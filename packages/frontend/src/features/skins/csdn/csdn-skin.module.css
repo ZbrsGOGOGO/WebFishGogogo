@@ -1,0 +1,211 @@
+/* CSDN 风格皮肤样式：贴近技术博客文章页外观。 */
+
+.root {
+  --csdn-red: #fc5531;
+  --csdn-text: #222226;
+  --csdn-muted: #999aaa;
+  --csdn-border: #ececec;
+  --csdn-bg: #f5f6f7;
+
+  color: var(--csdn-text);
+  background: var(--csdn-bg);
+  min-height: 100vh;
+  font-family: -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 50px;
+  padding: 0 24px;
+  background: #fff;
+  border-bottom: 1px solid var(--csdn-border);
+}
+
+.logo {
+  color: var(--csdn-red);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+
+.topnav {
+  display: flex;
+  gap: 20px;
+  color: #555666;
+}
+
+.topbarSpacer {
+  flex: 1;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  color: var(--csdn-muted);
+  font-size: 13px;
+}
+
+.sep {
+  color: var(--csdn-muted);
+}
+
+.crumbCurrent {
+  color: var(--csdn-text);
+}
+
+.layout {
+  display: flex;
+  gap: 16px;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 16px 48px;
+  align-items: flex-start;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.article {
+  background: #fff;
+  border-radius: 4px;
+  padding: 24px 32px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.title {
+  font-size: 28px;
+  line-height: 1.4;
+  margin: 0 0 16px;
+  color: var(--csdn-text);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  color: var(--csdn-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.author {
+  color: var(--csdn-red);
+}
+
+.stats {
+  display: flex;
+  gap: 24px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+  color: var(--csdn-muted);
+  font-size: 13px;
+}
+
+.stats li {
+  display: flex;
+  gap: 4px;
+}
+
+.statValue {
+  color: var(--csdn-text);
+  font-weight: 600;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.tag {
+  padding: 2px 10px;
+  background: #f2f6fc;
+  color: #4e5969;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.body {
+  font-size: 16px;
+  line-height: 1.9;
+  color: #2c2c2c;
+  word-break: break-word;
+}
+
+.body p {
+  margin: 0 0 1em;
+}
+
+.sidebar {
+  width: 260px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .topnav {
+    display: none;
+  }
+}
+
+/* 明暗主题（任务 16.2 / Req 6.4）：dark 覆盖皮肤配色变量与正文底色。 */
+.root[data-theme='dark'] {
+  --csdn-text: #d5d5da;
+  --csdn-muted: #7f8087;
+  --csdn-border: #2a2b31;
+  --csdn-bg: #1b1c20;
+}
+
+.root[data-theme='dark'] .topbar,
+.root[data-theme='dark'] .article {
+  background: #232428;
+}
+
+.root[data-theme='dark'] .body {
+  color: #cfcfd4;
+}
+
+.root[data-theme='dark'] .btn,
+.root[data-theme='dark'] .modeBtn {
+  background: #232428;
+}
+
+.root[data-theme='dark'] .tag {
+  background: #2a2f3a;
+  color: #9aa4b2;
+}
+
+/* 翻页模式（任务 16.2 / Req 6.5）：正文限定视口高度并可分页滚动，
+   与 scroll 模式（整篇顺序滚动）区分。 */
+.body[data-reading-mode='paging'] {
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}

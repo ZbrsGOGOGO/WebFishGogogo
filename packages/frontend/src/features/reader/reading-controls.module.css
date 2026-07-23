@@ -1,0 +1,69 @@
+/* 阅读控制条样式：克制融入博客顶栏工具区（任务 16.2）。 */
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #555666;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.label {
+  color: #999aaa;
+}
+
+.value {
+  min-width: 28px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #222226;
+}
+
+.btn {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #ececec;
+  border-radius: 4px;
+  background: #fff;
+  color: #555666;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.btn:hover {
+  border-color: #fc5531;
+  color: #fc5531;
+}
+
+.modeBtn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #ececec;
+  background: #fff;
+  color: #555666;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.modeBtn:first-of-type {
+  border-radius: 4px 0 0 4px;
+}
+
+.modeBtn:last-of-type {
+  border-radius: 0 4px 4px 0;
+  border-left: none;
+}
+
+.modeBtn[data-active='true'] {
+  background: #fc5531;
+  border-color: #fc5531;
+  color: #fff;
+}

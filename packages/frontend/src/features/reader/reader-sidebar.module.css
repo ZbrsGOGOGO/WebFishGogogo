@@ -1,0 +1,122 @@
+/* 侧栏（章节目录 / 书签）样式：融入博客右侧信息栏风格（任务 16.4）。 */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: 13px;
+  color: #555666;
+}
+
+.panel {
+  border: 1px solid #ececec;
+  border-radius: 6px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f2f2f2;
+  font-weight: 600;
+  color: #222226;
+}
+
+.panelTitle {
+  font-size: 14px;
+}
+
+.addBtn {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid #fc5531;
+  border-radius: 4px;
+  background: #fc5531;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  font-size: 12px;
+}
+
+.addBtn:hover {
+  background: #e14324;
+  border-color: #e14324;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.chapterBtn,
+.bookmarkBtn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 7px 6px;
+  border: none;
+  background: none;
+  color: #555666;
+  cursor: pointer;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chapterBtn:hover,
+.bookmarkBtn:hover {
+  background: #f7f8fa;
+  color: #fc5531;
+}
+
+.chapterBtn[data-active='true'] {
+  color: #fc5531;
+  font-weight: 600;
+}
+
+.bookmarkMeta {
+  color: #999aaa;
+  font-size: 12px;
+}
+
+.deleteBtn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: #999aaa;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.deleteBtn:hover {
+  background: #fdecea;
+  color: #d93025;
+}
+
+.empty {
+  padding: 12px;
+  color: #999aaa;
+  text-align: center;
+}
+
+.error {
+  padding: 8px 12px;
+  color: #d93025;
+}

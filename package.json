@@ -1,0 +1,23 @@
+{
+  "name": "stealth-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "摸鱼阅读器（Stealth Reader）monorepo",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "build:shared": "npm run build --workspace @stealth-reader/shared",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "overrides": {
+    "vite": "5.4.21"
+  }
+}
