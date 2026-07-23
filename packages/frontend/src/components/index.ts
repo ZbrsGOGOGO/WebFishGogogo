@@ -1,6 +1,9 @@
 // packages/frontend/src/components/index.ts
 // 通用 UI 组件的统一出口。
 
+// 通用 UI 组件库（U2）。
+export * from './ui';
+
 export { Footer } from './layout/Footer';
 export { SelfOwnedContentDeclaration } from './compliance/SelfOwnedContentDeclaration';
 export type { SelfOwnedContentDeclarationProps } from './compliance/SelfOwnedContentDeclaration';

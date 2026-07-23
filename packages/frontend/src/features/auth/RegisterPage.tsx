@@ -5,6 +5,7 @@ import { useState, type FormEvent, type JSX } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '../../app/store/auth-store';
+import { Button, Card, Input } from '../../components/ui';
 
 export function RegisterPage(): JSX.Element {
   const navigate = useNavigate();
@@ -32,53 +33,58 @@ export function RegisterPage(): JSX.Element {
   }
 
   return (
-    <section aria-labelledby="register-title">
-      <h1 id="register-title">注册</h1>
-      <form onSubmit={handleSubmit} noValidate>
-        <label>
-          邮箱
-          <input
-            type="email"
-            name="email"
-            value={email}
-            autoComplete="email"
-            required
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </label>
-        <label>
-          密码
-          <input
-            type="password"
-            name="password"
-            value={password}
-            autoComplete="new-password"
-            required
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        <label>
-          昵称（可选）
-          <input
-            type="text"
-            name="displayName"
-            value={displayName}
-            autoComplete="nickname"
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </label>
-        {error ? (
-          <p role="alert" style={{ color: 'crimson' }}>
-            {error}
+    <div className="auth-page">
+      <section aria-labelledby="register-title" className="auth-card">
+        <div className="auth-card__brand">
+          <span className="auth-card__logo" aria-hidden="true">
+            C
+          </span>
+        </div>
+        <Card>
+          <h1 id="register-title" className="auth-card__title">
+            注册
+          </h1>
+          <form onSubmit={handleSubmit} noValidate className="auth-form">
+            <Input
+              label="邮箱"
+              type="email"
+              name="email"
+              value={email}
+              autoComplete="email"
+              required
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <Input
+              label="密码"
+              type="password"
+              name="password"
+              value={password}
+              autoComplete="new-password"
+              required
+              onChange={(e) => setPassword(e.target.value)}
+            />
+            <Input
+              label="昵称（可选）"
+              type="text"
+              name="displayName"
+              value={displayName}
+              autoComplete="nickname"
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+            {error ? (
+              <p role="alert" className="auth-form__error">
+                {error}
+              </p>
+            ) : null}
+            <Button type="submit" loading={loading} fullWidth>
+              {loading ? '注册中…' : '注册'}
+            </Button>
+          </form>
+          <p className="auth-footer">
+            已有账户？<Link to="/login">去登录</Link>
           </p>
-        ) : null}
-        <button type="submit" disabled={loading}>
-          {loading ? '注册中…' : '注册'}
-        </button>
-      </form>
-      <p>
-        已有账户？<Link to="/login">去登录</Link>
-      </p>
-    </section>
+        </Card>
+      </section>
+    </div>
   );
 }

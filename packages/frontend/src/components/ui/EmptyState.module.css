@@ -1,0 +1,38 @@
+/* packages/frontend/src/components/ui/EmptyState.module.css */
+/* 空状态：图标 / emoji + 标题 + 描述 + 可选操作。 */
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-text-secondary);
+}
+
+.icon {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.message {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  max-width: 420px;
+}
+
+.actions {
+  margin-top: var(--space-2);
+  display: flex;
+  gap: var(--space-2);
+}

@@ -20,6 +20,7 @@ import {
   type ToolLaunchResult,
   type ToolListResult,
 } from '../../api';
+import { ToolRunnerModal, useToolRunner } from './runtime';
 
 /** listTools 结果统一归一为 { tools, noMatch, message }。 */
 function normalizeListResult(
@@ -56,6 +57,9 @@ export function ToolsPage(): JSX.Element {
     null,
   );
   const [launchingId, setLaunchingId] = useState<string | null>(null);
+
+  // 工具运行器（在 Modal 中渲染工具真实界面，替换仅展示可用状态的旧行为）。
+  const toolRunner = useToolRunner();
 
   /** 载入工具目录 / 筛选结果。 */
   const loadTools = useCallback(
@@ -143,8 +147,14 @@ export function ToolsPage(): JSX.Element {
     void loadTools('', '');
   }
 
-  /** 启动工具（Req 14.5）。 */
+  /**
+   * 启动工具（Req 14.5）：在 Modal 中渲染工具真实界面。
+   * 仍调用 launchTool 以获取/记录可用状态，但主 UX 是打开工具界面。
+   */
   async function handleLaunch(tool: Tool): Promise<void> {
+    // 立即打开运行器，渲染对应 slug 的工具组件。
+    toolRunner.open(tool.slug, tool.name);
+
     setLaunchingId(tool.id);
     setLaunchResult(null);
     try {
@@ -280,6 +290,13 @@ export function ToolsPage(): JSX.Element {
           />
         )}
       </section>
+
+      {/* 工具运行器：在 Modal 中渲染选中工具的真实界面（Req 14.5）。 */}
+      <ToolRunnerModal
+        slug={toolRunner.activeTool?.slug ?? null}
+        title={toolRunner.activeTool?.title}
+        onClose={toolRunner.close}
+      />
     </section>
   );
 }

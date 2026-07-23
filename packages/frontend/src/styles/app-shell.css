@@ -1,0 +1,292 @@
+/* packages/frontend/src/styles/app-shell.css
+ * 应用外壳与导航样式（V1.5 U3）。
+ * CSDN 风格顶栏、受保护布局、便签侧栏 dock、认证页与首页视觉落地。
+ * 仅使用 tokens.css 中的设计令牌，纯 CSS，无框架依赖。
+ */
+
+/* ---------- 受保护布局 ---------- */
+.protected-layout {
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
+/* 主内容容器：为固定便签 dock 预留右侧空间。 */
+.protected-layout__main {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
+
+/* ---------- CSDN 风格顶栏 ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-nav);
+  height: var(--nav-height);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+.topbar__inner {
+  max-width: var(--content-max);
+  height: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+/* 品牌标志（伪装成 CSDN 顶栏 LOGO）。 */
+.topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--color-brand);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.topbar__brand:hover {
+  text-decoration: none;
+  color: var(--color-brand-hover);
+}
+.topbar__brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* 顶栏导航链接组。 */
+.topbar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.topbar__link {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 15px;
+  text-decoration: none;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.topbar__link:hover {
+  text-decoration: none;
+  color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+/* 当前页高亮（NavLink active）。 */
+.topbar__link.is-active {
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+.topbar__spacer {
+  margin-left: auto;
+}
+
+.topbar__user {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- 便签侧栏 dock ---------- */
+.memo-dock {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  width: 300px;
+  max-width: calc(100vw - 2 * var(--space-4));
+  z-index: calc(var(--z-nav) - 1);
+}
+
+.memo-dock .memo-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-4);
+}
+
+.memo-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.memo-panel__header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.memo-panel__status {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.memo-panel__textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.memo-panel__textarea::placeholder {
+  color: var(--color-text-muted);
+}
+.memo-panel__textarea:focus {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+.memo-panel__textarea:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .memo-dock {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin: 0 auto var(--space-5);
+    padding: 0 var(--space-4);
+  }
+}
+
+/* ---------- 认证页（登录 / 注册） ---------- */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6) var(--space-4);
+  background:
+    radial-gradient(
+      1200px 400px at 50% -120px,
+      var(--color-brand-soft),
+      transparent
+    ),
+    var(--color-bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.auth-card__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.auth-card__logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.auth-card__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-form__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-danger);
+}
+
+.auth-footer {
+  margin: var(--space-4) 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+/* ---------- 首页仪表盘 ---------- */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.home-entry {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.home-entry:hover {
+  text-decoration: none;
+  transform: translateY(-2px);
+}
+.home-entry:hover .home-entry__card {
+  box-shadow: var(--shadow-md);
+  border-color: var(--color-brand);
+}
+
+.home-entry__icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.home-entry__name {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.home-entry__desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}

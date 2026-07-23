@@ -6,11 +6,17 @@
 // 均可用，跨页面与跨会话保持内容（挂载即恢复、编辑防抖自动保存）。
 
 import type { JSX } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import { ProtectedRoute } from './ProtectedRoute';
 import { MemoPanel } from '../features/memo';
+import { Button } from '../components/ui';
 import { useAuthStore } from './store/auth-store';
+
+/** 顶栏导航链接的 className，激活时高亮为品牌红。 */
+function navLinkClass({ isActive }: { isActive: boolean }): string {
+  return isActive ? 'topbar__link is-active' : 'topbar__link';
+}
 
 /**
  * 受保护布局：先经 ProtectedRoute 守卫（未认证重定向到登录页，Req 1.5），
@@ -22,32 +28,45 @@ import { useAuthStore } from './store/auth-store';
  */
 export function ProtectedLayout(): JSX.Element {
   const logout = useAuthStore((state) => state.logout);
+  const user = useAuthStore((state) => state.user);
 
   return (
     <ProtectedRoute>
       <div className="protected-layout">
-        <nav
-          aria-label="主导航"
-          style={{
-            display: 'flex',
-            gap: '1rem',
-            alignItems: 'center',
-            padding: '0.5rem 1rem',
-            borderBottom: '1px solid #e5e5e5',
-          }}
-        >
-          <Link to="/">首页</Link>
-          <Link to="/library">文档库</Link>
-          <Link to="/tools">工具</Link>
-          <button
-            type="button"
-            onClick={logout}
-            style={{ marginLeft: 'auto' }}
-          >
-            退出登录
-          </button>
-        </nav>
-        <Outlet />
+        {/* CSDN 风格顶栏：品牌 LOGO（左）+ 导航（首页/文档库/工具）+ 退出（右）。 */}
+        <header className="topbar">
+          <div className="topbar__inner">
+            <Link to="/" className="topbar__brand" aria-label="CSDN 首页">
+              <span className="topbar__brand-mark" aria-hidden="true">
+                C
+              </span>
+              CSDN
+            </Link>
+            <nav aria-label="主导航" className="topbar__nav">
+              <NavLink to="/" end className={navLinkClass}>
+                首页
+              </NavLink>
+              <NavLink to="/library" className={navLinkClass}>
+                文档库
+              </NavLink>
+              <NavLink to="/tools" className={navLinkClass}>
+                工具
+              </NavLink>
+            </nav>
+            <div className="topbar__spacer" />
+            {user ? (
+              <span className="topbar__user" title={user.displayName ?? user.email}>
+                {user.displayName ?? user.email}
+              </span>
+            ) : null}
+            <Button variant="ghost" size="sm" onClick={logout}>
+              退出登录
+            </Button>
+          </div>
+        </header>
+        <main className="protected-layout__main">
+          <Outlet />
+        </main>
         <aside className="memo-dock" aria-label="侧边便签">
           <MemoPanel />
         </aside>

@@ -1,0 +1,136 @@
+/* packages/frontend/src/styles/tokens.css
+ * 设计令牌 + 全局样式基线（V1.5 U1）。
+ * CSDN 风格视觉基调：品牌红、卡片、留白。纯 CSS，无框架依赖。
+ * 支持明/暗主题：默认 light，[data-theme="dark"] 覆盖。
+ */
+
+:root {
+  /* 品牌色（CSDN 风格红） */
+  --color-brand: #fc5531;
+  --color-brand-hover: #e34523;
+  --color-brand-soft: #fff1ee;
+
+  /* 中性色 */
+  --color-bg: #f5f6f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafafa;
+  --color-border: #e8e8e8;
+  --color-text: #222226;
+  --color-text-secondary: #555;
+  --color-text-muted: #999;
+
+  /* 语义色 */
+  --color-success: #52c41a;
+  --color-danger: #f5222d;
+  --color-link: #1e80ff; /* CSDN 链接蓝 */
+
+  /* 间距 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.12);
+
+  /* 字体 */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  /* 层级 */
+  --z-nav: 100;
+  --z-modal: 1000;
+
+  /* 布局 */
+  --nav-height: 56px;
+  --content-max: 1100px;
+}
+
+[data-theme='dark'] {
+  --color-bg: #1a1a1a;
+  --color-surface: #242424;
+  --color-surface-2: #2a2a2a;
+  --color-border: #3a3a3a;
+  --color-text: #e8e8e8;
+  --color-text-secondary: #b0b0b0;
+  --color-text-muted: #808080;
+  --color-brand-soft: #3a2420;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- 全局重置与基线 ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+h1, h2, h3, h4 {
+  margin: 0 0 var(--space-3);
+  line-height: 1.3;
+  color: var(--color-text);
+}
+h1 { font-size: 24px; }
+h2 { font-size: 19px; }
+h3 { font-size: 16px; }
+
+p { margin: 0 0 var(--space-3); }
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ---------- 应用外壳 ---------- */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.app-main {
+  flex: 1;
+}
+
+/* 受保护区内容容器 */
+.page-container {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4);
+}
