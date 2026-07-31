@@ -12,5 +12,11 @@ export interface AppProvidersProps {
 }
 
 export function AppProviders({ children }: AppProvidersProps): JSX.Element {
-  return <BrowserRouter>{children}</BrowserRouter>;
+  return (
+    <BrowserRouter
+      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+    >
+      {children}
+    </BrowserRouter>
+  );
 }

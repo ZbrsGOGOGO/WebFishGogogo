@@ -1,5 +1,5 @@
 // packages/frontend/src/api/auth.ts
-// 认证领域 API 客户端：注册 / 登录（对齐 backend AuthController）。
+// 认证领域 API 客户端：注册 / 登录 / 当前用户（对齐 backend AuthController）。
 
 import { http } from './http';
 
@@ -45,4 +45,11 @@ export function login(payload: LoginPayload): Promise<LoginResult> {
   return http.post<LoginResult>('/auth/login', payload, { auth: false });
 }
 
-export const authApi = { register, login };
+/**
+ * GET /auth/me：使用持久化 JWT 恢复当前账户视图。
+ */
+export function getCurrentUser(): Promise<AuthUser> {
+  return http.get<AuthUser>('/auth/me');
+}
+
+export const authApi = { register, login, getCurrentUser };

@@ -106,4 +106,31 @@ describe('AuthService', () => {
       ).rejects.toBeInstanceOf(UnauthorizedException);
     });
   });
+
+  describe('getCurrentUser', () => {
+    it('按已验签 subject 返回不含密码哈希的账户视图', async () => {
+      const registered = await service.register({
+        email: 'a@example.com',
+        password: 'secret123',
+        displayName: '小明',
+      });
+
+      const view = await service.getCurrentUser(registered.id);
+
+      expect(view).toEqual({
+        id: registered.id,
+        email: 'a@example.com',
+        displayName: '小明',
+      });
+      expect(
+        (view as unknown as Record<string, unknown>).passwordHash,
+      ).toBeUndefined();
+    });
+
+    it('JWT 指向已不存在账户时按无效会话拒绝', async () => {
+      await expect(
+        service.getCurrentUser('missing-user'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
 });

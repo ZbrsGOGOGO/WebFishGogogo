@@ -10,8 +10,18 @@ import type { JwtModuleOptions } from '@nestjs/jwt';
 export function buildJwtConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): JwtModuleOptions {
+  const secret = env.JWT_SECRET ?? 'dev-insecure-secret-change-me';
+  if (
+    env.NODE_ENV === 'production' &&
+    (!env.JWT_SECRET || env.JWT_SECRET.length < 32)
+  ) {
+    throw new Error(
+      'JWT_SECRET must be explicitly configured with at least 32 characters in production',
+    );
+  }
+
   return {
-    secret: env.JWT_SECRET ?? 'dev-insecure-secret-change-me',
+    secret,
     signOptions: {
       expiresIn: env.JWT_EXPIRES_IN ?? '7d',
     },

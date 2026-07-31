@@ -8,6 +8,12 @@ import { SkinModule } from './modules/skin/skin.module';
 import { MemoModule } from './modules/memo/memo.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { ToolsModule } from './modules/tools/tools.module';
+import { PlatformModule } from './modules/platform';
+import { FarmModule } from './modules/farm';
+import { ArenaModule } from './modules/games/arena';
+import { EngagementModule } from './modules/engagement';
+import { TasksModule } from './modules/tasks';
+import { StorageModule } from './modules/documents/storage/storage.module';
 
 // 根模块（Task 13 后端集成 checkpoint）。
 // 接入全部 V1 功能模块：auth/documents/reading/skin/memo/preferences/tools。
@@ -24,6 +30,12 @@ import { ToolsModule } from './modules/tools/tools.module';
     MemoModule,
     PreferencesModule,
     ToolsModule,
+    PlatformModule,
+    FarmModule,
+    ArenaModule,
+    EngagementModule,
+    TasksModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [],

@@ -4,6 +4,7 @@
 import { useState, type JSX } from 'react';
 
 import { Input } from '../../../../components/ui';
+import styles from './ToolSurface.module.css';
 
 export type Category = 'length' | 'weight' | 'temperature';
 
@@ -90,71 +91,80 @@ export default function UnitConverter(): JSX.Element {
   const valid = raw.trim() !== '' && Number.isFinite(value);
   const converted = valid ? convert(value, from, to, category) : null;
 
-  const selectStyle: React.CSSProperties = {
-    padding: 'var(--space-2)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-sm)',
-    background: 'var(--color-surface)',
-    color: 'var(--color-text)',
-    fontFamily: 'inherit',
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 320 }}>
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
-        <span>分类</span>
-        <select
-          value={category}
-          onChange={(e) => onCategoryChange(e.target.value as Category)}
-          style={selectStyle}
-          aria-label="分类"
-        >
-          {(Object.keys(UNITS) as Category[]).map((c) => (
-            <option key={c} value={c}>
-              {CATEGORY_LABELS[c]}
-            </option>
-          ))}
-        </select>
-      </label>
+    <div className={`${styles.surface} ${styles.compact}`}>
+      <section className={styles.panel}>
+        <div className={styles.formGrid}>
+          <label className={styles.selectField}>
+            分类
+            <select
+              value={category}
+              onChange={(event) =>
+                onCategoryChange(event.target.value as Category)
+              }
+              className={styles.select}
+              aria-label="分类"
+            >
+              {(Object.keys(UNITS) as Category[]).map((value) => (
+                <option key={value} value={value}>
+                  {CATEGORY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Input
+            label="数值"
+            type="number"
+            value={raw}
+            onChange={(event) => setRaw(event.target.value)}
+            error={raw.trim() !== '' && !valid ? '请输入有效数字' : undefined}
+          />
+        </div>
+      </section>
 
-      <Input
-        label="数值"
-        type="number"
-        value={raw}
-        onChange={(e) => setRaw(e.target.value)}
-        error={raw.trim() !== '' && !valid ? '请输入有效数字' : undefined}
-      />
+      <section className={styles.panel}>
+        <div className={styles.formGrid}>
+          <label className={styles.selectField}>
+            从
+            <select
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              className={styles.select}
+              aria-label="源单位"
+            >
+              {UNITS[category].map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={styles.selectField}>
+            到
+            <select
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              className={styles.select}
+              aria-label="目标单位"
+            >
+              {UNITS[category].map((unit) => (
+                <option key={unit} value={unit}>
+                  {unit}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-end' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}>
-          <span>从</span>
-          <select value={from} onChange={(e) => setFrom(e.target.value)} style={selectStyle} aria-label="源单位">
-            {UNITS[category].map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span style={{ padding: 'var(--space-2)' }}>→</span>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', flex: 1 }}>
-          <span>到</span>
-          <select value={to} onChange={(e) => setTo(e.target.value)} style={selectStyle} aria-label="目标单位">
-            {UNITS[category].map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className={styles.output}>
+        <span className={styles.outputText}>
+          <span className={styles.outputLabel}>换算结果</span>
+          <strong className={styles.outputValue}>
+            {converted !== null ? `${roundResult(converted)} ${to}` : '—'}
+          </strong>
+        </span>
       </div>
-
-      <p style={{ margin: 0, fontSize: 16 }}>
-        结果：
-        <strong style={{ fontFamily: 'var(--font-mono)' }}>
-          {converted !== null ? `${roundResult(converted)} ${to}` : '—'}
-        </strong>
-      </p>
     </div>
   );
 }

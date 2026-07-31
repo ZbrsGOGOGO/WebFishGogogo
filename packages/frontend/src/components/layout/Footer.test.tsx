@@ -32,10 +32,10 @@ describe('Footer', () => {
     ).toHaveAttribute('href', '/terms-of-service');
   });
 
-  it('展示 ICP/备案友好信息占位（Req 13.4）', () => {
+  it('单机版不展示未配置的备案占位', () => {
     renderFooter();
-    // 备案号仍为占位符时展示"备案信息待补充"提示。
-    expect(screen.getByText('备案信息待补充')).toBeInTheDocument();
+    expect(screen.getByText(/本机版/)).toBeInTheDocument();
+    expect(screen.queryByText('备案信息待补充')).not.toBeInTheDocument();
   });
 
   it('以 contentinfo 语义暴露页脚', () => {

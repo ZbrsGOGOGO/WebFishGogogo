@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 import { ToolRunnerModal } from './ToolRunnerModal';
@@ -33,6 +33,10 @@ describe('tool runtime registry', () => {
 });
 
 describe('ToolRunnerModal', () => {
+  beforeEach(() => {
+    document.body.style.overflow = '';
+  });
+
   it('renders nothing when slug is null', () => {
     const { container } = render(
       <ToolRunnerModal slug={null} onClose={() => {}} />,
@@ -49,7 +53,9 @@ describe('ToolRunnerModal', () => {
       />,
     );
     // 真实计算器组件懒加载后应出现其显示区。
-    expect(await screen.findByTestId('calc-display')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('calc-display', {}, { timeout: 5_000 }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: '计算器' })).toBeInTheDocument();
   });
 
@@ -62,8 +68,48 @@ describe('ToolRunnerModal', () => {
     const onClose = vi.fn();
     render(<ToolRunnerModal slug="timer" onClose={onClose} />);
     // 等待真实计时器组件懒加载出现其显示区。
-    await screen.findByTestId('timer-display');
+    await screen.findByTestId('timer-display', {}, { timeout: 5_000 });
     fireEvent.click(screen.getByRole('button', { name: '关闭' }));
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('locks page scrolling, handles Escape, and restores the trigger focus', () => {
+    const trigger = document.createElement('button');
+    trigger.textContent = '打开工具';
+    document.body.appendChild(trigger);
+    trigger.focus();
+    const onClose = vi.fn();
+
+    const { rerender } = render(
+      <ToolRunnerModal slug="nope" title="未知工具" onClose={onClose} />,
+    );
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(screen.getByRole('button', { name: '关闭' })).toHaveFocus();
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    rerender(<ToolRunnerModal slug={null} onClose={onClose} />);
+    expect(document.body.style.overflow).toBe('');
+    expect(trigger).toHaveFocus();
+    trigger.remove();
+  });
+
+  it('keeps Tab focus inside the dialog and closes from the backdrop', () => {
+    const onClose = vi.fn();
+    render(
+      <ToolRunnerModal slug="nope" title="未知工具" onClose={onClose} />,
+    );
+
+    const closeButton = screen.getByRole('button', { name: '关闭' });
+    fireEvent.keyDown(closeButton, { key: 'Tab' });
+    expect(closeButton).toHaveFocus();
+
+    const dialog = screen.getByRole('dialog');
+    const overlay = dialog.parentElement;
+    expect(overlay).not.toBeNull();
+    fireEvent.mouseDown(overlay as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

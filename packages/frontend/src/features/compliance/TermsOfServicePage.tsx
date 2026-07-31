@@ -15,17 +15,17 @@ import { Link } from 'react-router-dom';
  * 下列条款为通用基线模板，部署方应结合自身主体信息与司法辖区复核后使用。
  */
 export function TermsOfServicePage(): JSX.Element {
-  const lastUpdated = '2025-01-01';
+  const lastUpdated = '2026-07-26';
 
   return (
-    <section aria-labelledby="terms-of-service-title" className="compliance-page">
+    <main aria-labelledby="terms-of-service-title" className="compliance-page">
       <h1 id="terms-of-service-title">服务条款</h1>
       <p>
         <em>最近更新：{lastUpdated}</em>
       </p>
 
       <p>
-        欢迎使用摸鱼阅读器（以下简称"本服务"）。在使用本服务前，请仔细阅读并同意以下条款。
+        欢迎使用 ZBRS 技术工具工坊（以下简称"本服务"）。在使用本服务前，请仔细阅读并同意以下条款。
         当您注册账户或以任何方式使用本服务时，即视为您已阅读、理解并接受本条款的全部内容。
       </p>
 
@@ -96,6 +96,6 @@ export function TermsOfServicePage(): JSX.Element {
           另见：<Link to="/privacy-policy">隐私政策</Link>
         </p>
       </nav>
-    </section>
+    </main>
   );
 }

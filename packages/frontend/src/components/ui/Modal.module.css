@@ -25,6 +25,14 @@
   box-shadow: var(--shadow-lg);
 }
 
+.md {
+  max-width: 480px;
+}
+
+.lg {
+  max-width: 760px;
+}
+
 .header {
   display: flex;
   align-items: center;
@@ -45,8 +53,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border: none;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -55,6 +63,19 @@
   line-height: 1;
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+@media (max-width: 560px) {
+  .overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .panel {
+    max-width: none;
+    max-height: min(92dvh, 840px);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
 }
 .close:hover {
   background: var(--color-surface-2);

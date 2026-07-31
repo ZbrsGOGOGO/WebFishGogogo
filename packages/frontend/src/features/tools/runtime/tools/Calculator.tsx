@@ -1,10 +1,11 @@
 // packages/frontend/src/features/tools/runtime/tools/Calculator.tsx
 // 计算器（slug: calculator）。基础四则运算，含键盘布局。
 
-import { useState, type CSSProperties, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 
-import { Button, Card } from '../../../../components/ui';
+import { Button } from '../../../../components/ui';
 import { applyOperator, trimNumber, type Operator } from './logic';
+import styles from './ToolSurface.module.css';
 
 interface CalcState {
   /** 当前正在输入 / 显示的字符串。 */
@@ -22,27 +23,6 @@ const initialState: CalcState = {
   accumulator: null,
   pendingOp: null,
   overwrite: true,
-};
-
-const displayStyle: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: '32px',
-  fontWeight: 700,
-  textAlign: 'right',
-  padding: 'var(--space-3)',
-  background: 'var(--color-surface-2)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-md)',
-  marginBottom: 'var(--space-3)',
-  minHeight: 48,
-  overflow: 'hidden',
-  wordBreak: 'break-all',
-};
-
-const gridStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, 1fr)',
-  gap: 'var(--space-2)',
 };
 
 /** 基础四则计算器。 */
@@ -141,51 +121,74 @@ export default function Calculator(): JSX.Element {
   );
 
   const digitButton = (d: string): JSX.Element => (
-    <Button variant="ghost" onClick={() => inputDigit(d)} fullWidth>
+    <Button variant="secondary" onClick={() => inputDigit(d)} fullWidth>
       {d}
     </Button>
   );
 
   return (
-    <Card title="计算器">
-      <div style={{ maxWidth: 280 }}>
-        <div style={displayStyle} data-testid="calc-display">
-          {state.display}
-        </div>
-        <div style={gridStyle}>
-          <Button variant="danger" onClick={clearAll} fullWidth>
-            C
-          </Button>
-          <Button variant="secondary" onClick={toggleSign} fullWidth>
-            ±
-          </Button>
-          <Button variant="secondary" onClick={percent} fullWidth>
-            %
-          </Button>
-          {opButton('÷')}
-
-          {digitButton('7')}
-          {digitButton('8')}
-          {digitButton('9')}
-          {opButton('×')}
-
-          {digitButton('4')}
-          {digitButton('5')}
-          {digitButton('6')}
-          {opButton('-')}
-
-          {digitButton('1')}
-          {digitButton('2')}
-          {digitButton('3')}
-          {opButton('+')}
-
-          {digitButton('0')}
-          {digitButton('.')}
-          <Button variant="primary" onClick={equals} fullWidth style={{ gridColumn: 'span 2' }}>
-            =
-          </Button>
-        </div>
+    <div className={`${styles.surface} ${styles.calculatorSurface}`}>
+      <div
+        className={styles.display}
+        role="status"
+        aria-live="polite"
+        aria-label={`计算结果 ${state.display}`}
+        data-testid="calc-display"
+      >
+        {state.display}
       </div>
-    </Card>
+      <div className={styles.keypad} aria-label="计算器键盘">
+        <Button variant="danger" onClick={clearAll} fullWidth>
+          C
+        </Button>
+        <Button
+          variant="secondary"
+          aria-label="切换正负号"
+          onClick={toggleSign}
+          fullWidth
+        >
+          ±
+        </Button>
+        <Button
+          variant="secondary"
+          aria-label="百分比"
+          onClick={percent}
+          fullWidth
+        >
+          %
+        </Button>
+        {opButton('÷')}
+
+        {digitButton('7')}
+        {digitButton('8')}
+        {digitButton('9')}
+        {opButton('×')}
+
+        {digitButton('4')}
+        {digitButton('5')}
+        {digitButton('6')}
+        {opButton('-')}
+
+        {digitButton('1')}
+        {digitButton('2')}
+        {digitButton('3')}
+        {opButton('+')}
+
+        {digitButton('0')}
+        {digitButton('.')}
+        <Button
+          variant="primary"
+          className={styles.spanTwo}
+          aria-label="计算结果"
+          onClick={equals}
+          fullWidth
+        >
+          =
+        </Button>
+      </div>
+      <p className={`${styles.hint} ${styles.center}`}>
+        支持四则运算、百分比与正负数。
+      </p>
+    </div>
   );
 }

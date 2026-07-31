@@ -114,6 +114,19 @@ export class AuthService {
     return { accessToken, user: this.toUserView(user) };
   }
 
+  /**
+   * 根据已验签 JWT 的 subject 恢复当前账户视图。
+   *
+   * JWT 仍有效但账户已不存在时按无效会话处理，不泄露账户状态。
+   */
+  async getCurrentUser(userId: string): Promise<AuthUserView> {
+    const user = await this.userRepository.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    return this.toUserView(user);
+  }
+
   private toUserView(user: User): AuthUserView {
     return {
       id: user.id,

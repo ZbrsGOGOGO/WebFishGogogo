@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { Profession } from '@stealth-reader/shared';
 
 import { UserPreference } from '../../database/entities/user-preference.entity';
+import { UpdatePreferencesDto } from './dto/update-preferences.dto';
 import { PreferencesController } from './preferences.controller';
 import { PreferencePatch } from './preferences.repository';
 import { PreferencesService } from './preferences.service';
@@ -44,7 +45,7 @@ describe('PreferencesController', () => {
     expect(service.getPreferences).toHaveBeenCalledWith(userId);
   });
 
-  it('PUT /preferences 透传规整后的部分更新（含 profession）', async () => {
+  it('PUT /preferences 透传规整后的部分更新（含 profession/settings）', async () => {
     const updated = makePref(userId, { fontSize: 20, profession: Profession.Dev });
     service.updatePreferences.mockResolvedValue(updated);
 
@@ -55,6 +56,7 @@ describe('PreferencesController', () => {
       theme: 'dark',
       bossKey: 'F1',
       profession: Profession.Dev,
+      settings: { readingMode: 'paging', compactTools: true },
     };
     const result = await controller.updatePreferences(userId, body);
 
@@ -66,6 +68,7 @@ describe('PreferencesController', () => {
       theme: 'dark',
       bossKey: 'F1',
       profession: Profession.Dev,
+      settings: { readingMode: 'paging', compactTools: true },
     };
     expect(service.updatePreferences).toHaveBeenCalledWith(userId, expectedPatch);
   });
@@ -92,4 +95,16 @@ describe('PreferencesController', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(service.updatePreferences).not.toHaveBeenCalled();
   });
+
+  it.each([null, [], 'paging'])(
+    'PUT /preferences 对非对象 settings=%p 返回 400',
+    async (settings) => {
+      await expect(
+        controller.updatePreferences(userId, {
+          settings,
+        } as unknown as UpdatePreferencesDto),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(service.updatePreferences).not.toHaveBeenCalled();
+    },
+  );
 });

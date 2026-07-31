@@ -4,6 +4,7 @@
 import { useState, type JSX } from 'react';
 
 import { Button, Input } from '../../../../components/ui';
+import styles from './ToolSurface.module.css';
 
 export type ParseResult =
   | { ok: true; value: string }
@@ -67,21 +68,12 @@ export default function TimestampConverter(): JSX.Element {
     setTsInput(String(unit === 'seconds' ? Math.floor(now / 1000) : now));
   }
 
-  const boxStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--space-2)',
-    padding: 'var(--space-3)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 320 }}>
-      <div style={boxStyle}>
-        <strong>时间戳 → 日期</strong>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div className={`${styles.surface} ${styles.twoColumn}`}>
+      <section className={styles.panel}>
+        <h3 className={styles.panelTitle}>时间戳 → 日期</h3>
+        <div className={styles.radioRow}>
+          <label className={styles.radio}>
             <input
               type="radio"
               name="ts-unit"
@@ -90,7 +82,7 @@ export default function TimestampConverter(): JSX.Element {
             />
             秒
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <label className={styles.radio}>
             <input
               type="radio"
               name="ts-unit"
@@ -101,12 +93,14 @@ export default function TimestampConverter(): JSX.Element {
           </label>
         </div>
         <Input
+          label="Unix 时间戳"
           value={tsInput}
-          onChange={(e) => setTsInput(e.target.value)}
+          onChange={(event) => setTsInput(event.target.value)}
           placeholder={unit === 'seconds' ? '1700000000' : '1700000000000'}
           error={tsResult && !tsResult.ok ? tsResult.error : undefined}
+          className={styles.mono}
         />
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div className={styles.actions}>
           <Button size="sm" onClick={() => setTsResult(timestampToDate(tsInput, unit))}>
             转换
           </Button>
@@ -115,19 +109,26 @@ export default function TimestampConverter(): JSX.Element {
           </Button>
         </div>
         {tsResult?.ok && (
-          <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>{tsResult.value}</p>
+          <div className={styles.output}>
+            <span className={styles.outputText}>
+              <span className={styles.outputLabel}>本地日期时间</span>
+              <strong className={styles.outputValue}>{tsResult.value}</strong>
+            </span>
+          </div>
         )}
-      </div>
+      </section>
 
-      <div style={boxStyle}>
-        <strong>日期 → 时间戳</strong>
+      <section className={styles.panel}>
+        <h3 className={styles.panelTitle}>日期 → 时间戳</h3>
         <Input
+          label="本地日期时间"
           value={dateInput}
-          onChange={(e) => setDateInput(e.target.value)}
+          onChange={(event) => setDateInput(event.target.value)}
           placeholder="2024-01-01 12:00:00"
           error={dateResult && !dateResult.ok ? dateResult.error : undefined}
+          className={styles.mono}
         />
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <div className={styles.actions}>
           <Button size="sm" onClick={() => setDateResult(dateToTimestamp(dateInput))}>
             转换
           </Button>
@@ -140,9 +141,13 @@ export default function TimestampConverter(): JSX.Element {
           </Button>
         </div>
         {dateResult?.ok && (
-          <pre style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>{dateResult.value}</pre>
+          <div className={styles.output}>
+            <pre className={`${styles.outputValue} ${styles.mono}`}>
+              {dateResult.value}
+            </pre>
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

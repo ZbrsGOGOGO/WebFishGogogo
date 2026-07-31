@@ -7,7 +7,13 @@ import { useAuthStore } from './store/auth-store';
 
 /** 重置 auth store 到未认证态。 */
 function resetAuth(): void {
-  useAuthStore.setState({ token: null, user: null, error: null, loading: false });
+  useAuthStore.setState({
+    token: null,
+    user: null,
+    error: null,
+    loading: false,
+    sessionReady: true,
+  });
 }
 
 function renderAt(path: string) {
@@ -41,5 +47,16 @@ describe('ProtectedRoute (Req 1.5)', () => {
     });
     renderAt('/secret');
     expect(screen.getByText('机密内容')).toBeInTheDocument();
+  });
+
+  it('waits for persisted session validation before rendering', () => {
+    useAuthStore.setState({
+      token: 'persisted-token',
+      user: null,
+      sessionReady: false,
+    });
+    renderAt('/secret');
+    expect(screen.getByRole('status')).toHaveTextContent('正在恢复本机会话');
+    expect(screen.queryByText('机密内容')).not.toBeInTheDocument();
   });
 });

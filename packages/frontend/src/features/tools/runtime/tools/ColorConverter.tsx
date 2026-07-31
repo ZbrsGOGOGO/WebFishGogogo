@@ -3,7 +3,8 @@
 
 import { useState, type JSX } from 'react';
 
-import { Input } from '../../../../components/ui';
+import { Button, Input } from '../../../../components/ui';
+import styles from './ToolSurface.module.css';
 
 export interface Rgb {
   r: number;
@@ -120,6 +121,7 @@ export default function ColorConverter(): JSX.Element {
   const [rgb, setRgb] = useState<Rgb>({ r: 252, g: 85, b: 49 });
   const [hexInput, setHexInput] = useState('#FC5531');
   const [hexError, setHexError] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState('');
 
   const hsl = rgbToHsl(rgb);
 
@@ -158,47 +160,137 @@ export default function ColorConverter(): JSX.Element {
   }
 
   const currentHex = rgbToHex(rgb);
-  const numInput: React.CSSProperties = { maxWidth: 90 };
+  const rgbText = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+  const hslText = `hsl(${hsl.h} ${hsl.s}% ${hsl.l}%)`;
+
+  async function copyColor(value: string, label: string): Promise<void> {
+    try {
+      if (!navigator.clipboard) {
+        throw new Error('clipboard unavailable');
+      }
+      await navigator.clipboard.writeText(value);
+      setCopyStatus(`已复制 ${label}`);
+    } catch {
+      setCopyStatus('复制失败，请手动选择文本复制。');
+    }
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', minWidth: 320 }}>
-      <div
-        data-testid="color-swatch"
-        aria-label={`颜色预览 ${currentHex}`}
-        style={{
-          height: 64,
-          borderRadius: 'var(--radius-md)',
-          border: '1px solid var(--color-border)',
-          background: currentHex,
-        }}
-      />
-
-      <Input
-        label="HEX"
-        value={hexInput}
-        onChange={(e) => applyHex(e.target.value)}
-        placeholder="#FC5531"
-        error={hexError ?? undefined}
-        style={{ fontFamily: 'var(--font-mono)' }}
-      />
-
-      <fieldset style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', margin: 0 }}>
-        <legend>RGB</legend>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <Input label="R" type="number" value={String(rgb.r)} onChange={(e) => setChannel('r', e.target.value)} style={numInput} />
-          <Input label="G" type="number" value={String(rgb.g)} onChange={(e) => setChannel('g', e.target.value)} style={numInput} />
-          <Input label="B" type="number" value={String(rgb.b)} onChange={(e) => setChannel('b', e.target.value)} style={numInput} />
+    <div className={styles.surface}>
+      <div className={styles.colorLayout}>
+        <div
+          className={styles.colorPreview}
+          data-testid="color-swatch"
+          aria-label={`颜色预览 ${currentHex}`}
+          style={{ background: currentHex }}
+        >
+          <span className={styles.colorCode}>{currentHex}</span>
+          <Input
+            label="原生取色器"
+            type="color"
+            value={currentHex}
+            className={styles.colorPicker}
+            onChange={(event) => applyHex(event.target.value)}
+          />
         </div>
-      </fieldset>
 
-      <fieldset style={{ border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', margin: 0 }}>
-        <legend>HSL</legend>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <Input label="H" type="number" value={String(hsl.h)} onChange={(e) => setHslChannel('h', e.target.value)} style={numInput} />
-          <Input label="S%" type="number" value={String(hsl.s)} onChange={(e) => setHslChannel('s', e.target.value)} style={numInput} />
-          <Input label="L%" type="number" value={String(hsl.l)} onChange={(e) => setHslChannel('l', e.target.value)} style={numInput} />
+        <div className={styles.surface}>
+          <Input
+            label="HEX"
+            value={hexInput}
+            onChange={(event) => applyHex(event.target.value)}
+            placeholder="#FC5531"
+            error={hexError ?? undefined}
+            className={styles.mono}
+          />
+
+          <fieldset className={styles.fieldset}>
+            <legend>RGB</legend>
+            <div className={styles.tripleGrid}>
+              <Input
+                label="R"
+                type="number"
+                min={0}
+                max={255}
+                value={String(rgb.r)}
+                onChange={(event) => setChannel('r', event.target.value)}
+              />
+              <Input
+                label="G"
+                type="number"
+                min={0}
+                max={255}
+                value={String(rgb.g)}
+                onChange={(event) => setChannel('g', event.target.value)}
+              />
+              <Input
+                label="B"
+                type="number"
+                min={0}
+                max={255}
+                value={String(rgb.b)}
+                onChange={(event) => setChannel('b', event.target.value)}
+              />
+            </div>
+          </fieldset>
+
+          <fieldset className={styles.fieldset}>
+            <legend>HSL</legend>
+            <div className={styles.tripleGrid}>
+              <Input
+                label="H"
+                type="number"
+                min={0}
+                max={360}
+                value={String(hsl.h)}
+                onChange={(event) => setHslChannel('h', event.target.value)}
+              />
+              <Input
+                label="S%"
+                type="number"
+                min={0}
+                max={100}
+                value={String(hsl.s)}
+                onChange={(event) => setHslChannel('s', event.target.value)}
+              />
+              <Input
+                label="L%"
+                type="number"
+                min={0}
+                max={100}
+                value={String(hsl.l)}
+                onChange={(event) => setHslChannel('l', event.target.value)}
+              />
+            </div>
+          </fieldset>
         </div>
-      </fieldset>
+      </div>
+
+      <div className={styles.actions} aria-label="复制颜色值">
+        <Button
+          size="sm"
+          onClick={() => void copyColor(currentHex, 'HEX')}
+        >
+          复制 HEX
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void copyColor(rgbText, 'RGB')}
+        >
+          复制 RGB
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => void copyColor(hslText, 'HSL')}
+        >
+          复制 HSL
+        </Button>
+      </div>
+      <p className={styles.copyStatus} role="status" aria-live="polite">
+        {copyStatus}
+      </p>
     </div>
   );
 }

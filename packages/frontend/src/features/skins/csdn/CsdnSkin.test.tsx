@@ -30,36 +30,25 @@ function makeArticle(
   };
 }
 
-describe('CsdnSkin (Req 5.1, 5.2)', () => {
-  it('renders the fake title, breadcrumb, stats, tags and column (Req 5.2)', () => {
+describe('CsdnSkin / ZBRS 阅读工作台', () => {
+  it('renders the document title, breadcrumb and real reading status', () => {
     render(<CsdnSkin article={makeArticle()} />);
 
-    // 标题（假标题栏 + 文章标题）
     expect(
       screen.getByRole('heading', {
         name: '深入理解 TypeScript 类型系统',
       }),
     ).toBeInTheDocument();
 
-    // 面包屑存在
     expect(
       screen.getByRole('navigation', { name: '面包屑' }),
     ).toBeInTheDocument();
 
-    // 统计：阅读量/点赞/收藏（12345 → 1.2w 格式）
-    const stats = screen.getByRole('list', { name: '文章统计' });
-    expect(stats).toHaveTextContent('阅读量');
-    expect(stats).toHaveTextContent('1.2w');
-    expect(stats).toHaveTextContent('点赞');
-    expect(stats).toHaveTextContent('收藏');
-
-    // 标签
-    const tags = screen.getByRole('list', { name: '文章标签' });
-    expect(tags).toHaveTextContent('TypeScript');
-    expect(tags).toHaveTextContent('前端');
-
-    // 专栏名出现
-    expect(screen.getAllByText(/TS 进阶/).length).toBeGreaterThan(0);
+    expect(screen.getByText('私有文档')).toBeInTheDocument();
+    expect(screen.getByText('本机私有内容')).toBeInTheDocument();
+    expect(screen.getByText('进度 0%')).toBeInTheDocument();
+    expect(screen.queryByText('码农进阶')).not.toBeInTheDocument();
+    expect(screen.queryByText('TS 进阶')).not.toBeInTheDocument();
   });
 
   it('renders the blog body HTML (Req 5.1)', () => {
@@ -69,12 +58,13 @@ describe('CsdnSkin (Req 5.1, 5.2)', () => {
     expect(body).toHaveTextContent('第二段。');
   });
 
-  it('falls back to a default column name when columnName is null', () => {
+  it('does not expose generated metadata when columnName is null', () => {
     const article = makeArticle({
       fakeMeta: { ...makeArticle().fakeMeta, columnName: null },
     });
     render(<CsdnSkin article={article} />);
-    expect(screen.getAllByText(/技术专栏/).length).toBeGreaterThan(0);
+    expect(screen.getByText('本机私有内容')).toBeInTheDocument();
+    expect(screen.queryByText('技术专栏')).not.toBeInTheDocument();
   });
 
   it('renders control and sidebar slots when provided', () => {
@@ -91,11 +81,13 @@ describe('CsdnSkin (Req 5.1, 5.2)', () => {
 });
 
 describe('buildBlogTabTitle (Req 5.3)', () => {
-  it('builds a CSDN-style tab title from the article title', () => {
-    expect(buildBlogTabTitle('Hello World')).toBe('Hello World_CSDN博客');
+  it('builds a ZBRS article tab title from the article title', () => {
+    expect(buildBlogTabTitle('Hello World')).toBe(
+      'Hello World - ZBRS 阅读工作台',
+    );
   });
 
   it('falls back to a generic tech-blog title when empty', () => {
-    expect(buildBlogTabTitle('   ')).toBe('技术博客_CSDN博客');
+    expect(buildBlogTabTitle('   ')).toBe('ZBRS 阅读工作台');
   });
 });

@@ -14,8 +14,14 @@ import { AuthService, AuthUserView, LoginInput, LoginResult, RegisterInput } fro
 class FakeAuthService {
   registerCalls: RegisterInput[] = [];
   loginCalls: LoginInput[] = [];
+  currentUserCalls: string[] = [];
   conflictOn: string | null = null;
   rejectLogin = false;
+  currentUser: AuthUserView | null = {
+    id: 'user-1',
+    email: 'a@example.com',
+    displayName: null,
+  };
 
   async register(input: RegisterInput): Promise<AuthUserView> {
     this.registerCalls.push(input);
@@ -34,6 +40,14 @@ class FakeAuthService {
       accessToken: 'signed.jwt.token',
       user: { id: 'user-1', email: input.email, displayName: null },
     };
+  }
+
+  async getCurrentUser(userId: string): Promise<AuthUserView> {
+    this.currentUserCalls.push(userId);
+    if (!this.currentUser) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    return this.currentUser;
   }
 }
 
@@ -107,6 +121,24 @@ describe('AuthController', () => {
       await expect(
         controller.login({ email: 'a@example.com', password: 'wrong' }),
       ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('GET /auth/me', () => {
+    it('返回 JWT 对应的当前账户视图', async () => {
+      const { controller, service } = createController();
+
+      await expect(controller.me('user-1')).resolves.toEqual(service.currentUser);
+      expect(service.currentUserCalls).toEqual(['user-1']);
+    });
+
+    it('账户不存在时认证失败错误向上冒泡', async () => {
+      const { controller, service } = createController();
+      service.currentUser = null;
+
+      await expect(controller.me('missing-user')).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
     });
   });
 });

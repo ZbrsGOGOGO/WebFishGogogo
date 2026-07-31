@@ -1,0 +1,169 @@
+name: webfish
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  LOCAL_DEV: "false"
+  PORT: "3000"
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in the production env file}
+  JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+  CORS_ORIGIN: ${CORS_ORIGIN:-}
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USERNAME: ${DB_USERNAME:-webfish}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in the production env file}
+  DB_DATABASE: ${DB_DATABASE:-webfish}
+  DB_SCHEMA: public
+  DB_SSL: "false"
+  DB_LOGGING: ${DB_LOGGING:-false}
+  STORAGE_DRIVER: local
+  LOCAL_STORAGE_DIR: /app/data
+  STORAGE_KEY_PREFIX: documents
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-webfish}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in the production env file}
+      POSTGRES_DB: ${DB_DATABASE:-webfish}
+    command:
+      - postgres
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 1024m
+    cpus: 0.75
+    logging: *default-logging
+    networks:
+      - backend
+
+  migrate:
+    build:
+      context: .
+      target: api
+    image: webfish-api:${IMAGE_TAG:-local}
+    restart: "no"
+    environment: *api-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - node
+      - node_modules/typeorm/cli.js
+      - migration:run
+      - -d
+      - packages/backend/dist/database/data-source.js
+    mem_limit: 512m
+    cpus: 0.5
+    logging: *default-logging
+    networks:
+      - backend
+
+  api:
+    build:
+      context: .
+      target: api
+    image: webfish-api:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - document_data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 768m
+    cpus: 0.75
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - frontend
+      - backend
+
+  worker:
+    build:
+      context: .
+      target: api
+    image: webfish-api:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command:
+      - node
+      - packages/backend/dist/main.worker.js
+    mem_limit: 256m
+    cpus: 0.25
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - backend
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        VITE_API_BASE_URL: /api
+    image: webfish-web:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:80"
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1/healthz
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.25
+    stop_grace_period: 15s
+    logging: *default-logging
+    networks:
+      - frontend
+
+volumes:
+  postgres_data:
+  document_data:
+
+networks:
+  frontend:
+  backend:
+    internal: true

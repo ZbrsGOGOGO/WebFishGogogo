@@ -15,18 +15,18 @@ import { Link } from 'react-router-dom';
  * 下列条款为通用基线模板，部署方应结合自身主体信息、司法辖区与实际数据处理流程复核后使用。
  */
 export function PrivacyPolicyPage(): JSX.Element {
-  const lastUpdated = '2025-01-01';
+  const lastUpdated = '2026-07-26';
 
   return (
-    <section aria-labelledby="privacy-policy-title" className="compliance-page">
+    <main aria-labelledby="privacy-policy-title" className="compliance-page">
       <h1 id="privacy-policy-title">隐私政策</h1>
       <p>
         <em>最近更新：{lastUpdated}</em>
       </p>
 
       <p>
-        本隐私政策说明摸鱼阅读器（以下简称"本应用"）在您使用服务过程中如何收集、使用、存储与保护您的个人信息。
-        本应用为自托管的个人阅读工具，仅用于阅读您<strong>自有且合法拥有</strong>的文本内容。请在使用前仔细阅读本政策。
+        本隐私政策说明 ZBRS 技术工具工坊（以下简称"本应用"）在您使用服务过程中如何收集、使用、存储与保护您的个人信息。
+        本应用是自托管的技术工具与私人文档平台；阅读功能仅用于处理您<strong>自有且合法拥有</strong>的文本内容。请在使用前仔细阅读本政策。
       </p>
 
       <h2>1. 我们收集的信息</h2>
@@ -91,6 +91,6 @@ export function PrivacyPolicyPage(): JSX.Element {
           另见：<Link to="/terms-of-service">服务条款</Link>
         </p>
       </nav>
-    </section>
+    </main>
   );
 }

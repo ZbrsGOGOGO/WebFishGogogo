@@ -6,34 +6,81 @@ import { Module } from '@nestjs/common';
 import { buildStorageConfig } from '../../../config/storage.config';
 import { LocalFileStorageAdapter } from './local-file-storage.adapter';
 import { S3StorageAdapter } from './s3-storage.adapter';
-import { STORAGE_PORT } from './storage.port';
+import { STORAGE_PORT, type StoragePort } from './storage.port';
+
+export type StorageDriver = 'local' | 's3';
+
+const SUPPORTED_STORAGE_DRIVERS: readonly StorageDriver[] = ['local', 's3'];
+const DEFAULT_LOCAL_STORAGE_DIR = path.join(
+  os.tmpdir(),
+  'stealth-reader-storage',
+);
 
 /**
- * 存储模块：将 `StoragePort` 绑定到具体适配器。
+ * Resolves the selected storage backend.
  *
- * 上层（DocumentsService / ReadingService）通过 `@Inject(STORAGE_PORT)` 注入抽象，
- * 具体实现由此工厂根据环境变量构建，可在 S3 / MinIO / 本地文件系统间切换：
- * - 默认：S3StorageAdapter（生产 / MinIO）。
- * - LOCAL_DEV=true：LocalFileStorageAdapter（本地开发/预览，正文写到本地目录，
- *   无需任何对象存储服务）。存储目录由 LOCAL_STORAGE_DIR 指定，默认系统临时目录下
- *   的 stealth-reader-storage。
+ * `STORAGE_DRIVER` is authoritative when set. The `LOCAL_DEV=true` fallback is
+ * retained for existing zero-configuration development environments; all other
+ * environments continue to default to S3.
+ */
+export function resolveStorageDriver(
+  env: NodeJS.ProcessEnv = process.env,
+): StorageDriver {
+  const configuredDriver = env.STORAGE_DRIVER?.trim().toLowerCase();
+
+  if (!configuredDriver) {
+    return env.LOCAL_DEV === 'true' ? 'local' : 's3';
+  }
+
+  if (
+    SUPPORTED_STORAGE_DRIVERS.includes(configuredDriver as StorageDriver)
+  ) {
+    return configuredDriver as StorageDriver;
+  }
+
+  throw new Error(
+    `Invalid STORAGE_DRIVER "${env.STORAGE_DRIVER}". Expected one of: ${SUPPORTED_STORAGE_DRIVERS.join(', ')}.`,
+  );
+}
+
+/**
+ * Creates the adapter selected by the runtime environment.
+ *
+ * Local storage is a supported standalone deployment mode, not only a
+ * development shortcut. Set `LOCAL_STORAGE_DIR` to a persistent, backed-up
+ * directory when using it on a server.
+ */
+export function createStorageAdapter(
+  env: NodeJS.ProcessEnv = process.env,
+): StoragePort {
+  const driver = resolveStorageDriver(env);
+
+  if (driver === 'local') {
+    return new LocalFileStorageAdapter({
+      baseDir: env.LOCAL_STORAGE_DIR?.trim() || DEFAULT_LOCAL_STORAGE_DIR,
+      keyPrefix: env.STORAGE_KEY_PREFIX ?? 'documents',
+    });
+  }
+
+  return new S3StorageAdapter(buildStorageConfig(env));
+}
+
+/**
+ * Binds `StoragePort` to the configured storage adapter.
+ *
+ * Selection rules:
+ * - `STORAGE_DRIVER=local`: local filesystem in every environment.
+ * - `STORAGE_DRIVER=s3`: S3/MinIO in every environment.
+ * - no explicit driver: local for `LOCAL_DEV=true`, otherwise S3.
+ *
+ * Unsupported explicit values throw during Nest provider construction so a
+ * deployment cannot silently start against the wrong backend.
  */
 @Module({
   providers: [
     {
       provide: STORAGE_PORT,
-      useFactory: () => {
-        if (process.env.LOCAL_DEV === 'true') {
-          const baseDir =
-            process.env.LOCAL_STORAGE_DIR ||
-            path.join(os.tmpdir(), 'stealth-reader-storage');
-          return new LocalFileStorageAdapter({
-            baseDir,
-            keyPrefix: process.env.STORAGE_KEY_PREFIX ?? 'documents',
-          });
-        }
-        return new S3StorageAdapter(buildStorageConfig());
-      },
+      useFactory: () => createStorageAdapter(),
     },
   ],
   exports: [STORAGE_PORT],

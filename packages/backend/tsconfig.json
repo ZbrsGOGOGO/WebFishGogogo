@@ -5,7 +5,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "baseUrl": "./",
-    "incremental": true,
+    "incremental": false,
     "types": ["node", "jest"]
   },
   "include": ["src/**/*"],

@@ -13,11 +13,20 @@ vi.mock('../../api', async (importOriginal) => {
     readingApi: {
       ...actual.readingApi,
       getArticle: vi.fn(),
+      startSession: vi.fn(),
+      heartbeatSession: vi.fn(),
+      endSession: vi.fn(),
     },
   };
 });
 
 const getArticleMock = readingApi.getArticle as unknown as ReturnType<
+  typeof vi.fn
+>;
+const startSessionMock = readingApi.startSession as unknown as ReturnType<
+  typeof vi.fn
+>;
+const endSessionMock = readingApi.endSession as unknown as ReturnType<
   typeof vi.fn
 >;
 
@@ -51,6 +60,26 @@ function renderReaderAt(docId: string) {
 describe('ReaderPage (Req 5.1, 5.3)', () => {
   beforeEach(() => {
     getArticleMock.mockReset();
+    startSessionMock.mockReset();
+    endSessionMock.mockReset();
+    startSessionMock.mockResolvedValue({
+      sessionId: 'session-1',
+      state: 'active',
+      heartbeatIntervalMs: 15_000,
+      idleTimeoutMs: 120_000,
+      effectiveSeconds: 0,
+      qualified: false,
+      eventQueued: false,
+    });
+    endSessionMock.mockResolvedValue({
+      sessionId: 'session-1',
+      state: 'active',
+      heartbeatIntervalMs: 15_000,
+      idleTimeoutMs: 120_000,
+      effectiveSeconds: 0,
+      qualified: false,
+      eventQueued: false,
+    });
     document.title = '';
   });
 
@@ -65,7 +94,13 @@ describe('ReaderPage (Req 5.1, 5.3)', () => {
     });
 
     expect(getArticleMock).toHaveBeenCalledWith('d1', undefined);
-    expect(document.title).toBe('Redis 高可用架构实践_CSDN博客');
+    expect(document.title).toBe('Redis 高可用架构实践 - ZBRS 阅读工作台');
+    expect(await screen.findByText('有效阅读计时中')).toBeInTheDocument();
+    expect(startSessionMock).toHaveBeenCalledWith(
+      'd1',
+      expect.any(String),
+      'active',
+    );
   });
 
   it('shows a forbidden message without leaking existence (Req 12.2)', async () => {
@@ -74,7 +109,10 @@ describe('ReaderPage (Req 5.1, 5.3)', () => {
     renderReaderAt('other-user-doc');
 
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('无权访问该内容');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        '当前账户没有访问权限',
+      );
     });
+    expect(startSessionMock).not.toHaveBeenCalled();
   });
 });

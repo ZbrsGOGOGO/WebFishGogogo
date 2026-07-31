@@ -24,7 +24,7 @@ export interface SkinSummary {
  * - 不依赖文档真实存储细节（不接触对象存储、编码或原始文件），满足 Req 5.4。
  *
  * 承载 Requirement 5：
- * - 5.1 将当前章节正文渲染为 CSDN 风格技术博客文章视图；
+ * - 5.1 将当前章节正文渲染为 ZBRS 技术文章视图；
  * - 5.2 展示假标题栏/面包屑/阅读量/点赞/收藏/标签/专栏等伪装元数据（经 fakeMeta 提供）；
  * - 5.4 仅消费标准化 ArticleViewModel，不直接依赖文档真实存储细节。
  */
@@ -34,7 +34,7 @@ export class SkinService {
   private readonly registry = new Map<string, SkinTemplate>();
 
   constructor() {
-    // 默认注册 CSDN 皮肤（V1 唯一皮肤）。V2 可注册更多模板而无需改动阅读引擎。
+    // 默认注册技术文章皮肤（保留 csdn id 兼容已有数据）。
     this.register(csdnTemplate);
   }
 

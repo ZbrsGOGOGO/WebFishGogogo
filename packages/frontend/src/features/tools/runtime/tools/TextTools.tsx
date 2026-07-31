@@ -5,9 +5,10 @@
 
 import { useState, type JSX } from 'react';
 
-import { Button, Card, Textarea } from '../../../../components/ui';
+import { Button, Textarea } from '../../../../components/ui';
 
 import { applyTextOp, TEXT_OPS, type TextOp } from './textOps';
+import styles from './ToolSurface.module.css';
 
 /**
  * 文本处理工具组件。
@@ -22,42 +23,36 @@ export default function TextTools(): JSX.Element {
   }
 
   return (
-    <Card title="文本处理">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-        <Textarea
-          label="文本内容"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="在此粘贴或输入文本，然后选择下方操作…"
-          rows={10}
-          aria-label="文本内容"
-        />
+    <div className={styles.surface}>
+      <Textarea
+        label="文本内容"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder="在此粘贴或输入文本，然后选择下方操作…"
+        rows={14}
+      />
 
-        <div
-          role="group"
-          aria-label="文本操作"
-          style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}
-        >
-          {TEXT_OPS.map(({ op, label }) => (
-            <Button
-              key={op}
-              variant="secondary"
-              size="sm"
-              onClick={() => handleOp(op)}
-            >
-              {label}
-            </Button>
-          ))}
+      <div className={styles.actions} role="group" aria-label="文本操作">
+        {TEXT_OPS.map(({ op, label }) => (
           <Button
-            variant="ghost"
+            key={op}
+            variant="secondary"
             size="sm"
-            onClick={() => setText('')}
             disabled={text === ''}
+            onClick={() => handleOp(op)}
           >
-            清空
+            {label}
           </Button>
-        </div>
+        ))}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setText('')}
+          disabled={text === ''}
+        >
+          清空
+        </Button>
       </div>
-    </Card>
+    </div>
   );
 }

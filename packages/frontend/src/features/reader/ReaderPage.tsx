@@ -3,8 +3,8 @@
 //
 // 职责（任务 16.1）：
 // - 从路由参数取 docId，拉取 ArticleViewModel（useArticle）。
-// - 用 CSDN 皮肤渲染成"技术博客文章页"（Req 5.1/5.2）。
-// - 设置浏览器标签页标题为技术博客风格文本（Req 5.3）。
+// - 用历史兼容皮肤渲染成 ZBRS 技术文章页（Req 5.1/5.2）。
+// - 设置浏览器标签页标题为 ZBRS 技术文章风格文本（Req 5.3）。
 //
 // 该容器同时为后续任务预留插槽，便于渐进接入而不改动皮肤层：
 // - controlsSlot：阅读控制（16.2 字号/行距/主题/翻页模式）。
@@ -21,12 +21,15 @@ import { CsdnSkin, buildBlogTabTitle } from '../skins';
 import { BossScreen } from './BossScreen';
 import { ReaderSidebar } from './ReaderSidebar';
 import { ReadingControls } from './ReadingControls';
+import { ReadingSessionIndicator } from './ReadingSessionIndicator';
 import { useArticle } from './useArticle';
 import { useBossKey } from './useBossKey';
 import { useDocumentTitle } from './useDocumentTitle';
 import { useReaderSidebar } from './useReaderSidebar';
 import { useReadingProgress } from './useReadingProgress';
 import { useReadingSettings } from './useReadingSettings';
+import { useTrustedReadingSession } from './useTrustedReadingSession';
+import styles from './ReaderPage.module.css';
 
 export interface ReaderPageProps {
   /** 阅读控制条插槽（任务 16.2 注入）。 */
@@ -49,6 +52,10 @@ export function ReaderPage({
   // 并暂停进度上报（Req 9.2）；再次按下恢复界面与上报（Req 9.3）。
   // 老板键从偏好加载（默认 'Escape'，Req 9.4）。
   const bossKey = useBossKey();
+  const trustedSession = useTrustedReadingSession(docId, {
+    enabled: Boolean(article) && !error && !forbidden,
+    bossActive: bossKey.active,
+  });
 
   // 任务 16.3：进度自动保存与恢复。
   // - 重开文档时从 article.progress 恢复上次章节与偏移（Req 7.2）。
@@ -83,14 +90,16 @@ export function ReaderPage({
   useEffect(() => {
     if (!restored) return undefined;
 
-    const chapterIdx = article?.progress.chapterIdx ?? 0;
-
     const handleScroll = () => {
       const doc = document.documentElement;
       const scrollable = doc.scrollHeight - doc.clientHeight;
       const scrollTop = window.scrollY || doc.scrollTop || 0;
       const percent = scrollable > 0 ? (scrollTop / scrollable) * 100 : 0;
-      reportProgress({ chapterIdx, charOffset: scrollTop, percent });
+      reportProgress({
+        chapterIdx: progress.chapterIdx,
+        charOffset: scrollTop,
+        percent,
+      });
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
@@ -99,10 +108,10 @@ export function ReaderPage({
       // 离开页面前落盘挂起的进度，减少丢失。
       flush();
     };
-  }, [restored, article?.progress.chapterIdx, reportProgress, flush]);
+  }, [restored, progress.chapterIdx, reportProgress, flush]);
 
-  // Req 5.3：将标签页标题设为技术博客风格文本（如 "<title>_CSDN博客"）。
-  // 加载中/出错时使用通用博客标题占位，避免暴露"阅读器"字样。
+  // Req 5.3：将标签页标题设为 ZBRS 技术文章风格文本。
+  // 加载中/出错时使用统一的技术文章标题占位。
   const tabTitle = article
     ? buildBlogTabTitle(article.articleTitle)
     : buildBlogTabTitle('');
@@ -116,8 +125,12 @@ export function ReaderPage({
 
   if (loading) {
     return (
-      <div role="status" aria-live="polite" style={statusStyle}>
-        正在加载…
+      <div className={styles.statusPage} role="status" aria-live="polite">
+        <span className={styles.statusMark} aria-hidden="true">
+          Z
+        </span>
+        <strong>正在打开文档</strong>
+        <span>正在恢复章节与上次阅读位置…</span>
       </div>
     );
   }
@@ -125,19 +138,29 @@ export function ReaderPage({
   if (forbidden) {
     // Req 12.2：不泄露文档是否存在，仅提示无权访问。
     return (
-      <div role="alert" style={statusStyle}>
-        无权访问该内容。
+      <div className={styles.statusPage} role="alert">
+        <span className={styles.statusCode}>403</span>
+        <strong>无法打开这份文档</strong>
+        <span>当前账户没有访问权限，文档内容未被加载。</span>
+        <a className={styles.statusAction} href="/library">
+          返回文档库
+        </a>
       </div>
     );
   }
 
   if (error || !article) {
     return (
-      <div role="alert" style={statusStyle}>
-        <p>{error ?? '内容不可用'}</p>
-        <button type="button" onClick={reload}>
-          重试
-        </button>
+      <div className={styles.statusPage} role="alert">
+        <span className={styles.statusCode}>!</span>
+        <strong>文档暂时无法打开</strong>
+        <span>{error ?? '内容不可用'}</span>
+        <div className={styles.statusActions}>
+          <button type="button" onClick={reload}>
+            重新加载
+          </button>
+          <a href="/library">返回文档库</a>
+        </div>
       </div>
     );
   }
@@ -145,9 +168,12 @@ export function ReaderPage({
   return (
     <CsdnSkin
       article={article}
-      // 默认注入阅读控制条（任务 16.2）；如父级显式传入则以父级为准。
-      controlsSlot={controlsSlot ?? <ReadingControls settings={settings} />}
-      // 默认注入章节目录 / 书签侧栏（任务 16.4）；父级显式传入则以父级为准。
+      controlsSlot={
+        <>
+          {controlsSlot ?? <ReadingControls settings={settings} />}
+          <ReadingSessionIndicator session={trustedSession} />
+        </>
+      }
       sidebarSlot={
         sidebarSlot ?? (
           <ReaderSidebar
@@ -162,7 +188,6 @@ export function ReaderPage({
           />
         )
       }
-      // 应用视觉设置到正文（Req 6.4）与呈现模式（Req 6.5）。
       bodyStyle={{
         fontSize: `${settings.fontSize}px`,
         lineHeight: settings.lineHeight,
@@ -172,10 +197,3 @@ export function ReaderPage({
     />
   );
 }
-
-const statusStyle: React.CSSProperties = {
-  maxWidth: 800,
-  margin: '80px auto',
-  textAlign: 'center',
-  color: '#555',
-};

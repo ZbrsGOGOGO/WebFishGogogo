@@ -102,6 +102,18 @@ describe('PreferencesService', () => {
     expect(prefs.activeSkin).toBe('csdn');
   });
 
+  it('round-trips extensible settings without dropping existing keys', async () => {
+    await service.updatePreferences(userId, {
+      settings: { readingMode: 'paging', compactTools: true },
+    });
+
+    const prefs = await service.getPreferences(userId);
+    expect(prefs.settings).toEqual({
+      readingMode: 'paging',
+      compactTools: true,
+    });
+  });
+
   it('round-trips profession set -> get consistently (Req 14.6, backs Property 9)', async () => {
     for (const profession of Object.values(Profession)) {
       await service.setProfession(userId, profession);

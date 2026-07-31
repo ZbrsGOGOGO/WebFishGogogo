@@ -1,0 +1,391 @@
+.dashboard {
+  margin-bottom: 0;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.22fr) minmax(280px, 0.78fr);
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
+.panel {
+  min-width: 0;
+  height: 100%;
+}
+
+.pageState {
+  min-height: 180px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.pageState p {
+  margin: 0;
+}
+
+.refreshWarning,
+.claimError {
+  margin: 0 0 var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-danger) 24%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface));
+  color: var(--color-danger);
+}
+
+.refreshWarning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.claimError {
+  padding: var(--space-2) var(--space-3);
+}
+
+.syncNotice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 20%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: 13px;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: auto minmax(80px, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-soft);
+}
+
+.summary > div:first-child {
+  display: grid;
+  gap: 1px;
+}
+
+.summary span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.summary strong {
+  color: var(--color-brand);
+  font-size: 18px;
+}
+
+.overallTrack,
+.progressTrack {
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-brand) 13%, var(--color-surface));
+}
+
+.overallTrack {
+  height: 8px;
+}
+
+.overallTrack > span,
+.progressTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-brand);
+  transition: width 0.2s ease;
+}
+
+.taskList,
+.activityList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.taskList {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.taskItem {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.taskHeading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.taskHeading > div {
+  min-width: 0;
+}
+
+.taskHeading h3 {
+  margin: 0 0 2px;
+  font-size: 15px;
+}
+
+.taskHeading p {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.taskProgress {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.progressMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.progressMeta strong {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.progressTrack {
+  height: 6px;
+  background: var(--color-surface-2);
+}
+
+.taskFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.rewards {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.rewardLabel {
+  margin-right: 2px;
+}
+
+.rewards strong {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-weight: 600;
+}
+
+.actionLink {
+  min-height: 30px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.actionLink:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+  text-decoration: none;
+}
+
+.actionLink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+
+.claimed {
+  flex: 0 0 auto;
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.waiting {
+  max-width: 150px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+
+.activityList {
+  gap: 0;
+  max-height: 356px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+}
+
+.activityItem {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.activityItem:last-child {
+  padding-bottom: 0;
+}
+
+.activityItem:not(:last-child)::after {
+  position: absolute;
+  top: 32px;
+  bottom: 4px;
+  left: 15px;
+  width: 1px;
+  background: var(--color-border);
+  content: '';
+}
+
+.activityIcon {
+  position: relative;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, var(--color-border));
+  border-radius: 50%;
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.activityContent {
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.activityContent > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.activityContent strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activityContent time {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.activityContent p {
+  margin: 2px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.empty {
+  min-height: 156px;
+}
+
+@media (max-width: 860px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .activityList {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 680px) {
+  .taskList {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .overallTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .taskFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .taskFooter button,
+  .actionLink {
+    width: 100%;
+  }
+
+  .claimed,
+  .waiting {
+    max-width: none;
+    text-align: left;
+  }
+
+  .refreshWarning {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .activityContent > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overallTrack > span,
+  .progressTrack > span {
+    transition: none;
+  }
+}

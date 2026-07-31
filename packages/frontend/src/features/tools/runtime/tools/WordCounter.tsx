@@ -5,9 +5,10 @@
 
 import { useMemo, useState, type JSX } from 'react';
 
-import { Card, Textarea } from '../../../../components/ui';
+import { Textarea } from '../../../../components/ui';
 
 import { computeTextStats } from './textStats';
+import styles from './ToolSurface.module.css';
 
 interface StatItem {
   label: string;
@@ -31,60 +32,27 @@ export default function WordCounter(): JSX.Element {
   ];
 
   return (
-    <Card title="字数统计">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-        <Textarea
-          label="文本内容"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="在此粘贴或输入文本，实时统计…"
-          rows={8}
-          aria-label="文本内容"
-        />
+    <div className={styles.surface}>
+      <Textarea
+        label="文本内容"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder="在此粘贴或输入文本，实时统计…"
+        rows={12}
+      />
 
-        <dl
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: 'var(--space-3)',
-            margin: 0,
-          }}
-        >
-          {items.map((item) => (
-            <div
-              key={item.label}
-              style={{
-                background: 'var(--color-surface-2)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: 'var(--space-3)',
-                textAlign: 'center',
-              }}
+      <dl className={styles.statGrid} aria-live="polite">
+        {items.map((item) => (
+          <div key={item.label} className={styles.stat}>
+            <dt>{item.label}</dt>
+            <dd
+              data-testid={`stat-value-${item.label}`}
             >
-              <dd
-                style={{
-                  margin: 0,
-                  fontSize: '22px',
-                  fontWeight: 600,
-                  color: 'var(--color-brand)',
-                }}
-                data-testid={`stat-value-${item.label}`}
-              >
-                {item.value}
-              </dd>
-              <dt
-                style={{
-                  marginTop: 'var(--space-1)',
-                  fontSize: '12px',
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                {item.label}
-              </dt>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </Card>
+              {item.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

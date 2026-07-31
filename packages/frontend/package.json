@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "摸鱼阅读器 React + Vite SPA",
+  "description": "ZBRS 技术工具工坊 React + Vite SPA",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

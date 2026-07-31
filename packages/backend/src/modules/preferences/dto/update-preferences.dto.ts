@@ -16,6 +16,7 @@ export interface UpdatePreferencesDto {
   theme?: string;
   bossKey?: string;
   profession?: Profession | null;
+  settings?: Record<string, unknown>;
 }
 
 /**
@@ -51,6 +52,9 @@ export function toPreferencePatch(body: unknown): PreferencePatch {
   if ('profession' in raw) {
     patch.profession = raw.profession === null ? null : expectString(raw.profession, 'profession') as Profession;
   }
+  if ('settings' in raw) {
+    patch.settings = expectRecord(raw.settings, 'settings');
+  }
 
   return patch;
 }
@@ -77,4 +81,11 @@ function expectNumericString(value: unknown, field: string): string {
     return value;
   }
   throw new BadRequestException(`${field} must be a number`);
+}
+
+function expectRecord(value: unknown, field: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new BadRequestException(`${field} must be an object`);
+  }
+  return { ...(value as Record<string, unknown>) };
 }

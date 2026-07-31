@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import {
   DeleteObjectsCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -61,6 +62,10 @@ export class S3StorageAdapter implements StoragePort {
   /** 构造单个章节的完整 storageKey。 */
   private chapterKey(docId: string, idx: number): string {
     return `${this.documentPrefix(docId)}/chapter-${idx}.txt`;
+  }
+
+  async checkHealth(): Promise<void> {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
   }
 
   async putChapter(

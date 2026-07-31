@@ -24,7 +24,19 @@ export function ProtectedRoute({
   children,
 }: ProtectedRouteProps): JSX.Element {
   const token = useAuthStore((state) => state.token);
+  const sessionReady = useAuthStore((state) => state.sessionReady);
   const location = useLocation();
+
+  if (!sessionReady) {
+    return (
+      <div className="route-loading" role="status" aria-live="polite">
+        <span className="route-loading__mark" aria-hidden="true">
+          Z
+        </span>
+        <span>正在恢复本机会话…</span>
+      </div>
+    );
+  }
 
   if (!token) {
     return <Navigate to={redirectTo} replace state={{ from: location }} />;

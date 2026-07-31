@@ -1,0 +1,373 @@
+.page {
+  --tetris-stage: #101827;
+  --tetris-grid: rgba(255, 255, 255, 0.08);
+  --tetris-i: #22d3ee;
+  --tetris-j: #3b82f6;
+  --tetris-l: #fb923c;
+  --tetris-o: #facc15;
+  --tetris-s: #4ade80;
+  --tetris-t: #c084fc;
+  --tetris-z: #fb7185;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(340px, 1fr) minmax(230px, 290px);
+  align-items: start;
+  gap: var(--space-4);
+}
+
+.boardCard {
+  min-width: 0;
+}
+
+.boardCardBody {
+  padding: var(--space-4);
+  background:
+    radial-gradient(
+      circle at 50% 15%,
+      color-mix(in srgb, var(--color-brand) 10%, transparent),
+      transparent 45%
+    ),
+    var(--color-surface-2);
+}
+
+.gameStage {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+}
+
+.boardFrame {
+  position: relative;
+  width: clamp(180px, calc((100dvh - 270px) / 2), 320px);
+  max-width: 100%;
+  overflow: hidden;
+  border: 6px solid color-mix(in srgb, var(--tetris-stage) 84%, white);
+  border-radius: var(--radius-md);
+  background: var(--tetris-stage);
+  box-shadow:
+    0 0 0 1px var(--color-border),
+    var(--shadow-lg);
+}
+
+.board {
+  width: 100%;
+  aspect-ratio: 1 / 2;
+  display: grid;
+  grid-template-rows: repeat(20, 1fr);
+  background:
+    linear-gradient(var(--tetris-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--tetris-grid) 1px, transparent 1px),
+    var(--tetris-stage);
+  background-size: 10% 5%;
+}
+
+.board:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: -6px;
+}
+
+.boardRow {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+}
+
+.cell,
+.previewCell {
+  min-width: 0;
+  min-height: 0;
+}
+
+.cell[class*='piece'] {
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 3px;
+  box-shadow:
+    inset 2px 2px 0 rgba(255, 255, 255, 0.32),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.16);
+}
+
+.pieceI {
+  background: var(--tetris-i);
+}
+
+.pieceJ {
+  background: var(--tetris-j);
+}
+
+.pieceL {
+  background: var(--tetris-l);
+}
+
+.pieceO {
+  background: var(--tetris-o);
+}
+
+.pieceS {
+  background: var(--tetris-s);
+}
+
+.pieceT {
+  background: var(--tetris-t);
+}
+
+.pieceZ {
+  background: var(--tetris-z);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: rgba(9, 15, 27, 0.78);
+  color: #fff;
+  text-align: center;
+  backdrop-filter: blur(2px);
+}
+
+.overlay strong {
+  font-size: 22px;
+}
+
+.overlay span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+}
+
+.overlay button {
+  margin-top: var(--space-2);
+}
+
+.screenControls {
+  width: min(100%, 420px);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(52px, 1fr));
+  gap: var(--space-2);
+}
+
+.controlButton {
+  min-height: 54px;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-sm);
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.controlButton:hover:not(:disabled) {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+}
+
+.controlButton:active:not(:disabled) {
+  background: var(--color-brand-soft);
+  transform: translateY(1px);
+}
+
+.controlButton:focus-visible {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+
+.controlButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.controlButton > span {
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.controlButton small {
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.hardDropControl {
+  border-color: color-mix(in srgb, var(--color-brand) 35%, var(--color-border));
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+}
+
+.sidebar {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.statsBody {
+  padding: 0;
+}
+
+.stats {
+  margin: 0;
+}
+
+.stats > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.stats > div:last-child {
+  border-bottom: 0;
+}
+
+.stats dt {
+  color: var(--color-text-secondary);
+}
+
+.stats dd {
+  margin: 0;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.stats > div:first-child dd {
+  color: var(--color-brand);
+  font-size: 22px;
+}
+
+.previewBody {
+  min-height: 112px;
+  display: grid;
+  place-items: center;
+}
+
+.preview {
+  width: 104px;
+  min-height: 52px;
+  display: grid;
+  grid-auto-rows: 26px;
+  align-content: center;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--tetris-stage);
+}
+
+.previewCell[class*='piece'] {
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 3px;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.3);
+}
+
+.helpBody {
+  padding: var(--space-3) var(--space-4);
+}
+
+.helpList {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.helpList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.helpList li span {
+  margin-left: auto;
+}
+
+.helpList kbd {
+  min-width: 24px;
+  padding: 2px 5px;
+  border: 1px solid var(--color-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sidebar > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .boardFrame {
+    width: clamp(160px, calc((100dvh - 350px) / 2), 280px);
+  }
+}
+
+@media (max-width: 520px) {
+  .headerActions > button {
+    min-height: 40px;
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .boardCardBody {
+    padding: var(--space-3);
+  }
+
+  .screenControls {
+    grid-template-columns: repeat(5, minmax(45px, 1fr));
+    gap: var(--space-1);
+  }
+
+  .controlButton {
+    min-height: 50px;
+    padding-inline: var(--space-1);
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr;
+    margin-top: var(--space-4);
+  }
+
+  .sidebar > :last-child {
+    grid-column: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .controlButton:active:not(:disabled) {
+    transform: none;
+  }
+}

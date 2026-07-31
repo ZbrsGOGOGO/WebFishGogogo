@@ -2,7 +2,7 @@
 // 应用路由表：公开的登录/注册页 + 受保护的应用区（ProtectedRoute 守卫）。
 
 import type { JSX } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router-dom';
 
 import { LoginPage, RegisterPage } from '../features/auth';
 import { PrivacyPolicyPage, TermsOfServicePage } from '../features/compliance';
@@ -10,7 +10,28 @@ import { HomePage } from '../features/home/HomePage';
 import { LibraryPage } from '../features/library';
 import { ReaderPage } from '../features/reader';
 import { ToolsPage } from '../features/tools';
+import { FarmPage } from '../features/farm';
+import {
+  ArenaPage,
+  GamesPage,
+  HighLowGamePage,
+  SnakeGamePage,
+  TankBattlePage,
+  TetrisGamePage,
+  ThreeSumGamePage,
+} from '../features/games';
 import { ProtectedLayout } from './ProtectedLayout';
+
+function NotFoundPage(): JSX.Element {
+  return (
+    <section className="not-found" aria-labelledby="not-found-title">
+      <span className="not-found__code">404</span>
+      <h1 id="not-found-title">没有找到这个页面</h1>
+      <p>地址可能已变更，或这项功能尚未包含在当前本机版本中。</p>
+      <a href="/">返回工作台</a>
+    </section>
+  );
+}
 
 /**
  * 路由结构：
@@ -35,10 +56,16 @@ export function AppRouter(): JSX.Element {
         {/* 阅读页伪装成博客文章路径（Req 5.1）。 */}
         <Route path="/blog/article/:docId" element={<ReaderPage />} />
         <Route path="/tools" element={<ToolsPage />} />
+        <Route path="/farm" element={<FarmPage />} />
+        <Route path="/games" element={<GamesPage />} />
+        <Route path="/games/arena" element={<ArenaPage />} />
+        <Route path="/games/snake" element={<SnakeGamePage />} />
+        <Route path="/games/tetris" element={<TetrisGamePage />} />
+        <Route path="/games/tank" element={<TankBattlePage />} />
+        <Route path="/games/high-low" element={<HighLowGamePage />} />
+        <Route path="/games/three-sum" element={<ThreeSumGamePage />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Route>
-
-      {/* 未匹配路径回退到首页（由 ProtectedRoute 决定是否需要登录）。 */}
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

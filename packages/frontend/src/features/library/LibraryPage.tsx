@@ -8,9 +8,11 @@ import type { DocumentMeta } from '@stealth-reader/shared';
 import { DEFAULT_PAGE, DEFAULT_PAGE_SIZE } from '@stealth-reader/shared';
 
 import { ApiError, documentsApi } from '../../api';
+import { Button, Card, Modal, PageHeader } from '../../components/ui';
 import { DocumentList } from './DocumentList';
 import { DocumentSearch } from './DocumentSearch';
 import { DocumentUpload } from './DocumentUpload';
+import styles from './LibraryPage.module.css';
 
 export function LibraryPage(): JSX.Element {
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
@@ -20,10 +22,15 @@ export function LibraryPage(): JSX.Element {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const loadDocuments = useCallback(
-    async (nextPage: number, keyword: string): Promise<void> => {
-      setLoading(true);
+    async (
+      nextPage: number,
+      keyword: string,
+      silent = false,
+    ): Promise<void> => {
+      if (!silent) setLoading(true);
       setError(null);
       try {
         const result = await documentsApi.listDocuments({
@@ -37,7 +44,7 @@ export function LibraryPage(): JSX.Element {
       } catch (err) {
         setError(err instanceof ApiError ? err.message : '加载文档库失败');
       } finally {
-        setLoading(false);
+        if (!silent) setLoading(false);
       }
     },
     [pageSize],
@@ -48,6 +55,16 @@ export function LibraryPage(): JSX.Element {
     // 仅在页码或搜索关键字变化时重新加载。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, query]);
+
+  useEffect(() => {
+    if (!documents.some((document) => document.status === 'processing')) {
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      void loadDocuments(page, query, true);
+    }, 3500);
+    return () => window.clearTimeout(timer);
+  }, [documents, loadDocuments, page, query]);
 
   const handleSearch = useCallback((keyword: string): void => {
     // 搜索时回到第一页（Req 3.2/3.3）。
@@ -64,6 +81,7 @@ export function LibraryPage(): JSX.Element {
     setQuery('');
     setPage(DEFAULT_PAGE);
     void loadDocuments(DEFAULT_PAGE, '');
+    setUploadOpen(false);
   }, [loadDocuments]);
 
   const handleDelete = useCallback(
@@ -79,29 +97,78 @@ export function LibraryPage(): JSX.Element {
     [loadDocuments, page, query],
   );
 
+  const readyCount = documents.filter(
+    (document) => document.status === 'ready',
+  ).length;
+
   return (
-    <section aria-labelledby="library-title">
-      <h1 id="library-title">文档库</h1>
-
-      <DocumentUpload onUploaded={handleUploaded} />
-
-      <DocumentSearch value={query} onSearch={handleSearch} />
-
-      {error ? (
-        <p role="alert" style={{ color: 'crimson' }}>
-          {error}
-        </p>
-      ) : null}
-
-      <DocumentList
-        documents={documents}
-        total={total}
-        page={page}
-        pageSize={pageSize}
-        loading={loading}
-        onPageChange={handlePageChange}
-        onDelete={handleDelete}
+    <section aria-label="文档库">
+      <PageHeader
+        title="我的文档"
+        subtitle="查找资料、继续阅读，进度与书签会自动保存在本机账户中。"
+        actions={
+          <div className={styles.headerActions}>
+            <dl className={styles.headerStats} aria-label="文档统计">
+              <div>
+                <dt>全部</dt>
+                <dd>{total}</dd>
+              </div>
+              <div>
+                <dt>可阅读</dt>
+                <dd>{readyCount}</dd>
+              </div>
+            </dl>
+            <Button onClick={() => setUploadOpen(true)}>+ 导入文档</Button>
+          </div>
+        }
       />
+
+      <Card className={styles.libraryCard}>
+        <div className={styles.libraryToolbar}>
+          <div>
+            <span className={styles.eyebrow}>私人资料库</span>
+            <h2>{query ? '搜索结果' : '全部文档'}</h2>
+            <p>
+              {query
+                ? `正在查看与“${query}”相关的结果`
+                : '按标题快速查找，并从上次进度继续阅读。'}
+            </p>
+          </div>
+          <DocumentSearch value={query} onSearch={handleSearch} />
+        </div>
+
+        {error ? (
+          <div className={styles.inlineError} role="alert">
+            <span aria-hidden="true">!</span>
+            <p>{error}</p>
+            <button
+              type="button"
+              onClick={() => void loadDocuments(page, query)}
+            >
+              重新加载
+            </button>
+          </div>
+        ) : null}
+
+        <DocumentList
+          documents={documents}
+          total={total}
+          page={page}
+          pageSize={pageSize}
+          loading={loading}
+          onPageChange={handlePageChange}
+          onDelete={handleDelete}
+        />
+      </Card>
+
+      <Modal
+        open={uploadOpen}
+        size="lg"
+        title="导入私人文档"
+        onClose={() => setUploadOpen(false)}
+      >
+        <DocumentUpload onUploaded={handleUploaded} />
+      </Modal>
     </section>
   );
 }

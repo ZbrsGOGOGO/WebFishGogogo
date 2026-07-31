@@ -145,6 +145,8 @@ class InMemoryStorage implements StoragePort {
   puts: Array<{ docId: string; idx: number; content: string }> = [];
   failOnPut = false;
 
+  async checkHealth(): Promise<void> {}
+
   async putChapter(docId: string, idx: number, content: string) {
     if (this.failOnPut) {
       throw new Error('对象存储不可达');

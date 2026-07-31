@@ -33,33 +33,24 @@ export function Footer(): JSX.Element {
   const beianPending = isBeianPlaceholder(ICP_BEIAN_NUMBER);
 
   return (
-    <footer role="contentinfo" aria-label="站点合规信息">
-      <nav aria-label="合规页面">
-        <ul>
-          <li>
-            <Link to="/privacy-policy">隐私政策</Link>
-          </li>
-          <li>
-            <Link to="/terms-of-service">服务条款</Link>
-          </li>
-        </ul>
-      </nav>
-
-      <p>{USER_CONTENT_FOOTER_STATEMENT}</p>
-
-      <p>
-        {beianPending ? (
-          <span>备案信息待补充</span>
-        ) : (
-          <a href={ICP_BEIAN_URL} target="_blank" rel="noreferrer noopener">
-            {ICP_BEIAN_NUMBER}
-          </a>
-        )}
-      </p>
-
-      <p>
-        <small>© {currentYear} 摸鱼阅读器</small>
-      </p>
+    <footer className="site-footer" role="contentinfo" aria-label="站点信息">
+      <div className="site-footer__inner">
+        <div className="site-footer__brand">
+          <strong>ZBRS 技术工具工坊</strong>
+          <span>本机版 · 数据由您的本地服务保存</span>
+        </div>
+        <p className="site-footer__statement">{USER_CONTENT_FOOTER_STATEMENT}</p>
+        <nav className="site-footer__links" aria-label="合规页面">
+          <Link to="/privacy-policy">隐私政策</Link>
+          <Link to="/terms-of-service">服务条款</Link>
+          {!beianPending ? (
+            <a href={ICP_BEIAN_URL} target="_blank" rel="noreferrer noopener">
+              {ICP_BEIAN_NUMBER}
+            </a>
+          ) : null}
+          <span>© {currentYear} ZBRS</span>
+        </nav>
+      </div>
     </footer>
   );
 }

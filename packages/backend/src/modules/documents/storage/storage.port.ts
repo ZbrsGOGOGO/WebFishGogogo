@@ -5,6 +5,8 @@
  * 具体实现（AWS S3 / MinIO / 本地）可通过配置切换而不影响上层逻辑。
  */
 export interface StoragePort {
+  /** Verify that the configured storage backend is reachable and writable. */
+  checkHealth(): Promise<void>;
   /** 保存单个章节正文，返回该章节的 storageKey。 */
   putChapter(docId: string, idx: number, content: string): Promise<string>;
   /** 读取章节正文。 */

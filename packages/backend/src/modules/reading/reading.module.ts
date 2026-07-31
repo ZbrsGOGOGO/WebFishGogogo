@@ -1,14 +1,27 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-import { Bookmark, Chapter, ReadingProgress } from '../../database/entities';
+import {
+  Bookmark,
+  Chapter,
+  ReadingDailyUsage,
+  ReadingProgress,
+  ReadingSession,
+} from '../../database/entities';
 import { DocumentsModule } from '../documents/documents.module';
 import { StorageModule } from '../documents/storage';
+import { OutboxModule } from '../outbox';
 import { SkinModule } from '../skin/skin.module';
 import { BookmarkRepository } from './bookmark.repository';
 import { ChapterRepository } from './chapter.repository';
 import { ProgressRepository } from './progress.repository';
 import { ReadingController } from './reading.controller';
+import {
+  READING_SESSION_CLOCK,
+  systemReadingSessionClock,
+} from './reading-session.constants';
+import { ReadingSessionsController } from './reading-sessions.controller';
+import { ReadingSessionsService } from './reading-sessions.service';
 import { ReadingService } from './reading.service';
 
 /**
@@ -31,23 +44,36 @@ import { ReadingService } from './reading.service';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ReadingProgress, Chapter, Bookmark]),
+    TypeOrmModule.forFeature([
+      ReadingProgress,
+      ReadingSession,
+      ReadingDailyUsage,
+      Chapter,
+      Bookmark,
+    ]),
     DocumentsModule,
+    OutboxModule,
     StorageModule,
     SkinModule,
   ],
-  controllers: [ReadingController],
+  controllers: [ReadingController, ReadingSessionsController],
   providers: [
     ProgressRepository,
     ChapterRepository,
     BookmarkRepository,
     ReadingService,
+    ReadingSessionsService,
+    {
+      provide: READING_SESSION_CLOCK,
+      useValue: systemReadingSessionClock,
+    },
   ],
   exports: [
     ProgressRepository,
     ChapterRepository,
     BookmarkRepository,
     ReadingService,
+    ReadingSessionsService,
   ],
 })
 export class ReadingModule {}

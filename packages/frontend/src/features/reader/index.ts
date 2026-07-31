@@ -32,3 +32,11 @@ export { useBossKey, DEFAULT_BOSS_KEY } from './useBossKey';
 export type { UseBossKeyOptions, UseBossKeyResult } from './useBossKey';
 export { BossScreen } from './BossScreen';
 export type { BossScreenProps } from './BossScreen';
+export { ReadingSessionIndicator } from './ReadingSessionIndicator';
+export type { ReadingSessionIndicatorProps } from './ReadingSessionIndicator';
+export { useTrustedReadingSession } from './useTrustedReadingSession';
+export type {
+  ReadingSessionConnection,
+  UseTrustedReadingSessionOptions,
+  UseTrustedReadingSessionResult,
+} from './useTrustedReadingSession';

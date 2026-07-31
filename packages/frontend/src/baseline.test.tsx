@@ -10,8 +10,9 @@ describe('frontend baseline', () => {
     // 未认证用户访问根路径会被 ProtectedRoute 重定向到登录页（Req 1.5）。
     render(<App />);
     expect(
-      screen.getByRole('heading', { name: '登录' }),
+      screen.getByRole('heading', { name: '欢迎回来' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '登录' })).toBeInTheDocument();
   });
 
   it('consumes shared constants', () => {

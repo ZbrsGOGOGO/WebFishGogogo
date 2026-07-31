@@ -66,6 +66,7 @@ export function Input({
         aria-invalid={error ? true : undefined}
         aria-describedby={errorId}
         aria-required={required || undefined}
+        required={required}
         {...rest}
       />
       {error && (
@@ -109,6 +110,7 @@ export function Textarea({
         aria-invalid={error ? true : undefined}
         aria-describedby={errorId}
         aria-required={required || undefined}
+        required={required}
         {...rest}
       />
       {error && (

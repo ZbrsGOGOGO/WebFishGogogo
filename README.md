@@ -1,204 +1,176 @@
-# 摸鱼阅读器 · WebFishGogogo（Stealth Reader）
+# ZBRS 技术工具工坊
 
-> 一个「伪装成 CSDN 风格技术博客」的**个人自有内容**阅读器。用户上传并阅读**自己合法拥有**的文本文档，阅读界面伪装成技术博客文章页，融入办公环境。
->
-> **合规基线：本项目仅面向用户自有、合法拥有的内容，明确排除盗版小说分发、赌博/博彩及任何违法玩法。**
+ZBRS 技术工具工坊是一个面向自有服务器部署的 Web 平台，由四个用户可见系统组成：
 
----
+- **阅读**：上传并阅读用户自己合法拥有的文本文档，提供书架、章节、进度、书签、便签与技术博客风格阅读页。
+- **工具**：办公、文本与开发者小工具，支持岗位偏好推荐和可直接使用的工具组件。
+- **农场**：围绕土地、种子、种植、成熟与收获构成的轻量资源循环。
+- **小游戏**：统一游戏入口，现有贪食蛇、俄罗斯方块、坦克大战、比大小、三数之和，以及服务端自动结算的“午休斗技场”。
 
-## 目录
+四个系统共用账号、成长、精力、钱包、背包、签到和幂等奖励能力。共享底座属于平台内部能力，不是第五个前台系统。
 
-- [1. 项目简介](#1-项目简介)
-- [2. 参考来源（灵感站点）](#2-参考来源灵感站点)
-- [3. 技术栈](#3-技术栈)
-- [4. 项目结构](#4-项目结构)
-- [5. 版本规划（V1 / V2 / V3）](#5-版本规划v1--v2--v3)
-- [6. 开发进度跟踪](#6-开发进度跟踪)
-- [7. 整体设计](#7-整体设计)
-- [8. 本地运行（预览）](#8-本地运行预览)
-- [9. 文档索引](#9-文档索引)
+> **合规边界：**阅读系统只处理用户自有、合法拥有的内容；项目不提供盗版内容分发、赌博/博彩、付费抽奖、虚拟资产提现或现金返佣，也不复制第三方游戏的名称、角色、图像、技能与文案。
 
----
+## 当前状态
 
-## 1. 项目简介
+当前仓库已完成四系统重建与正式界面收口，可作为**单机首发候选版**运行。前端统一使用“ZBRS 技术工具工坊”品牌；阅读、工具、农场和六个小游戏入口均已接入同一账号与导航框架。
 
-| 项 | 内容 |
-|---|---|
-| 项目名 | 摸鱼阅读器 / WebFishGogogo / Stealth Reader |
-| 代码仓库 | https://github.com/ZbrsGOGOGO/WebFishGogogo |
-| 形态 | 自托管 Web 应用（前后端分离 + Monorepo） |
-| 核心价值 | 把自有文本渲染成「技术博客文章页」，办公场景低调阅读 |
-| 目标规模 | 1–2k 活跃 / 同时在线 |
-| 当前阶段 | **V1（上线审核版）功能已完成**，UI 设计与工具真实交互待补 |
-
----
-
-## 2. 参考来源（灵感站点）
-
-本项目的产品形态灵感来自以下站点，**仅作交互与产品设计参考，不复制其内容与非法功能**：
-
-| 参考项 | 地址 / 说明 |
-|---|---|
-| 灵感站点 | `https://www.duanwuqiufenmao.top/` |
-| 参考的产品点 | CSDN 风格伪装阅读界面、文档库、老板键、摸鱼小工具（下班倒计时等）、便签 |
-| **明确不参考/不实现** | 该站的盗版小说分发、赌博类玩法（乐斗/梭哈）、非法聊天导流 |
-| 视觉风格参考 | CSDN 技术博客文章页布局（阅读量/点赞/收藏/标签/专栏等元数据样式） |
-
-> 说明：参考站点自述为「办公室摸鱼神器」，其内容与玩法存在版权与合规问题。本项目只借鉴**合法的产品交互思路**（伪装阅读体验 + 摸鱼工具），全部内容改为用户自有、合规。
-
----
-
-## 3. 技术栈
-
-### 3.1 当前技术栈（已落地）
-
-| 层 | 技术 | 说明 |
+| 范围 | 状态 | 当前能力 |
 |---|---|---|
-| 前端 | React 18 + TypeScript + Vite 5 | SPA |
-| 前端路由 | React Router v6 | 公开页 + 受保护路由 |
-| 前端状态 | Zustand | 轻量状态（认证 token/user） |
-| 后端 | NestJS 10 + TypeScript | REST API |
-| ORM | TypeORM 0.3 | 实体 + 迁移 |
-| 数据库 | PostgreSQL | 元数据/索引/用户数据（正文不入库） |
-| 对象存储 | S3 兼容（AWS SDK v3 / MinIO） | 文档正文按章节存放 |
-| 鉴权 | JWT（@nestjs/jwt）+ bcrypt | 加盐哈希密码 |
-| 测试 | Jest（后端）/ Vitest（前端）/ fast-check（属性测试） | 173 个测试 |
-| 本地开发 | pg-mem（内存 Postgres）+ 本地文件存储 | 零安装预览，`LOCAL_DEV=true` |
-| 工程 | npm workspaces（Monorepo） | shared / backend / frontend 三包 |
+| 阅读系统 | ✅ 已收口 | 文档上传/解析、书架、搜索、章节阅读、进度、书签、便签、阅读设置、工作模式与服务端可信阅读计时 |
+| 工具系统 | ✅ 已收口 | 工具目录、搜索与分类，以及 12 款计算、时间、文本和开发者工具的真实交互 |
+| 共享平台底座 | ✅ 本轮已实现 | 用户档案、等级/EXP、精力、钱包与流水、背包与流水、签到、每日任务、活动时间线与幂等奖励 |
+| 农场 MVP | ✅ 已收口 | 土地选择、种子与水资源、种植、服务端成熟倒计时、收获、农场经验和确定性奖励 |
+| 小游戏/竞技场 MVP | ✅ 已收口 | 5 款可直接游玩的单机小游戏，以及 Lv.3 解锁、三档 AI 对手、确定性战斗、战报、精力消耗与幂等奖励 |
+| 跨系统成长闭环 | ✅ 本轮已实现 | 签到、有效阅读、农场收获和竞技场可信事件推进每日任务，支持领奖、最近活动与可靠异步处理 |
+| 整体架构设计 | ✅ 本轮已完成 | 四系统边界、资产真源、事务/幂等、部署基线与后续演进路线 |
+| 单机发布验收 | ✅ 已通过 | 前后端全量测试、三端 TypeScript 检查、生产构建与浏览器逐页/小游戏实玩验收 |
+| 自有服务器部署配置 | 🚧 已安全收口、待实机验证 | Node 24 LTS、Nginx 安全版本、PostgreSQL、持久化文档卷、回环 HTTP 与受保护备份恢复 |
 
-### 3.2 计划技术栈（规划中 / 待引入）
+详细状态见 [`docs/PROGRESS.md`](docs/PROGRESS.md)，架构基线见 [`docs/PLATFORM_ARCHITECTURE.md`](docs/PLATFORM_ARCHITECTURE.md)。
 
-| 方向 | 计划技术 | 归属版本 | 说明 |
-|---|---|---|---|
-| UI 设计体系 | Tailwind CSS 或组件库（待定） | 待排期 | 当前页面为裸 HTML，缺统一视觉设计 |
-| 工具真实交互 | 纯前端小组件（计算器/JSON/正则/倒计时等） | 待排期 | 目前工具页只做「目录+推荐+启动接口」 |
-| 更多文档格式 | epub.js / pdf.js | V2 | epub/pdf 解析 |
-| 缓存/会话 | Redis（ioredis） | V2/上线 | 会话、热点章节、假元数据缓存 |
-| 部署 | Docker / docker-compose、Nginx、PgBouncer、CDN | 上线阶段 | 容量与部署规划见 design.md |
-| 支付/会员 | 合规支付渠道（待定） | V3 | 会员订阅分层 |
+## 架构概览
 
----
-
-## 4. 项目结构
+当前采用**一个仓库、模块化单体、前后端分离**的结构：
 
 ```text
-WebFishGogogo/
-├─ packages/
-│  ├─ shared/                 # 前后端共享 TS 类型与常量
-│  ├─ backend/                # NestJS API
-│  │  └─ src/
-│  │     ├─ modules/
-│  │     │  ├─ auth/          # 认证（注册/登录/JWT 守卫）
-│  │     │  ├─ documents/     # 【文档存储】上传/解析/库管理 + 存储适配器
-│  │     │  ├─ reading/       # 【阅读引擎】分页/进度/书签/目录/视图组装
-│  │     │  ├─ skin/          # 【伪装皮肤】假元数据/CSDN 模板
-│  │     │  ├─ memo/          # 便签（自动保存）
-│  │     │  ├─ preferences/   # 用户偏好（皮肤/字号/老板键/职业）
-│  │     │  └─ tools/         # 工具页（职业化推荐 + 目录）
-│  │     ├─ database/         # 实体、迁移、pg-mem 本地数据源
-│  │     └─ config/           # 数据库/存储/JWT 配置
-│  └─ frontend/               # React + Vite SPA
-│     └─ src/
-│        ├─ app/              # 路由、Provider、受保护布局、状态
-│        ├─ api/              # 按领域拆分的 API 客户端
-│        ├─ features/         # library / reader / skins / memo / tools / auth / compliance
-│        ├─ components/       # 通用组件（页脚、合规声明）
-│        └─ hooks/            # useAutoSave / useDebouncedCallback 等
-├─ .kiro/specs/stealth-reader/  # 需求 / 设计 / 任务规格文档
-│  ├─ requirements.md         # EARS 需求（分 V1/V2/V3）
-│  ├─ design.md               # 架构/建表/时序/接口/正确性属性
-│  └─ tasks.md                # 实现任务清单 + 依赖图
-├─ docs/                      # 项目跟踪文档（见第 9 节）
-├─ README.md                  # 本文件：项目总览
-├─ package.json               # workspace 根
-└─ tsconfig.base.json
+Browser
+  │ HTTPS
+  ▼
+Nginx
+├─ /           React SPA
+└─ /api/*      NestJS API
+                  │
+                  ├─ PostgreSQL（账号、资产、任务、农场、战斗的唯一真源）
+                  └─ 持久化文件卷（单机版文档正文；可切换 S3）
+
+Worker ────────────────┘（消费事务外盒，投影任务进度与最近活动）
 ```
 
----
+```text
+packages/
+├─ shared/                   前后端共享类型、契约与纯规则
+├─ backend/
+│  └─ src/modules/
+│     ├─ auth/               认证与当前用户
+│     ├─ documents/          文档上传、解析与存储
+│     ├─ reading/            阅读视图、进度、书签与可信阅读会话
+│     ├─ skin/               阅读伪装皮肤
+│     ├─ memo/               便签
+│     ├─ preferences/        阅读/UI/工具岗位偏好
+│     ├─ tools/              工具目录与推荐
+│     ├─ platform/           成长、精力、钱包、签到与奖励编排
+│     ├─ tasks/              每日任务查询与幂等领奖
+│     ├─ engagement/         可信活动与任务进度投影
+│     ├─ outbox/             事务外盒与独立 Worker
+│     ├─ farm/               农场 MVP
+│     └─ games/arena/        竞技场 MVP 与确定性战斗引擎
+└─ frontend/
+   └─ src/features/
+      ├─ library/ + reader/  阅读系统
+      ├─ tools/              工具系统
+      ├─ platform/           全局资产、每日任务与最近活动
+      ├─ farm/               农场
+      └─ games/              小游戏中心、5 款本地游戏与竞技场
+```
 
-## 5. 版本规划（V1 / V2 / V3）
+关键原则：
 
-| 版本 | 主题 | 目标 | 交付重点 | 归属需求 |
-|---|---|---|---|---|
-| **V1 上线审核版** | 可上线、合规、可审核 | 满足应用/站点审核的最小合规可用产品 | 账户认证、文档库、CSDN 伪装阅读、阅读控制、进度自动保存、章节目录/书签、老板键、便签、假元数据一致性、访问隔离、合规基础页、工具页与职业化推荐 | Req 1–14 |
-| **V2 内容丰富版** | 丰富内容与阅读体验 | 扩展格式、皮肤与文档管理 | epub/pdf、多皮肤/模板管理、富文档库（分类/标签/收藏/阅读历史）、更多摸鱼小工具、增强搜索、跨设备同步与导入导出 | Req 15–20 |
-| **V3 玩法/引流/变现版** | 合法玩法与增长变现 | 合法会员、引流与游戏化 | 会员/订阅分层、分享与邀请推荐、成就/连续打卡/等级、社区/精选内容区、可选广告位（**排除赌博/博彩/盗版/违法**） | Req 21–25 |
+- PostgreSQL 是 EXP、精力、货币、道具、作物和战斗结果的唯一真源。
+- 农场和竞技场通过共享资产服务变更余额与背包，不直接绕过账本写表。
+- 签到、种植、收获和战斗写操作使用幂等键，重复请求不会重复扣除或发奖。
+- 可信业务事件与领域数据同事务写入 Outbox，独立 Worker 可重试且不会重复推进任务。
+- 有效阅读由服务端按连续心跳和墙钟差值累计；页面隐藏、长时间无操作或工作模式开启时暂停，客户端不能自报时长。
+- 作物成熟和战斗结算均以服务端数据为准，客户端不能提交奖励数值或对手属性。
+- 纯前端小游戏成绩不直接产生平台资产，避免信任客户端自报分数。
+- 工具推荐岗位与竞技场战斗职业是两个独立概念。
 
-> 详细验收标准见 `.kiro/specs/stealth-reader/requirements.md`。
+## 已实现与后续能力
 
----
+单机首发候选版已经落地账号、资产、签到、可信阅读计时、农场、小游戏、竞技场，以及 `Tasks + Activity + Outbox + Worker` 的跨系统闭环。以下仍是**后续目标能力**：
 
-## 6. 开发进度跟踪
+- 更通用的任务条件、周期任务与运营配置；
+- Redis 缓存、限流与队列（不会成为资产真源）；
+- 更完整的监控、灰度发布与回滚自动化，以及目标服务器上的备份恢复演练。
 
-> 详细可勾选进度见 `docs/PROGRESS.md`；这里是概览。
+这些目标不会阻塞当前四系统 MVP 的本地开发，但在开放更复杂的跨系统奖励或扩大流量前应优先完成。
 
-| 模块 / 阶段 | 版本 | 状态 |
-|---|---|---|
-| Monorepo 脚手架 + 共享类型 | V1 | ✅ 完成 |
-| 数据库建表 + 迁移（10 表）+ 工具种子 | V1 | ✅ 完成 |
-| 认证（注册/登录/JWT 守卫） | V1 | ✅ 完成 |
-| 文档存储（上传/解析/分章/库管理） | V1 | ✅ 完成 |
-| 阅读引擎（分页/进度/书签/目录/视图组装） | V1 | ✅ 完成 |
-| 伪装皮肤（假元数据/CSDN 模板） | V1 | ✅ 完成 |
-| 便签自动保存 | V1 | ✅ 完成 |
-| 用户偏好（含职业持久化） | V1 | ✅ 完成 |
-| 工具页（职业化推荐 + 目录） | V1 | ✅ 完成（后端+前端骨架） |
-| 合规页（隐私/条款/备案页脚/自有声明） | V1 | ✅ 完成 |
-| 前端各页面接入 + 全链路 checkpoint | V1 | ✅ 完成（173 测试通过） |
-| **统一 UI 设计** | 待排期 | ⛔ 未开始（当前为裸 HTML） |
-| **工具真实交互实现** | 待排期 | ⛔ 未开始（仅目录+推荐+启动接口） |
-| V2 全部 | V2 | ⬜ 未开始（高层规划） |
-| V3 全部 | V3 | ⬜ 未开始（高层规划） |
+## 技术栈
 
-**图例**：✅ 完成 · 🚧 进行中 · ⬜ 未开始 · ⛔ 已知缺口（不在原 spec 内，需新增）
+| 层 | 技术 |
+|---|---|
+| 前端 | React 18、TypeScript、Vite 5、React Router、Zustand |
+| 后端 | NestJS 10、TypeScript、TypeORM 0.3 |
+| 数据 | PostgreSQL、单机持久化文件卷（保留 S3 适配器） |
+| 鉴权 | JWT、bcrypt |
+| 测试 | Jest、Vitest、Testing Library、fast-check |
+| 工程 | npm workspaces、Docker、Docker Compose、Nginx |
+| 本地模式 | pg-mem + 本地文件存储（`LOCAL_DEV=true`） |
 
----
+## 本地开发
 
-## 7. 整体设计
-
-完整设计见 `.kiro/specs/stealth-reader/design.md`，涵盖：
-
-- **架构**：前后端分离，无状态 NestJS 多实例 + PostgreSQL + Redis + 对象存储 + CDN。
-- **三层解耦**：伪装皮肤层 / 阅读引擎层 / 文档存储层，可独立演进。
-- **数据模型**：10 张表（users、documents、chapters、reading_progress、bookmarks、memos、fake_meta、user_preferences、tools、tool_professions）。正文存对象存储，元数据入库。
-- **正确性属性**：9 条可用于属性测试（fast-check）的不变量（分章完整性、分页边界/可遍历性、假元数据幂等、进度幂等、访问隔离、职业推荐可靠性等）。
-- **容量与部署规划**：针对 1–2k 在线规模的服务器/存储/CDN/连接池起步规格与发版路线。
-
----
-
-## 8. 本地运行（预览）
-
-无需安装 PostgreSQL —— 本地开发模式用 pg-mem（内存 Postgres）+ 本地文件存储。
+要求使用仍处于官方支持期的 Node.js 22 或 24 LTS；生产镜像固定使用 Node.js 24 LTS。
 
 ```bash
-# 安装依赖（首次）
-npm install
-
-# 构建 shared 包
+npm ci
 npm run build:shared
+npm run typecheck
+npm test
+```
 
-# 启动后端（本地开发模式，端口 3000）
-cd packages/backend
-npm run build
-LOCAL_DEV=true JWT_SECRET=local-dev-secret node dist/main.js
+启动后端（PowerShell）：
 
-# 另开一个终端，启动前端（端口 5173）
+```powershell
+$env:LOCAL_DEV="true"
+$env:JWT_SECRET="local-dev-secret-at-least-32-characters"
+npm run start:dev --workspace @stealth-reader/backend
+```
+
+另开终端启动前端：
+
+```bash
 npm run dev --workspace @stealth-reader/frontend
 ```
 
-- 前端预览：`http://localhost:5173/`
+- 前端：`http://localhost:5173/`
 - 后端 API：`http://localhost:3000/api`
-- 首次使用先在 `/register` 注册账号（无预置账号）。
-- 注意：本地模式数据存内存，后端重启即清空。生产走真实 PostgreSQL + 对象存储。
+- 本地模式使用内存数据库，后端重启后数据会清空。
 
----
+全量验证不在文档中固定测试数量，以仓库当前命令输出为准：
 
-## 9. 文档索引
+```bash
+npm run typecheck
+npm test
+npm run build
+```
 
-| 文档 | 位置 | 内容 |
-|---|---|---|
-| 项目总览 | `README.md` | 本文件 |
-| 进度跟踪 | `docs/PROGRESS.md` | 逐项可勾选进度 + 已知缺口 + 后续计划 |
-| 需求文档 | `.kiro/specs/stealth-reader/requirements.md` | EARS 需求，分 V1/V2/V3 |
-| 设计文档 | `.kiro/specs/stealth-reader/design.md` | 架构/建表/时序/接口/正确性属性/部署 |
-| 任务清单 | `.kiro/specs/stealth-reader/tasks.md` | 实现任务 + 依赖图 |
+最近一次完整发布门槛（2026-07-31）：
+
+- 前端 44 个测试文件、224 项测试全部通过；
+- 后端 32 个测试套件、199 项测试全部通过；
+- shared、backend、frontend TypeScript 检查全部通过；
+- shared、backend、frontend 生产构建全部通过；
+- 首页、文档库、阅读页、工具、农场和 6 个游戏入口已完成浏览器验收，其中 5 款本地小游戏均完成实际操作验证。
+
+## 自有服务器部署
+
+仓库已加入单机首发配置，等待在目标服务器完成实机验证：
+
+- 根目录 `Dockerfile`、`docker-compose.yml` 与 `.dockerignore`；
+- `deploy/nginx.conf`；
+- `deploy/.env.example`；
+- `deploy/preflight.sh`、`deploy/backup.sh`、`deploy/restore.sh`；
+- `deploy/README.md`。
+
+配置面向 Nginx + API + Worker + PostgreSQL + 持久化文档卷的单机部署。默认入口只绑定 `127.0.0.1:8080`，必须由宿主机反向代理提供公网 HTTPS；仓库侧已经具备生产预检、数据库与正文一致性备份、归档校验及等待依赖就绪的受保护恢复。正式上线前仍需在用户服务器完成域名/TLS、防火墙、首次迁移、持久卷、异机备份和恢复冒烟验证。
+
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/PLATFORM_ARCHITECTURE.md`](docs/PLATFORM_ARCHITECTURE.md) | 四系统整体架构、领域边界、数据模型、事务/幂等与演进路线 |
+| [`docs/FARM_GAMEPLAY.md`](docs/FARM_GAMEPLAY.md) | 农场首发循环、作物数值、成长联动与单机边界 |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) | 已实现、收口中与后续目标能力 |
+| [`.kiro/specs/stealth-reader/requirements.md`](.kiro/specs/stealth-reader/requirements.md) | 原阅读器 V1–V3 需求基线 |
+| [`.kiro/specs/stealth-reader/design.md`](.kiro/specs/stealth-reader/design.md) | 原阅读器详细设计 |
+| [`deploy/README.md`](deploy/README.md) | 自有服务器 Docker 部署说明 |

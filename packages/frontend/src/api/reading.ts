@@ -37,6 +37,77 @@ export interface CreateBookmarkPayload {
   note?: string | null;
 }
 
+/** 客户端只上报当前可计时状态；有效时长始终由服务端计算。 */
+export type ReadingSessionState = 'active' | 'hidden' | 'idle' | 'boss';
+
+export interface ReadingSessionSnapshot {
+  sessionId: string;
+  state: ReadingSessionState;
+  heartbeatIntervalMs: number;
+  idleTimeoutMs: number;
+  effectiveSeconds: number;
+  qualified: boolean;
+  eventQueued: boolean;
+}
+
+interface ReadingSessionWireResponse {
+  id?: string;
+  sessionId?: string;
+  state?: ReadingSessionState;
+  status?: ReadingSessionState;
+  heartbeatIntervalMs?: number;
+  heartbeatIntervalSeconds?: number;
+  idleTimeoutMs?: number;
+  idleTimeoutSeconds?: number;
+  effectiveSeconds?: number;
+  qualified?: boolean;
+  eventQueued?: boolean;
+}
+
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
+const DEFAULT_IDLE_TIMEOUT_MS = 120_000;
+
+function positiveMilliseconds(
+  milliseconds: number | undefined,
+  seconds: number | undefined,
+  fallback: number,
+): number {
+  const value =
+    typeof milliseconds === 'number'
+      ? milliseconds
+      : typeof seconds === 'number'
+        ? seconds * 1_000
+        : fallback;
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
+}
+
+function normalizeSession(
+  response: ReadingSessionWireResponse,
+  fallbackState: ReadingSessionState,
+): ReadingSessionSnapshot {
+  const sessionId = response.sessionId ?? response.id;
+  if (!sessionId) {
+    throw new Error('阅读会话响应缺少 sessionId');
+  }
+  return {
+    sessionId,
+    state: response.state ?? response.status ?? fallbackState,
+    heartbeatIntervalMs: positiveMilliseconds(
+      response.heartbeatIntervalMs,
+      response.heartbeatIntervalSeconds,
+      DEFAULT_HEARTBEAT_INTERVAL_MS,
+    ),
+    idleTimeoutMs: positiveMilliseconds(
+      response.idleTimeoutMs,
+      response.idleTimeoutSeconds,
+      DEFAULT_IDLE_TIMEOUT_MS,
+    ),
+    effectiveSeconds: Math.max(0, response.effectiveSeconds ?? 0),
+    qualified: response.qualified ?? false,
+    eventQueued: response.eventQueued ?? false,
+  };
+}
+
 /**
  * GET /reading/:docId/article：获取伪装阅读视图。
  * _Requirements: 5.1_
@@ -114,6 +185,43 @@ export function deleteBookmark(
   );
 }
 
+export async function startReadingSession(
+  documentId: string,
+  clientSessionId: string,
+  state: ReadingSessionState,
+): Promise<ReadingSessionSnapshot> {
+  const response = await http.post<ReadingSessionWireResponse>(
+    '/v1/reading/sessions',
+    { documentId, clientSessionId, state },
+  );
+  return normalizeSession(response, state);
+}
+
+export async function heartbeatReadingSession(
+  sessionId: string,
+  sequence: number,
+  state: ReadingSessionState,
+): Promise<ReadingSessionSnapshot> {
+  const response = await http.post<ReadingSessionWireResponse>(
+    `/v1/reading/sessions/${encodeURIComponent(sessionId)}/heartbeat`,
+    { sequence, state },
+  );
+  return normalizeSession(response, state);
+}
+
+export async function endReadingSession(
+  sessionId: string,
+  sequence: number,
+  state: ReadingSessionState,
+): Promise<ReadingSessionSnapshot> {
+  const response = await http.post<ReadingSessionWireResponse>(
+    `/v1/reading/sessions/${encodeURIComponent(sessionId)}/end`,
+    { sequence, state },
+    { keepalive: true },
+  );
+  return normalizeSession(response, state);
+}
+
 export const readingApi = {
   getArticle,
   saveProgress,
@@ -121,4 +229,7 @@ export const readingApi = {
   listBookmarks,
   createBookmark,
   deleteBookmark,
+  startSession: startReadingSession,
+  heartbeatSession: heartbeatReadingSession,
+  endSession: endReadingSession,
 };

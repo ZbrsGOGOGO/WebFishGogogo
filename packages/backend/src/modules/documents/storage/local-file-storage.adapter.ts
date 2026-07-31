@@ -1,18 +1,18 @@
-import { promises as fs } from 'node:fs';
+import { constants as fsConstants, promises as fs } from 'node:fs';
 import * as path from 'node:path';
 
 import type { StoragePort } from './storage.port';
 
 /**
- * 本地文件系统存储适配器（仅用于本地开发 / 预览）。
+ * Local filesystem implementation of `StoragePort`.
  *
- * 实现与 S3StorageAdapter 相同的 StoragePort 契约，但把章节正文写到本地磁盘目录，
- * 从而无需任何对象存储服务即可跑通「上传 → 解析 → 存正文 → 阅读拉取」全链路。
+ * This adapter is suitable for both local development and a standalone
+ * single-server deployment. In production, `baseDir` should point to a
+ * persistent directory included in the server's backup policy.
  *
- * 生产环境仍使用 S3StorageAdapter；本适配器仅在 LOCAL_DEV=true 时启用。
- *
- * key 布局与 S3 适配器保持一致：`${keyPrefix}/${docId}/chapter-${idx}.txt`，
- * 落到磁盘即 `${baseDir}/${keyPrefix}/${docId}/chapter-${idx}.txt`。
+ * Object keys match the S3 adapter:
+ * `${keyPrefix}/${docId}/chapter-${idx}.txt`. On disk they are stored below
+ * `${baseDir}/${keyPrefix}/${docId}`.
  */
 export class LocalFileStorageAdapter implements StoragePort {
   private readonly baseDir: string;
@@ -34,6 +34,11 @@ export class LocalFileStorageAdapter implements StoragePort {
   /** 将 storageKey 映射为磁盘绝对路径。 */
   private absPath(storageKey: string): string {
     return path.join(this.baseDir, storageKey);
+  }
+
+  async checkHealth(): Promise<void> {
+    await fs.mkdir(this.baseDir, { recursive: true });
+    await fs.access(this.baseDir, fsConstants.R_OK | fsConstants.W_OK);
   }
 
   async putChapter(docId: string, idx: number, content: string): Promise<string> {

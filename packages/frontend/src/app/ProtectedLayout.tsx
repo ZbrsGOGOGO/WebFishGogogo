@@ -5,8 +5,8 @@
 // 便签面板作为全站级摸鱼小工具，在所有受保护页面（首页/库/阅读器/工具页）
 // 均可用，跨页面与跨会话保持内容（挂载即恢复、编辑防抖自动保存）。
 
-import type { JSX } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState, type JSX } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { ProtectedRoute } from './ProtectedRoute';
 import { MemoPanel } from '../features/memo';
@@ -29,18 +29,34 @@ function navLinkClass({ isActive }: { isActive: boolean }): string {
 export function ProtectedLayout(): JSX.Element {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const location = useLocation();
+  const [memoOpen, setMemoOpen] = useState(false);
+  const isReader = location.pathname.startsWith('/blog/article/');
+
+  useEffect(() => {
+    setMemoOpen(false);
+  }, [location.pathname]);
 
   return (
     <ProtectedRoute>
-      <div className="protected-layout">
-        {/* CSDN 风格顶栏：品牌 LOGO（左）+ 导航（首页/文档库/工具）+ 退出（右）。 */}
+      <div className={`protected-layout${isReader ? ' is-reader' : ''}`}>
+        <a className="skip-link" href="#main-content">
+          跳到主要内容
+        </a>
         <header className="topbar">
           <div className="topbar__inner">
-            <Link to="/" className="topbar__brand" aria-label="CSDN 首页">
+            <Link
+              to="/"
+              className="topbar__brand"
+              aria-label="ZBRS 技术工具工坊首页"
+            >
               <span className="topbar__brand-mark" aria-hidden="true">
-                C
+                Z
               </span>
-              CSDN
+              <span className="topbar__brand-copy">
+                <strong>ZBRS</strong>
+                <small>技术工具工坊</small>
+              </span>
             </Link>
             <nav aria-label="主导航" className="topbar__nav">
               <NavLink to="/" end className={navLinkClass}>
@@ -52,24 +68,65 @@ export function ProtectedLayout(): JSX.Element {
               <NavLink to="/tools" className={navLinkClass}>
                 工具
               </NavLink>
+              <NavLink to="/farm" className={navLinkClass}>
+                农场
+              </NavLink>
+              <NavLink to="/games" className={navLinkClass}>
+                小游戏
+              </NavLink>
             </nav>
             <div className="topbar__spacer" />
+            <span className="topbar__edition">本机版</span>
             {user ? (
               <span className="topbar__user" title={user.displayName ?? user.email}>
                 {user.displayName ?? user.email}
               </span>
             ) : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              aria-expanded={memoOpen}
+              aria-controls="memo-drawer"
+              onClick={() => setMemoOpen((open) => !open)}
+            >
+              便签
+            </Button>
             <Button variant="ghost" size="sm" onClick={logout}>
-              退出登录
+              退出
             </Button>
           </div>
         </header>
-        <main className="protected-layout__main">
-          <Outlet />
-        </main>
-        <aside className="memo-dock" aria-label="侧边便签">
-          <MemoPanel />
-        </aside>
+        <div className="protected-layout__body">
+          <main id="main-content" className="protected-layout__main" tabIndex={-1}>
+            <Outlet />
+          </main>
+        </div>
+        {memoOpen ? (
+          <button
+            type="button"
+            className="memo-backdrop"
+            aria-label="关闭便签"
+            onClick={() => setMemoOpen(false)}
+          />
+        ) : null}
+        {memoOpen ? (
+          <div id="memo-drawer" className="memo-dock is-open">
+            <div className="memo-dock__heading">
+              <span>随手便签</span>
+              <button
+                type="button"
+                className="memo-dock__close"
+                aria-label="关闭便签"
+                onClick={() => setMemoOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="memo-dock__body">
+              <MemoPanel />
+            </div>
+          </div>
+        ) : null}
       </div>
     </ProtectedRoute>
   );

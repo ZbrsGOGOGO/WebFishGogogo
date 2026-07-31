@@ -28,13 +28,13 @@
 
 /* ---------- 尺寸 ---------- */
 .sm {
-  height: 28px;
+  min-height: 34px;
   padding: 0 var(--space-3);
   font-size: 13px;
 }
 
 .md {
-  height: 36px;
+  min-height: 40px;
   padding: 0 var(--space-4);
   font-size: 14px;
 }
@@ -83,6 +83,13 @@
 .button:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .sm,
+  .md {
+    min-height: 44px;
+  }
 }
 
 .loading {

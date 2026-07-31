@@ -25,7 +25,7 @@ import {
 } from './reading.service';
 
 /**
- * 皮肤缺省值：未显式指定 ?skin= 时使用 CSDN 伪装皮肤（design.md 6.4）。
+ * 皮肤缺省值：未显式指定 ?skin= 时使用技术文章皮肤（保留 csdn id 兼容已有数据）。
  */
 const DEFAULT_SKIN_ID = 'csdn';
 

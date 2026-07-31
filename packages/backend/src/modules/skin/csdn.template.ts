@@ -44,14 +44,14 @@ function renderBodyHtml(body: string): string {
 }
 
 /**
- * CSDN 风格技术博客皮肤模板。
+ * ZBRS 技术文章皮肤模板。
  *
- * 承载 Requirement 5：将标准化 ArticleViewModel 渲染为 CSDN 风格博客视图。
+ * 承载 Requirement 5：将标准化 ArticleViewModel 渲染为技术文章视图。
  * 该模板仅消费 {@link SkinRenderInput} 与 {@link FakeMeta}，不触碰真实存储（Req 5.4）。
  */
 export const csdnTemplate: SkinTemplate = {
   id: 'csdn',
-  displayName: 'CSDN 技术博客',
+  displayName: 'ZBRS 技术文章',
 
   render(input: SkinRenderInput, fakeMeta: FakeMeta): ArticleViewModel {
     return {

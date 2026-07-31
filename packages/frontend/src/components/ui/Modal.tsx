@@ -22,6 +22,8 @@ export interface ModalProps {
   closeOnOverlayClick?: boolean;
   /** 关闭按钮的无障碍标签，默认"关闭"。 */
   closeLabel?: string;
+  /** 对话框宽度，lg 适合工具运行器和上传表单。 */
+  size?: 'md' | 'lg';
 }
 
 /** 可获得焦点的元素选择器。 */
@@ -44,6 +46,7 @@ export function Modal({
   footer,
   closeOnOverlayClick = true,
   closeLabel = '关闭',
+  size = 'md',
 }: ModalProps): JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -55,6 +58,8 @@ export function Modal({
       return;
     }
     previousFocusRef.current = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
     const panel = panelRef.current;
     if (panel) {
@@ -63,6 +68,7 @@ export function Modal({
     }
 
     return () => {
+      document.body.style.overflow = previousOverflow;
       previousFocusRef.current?.focus?.();
     };
   }, [open]);
@@ -119,7 +125,7 @@ export function Modal({
     >
       <div
         ref={panelRef}
-        className={styles.panel}
+        className={`${styles.panel} ${styles[size]}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={title != null ? titleId : undefined}

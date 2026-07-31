@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   app.setGlobalPrefix('api');
   // 本地开发：允许前端 dev server（默认 5173）跨域调用后端 API。
   if (process.env.LOCAL_DEV === 'true') {

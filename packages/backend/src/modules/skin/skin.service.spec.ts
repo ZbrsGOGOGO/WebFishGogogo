@@ -30,7 +30,7 @@ describe('SkinService', () => {
     expect(service.has('csdn')).toBe(true);
     expect(service.listSkins()).toContainEqual({
       id: 'csdn',
-      displayName: 'CSDN 技术博客',
+      displayName: 'ZBRS 技术文章',
     });
   });
 

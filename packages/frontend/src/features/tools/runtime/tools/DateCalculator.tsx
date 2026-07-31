@@ -3,21 +3,11 @@
 // 功能一：计算两个日期之间的天数差。
 // 功能二：在某个日期上加/减 N 天。
 
-import { useMemo, useState, type CSSProperties, type JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 
-import { Button, Card, Input } from '../../../../components/ui';
+import { Button, Input } from '../../../../components/ui';
 import { addDays, daysBetween, toIsoDate } from './logic';
-
-const resultStyle: CSSProperties = {
-  fontSize: '18px',
-  fontWeight: 600,
-  color: 'var(--color-brand)',
-  marginTop: 'var(--space-3)',
-};
-
-const sectionStyle: CSSProperties = {
-  marginBottom: 'var(--space-5)',
-};
+import styles from './ToolSurface.module.css';
 
 function today(): string {
   return toIsoDate(new Date());
@@ -42,10 +32,10 @@ export default function DateCalculator(): JSX.Element {
   );
 
   return (
-    <Card title="日期计算">
-      <section style={sectionStyle}>
-        <h4>两个日期相差天数</h4>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+    <div className={`${styles.surface} ${styles.twoColumn}`}>
+      <section className={styles.panel}>
+        <h3 className={styles.panelTitle}>两个日期相差天数</h3>
+        <div className={styles.formGrid}>
           <Input
             label="开始日期"
             type="date"
@@ -59,16 +49,21 @@ export default function DateCalculator(): JSX.Element {
             onChange={(e) => setEnd(e.target.value)}
           />
         </div>
-        <div style={resultStyle} data-testid="date-diff">
-          {diff === null
-            ? '请输入有效日期'
-            : `相差 ${diff} 天${diff !== 0 ? `（${Math.abs(diff)} 天${diff > 0 ? '之后' : '之前'}）` : ''}`}
+        <div className={styles.output} data-testid="date-diff">
+          <span className={styles.outputText}>
+            <span className={styles.outputLabel}>日期间隔</span>
+            <strong className={styles.outputValue}>
+              {diff === null
+                ? '请输入有效日期'
+                : `相差 ${diff} 天${diff !== 0 ? `（${Math.abs(diff)} 天${diff > 0 ? '之后' : '之前'}）` : ''}`}
+            </strong>
+          </span>
         </div>
       </section>
 
-      <section style={sectionStyle}>
-        <h4>日期加减</h4>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+      <section className={styles.panel}>
+        <h3 className={styles.panelTitle}>日期加减</h3>
+        <div className={styles.formGrid}>
           <Input
             label="基准日期"
             type="date"
@@ -80,9 +75,8 @@ export default function DateCalculator(): JSX.Element {
             type="number"
             value={deltaText}
             onChange={(e) => setDeltaText(e.target.value)}
-            wrapperClassName=""
           />
-          <div style={{ display: 'flex', gap: 'var(--space-2)', paddingBottom: 2 }}>
+          <div className={styles.actions}>
             <Button size="sm" variant="secondary" onClick={() => setDeltaText(String((Number(deltaText) || 0) - 1))}>
               −1
             </Button>
@@ -91,10 +85,15 @@ export default function DateCalculator(): JSX.Element {
             </Button>
           </div>
         </div>
-        <div style={resultStyle} data-testid="date-shift">
-          {shifted === null ? '请输入有效日期与天数' : `结果日期：${shifted}`}
+        <div className={styles.output} data-testid="date-shift">
+          <span className={styles.outputText}>
+            <span className={styles.outputLabel}>结果日期</span>
+            <strong className={styles.outputValue}>
+              {shifted === null ? '请输入有效日期与天数' : shifted}
+            </strong>
+          </span>
         </div>
       </section>
-    </Card>
+    </div>
   );
 }

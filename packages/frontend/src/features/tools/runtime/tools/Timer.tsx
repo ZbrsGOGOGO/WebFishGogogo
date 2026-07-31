@@ -7,30 +7,14 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type JSX,
 } from 'react';
 
-import { Button, Card, Input } from '../../../../components/ui';
+import { Button, Input } from '../../../../components/ui';
 import { formatDuration } from './logic';
+import styles from './ToolSurface.module.css';
 
 type Mode = 'up' | 'down';
-
-const displayStyle: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: '44px',
-  fontWeight: 700,
-  color: 'var(--color-text)',
-  textAlign: 'center',
-  margin: 'var(--space-4) 0',
-};
-
-const rowStyle: CSSProperties = {
-  display: 'flex',
-  gap: 'var(--space-2)',
-  justifyContent: 'center',
-  flexWrap: 'wrap',
-};
 
 /**
  * 计时器工具。
@@ -101,18 +85,18 @@ export default function Timer(): JSX.Element {
   }
 
   return (
-    <Card title="计时器">
-      <div style={{ ...rowStyle, marginBottom: 'var(--space-3)' }}>
+    <div className={`${styles.surface} ${styles.compact}`}>
+      <div className={styles.segmented} aria-label="计时模式">
         <Button
           variant={mode === 'up' ? 'primary' : 'secondary'}
-          size="sm"
+          aria-pressed={mode === 'up'}
           onClick={() => handleModeChange('up')}
         >
           正计时
         </Button>
         <Button
           variant={mode === 'down' ? 'primary' : 'secondary'}
-          size="sm"
+          aria-pressed={mode === 'down'}
           onClick={() => handleModeChange('down')}
         >
           倒计时
@@ -120,7 +104,7 @@ export default function Timer(): JSX.Element {
       </div>
 
       {mode === 'down' && (
-        <div style={{ maxWidth: 200, margin: '0 auto' }}>
+        <div className={styles.panel}>
           <Input
             label="倒计时分钟数"
             type="number"
@@ -139,18 +123,23 @@ export default function Timer(): JSX.Element {
         </div>
       )}
 
-      <div style={displayStyle} data-testid="timer-display">
+      <div
+        className={styles.timerDisplay}
+        role="timer"
+        aria-live="off"
+        data-testid="timer-display"
+      >
         {formatDuration(remainingMs)}
       </div>
 
-      <div style={rowStyle}>
+      <div className={styles.actionsCentered}>
         <Button onClick={handleStartPause}>{running ? '暂停' : '开始'}</Button>
         <Button variant="secondary" onClick={handleReset}>
           重置
         </Button>
       </div>
 
-      <div style={{ ...rowStyle, marginTop: 'var(--space-4)' }}>
+      <div className={styles.actionsCentered}>
         <Button variant="ghost" size="sm" onClick={() => applyCountdown(25)}>
           🍅 专注 25 分钟
         </Button>
@@ -158,6 +147,6 @@ export default function Timer(): JSX.Element {
           ☕ 休息 5 分钟
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }

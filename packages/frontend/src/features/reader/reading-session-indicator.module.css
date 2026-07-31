@@ -1,0 +1,17 @@
+.indicator {
+  flex: 0 0 auto;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (max-width: 760px) {
+  .indicator {
+    min-height: 34px;
+    font-size: 11px;
+  }
+}

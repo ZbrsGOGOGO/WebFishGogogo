@@ -2,31 +2,13 @@
 // 汇率换算（slug: currency-converter）。
 // 纯前端、无网络：汇率由用户手动输入（1 单位 from = rate 单位 to）。
 
-import { useMemo, useState, type CSSProperties, type JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 
-import { Button, Card, Input } from '../../../../components/ui';
+import { Button, Input } from '../../../../components/ui';
 import { convertCurrency, trimNumber } from './logic';
+import styles from './ToolSurface.module.css';
 
 const CURRENCIES = ['CNY', 'USD', 'EUR', 'JPY', 'GBP', 'HKD', 'KRW', 'AUD'];
-
-const resultStyle: CSSProperties = {
-  fontSize: '24px',
-  fontWeight: 700,
-  color: 'var(--color-brand)',
-  marginTop: 'var(--space-4)',
-  textAlign: 'center',
-};
-
-const selectStyle: CSSProperties = {
-  height: 38,
-  padding: '0 var(--space-2)',
-  borderRadius: 'var(--radius-md)',
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-surface)',
-  color: 'var(--color-text)',
-  fontFamily: 'inherit',
-  fontSize: 14,
-};
 
 /**
  * 汇率换算工具。汇率为手动输入，无任何网络请求。
@@ -55,69 +37,85 @@ export default function CurrencyConverter(): JSX.Element {
   }
 
   return (
-    <Card title="汇率换算">
-      <p style={{ color: 'var(--color-text-secondary)', fontSize: 13 }}>
+    <div className={styles.surface}>
+      <p className={styles.hint}>
         汇率需手动输入（无网络）。汇率含义：1 {from} = 汇率 × {to}。
       </p>
 
-      <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <Input
-          label="金额"
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          error={Number.isFinite(amountNum) ? undefined : '请输入有效金额'}
-        />
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
-          从
-          <select
-            style={selectStyle}
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
-            aria-label="源货币"
+      <div className={styles.panel}>
+        <div className={styles.row}>
+          <Input
+            label="金额"
+            type="number"
+            value={amount}
+            wrapperClassName={styles.grow}
+            onChange={(event) => setAmount(event.target.value)}
+            error={Number.isFinite(amountNum) ? undefined : '请输入有效金额'}
+          />
+          <label className={`${styles.selectField} ${styles.grow}`}>
+            从
+            <select
+              className={styles.select}
+              value={from}
+              onChange={(event) => setFrom(event.target.value)}
+              aria-label="源货币"
+            >
+              {CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Button
+            variant="secondary"
+            onClick={swap}
+            aria-label="交换源货币和目标货币"
           >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button variant="ghost" size="sm" onClick={swap} aria-label="交换货币">
-          ⇄
-        </Button>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
-          到
-          <select
-            style={selectStyle}
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            aria-label="目标货币"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </label>
+            ⇄ 交换
+          </Button>
+          <label className={`${styles.selectField} ${styles.grow}`}>
+            到
+            <select
+              className={styles.select}
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+              aria-label="目标货币"
+            >
+              {CURRENCIES.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Input
+            label={`汇率（1 ${from} = ? ${to}）`}
+            type="number"
+            min={0}
+            step="any"
+            value={rate}
+            wrapperClassName={styles.grow}
+            onChange={(event) => setRate(event.target.value)}
+            error={
+              Number.isFinite(rateNum) && rateNum > 0
+                ? undefined
+                : '汇率必须大于 0'
+            }
+          />
+        </div>
       </div>
 
-      <div style={{ maxWidth: 240, marginTop: 'var(--space-3)' }}>
-        <Input
-          label={`汇率（1 ${from} = ? ${to}）`}
-          type="number"
-          value={rate}
-          onChange={(e) => setRate(e.target.value)}
-          error={Number.isFinite(rateNum) && rateNum >= 0 ? undefined : '请输入有效汇率'}
-        />
+      <div className={styles.output} data-testid="currency-result">
+        <span className={styles.outputText}>
+          <span className={styles.outputLabel}>换算结果</span>
+          <strong className={styles.outputValue}>
+            {converted === null || rateNum <= 0
+              ? '—'
+              : `${trimNumber(amountNum)} ${from} = ${trimNumber(converted)} ${to}`}
+          </strong>
+        </span>
       </div>
-
-      <div style={resultStyle} data-testid="currency-result">
-        {converted === null
-          ? '—'
-          : `${trimNumber(amountNum)} ${from} = ${trimNumber(converted)} ${to}`}
-      </div>
-    </Card>
+    </div>
   );
 }

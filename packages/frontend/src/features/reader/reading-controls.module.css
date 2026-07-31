@@ -1,69 +1,71 @@
-/* 阅读控制条样式：克制融入博客顶栏工具区（任务 16.2）。 */
-
 .controls {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: #555666;
+  gap: 8px;
+  color: var(--reader-muted, var(--color-text-secondary));
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .label {
-  color: #999aaa;
+  margin-right: 2px;
+  color: var(--reader-muted, var(--color-text-muted));
 }
 
 .value {
-  min-width: 28px;
+  min-width: 26px;
+  color: var(--reader-text, var(--color-text));
   text-align: center;
   font-variant-numeric: tabular-nums;
-  color: #222226;
 }
 
-.btn {
-  min-width: 28px;
-  height: 26px;
-  padding: 0 8px;
-  border: 1px solid #ececec;
-  border-radius: 4px;
-  background: #fff;
-  color: #555666;
-  cursor: pointer;
+.btn,
+.modeBtn {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--reader-border, var(--color-border));
+  border-radius: 8px;
+  color: var(--reader-text, var(--color-text-secondary));
+  background: var(--reader-surface, var(--color-surface));
   line-height: 1;
 }
 
-.btn:hover {
-  border-color: #fc5531;
-  color: #fc5531;
+.btn:hover,
+.modeBtn:hover {
+  border-color: var(--reader-brand, var(--color-brand));
+  color: var(--reader-brand, var(--color-brand));
 }
 
 .modeBtn {
-  height: 26px;
-  padding: 0 10px;
-  border: 1px solid #ececec;
-  background: #fff;
-  color: #555666;
-  cursor: pointer;
-  line-height: 1;
+  border-radius: 0;
 }
 
 .modeBtn:first-of-type {
-  border-radius: 4px 0 0 4px;
+  border-radius: 8px 0 0 8px;
 }
 
 .modeBtn:last-of-type {
-  border-radius: 0 4px 4px 0;
-  border-left: none;
+  margin-left: -4px;
+  border-radius: 0 8px 8px 0;
 }
 
 .modeBtn[data-active='true'] {
-  background: #fc5531;
-  border-color: #fc5531;
+  z-index: 1;
+  border-color: var(--reader-brand, var(--color-brand));
   color: #fff;
+  background: var(--reader-brand, var(--color-brand));
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .modeBtn {
+    min-height: 40px;
+  }
 }

@@ -5,13 +5,12 @@ import { AppRouter } from './app/router';
 import { Footer } from './components';
 
 export function App(): JSX.Element {
-  // 全站布局：主内容区 + 站点级页脚（页脚在所有页面底部展示，Req 13.4/13.5）。
   return (
     <AppProviders>
       <div className="app-shell">
-        <main className="app-main">
+        <div className="app-main">
           <AppRouter />
-        </main>
+        </div>
         <Footer />
       </div>
     </AppProviders>

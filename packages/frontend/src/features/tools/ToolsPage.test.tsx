@@ -1,115 +1,144 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Profession, type Tool } from '@stealth-reader/shared';
 
-import { ToolsPage } from './ToolsPage';
 import * as api from '../../api';
+import { ToolsPage } from './ToolsPage';
 
-function makeTool(overrides: Partial<Tool> = {}): Tool {
+function makeRemoteTool(overrides: Partial<Tool> = {}): Tool {
   return {
-    id: overrides.id ?? 't1',
-    slug: overrides.slug ?? 'countdown',
-    name: overrides.name ?? '下班倒计时',
-    category: overrides.category ?? '效率',
-    description: overrides.description ?? '距离下班还有多久',
-    icon: overrides.icon ?? null,
+    id: overrides.id ?? 'remote-calculator',
+    slug: overrides.slug ?? 'calculator',
+    name: overrides.name ?? '计算器',
+    category: overrides.category ?? '计算',
+    description: overrides.description ?? '服务端旧文案',
+    icon: overrides.icon ?? 'calculator',
     enabled: overrides.enabled ?? true,
-    professions: overrides.professions ?? [Profession.Dev],
+    professions: overrides.professions ?? [Profession.Finance],
   };
 }
 
-describe('ToolsPage (Req 14)', () => {
+describe('ToolsPage 本机工具箱', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
-  it('lists all available tools on load (14.1) and uses persisted recommendation (14.7)', async () => {
-    vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([makeTool()]);
+  it('首屏立即展示内置 12 项目录，并吸收服务端职业偏好', async () => {
+    vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([
+      makeRemoteTool(),
+    ]);
     vi.spyOn(api.toolsApi, 'recommendTools').mockResolvedValue({
       profession: Profession.Dev,
-      tools: [makeTool({ id: 't1', name: '下班倒计时' })],
+      tools: [],
     });
 
     render(<ToolsPage />);
 
-    // 目录列出全部工具（推荐区与目录区都会出现）
-    expect(
-      (await screen.findAllByRole('heading', { name: '下班倒计时' })).length,
-    ).toBeGreaterThan(0);
-    // 使用已持久化职业推荐
-    expect(await screen.findByText('为「开发」推荐：')).toBeInTheDocument();
+    expect(screen.getByLabelText('本机工具数量')).toHaveTextContent('12');
+    expect(screen.getByRole('heading', { name: '计算器' })).toBeInTheDocument();
+
+    const professionGroup = screen.getByRole('group', { name: '职业偏好' });
+    await waitFor(() =>
+      expect(
+        within(professionGroup).getByRole('button', { name: '开发' }),
+      ).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(window.localStorage.getItem('zbrs.tools.profession')).toBe('开发');
   });
 
-  it('selecting a profession persists + refreshes recommendation (14.2)', async () => {
-    vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([makeTool()]);
+  it('职业 chips 本机即时生效并尝试同步偏好', async () => {
+    vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([]);
     const recommendSpy = vi
       .spyOn(api.toolsApi, 'recommendTools')
-      .mockResolvedValueOnce(null) // 初次无持久化职业
-      .mockResolvedValueOnce({
-        profession: Profession.Design,
-        tools: [
-          makeTool({
-            id: 't2',
-            name: '配色工具',
-            professions: [Profession.Design],
-          }),
-        ],
-      });
+      .mockResolvedValue(null);
 
     render(<ToolsPage />);
-    await screen.findByRole('heading', { name: '下班倒计时' });
 
-    fireEvent.click(screen.getByRole('button', { name: '设计' }));
+    const professionGroup = screen.getByRole('group', { name: '职业偏好' });
+    fireEvent.click(
+      within(professionGroup).getByRole('button', { name: '设计' }),
+    );
 
+    expect(window.localStorage.getItem('zbrs.tools.profession')).toBe('设计');
+    expect(screen.getByText('已优先展示适合「设计」的工具。')).toBeInTheDocument();
     await waitFor(() =>
       expect(recommendSpy).toHaveBeenCalledWith(Profession.Design),
     );
-    expect(await screen.findByText('为「设计」推荐：')).toBeInTheDocument();
   });
 
-  it('shows empty-state message when filter has no match (14.3/14.4)', async () => {
+  it('搜索和分类均在本机即时筛选，不发起额外目录请求', async () => {
     const listSpy = vi
       .spyOn(api.toolsApi, 'listTools')
-      .mockResolvedValueOnce([makeTool()]) // 初次载入
-      .mockResolvedValueOnce({
-        tools: [],
-        noMatch: true,
-        message: '未匹配到任何工具',
-      });
+      .mockResolvedValue([]);
     vi.spyOn(api.toolsApi, 'recommendTools').mockResolvedValue(null);
 
     render(<ToolsPage />);
-    await screen.findByRole('heading', { name: '下班倒计时' });
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(1));
 
-    fireEvent.change(screen.getByLabelText('名称搜索'), {
-      target: { value: '不存在的工具' },
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索工具' }), {
+      target: { value: 'JSON' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '筛选' }));
 
-    expect(await screen.findByTestId('tools-empty')).toHaveTextContent(
-      '未匹配到任何工具',
+    expect(screen.getByRole('heading', { name: 'JSON 格式化' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: '下班倒计时' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '清除筛选' }));
+    const categoryGroup = screen.getByRole('group', { name: '工具分类' });
+    fireEvent.click(
+      within(categoryGroup).getByRole('button', { name: '文本' }),
     );
-    expect(listSpy).toHaveBeenLastCalledWith({
-      category: undefined,
-      q: '不存在的工具',
-    });
+
+    expect(screen.getByRole('heading', { name: '文本处理' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '字数统计' })).toBeInTheDocument();
+    expect(listSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('launches a tool and shows its availability (14.5)', async () => {
-    vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([makeTool()]);
-    vi.spyOn(api.toolsApi, 'recommendTools').mockResolvedValue(null);
-    const launchSpy = vi.spyOn(api.toolsApi, 'launchTool').mockResolvedValue({
-      toolId: 't1',
-      slug: 'countdown',
-      available: true,
-    });
+  it('目录接口失败时保留 12 项兜底，并且不经 launch API 直接打开', async () => {
+    vi.spyOn(api.toolsApi, 'listTools').mockRejectedValue(
+      new Error('offline'),
+    );
+    vi.spyOn(api.toolsApi, 'recommendTools').mockRejectedValue(
+      new Error('offline'),
+    );
+    const launchSpy = vi.spyOn(api.toolsApi, 'launchTool');
 
     render(<ToolsPage />);
-    await screen.findByRole('heading', { name: '下班倒计时' });
 
-    fireEvent.click(screen.getAllByRole('button', { name: '启动' })[0]);
+    expect(
+      await screen.findByText('当前使用内置本机目录，12 款工具仍可正常使用。'),
+    ).toBeInTheDocument();
 
-    await waitFor(() => expect(launchSpy).toHaveBeenCalledWith('t1'));
-    expect(await screen.findByRole('status')).toHaveTextContent('可用');
+    fireEvent.click(screen.getByRole('button', { name: '打开计算器' }));
+
+    expect(
+      screen.getByRole('dialog', { name: '计算器' }),
+    ).toBeInTheDocument();
+    expect(launchSpy).not.toHaveBeenCalled();
+  });
+
+  it('无匹配时显示清晰空状态，并可恢复全部工具', async () => {
+    const listSpy = vi.spyOn(api.toolsApi, 'listTools').mockResolvedValue([]);
+    vi.spyOn(api.toolsApi, 'recommendTools').mockResolvedValue(null);
+
+    render(<ToolsPage />);
+    await waitFor(() => expect(listSpy).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索工具' }), {
+      target: { value: '不存在的工具' },
+    });
+
+    expect(screen.getByTestId('tools-empty')).toHaveTextContent(
+      '没有找到匹配的工具',
+    );
+    fireEvent.click(screen.getByRole('button', { name: '查看全部工具' }));
+    expect(screen.getByRole('heading', { name: '计算器' })).toBeInTheDocument();
   });
 });
