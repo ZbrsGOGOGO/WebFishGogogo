@@ -132,6 +132,8 @@ interface PlotCardProps {
   nowMs: number;
   selected: boolean;
   busy: boolean;
+  allowSelection: boolean;
+  allowHarvest: boolean;
   onSelect: (plot: FarmPlot) => void;
   onHarvest: (plot: FarmPlot) => void;
 }
@@ -141,6 +143,8 @@ function PlotCard({
   nowMs,
   selected,
   busy,
+  allowSelection,
+  allowHarvest,
   onSelect,
   onHarvest,
 }: PlotCardProps): JSX.Element {
@@ -174,13 +178,17 @@ function PlotCard({
           ＋
         </span>
         <strong>第 {plot.slotIndex + 1} 块地</strong>
-        <Button
-          size="sm"
-          variant={selected ? 'primary' : 'secondary'}
-          onClick={() => onSelect(plot)}
-        >
-          {selected ? '正在选种' : '选择作物'}
-        </Button>
+        {allowSelection ? (
+          <Button
+            size="sm"
+            variant={selected ? 'primary' : 'secondary'}
+            onClick={() => onSelect(plot)}
+          >
+            {selected ? '正在选种' : '选择作物'}
+          </Button>
+        ) : (
+          <span>等待一键种植</span>
+        )}
       </article>
     );
   }
@@ -194,13 +202,15 @@ function PlotCard({
       {ready ? (
         <>
           <span className={styles.readyLabel}>可收获</span>
-          <Button
-            size="sm"
-            onClick={() => onHarvest(plot)}
-            loading={busy}
-          >
-            收获
-          </Button>
+          {allowHarvest && (
+            <Button
+              size="sm"
+              onClick={() => onHarvest(plot)}
+              loading={busy}
+            >
+              收获
+            </Button>
+          )}
         </>
       ) : (
         <>
@@ -293,25 +303,35 @@ export function FarmPage(): JSX.Element {
     });
   };
 
-  const startOnboarding = (): void => {
-    if (!overview) return;
+  const handleOnboardingPlant = async (): Promise<void> => {
+    if (!overview || busyPlotId) return;
     const firstEmptyPlot = overview.plots.find(
       (plot) => plot.state === 'empty',
     );
     const wheat = overview.crops.find((crop) => crop.slug === 'wheat');
-    if (!firstEmptyPlot || !wheat) return;
+    if (!firstEmptyPlot || !wheat) {
+      setActionError('暂时没有可用的新手土地，请刷新农场后重试。');
+      return;
+    }
 
-    setSelectedPlotId(firstEmptyPlot.id);
-    setSelectedCropSlug(wheat.slug);
+    setBusyPlotId(firstEmptyPlot.id);
     setActionError(null);
     setActionSuccess(null);
     setFirstHarvestCelebration(false);
-    window.requestAnimationFrame(() => {
-      cropPanelRef.current?.scrollIntoView?.({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    });
+    try {
+      const nextOverview = await farmApi.plantCrop(
+        firstEmptyPlot.id,
+        wheat.slug,
+      );
+      applyOverview(nextOverview);
+      setActionSuccess(`${wheat.name}已种下，30 秒后点一次收获即可。`);
+    } catch (error) {
+      setActionError(
+        `一键种植未完成。${readableError(error, '请稍后重试。')}`,
+      );
+    } finally {
+      setBusyPlotId(null);
+    }
   };
 
   const handlePlant = async (): Promise<void> => {
@@ -431,10 +451,13 @@ export function FarmPage(): JSX.Element {
   }
 
   const nowMs = clockMs + serverOffsetMs;
-  const visiblePlots = overview.plots.filter(
+  const allVisiblePlots = overview.plots.filter(
     (plot) => plot.slotIndex < MAX_VISIBLE_PLOTS,
   );
-  const unlockedPlotCount = visiblePlots.filter(
+  const visiblePlots = overview.onboarding.firstHarvestCompleted
+    ? allVisiblePlots
+    : allVisiblePlots.slice(0, 1);
+  const unlockedPlotCount = allVisiblePlots.filter(
     (plot) => plot.state !== 'locked',
   ).length;
   const canPlant =
@@ -457,21 +480,30 @@ export function FarmPage(): JSX.Element {
     })
       ? 'ready'
       : overview.onboarding.stage;
+  const readyOnboardingPlot = visiblePlots.find((plot) => {
+    const maturesAtMs = plot.maturesAt ? Date.parse(plot.maturesAt) : 0;
+    return (
+      plot.state === 'ready' ||
+      (plot.state === 'growing' &&
+        Number.isFinite(maturesAtMs) &&
+        maturesAtMs <= nowMs)
+    );
+  });
   const onboardingCopy = {
     choose_plot: {
-      step: '新手任务 · 第 1 步',
-      title: '30 秒收获你的第一株',
-      description: `第一次种植会自动加速到 ${overview.onboarding.quickGrowSeconds} 秒；首次收获再送 ${overview.onboarding.firstHarvestBonusFarmExp} 农场 EXP，直接升到 Lv.2。`,
+      step: '新手任务 · 第 1 / 2 步',
+      title: '一键种下，30 秒后收获',
+      description: `不用选土地，也不用配资源。点一次就会种下小麦，首收再送 ${overview.onboarding.firstHarvestBonusFarmExp} 农场 EXP。`,
     },
     growing: {
-      step: '新手任务 · 第 2 步',
-      title: '第一株正在长大',
-      description: '倒计时由服务器记录，离开页面也不会中断。成熟后回来点一次收获即可。',
+      step: '新手任务 · 等待成熟',
+      title: '小麦正在长大',
+      description: '只需等待 30 秒。离开页面也不会中断，成熟后按钮会自动变成“收获”。',
     },
     ready: {
-      step: '新手任务 · 最后一步',
-      title: '第一株成熟了，马上收获',
-      description: `点击土地上的“收获”，领取基础奖励与 ${overview.onboarding.firstHarvestBonusFarmExp} 农场 EXP 新人加成。`,
+      step: '新手任务 · 第 2 / 2 步',
+      title: '小麦成熟了，点一下收获',
+      description: `收获后立即升到农场 Lv.2，并解锁咖啡。`,
     },
     completed: {
       step: '新手任务 · 已完成',
@@ -484,16 +516,22 @@ export function FarmPage(): JSX.Element {
     <section aria-label="农场">
       <PageHeader
         title="农场"
-        subtitle="每日签到获得 5 水滴；作物按服务器时间生长，关闭页面也不会中断。"
+        subtitle={
+          overview.onboarding.firstHarvestCompleted
+            ? '每日签到获得 5 水滴；作物离线也会继续生长。'
+            : '两步完成首收：一键种下，30 秒后收获。'
+        }
         actions={
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={loading}
-            onClick={() => void loadFarm()}
-          >
-            刷新农场
-          </Button>
+          overview.onboarding.firstHarvestCompleted ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={loading}
+              onClick={() => void loadFarm()}
+            >
+              刷新农场
+            </Button>
+          ) : undefined
         }
       />
 
@@ -514,7 +552,20 @@ export function FarmPage(): JSX.Element {
             <small>解锁 ☕ 加班咖啡豆</small>
           </div>
           {onboardingStage === 'choose_plot' && (
-            <Button onClick={startOnboarding}>选好小麦，开始首种</Button>
+            <Button
+              loading={busyPlotId != null}
+              onClick={() => void handleOnboardingPlant()}
+            >
+              一键种下小麦 · 30 秒
+            </Button>
+          )}
+          {onboardingStage === 'ready' && readyOnboardingPlot && (
+            <Button
+              loading={busyPlotId === readyOnboardingPlot.id}
+              onClick={() => void handleHarvest(readyOnboardingPlot)}
+            >
+              收获并升到 Lv.2
+            </Button>
           )}
         </section>
       )}
@@ -541,12 +592,20 @@ export function FarmPage(): JSX.Element {
           </span>
         </Card>
         <Card>
-          <dl className={styles.assetList} aria-label="农场资源">
+          <dl
+            className={styles.assetList}
+            data-compact={!overview.onboarding.firstHarvestCompleted}
+            aria-label="农场资源"
+          >
             <div>
               <dt>水滴</dt>
               <dd>{numberFormatter.format(overview.assets.water)}</dd>
             </div>
-            {SEED_RESOURCES.map((resource) => (
+            {SEED_RESOURCES.filter(
+              (resource) =>
+                overview.onboarding.firstHarvestCompleted ||
+                resource.slug === 'seed_wheat',
+            ).map((resource) => (
               <div key={resource.slug}>
                 <dt>{resource.label}</dt>
                 <dd>
@@ -590,9 +649,17 @@ export function FarmPage(): JSX.Element {
 
       <Card
         className={styles.plotsCard}
-        title={`我的土地 · 已开放 ${unlockedPlotCount} / ${MAX_VISIBLE_PLOTS}`}
+        title={
+          overview.onboarding.firstHarvestCompleted
+            ? `我的土地 · 已开放 ${unlockedPlotCount} / ${MAX_VISIBLE_PLOTS}`
+            : '你的第一块地'
+        }
       >
-        <div className={styles.plotGrid} aria-label="农场地块">
+        <div
+          className={styles.plotGrid}
+          data-compact={!overview.onboarding.firstHarvestCompleted}
+          aria-label="农场地块"
+        >
           {visiblePlots.map((plot) => (
             <PlotCard
               key={plot.id}
@@ -600,6 +667,8 @@ export function FarmPage(): JSX.Element {
               nowMs={nowMs}
               selected={plot.id === selectedPlotId}
               busy={plot.id === busyPlotId}
+              allowSelection={overview.onboarding.firstHarvestCompleted}
+              allowHarvest={overview.onboarding.firstHarvestCompleted}
               onSelect={selectPlot}
               onHarvest={(target) => void handleHarvest(target)}
             />
@@ -607,6 +676,7 @@ export function FarmPage(): JSX.Element {
         </div>
       </Card>
 
+      {overview.onboarding.firstHarvestCompleted && (
       <div ref={cropPanelRef} className={styles.cropPanelAnchor}>
         <Card
           className={styles.cropPanel}
@@ -715,7 +785,9 @@ export function FarmPage(): JSX.Element {
           )}
         </Card>
       </div>
+      )}
 
+      {overview.onboarding.firstHarvestCompleted && (
       <details className={styles.guideDetails}>
         <summary>
           <span>
@@ -760,6 +832,7 @@ export function FarmPage(): JSX.Element {
           </p>
         </div>
       </details>
+      )}
     </section>
   );
 }

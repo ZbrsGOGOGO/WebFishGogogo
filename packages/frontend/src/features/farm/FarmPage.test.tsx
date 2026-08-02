@@ -127,17 +127,35 @@ describe('FarmPage', () => {
     expect(screen.getByRole('button', { name: /小麦/ })).toBeDisabled();
   });
 
-  it('为新用户突出 30 秒首收，并一键选好空地和小麦', async () => {
-    const scrollIntoView = vi.fn();
-    Object.defineProperty(Element.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoView,
+  it('新用户只需一次点击就能种下 30 秒小麦，并隐藏高级操作', async () => {
+    const initialOverview = makeOverview({
+      onboarding: {
+        stage: 'choose_plot',
+        quickGrowAvailable: true,
+        quickGrowSeconds: 30,
+        firstHarvestCompleted: false,
+        firstHarvestBonusFarmExp: 40,
+      },
+      farm: {
+        level: 1,
+        experience: 0,
+        expToNextLevel: 50,
+        plotCount: 4,
+      },
     });
-    vi.spyOn(farmApi, 'getFarm').mockResolvedValue(
-      makeOverview({
+    const plantedPlots = makePlots([
+      {
+        state: 'growing',
+        crop: { slug: 'wheat', name: '小麦', emoji: '🌾' },
+        plantedAt: NOW.toISOString(),
+        maturesAt: new Date(NOW.getTime() + 30_000).toISOString(),
+      },
+    ]);
+    const plantedOverview = makeOverview(
+      {
         onboarding: {
-          stage: 'choose_plot',
-          quickGrowAvailable: true,
+          stage: 'growing',
+          quickGrowAvailable: false,
           quickGrowSeconds: 30,
           firstHarvestCompleted: false,
           firstHarvestBonusFarmExp: 40,
@@ -148,17 +166,33 @@ describe('FarmPage', () => {
           expToNextLevel: 50,
           plotCount: 4,
         },
-      }),
+      },
+      plantedPlots,
     );
+    vi.spyOn(farmApi, 'getFarm').mockResolvedValue(initialOverview);
+    const plantSpy = vi
+      .spyOn(farmApi, 'plantCrop')
+      .mockResolvedValue(plantedOverview);
 
     render(<FarmPage />);
 
-    expect(await screen.findByText('30 秒收获你的第一株')).toBeInTheDocument();
-    expect(screen.getByText(/首次收获再送 40 农场 EXP/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '选好小麦，开始首种' }));
-    expect(screen.getByText('已选择：🌾 小麦')).toBeInTheDocument();
-    expect(screen.getAllByText('首次种植自动加速').length).toBeGreaterThan(0);
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
+    expect(await screen.findByText('一键种下，30 秒后收获')).toBeInTheDocument();
+    expect(screen.getByLabelText('农场地块').children).toHaveLength(1);
+    expect(screen.queryByRole('heading', { name: '选择作物' })).not.toBeInTheDocument();
+    expect(screen.queryByText('玩法说明')).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '一键种下小麦 · 30 秒' }),
+    );
+
+    await waitFor(() =>
+      expect(plantSpy).toHaveBeenCalledWith('plot-1', 'wheat'),
+    );
+    expect(await screen.findByText('小麦正在长大')).toBeInTheDocument();
+    expect(screen.getByText('00:00:30')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '小麦已种下，30 秒后点一次收获即可',
+    );
   });
 
   it('选择空地后滚动作物区，并直接采用种植响应', async () => {
@@ -248,7 +282,9 @@ describe('FarmPage', () => {
 
     render(<FarmPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '收获' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: '收获并升到 Lv.2' }),
+    );
 
     await waitFor(() =>
       expect(harvestSpy).toHaveBeenCalledWith('plot-1'),
@@ -300,8 +336,11 @@ describe('FarmPage', () => {
     await act(async () => {
       vi.advanceTimersByTime(2_000);
     });
-    expect(screen.getByRole('button', { name: '收获' })).toBeInTheDocument();
-    expect(screen.getByText('第一株成熟了，马上收获')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: '收获并升到 Lv.2' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^收获$/ })).not.toBeInTheDocument();
+    expect(screen.getByText('小麦成熟了，点一下收获')).toBeInTheDocument();
   });
 
   it('加载失败时展示错误并允许重试', async () => {

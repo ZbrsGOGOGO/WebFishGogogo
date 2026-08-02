@@ -139,6 +139,10 @@
   margin: 0;
 }
 
+.assetList[data-compact='true'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .assetList div {
   padding: var(--space-2);
   border-radius: var(--radius-md);
@@ -256,6 +260,10 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.plotGrid[data-compact='true'] {
+  grid-template-columns: minmax(220px, 320px);
 }
 
 .plot {
