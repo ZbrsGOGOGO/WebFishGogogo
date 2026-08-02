@@ -1,0 +1,349 @@
+.catalogStat {
+  min-width: 112px;
+  display: grid;
+  justify-items: end;
+  line-height: 1.2;
+}
+
+.catalogStat strong {
+  color: var(--color-brand);
+  font-family: var(--font-mono);
+  font-size: 26px;
+}
+
+.catalogStat span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.controlPanel {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, var(--color-brand-soft), transparent 46%),
+    var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.searchField {
+  min-width: 0;
+}
+
+.clearButton {
+  margin-bottom: 1px;
+}
+
+.filterGroup {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.filterLabel {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.chipRail {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip,
+.activeChip {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.chip:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand);
+}
+
+.chip:focus-visible,
+.activeChip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+
+.activeChip {
+  border-color: var(--color-brand);
+  background: var(--color-brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+.localNotice {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 22%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-brand-soft);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.catalogSection {
+  margin-bottom: var(--space-6);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.sectionHeading h2 {
+  margin: var(--space-1) 0;
+  font-size: 20px;
+}
+
+.sectionHeading p {
+  margin: 0;
+  color: var(--color-text-secondary);
+}
+
+.eyebrow {
+  color: var(--color-brand);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.resultCount {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toolGrid > li {
+  min-width: 0;
+}
+
+.toolCard {
+  position: relative;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.toolCard::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: transparent;
+  content: '';
+}
+
+.toolCard:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-brand) 42%, var(--color-border));
+  box-shadow: var(--shadow-md);
+}
+
+.priorityCard::before {
+  background: var(--color-brand);
+}
+
+.toolTopline,
+.toolFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.toolIcon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.toolTags,
+.professionTags {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.toolCopy {
+  min-width: 0;
+  flex: 1;
+}
+
+.toolCopy h3 {
+  margin: 0 0 var(--space-2);
+  font-size: 17px;
+}
+
+.toolCopy p {
+  display: -webkit-box;
+  min-height: 44px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-text-secondary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.toolFooter {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.professionTags {
+  justify-content: flex-start;
+}
+
+.professionTags span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.emptyPanel {
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+@media (max-width: 900px) {
+  .toolGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .catalogStat {
+    display: none;
+  }
+
+  .controlPanel {
+    padding: var(--space-3);
+  }
+
+  .searchRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .clearButton {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .filterGroup {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .chipRail {
+    margin-inline: calc(-1 * var(--space-3));
+    padding-inline: var(--space-3);
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+
+  .chipRail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip,
+  .activeChip {
+    min-height: 40px;
+    flex: 0 0 auto;
+  }
+
+  .sectionHeading {
+    align-items: flex-start;
+  }
+
+  .sectionHeading p {
+    max-width: 25rem;
+  }
+
+  .toolGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .toolFooter > button {
+    min-height: 42px;
+    padding-inline: var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .activeChip,
+  .toolCard {
+    transition: none;
+  }
+}

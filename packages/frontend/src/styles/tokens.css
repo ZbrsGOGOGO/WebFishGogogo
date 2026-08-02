@@ -1,0 +1,211 @@
+:root {
+  --color-brand: #5b5bd6;
+  --color-brand-hover: #4848bd;
+  --color-brand-strong: #30307e;
+  --color-brand-soft: #efefff;
+  --color-accent: #10a37f;
+  --color-accent-soft: #e6f7f2;
+
+  --color-bg: #f3f5f9;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8f9fc;
+  --color-surface-strong: #171a2f;
+  --color-border: #dfe3ec;
+  --color-border-strong: #cbd1dc;
+  --color-text: #1b2033;
+  --color-text-secondary: #515a70;
+  --color-text-muted: #70798e;
+
+  --color-success: #16865c;
+  --color-warning: #b86a12;
+  --color-danger: #d03b4f;
+  --color-link: #4d4dc6;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 48px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+
+  --shadow-sm: 0 1px 2px rgba(25, 31, 54, 0.06);
+  --shadow-md: 0 10px 28px rgba(25, 31, 54, 0.09);
+  --shadow-lg: 0 22px 60px rgba(25, 31, 54, 0.15);
+
+  --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+
+  --z-nav: 100;
+  --z-drawer: 600;
+  --z-modal: 1000;
+
+  --nav-height: 66px;
+  --content-max: 1200px;
+}
+
+[data-theme='dark'] {
+  --color-bg: #121420;
+  --color-surface: #1b1e2c;
+  --color-surface-2: #222637;
+  --color-surface-strong: #0e1019;
+  --color-border: #32374a;
+  --color-border-strong: #444a60;
+  --color-text: #f1f3f9;
+  --color-text-secondary: #b7bed0;
+  --color-text-muted: #959db1;
+  --color-brand-soft: #29294b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 22px 60px rgba(0, 0, 0, 0.4);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  scroll-behavior: smooth;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at 8% -20%, rgba(91, 91, 214, 0.11), transparent 34rem),
+    var(--color-bg);
+  color: var(--color-text);
+  font-size: 14px;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: var(--color-link);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 32%, transparent);
+  outline-offset: 2px;
+}
+
+::selection {
+  color: var(--color-brand-strong);
+  background: color-mix(in srgb, var(--color-brand) 22%, white);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text);
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: clamp(24px, 2.4vw, 34px);
+}
+
+h2 {
+  font-size: 20px;
+}
+
+h3 {
+  font-size: 16px;
+}
+
+p {
+  margin: 0 0 var(--space-3);
+}
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-main {
+  flex: 1;
+}
+
+.page-container {
+  width: min(100%, var(--content-max));
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+.route-loading {
+  min-height: min(72vh, 680px);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-secondary);
+}
+
+.route-loading__mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--color-brand), #7474e9);
+  box-shadow: var(--shadow-md);
+  color: white;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: var(--space-5) var(--space-4) calc(92px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

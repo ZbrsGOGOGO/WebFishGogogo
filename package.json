@@ -1,0 +1,24 @@
+{
+  "name": "stealth-reader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZBRS 技术工具工坊 monorepo",
+  "workspaces": [
+    "packages/shared",
+    "packages/backend",
+    "packages/frontend"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @stealth-reader/shared && npm run build --workspace @stealth-reader/backend && npm run build --workspace @stealth-reader/frontend",
+    "build:shared": "npm run build --workspace @stealth-reader/shared",
+    "test": "npm run test --workspace @stealth-reader/backend && npm run test --workspace @stealth-reader/frontend",
+    "typecheck": "npm run typecheck --workspace @stealth-reader/shared && npm run typecheck --workspace @stealth-reader/backend && npm run typecheck --workspace @stealth-reader/frontend",
+    "verify": "npm run typecheck && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "vite": "5.4.21"
+  }
+}

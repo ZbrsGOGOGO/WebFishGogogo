@@ -1,0 +1,36 @@
+/* packages/frontend/src/components/ui/Tag.module.css */
+/* 标签 / 徽标：柔和品牌红底色。 */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ---------- 颜色 ---------- */
+.brand {
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+}
+
+.neutral {
+  background: var(--color-surface-2);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.success {
+  background: rgba(82, 196, 26, 0.12);
+  color: var(--color-success);
+}
+
+.danger {
+  background: rgba(245, 34, 45, 0.1);
+  color: var(--color-danger);
+}

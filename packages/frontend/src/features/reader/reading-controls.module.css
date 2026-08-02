@@ -1,0 +1,71 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--reader-muted, var(--color-text-secondary));
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.label {
+  margin-right: 2px;
+  color: var(--reader-muted, var(--color-text-muted));
+}
+
+.value {
+  min-width: 26px;
+  color: var(--reader-text, var(--color-text));
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn,
+.modeBtn {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--reader-border, var(--color-border));
+  border-radius: 8px;
+  color: var(--reader-text, var(--color-text-secondary));
+  background: var(--reader-surface, var(--color-surface));
+  line-height: 1;
+}
+
+.btn:hover,
+.modeBtn:hover {
+  border-color: var(--reader-brand, var(--color-brand));
+  color: var(--reader-brand, var(--color-brand));
+}
+
+.modeBtn {
+  border-radius: 0;
+}
+
+.modeBtn:first-of-type {
+  border-radius: 8px 0 0 8px;
+}
+
+.modeBtn:last-of-type {
+  margin-left: -4px;
+  border-radius: 0 8px 8px 0;
+}
+
+.modeBtn[data-active='true'] {
+  z-index: 1;
+  border-color: var(--reader-brand, var(--color-brand));
+  color: #fff;
+  background: var(--reader-brand, var(--color-brand));
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .modeBtn {
+    min-height: 40px;
+  }
+}
