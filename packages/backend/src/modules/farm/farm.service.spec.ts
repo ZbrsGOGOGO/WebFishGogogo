@@ -58,6 +58,13 @@ describe('FarmService integration', () => {
     expect(initial.farm.plotCount).toBe(4);
     expect(initial.assets.water).toBe(4);
     expect(initial.inventory.seed_wheat).toBe(4);
+    expect(initial.onboarding).toMatchObject({
+      stage: 'choose_plot',
+      quickGrowAvailable: true,
+      quickGrowSeconds: 30,
+      firstHarvestCompleted: false,
+      firstHarvestBonusFarmExp: 40,
+    });
 
     const plot = initial.plots.find((candidate) => candidate.state === 'empty');
     expect(plot).toBeDefined();
@@ -72,6 +79,17 @@ describe('FarmService integration', () => {
     expect(planted.inventory.seed_wheat).toBe(3);
     expect(planted.plots.find((candidate) => candidate.id === plot!.id)?.state)
       .toBe('growing');
+    const firstPlanting = planted.plots.find(
+      (candidate) => candidate.id === plot!.id,
+    )!;
+    expect(
+      Date.parse(firstPlanting.maturesAt!) -
+        Date.parse(firstPlanting.plantedAt!),
+    ).toBe(30_000);
+    expect(planted.onboarding).toMatchObject({
+      stage: 'growing',
+      quickGrowAvailable: false,
+    });
 
     const plantReplay = await farmService.plant(
       userId,
@@ -82,7 +100,7 @@ describe('FarmService integration', () => {
     expect(plantReplay.assets.water).toBe(3);
     expect(plantReplay.inventory.seed_wheat).toBe(3);
 
-    clock.advanceMilliseconds(30 * 60 * 1000);
+    clock.advanceMilliseconds(30 * 1000);
     const harvested = await farmService.harvest(
       userId,
       plot!.id,
@@ -90,7 +108,12 @@ describe('FarmService integration', () => {
     );
     expect(harvested.plots.find((candidate) => candidate.id === plot!.id)?.state)
       .toBe('empty');
-    expect(harvested.farm.experience).toBe(10);
+    expect(harvested.farm.experience).toBe(50);
+    expect(harvested.farm.level).toBe(2);
+    expect(harvested.onboarding).toMatchObject({
+      stage: 'completed',
+      firstHarvestCompleted: true,
+    });
     expect(harvested.inventory.seed_wheat).toBe(4);
 
     const platformAfterHarvest = await platformService.getOverview(userId);
@@ -105,6 +128,27 @@ describe('FarmService integration', () => {
     const platformAfterReplay = await platformService.getOverview(userId);
     expect(platformAfterReplay.profile.exp).toBe(20);
     expect(platformAfterReplay.balances.officeCoin).toBe(5);
+
+    const secondPlanting = await farmService.plant(
+      userId,
+      plot!.id,
+      'wheat',
+      'plant-test-0002',
+    );
+    const normalCycle = secondPlanting.plots.find(
+      (candidate) => candidate.id === plot!.id,
+    )!;
+    expect(
+      Date.parse(normalCycle.maturesAt!) - Date.parse(normalCycle.plantedAt!),
+    ).toBe(30 * 60 * 1000);
+
+    clock.advanceMilliseconds(30 * 60 * 1000);
+    const secondHarvest = await farmService.harvest(
+      userId,
+      plot!.id,
+      'harvest-test-0002',
+    );
+    expect(secondHarvest.farm.experience).toBe(60);
   });
 
   it('rejects harvesting before the server-side maturity time', async () => {

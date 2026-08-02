@@ -4,6 +4,14 @@ import { http } from './http';
 
 export type FarmPlotState = 'locked' | 'empty' | 'growing' | 'ready';
 
+export interface FarmOnboarding {
+  stage: 'choose_plot' | 'growing' | 'ready' | 'completed';
+  quickGrowAvailable: boolean;
+  quickGrowSeconds: number;
+  firstHarvestCompleted: boolean;
+  firstHarvestBonusFarmExp: number;
+}
+
 export interface FarmSummary {
   level: number;
   experience: number;
@@ -63,6 +71,7 @@ export interface FarmPlot {
 
 export interface FarmOverview {
   serverTime: string;
+  onboarding: FarmOnboarding;
   farm: FarmSummary;
   assets: FarmAssets;
   inventory: FarmInventory;

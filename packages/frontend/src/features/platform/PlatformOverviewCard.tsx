@@ -14,6 +14,8 @@ export interface PlatformOverviewCardProps {
   refreshKey?: number;
   /** 每日签到与总览刷新都成功后触发。 */
   onCheckinComplete?: () => void | Promise<void>;
+  /** 将最新总览同步给所在页面，用于编排跨系统的新手路线。 */
+  onOverviewChange?: (overview: PlatformOverview) => void;
 }
 
 const BALANCE_ITEMS: ReadonlyArray<{
@@ -45,6 +47,7 @@ export function PlatformOverviewCard({
   className,
   refreshKey = 0,
   onCheckinComplete,
+  onOverviewChange,
 }: PlatformOverviewCardProps): JSX.Element {
   const [overview, setOverview] = useState<PlatformOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,13 +60,15 @@ export function PlatformOverviewCard({
     setLoadError(null);
 
     try {
-      setOverview(await platformApi.getOverview());
+      const nextOverview = await platformApi.getOverview();
+      setOverview(nextOverview);
+      onOverviewChange?.(nextOverview);
     } catch (error) {
       setLoadError(readableError(error, '成长数据加载失败，请稍后重试。'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onOverviewChange]);
 
   useEffect(() => {
     void loadOverview();
@@ -79,7 +84,9 @@ export function PlatformOverviewCard({
 
     try {
       await platformApi.checkInToday();
-      setOverview(await platformApi.getOverview());
+      const nextOverview = await platformApi.getOverview();
+      setOverview(nextOverview);
+      onOverviewChange?.(nextOverview);
       await onCheckinComplete?.();
     } catch (error) {
       setCheckinError(readableError(error, '签到失败，请稍后重试。'));

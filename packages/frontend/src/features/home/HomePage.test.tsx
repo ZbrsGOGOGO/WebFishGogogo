@@ -15,6 +15,26 @@ import {
 } from '../../app/engagement-sync';
 import { HomePage } from './HomePage';
 
+vi.mock('../../api/farm', () => ({
+  farmApi: {
+    getFarm: vi.fn().mockResolvedValue({
+      serverTime: '2026-07-24T01:00:00.000Z',
+      onboarding: {
+        stage: 'choose_plot',
+        quickGrowAvailable: true,
+        quickGrowSeconds: 30,
+        firstHarvestCompleted: false,
+        firstHarvestBonusFarmExp: 40,
+      },
+      farm: { level: 1, experience: 0, expToNextLevel: 50, plotCount: 4 },
+      assets: { water: 4, sunlight: 0, fertilizer: 0 },
+      inventory: { wheatSeed: 4, strawberrySeed: 2, coffeeSeed: 1 },
+      crops: [],
+      plots: [],
+    }),
+  },
+}));
+
 vi.mock('../platform', () => ({
   PlatformOverviewCard: ({
     refreshKey,
@@ -116,13 +136,17 @@ describe('HomePage reading engagement synchronization', () => {
     );
   });
 
-  it('places the four product systems before growth and removes prototype copy', () => {
+  it('把三分钟路线放在四个系统与成长面板之前', async () => {
     render(
       <MemoryRouter>
         <HomePage />
       </MemoryRouter>,
     );
 
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText('30 秒种下并收获第一株')).toBeInTheDocument();
     const systemLinks = [
       screen.getByRole('link', { name: '进入阅读系统' }),
       screen.getByRole('link', { name: '进入工具系统' }),
@@ -130,14 +154,26 @@ describe('HomePage reading engagement synchronization', () => {
       screen.getByRole('link', { name: '进入小游戏系统' }),
     ];
     const overview = screen.getByTestId('overview');
+    const firstPlayTitle = screen.getByRole('heading', {
+      name: '先完成一条有结果的短循环',
+    });
 
     for (const link of systemLinks) {
+      expect(
+        firstPlayTitle.compareDocumentPosition(link) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
       expect(
         link.compareDocumentPosition(overview) &
           Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
     expect(screen.queryByText(/每页默认字符数/)).not.toBeInTheDocument();
-    expect(screen.getByText('单机版已就绪')).toBeInTheDocument();
+    expect(screen.getByText('30 秒首收')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '去农场' })).toHaveAttribute(
+      'href',
+      '/farm',
+    );
+    expect(screen.getByText('农场 Lv.2 · 咖啡豆')).toBeInTheDocument();
   });
 });

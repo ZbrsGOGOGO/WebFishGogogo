@@ -223,6 +223,7 @@ export function FarmPage(): JSX.Element {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [firstHarvestCelebration, setFirstHarvestCelebration] = useState(false);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [selectedCropSlug, setSelectedCropSlug] = useState<string | null>(null);
   const [busyPlotId, setBusyPlotId] = useState<string | null>(null);
@@ -283,6 +284,28 @@ export function FarmPage(): JSX.Element {
     setSelectedCropSlug(null);
     setActionError(null);
     setActionSuccess(null);
+    setFirstHarvestCelebration(false);
+    window.requestAnimationFrame(() => {
+      cropPanelRef.current?.scrollIntoView?.({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
+  const startOnboarding = (): void => {
+    if (!overview) return;
+    const firstEmptyPlot = overview.plots.find(
+      (plot) => plot.state === 'empty',
+    );
+    const wheat = overview.crops.find((crop) => crop.slug === 'wheat');
+    if (!firstEmptyPlot || !wheat) return;
+
+    setSelectedPlotId(firstEmptyPlot.id);
+    setSelectedCropSlug(wheat.slug);
+    setActionError(null);
+    setActionSuccess(null);
+    setFirstHarvestCelebration(false);
     window.requestAnimationFrame(() => {
       cropPanelRef.current?.scrollIntoView?.({
         behavior: 'smooth',
@@ -336,8 +359,14 @@ export function FarmPage(): JSX.Element {
         (definition) => definition.slug === plot.crop?.slug,
       );
       const previousFarmExperience = overview.farm.experience;
+      const wasFirstHarvestCompleted =
+        overview.onboarding.firstHarvestCompleted;
       const nextOverview = await farmApi.harvestCrop(plot.id);
       applyOverview(nextOverview);
+      setFirstHarvestCelebration(
+        !wasFirstHarvestCompleted &&
+          nextOverview.onboarding.firstHarvestCompleted,
+      );
       setActionSuccess(
         harvestSuccessText(
           crop,
@@ -415,6 +444,41 @@ export function FarmPage(): JSX.Element {
     overview.assets.water >= selectedCrop.plantCost.water &&
     seedQuantity(overview, selectedCrop.plantCost.seedSlug) >=
       selectedCrop.plantCost.seedQuantity;
+  const onboardingStage =
+    overview.onboarding.stage === 'growing' &&
+    overview.plots.some((plot) => {
+      const maturesAtMs = plot.maturesAt ? Date.parse(plot.maturesAt) : 0;
+      return (
+        plot.state === 'ready' ||
+        (plot.state === 'growing' &&
+          Number.isFinite(maturesAtMs) &&
+          maturesAtMs <= nowMs)
+      );
+    })
+      ? 'ready'
+      : overview.onboarding.stage;
+  const onboardingCopy = {
+    choose_plot: {
+      step: '新手任务 · 第 1 步',
+      title: '30 秒收获你的第一株',
+      description: `第一次种植会自动加速到 ${overview.onboarding.quickGrowSeconds} 秒；首次收获再送 ${overview.onboarding.firstHarvestBonusFarmExp} 农场 EXP，直接升到 Lv.2。`,
+    },
+    growing: {
+      step: '新手任务 · 第 2 步',
+      title: '第一株正在长大',
+      description: '倒计时由服务器记录，离开页面也不会中断。成熟后回来点一次收获即可。',
+    },
+    ready: {
+      step: '新手任务 · 最后一步',
+      title: '第一株成熟了，马上收获',
+      description: `点击土地上的“收获”，领取基础奖励与 ${overview.onboarding.firstHarvestBonusFarmExp} 农场 EXP 新人加成。`,
+    },
+    completed: {
+      step: '新手任务 · 已完成',
+      title: '首收已经完成',
+      description: '咖啡作物已解锁，接下来可以按自己的节奏安排离线种植。',
+    },
+  }[onboardingStage];
 
   return (
     <section aria-label="农场">
@@ -432,6 +496,38 @@ export function FarmPage(): JSX.Element {
           </Button>
         }
       />
+
+      {!overview.onboarding.firstHarvestCompleted && (
+        <section
+          className={styles.onboarding}
+          data-stage={onboardingStage}
+          aria-labelledby="farm-onboarding-title"
+        >
+          <div className={styles.onboardingCopy}>
+            <span>{onboardingCopy.step}</span>
+            <h2 id="farm-onboarding-title">{onboardingCopy.title}</h2>
+            <p>{onboardingCopy.description}</p>
+          </div>
+          <div className={styles.onboardingReward} aria-label="新手首收奖励">
+            <strong>首收目标</strong>
+            <span>农场 Lv.2</span>
+            <small>解锁 ☕ 加班咖啡豆</small>
+          </div>
+          {onboardingStage === 'choose_plot' && (
+            <Button onClick={startOnboarding}>选好小麦，开始首种</Button>
+          )}
+        </section>
+      )}
+
+      {firstHarvestCelebration && (
+        <section className={styles.celebration} role="status" aria-live="polite">
+          <span aria-hidden="true">✓</span>
+          <div>
+            <strong>新手闭环完成 · 咖啡已解锁</strong>
+            <p>你已升到农场 Lv.2。下一步可以种咖啡，或去小游戏完成一局短挑战。</p>
+          </div>
+        </section>
+      )}
 
       <div className={styles.summaryGrid}>
         <Card className={styles.levelCard}>
@@ -543,6 +639,12 @@ export function FarmPage(): JSX.Element {
                 overview.assets.water < crop.plantCost.water ||
                 seedBalance < crop.plantCost.seedQuantity;
               const disabled = !selectedPlot || levelLocked;
+              const displayedGrowSeconds = overview.onboarding.quickGrowAvailable
+                ? Math.min(
+                    crop.growSeconds,
+                    overview.onboarding.quickGrowSeconds,
+                  )
+                : crop.growSeconds;
 
               return (
                 <button
@@ -563,13 +665,20 @@ export function FarmPage(): JSX.Element {
                     {crop.emoji}
                   </span>
                   <strong>{crop.name}</strong>
-                  <span>成熟时间：{formatDuration(crop.growSeconds)}</span>
+                  <span>
+                    {overview.onboarding.quickGrowAvailable
+                      ? `本次新手加速：${formatDuration(displayedGrowSeconds)}`
+                      : `成熟时间：${formatDuration(displayedGrowSeconds)}`}
+                  </span>
                   <span>收获：{rewardText(crop)}</span>
                   <small>
                     消耗 {crop.plantCost.water} 水滴 ·{' '}
                     {crop.plantCost.seedQuantity} 颗种子（持有 {seedBalance}）
                   </small>
                   {levelLocked && <em>农场 Lv.{crop.requiredLevel} 解锁</em>}
+                  {!levelLocked && overview.onboarding.quickGrowAvailable && (
+                    <em>首次种植自动加速</em>
+                  )}
                   {!levelLocked && insufficient && <em>当前资源不足</em>}
                 </button>
               );
@@ -635,12 +744,14 @@ export function FarmPage(): JSX.Element {
             <article>
               <span aria-hidden="true">03</span>
               <strong>等待成熟</strong>
-              <p>成熟时间由服务器记录，关闭页面或离线都不会停止生长。</p>
+              <p>
+                首次种植只需 30 秒；之后恢复作物原时长，关闭页面也不会停止生长。
+              </p>
             </article>
             <article>
               <span aria-hidden="true">04</span>
               <strong>收获奖励</strong>
-              <p>成熟后手动收获，奖励和农场经验会在同一次操作中到账。</p>
+              <p>首次收获额外获得 40 农场 EXP，立即升到 Lv.2 并解锁咖啡。</p>
             </article>
           </div>
           <p className={styles.guideNote}>

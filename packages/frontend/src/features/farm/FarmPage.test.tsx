@@ -28,6 +28,13 @@ function makeOverview(
 ): FarmOverview {
   return {
     serverTime: NOW.toISOString(),
+    onboarding: {
+      stage: 'completed',
+      quickGrowAvailable: false,
+      quickGrowSeconds: 30,
+      firstHarvestCompleted: true,
+      firstHarvestBonusFarmExp: 40,
+    },
     farm: {
       level: 2,
       experience: 45,
@@ -63,7 +70,7 @@ function makeOverview(
         name: '草莓',
         emoji: '🍓',
         growSeconds: 7200,
-        requiredLevel: 2,
+        requiredLevel: 1,
         plantCost: {
           water: 2,
           seedSlug: 'strawberrySeed',
@@ -76,7 +83,7 @@ function makeOverview(
         name: '咖啡豆',
         emoji: '☕',
         growSeconds: 14400,
-        requiredLevel: 3,
+        requiredLevel: 2,
         plantCost: {
           water: 3,
           seedSlug: 'coffeeSeed',
@@ -118,6 +125,40 @@ describe('FarmPage', () => {
     expect(screen.getByText('玩法说明')).toBeInTheDocument();
     expect(screen.queryByText(/后续扩展/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /小麦/ })).toBeDisabled();
+  });
+
+  it('为新用户突出 30 秒首收，并一键选好空地和小麦', async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    vi.spyOn(farmApi, 'getFarm').mockResolvedValue(
+      makeOverview({
+        onboarding: {
+          stage: 'choose_plot',
+          quickGrowAvailable: true,
+          quickGrowSeconds: 30,
+          firstHarvestCompleted: false,
+          firstHarvestBonusFarmExp: 40,
+        },
+        farm: {
+          level: 1,
+          experience: 0,
+          expToNextLevel: 50,
+          plotCount: 4,
+        },
+      }),
+    );
+
+    render(<FarmPage />);
+
+    expect(await screen.findByText('30 秒收获你的第一株')).toBeInTheDocument();
+    expect(screen.getByText(/首次收获再送 40 农场 EXP/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '选好小麦，开始首种' }));
+    expect(screen.getByText('已选择：🌾 小麦')).toBeInTheDocument();
+    expect(screen.getAllByText('首次种植自动加速').length).toBeGreaterThan(0);
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalled());
   });
 
   it('选择空地后滚动作物区，并直接采用种植响应', async () => {
@@ -172,12 +213,32 @@ describe('FarmPage', () => {
     ]);
     const getSpy = vi
       .spyOn(farmApi, 'getFarm')
-      .mockResolvedValue(makeOverview({}, readyPlots));
+      .mockResolvedValue(
+        makeOverview(
+          {
+            onboarding: {
+              stage: 'ready',
+              quickGrowAvailable: false,
+              quickGrowSeconds: 30,
+              firstHarvestCompleted: false,
+              firstHarvestBonusFarmExp: 40,
+            },
+          },
+          readyPlots,
+        ),
+      );
     const harvestedOverview = makeOverview({
+      onboarding: {
+        stage: 'completed',
+        quickGrowAvailable: false,
+        quickGrowSeconds: 30,
+        firstHarvestCompleted: true,
+        firstHarvestBonusFarmExp: 40,
+      },
       farm: {
         level: 2,
-        experience: 55,
-        expToNextLevel: 45,
+        experience: 95,
+        expToNextLevel: 5,
         plotCount: 4,
       },
     });
@@ -196,9 +257,12 @@ describe('FarmPage', () => {
     expect(
       await screen.findAllByRole('button', { name: '选择作物' }),
     ).toHaveLength(4);
-    expect(screen.getByRole('status')).toHaveTextContent(
-      '小麦收获成功，奖励已到账：+10 EXP · +10 农场 EXP',
-    );
+    expect(
+      screen.getByText(
+        '小麦收获成功，奖励已到账：+10 EXP · +50 农场 EXP',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('新手闭环完成 · 咖啡已解锁')).toBeInTheDocument();
   });
 
   it('使用服务器时间显示倒计时，并在到期后开放收获', async () => {
@@ -213,7 +277,18 @@ describe('FarmPage', () => {
       },
     ]);
     vi.spyOn(farmApi, 'getFarm').mockResolvedValue(
-      makeOverview({}, growingPlots),
+      makeOverview(
+        {
+          onboarding: {
+            stage: 'growing',
+            quickGrowAvailable: false,
+            quickGrowSeconds: 30,
+            firstHarvestCompleted: false,
+            firstHarvestBonusFarmExp: 40,
+          },
+        },
+        growingPlots,
+      ),
     );
 
     render(<FarmPage />);
@@ -226,6 +301,7 @@ describe('FarmPage', () => {
       vi.advanceTimersByTime(2_000);
     });
     expect(screen.getByRole('button', { name: '收获' })).toBeInTheDocument();
+    expect(screen.getByText('第一株成熟了，马上收获')).toBeInTheDocument();
   });
 
   it('加载失败时展示错误并允许重试', async () => {

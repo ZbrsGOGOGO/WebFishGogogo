@@ -20,6 +20,8 @@ import {
 import { OutboxService } from '../outbox';
 import {
   FARM_CLOCK,
+  FARM_FIRST_GROW_SECONDS,
+  FARM_FIRST_HARVEST_BONUS_EXP,
   FARM_ONBOARDING_REWARD,
   FARM_PLOT_SLOTS,
   FIFTH_PLOT_UNLOCK_LEVEL,
@@ -42,6 +44,13 @@ export type FarmPlotState = 'locked' | 'empty' | 'growing' | 'ready';
 
 export interface FarmOverview {
   serverTime: string;
+  onboarding: {
+    stage: 'choose_plot' | 'growing' | 'ready' | 'completed';
+    quickGrowAvailable: boolean;
+    quickGrowSeconds: number;
+    firstHarvestCompleted: boolean;
+    firstHarvestBonusFarmExp: number;
+  };
   farm: {
     level: number;
     experience: number;
@@ -169,6 +178,11 @@ export class FarmService {
         });
       }
 
+      // ensureFarmContext 会锁住用户资产行；同一用户的并发写入在这里已串行，
+      // 因而历史为空可以可靠地表示“这就是第一次种植”。
+      const isFirstPlanting =
+        (await plantingRepo.count({ where: { userId } })) === 0;
+
       // 资产流水的 source_id 数据库列上限为 100。客户端请求键与 userId
       // 拼接后可能超过该上限，因此使用稳定摘要作为审计来源标识。
       const sourceId = createHash('sha256')
@@ -206,6 +220,9 @@ export class FarmService {
       );
 
       const now = this.clock.now();
+      const growSeconds = isFirstPlanting
+        ? Math.min(crop.growSeconds, FARM_FIRST_GROW_SECONDS)
+        : crop.growSeconds;
       const planting = await plantingRepo.save(
         plantingRepo.create({
           userId,
@@ -213,7 +230,7 @@ export class FarmService {
           cropSlug: crop.slug,
           status: 'growing',
           plantedAt: now,
-          maturesAt: new Date(now.getTime() + crop.growSeconds * 1000),
+          maturesAt: new Date(now.getTime() + growSeconds * 1000),
           harvestedAt: null,
           costSnapshot: {
             water: crop.waterCost,
@@ -244,6 +261,7 @@ export class FarmService {
             cropSlug: crop.slug,
             cropName: crop.name,
             plotId,
+            onboardingQuickGrow: isFirstPlanting,
           },
         },
       });
@@ -293,6 +311,11 @@ export class FarmService {
         });
       }
 
+      const isFirstHarvest =
+        (await plantingRepo.count({
+          where: { userId, status: 'harvested' },
+        })) === 0;
+
       const reward = await this.platformAssets.grantReward(manager, {
         userId,
         sourceType: 'farm_harvest',
@@ -305,8 +328,10 @@ export class FarmService {
         context.farm.experience,
         'farm experience',
       );
-      const nextFarmExperience =
-        currentFarmExperience + planting.farmExpReward;
+      const farmExperienceGain =
+        planting.farmExpReward +
+        (isFirstHarvest ? FARM_FIRST_HARVEST_BONUS_EXP : 0);
+      const nextFarmExperience = currentFarmExperience + farmExperienceGain;
       context.farm.experience = String(nextFarmExperience);
       context.farm.level = farmLevelForExperience(nextFarmExperience);
       context.farm.plotCount =
@@ -320,6 +345,10 @@ export class FarmService {
       planting.harvestIdempotencyKey = idempotencyKey;
       planting.harvestResult = {
         reward: reward.snapshot,
+        farmExperienceGain,
+        firstHarvestBonusFarmExp: isFirstHarvest
+          ? FARM_FIRST_HARVEST_BONUS_EXP
+          : 0,
         farmLevel: context.farm.level,
         farmExperience: nextFarmExperience,
       };
@@ -344,6 +373,10 @@ export class FarmService {
             cropSlug: planting.cropSlug,
             cropName: crop?.name ?? planting.cropSlug,
             plotId,
+            farmExperienceGain,
+            firstHarvestBonusFarmExp: isFirstHarvest
+              ? FARM_FIRST_HARVEST_BONUS_EXP
+              : 0,
             farmExperience: nextFarmExperience,
           },
         },
@@ -436,12 +469,30 @@ export class FarmService {
     });
     const cropMap = new Map(crops.map((crop) => [crop.slug, crop]));
     const plotIds = context.plots.map((plot) => plot.id);
+    const plantingRepo = manager.getRepository(FarmPlanting);
     const plantings =
       plotIds.length === 0
         ? []
-        : await manager.getRepository(FarmPlanting).find({
+        : await plantingRepo.find({
             where: { plotId: In(plotIds), status: 'growing' },
           });
+    const [totalPlantings, harvestedPlantings] = await Promise.all([
+      plantingRepo.count({ where: { userId: context.farm.userId } }),
+      plantingRepo.count({
+        where: { userId: context.farm.userId, status: 'harvested' },
+      }),
+    ]);
+    const firstHarvestCompleted = harvestedPlantings > 0;
+    const hasReadyPlanting = plantings.some(
+      (planting) => planting.maturesAt.getTime() <= now.getTime(),
+    );
+    const onboardingStage = firstHarvestCompleted
+      ? 'completed'
+      : hasReadyPlanting
+        ? 'ready'
+        : plantings.length > 0
+          ? 'growing'
+          : 'choose_plot';
     const plantingByPlot = new Map(
       plantings.map((planting) => [planting.plotId, planting]),
     );
@@ -457,6 +508,13 @@ export class FarmService {
 
     return {
       serverTime: now.toISOString(),
+      onboarding: {
+        stage: onboardingStage,
+        quickGrowAvailable: totalPlantings === 0,
+        quickGrowSeconds: FARM_FIRST_GROW_SECONDS,
+        firstHarvestCompleted,
+        firstHarvestBonusFarmExp: FARM_FIRST_HARVEST_BONUS_EXP,
+      },
       farm: {
         level: context.farm.level,
         experience: farmExperience,

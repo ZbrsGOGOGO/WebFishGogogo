@@ -16,6 +16,8 @@ import {
   hasReadingEngagementPending,
   READING_ENGAGEMENT_PENDING_EVENT,
 } from '../../app/engagement-sync';
+import { farmApi, type FarmOverview } from '../../api/farm';
+import type { PlatformOverview } from '../../api/platform';
 import { Card } from '../../components/ui';
 import { EngagementDashboard, PlatformOverviewCard } from '../platform';
 import styles from './HomePage.module.css';
@@ -71,10 +73,33 @@ export function HomePage(): JSX.Element {
   const user = useAuthStore((state) => state.user);
   const [overviewRefreshKey, setOverviewRefreshKey] = useState(0);
   const [engagementRefreshKey, setEngagementRefreshKey] = useState(0);
+  const [platformOverview, setPlatformOverview] =
+    useState<PlatformOverview | null>(null);
+  const [farmOverview, setFarmOverview] = useState<FarmOverview | null>(null);
   const [readingSyncPending, setReadingSyncPending] = useState(
     hasReadingEngagementPending,
   );
   const taskRefreshTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void farmApi
+      .getFarm()
+      .then((nextOverview) => {
+        if (active) {
+          setFarmOverview(nextOverview);
+          // 首次读取农场会幂等发放新手资源；随后刷新资产卡，避免并行
+          // 请求先后顺序让首页短暂保留“水滴 0”的旧快照。
+          setOverviewRefreshKey((current) => current + 1);
+        }
+      })
+      .catch(() => {
+        // 首页路线仍可使用；具体错误由农场页在进入时完整呈现。
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // 阅读页结束请求可能在首页已经挂载后才返回；同页自定义事件用于补上
   // sessionStorage 原生 storage 事件不会通知当前标签页的这一时序。
@@ -128,26 +153,112 @@ export function HomePage(): JSX.Element {
     setOverviewRefreshKey((current) => current + 1);
   }, []);
 
+  const handlePlatformOverviewChange = useCallback(
+    (nextOverview: PlatformOverview): void => {
+      setPlatformOverview(nextOverview);
+    },
+    [],
+  );
+
   const greeting = user
     ? `欢迎回来，${user.displayName ?? user.email}`
     : '欢迎回来';
+  const checkedIn = platformOverview?.checkin.checkedInToday ?? false;
+  const firstHarvestCompleted =
+    farmOverview?.onboarding.firstHarvestCompleted ?? false;
+  const farmStepTitle = firstHarvestCompleted
+    ? '首收完成，咖啡已解锁'
+    : farmOverview?.onboarding.stage === 'ready'
+      ? '作物成熟了，去完成首收'
+      : farmOverview?.onboarding.stage === 'growing'
+        ? '第一株生长中，回来收获'
+        : '30 秒种下并收获第一株';
+  const farmStepDescription = firstHarvestCompleted
+    ? `当前农场 Lv.${farmOverview?.farm.level ?? 2}，已经进入正常离线种植节奏。`
+    : '首次种植自动加速，首次收获直升农场 Lv.2。';
 
   return (
     <section className={styles.page} aria-label="首页">
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}>ZBRS · 本地工作台</span>
+          <span className={styles.eyebrow}>ZBRS · 上班族轻量工作台</span>
           <h1>{greeting}</h1>
-          <p>阅读、工具、农场与小游戏都在这里，选择一个系统开始。</p>
+          <p>工作时积累成长，空闲时收菜和玩一局。先用三分钟完成今天的开局路线。</p>
         </div>
-        <div className={styles.localStatus} aria-label="当前运行状态">
-          <span className={styles.statusDot} aria-hidden="true" />
-          <div>
-            <strong>单机版已就绪</strong>
-            <span>数据保存在你的专属空间</span>
-          </div>
+        <div className={styles.heroMission} aria-label="新手开局收益">
+          <span>3 分钟开局</span>
+          <strong>30 秒首收</strong>
+          <small>农场 Lv.2 · 解锁咖啡</small>
         </div>
       </header>
+
+      <section className={styles.firstPlay} aria-labelledby="first-play-title">
+        <div className={styles.sectionHeading}>
+          <div>
+            <span className={styles.eyebrow}>今日摸鱼路线</span>
+            <h2 id="first-play-title">先完成一条有结果的短循环</h2>
+          </div>
+          <p>补给 → 首收 → 小游戏，三步都能独立暂停，回来继续。</p>
+        </div>
+
+        <div className={styles.routeGrid}>
+          <article className={styles.routeStep} data-complete={checkedIn}>
+            <span className={styles.stepIndex}>{checkedIn ? '✓' : '01'}</span>
+            <div>
+              <small>每日补给</small>
+              <strong>{checkedIn ? '今日补给已领取' : '签到领取 5 水滴'}</strong>
+              <p>给今天的种植准备资源，同时积累全站成长。</p>
+            </div>
+            <a className={styles.routeAction} href="#today-growth">
+              {checkedIn ? '查看资产' : '去签到'}
+            </a>
+          </article>
+
+          <article
+            className={styles.routeStep}
+            data-complete={firstHarvestCompleted}
+          >
+            <span className={styles.stepIndex}>
+              {firstHarvestCompleted ? '✓' : '02'}
+            </span>
+            <div>
+              <small>新手首收</small>
+              <strong>{farmStepTitle}</strong>
+              <p>{farmStepDescription}</p>
+            </div>
+            <Link className={styles.routeAction} to="/farm">
+              {firstHarvestCompleted ? '继续种植' : '去农场'}
+            </Link>
+          </article>
+
+          <article className={styles.routeStep}>
+            <span className={styles.stepIndex}>03</span>
+            <div>
+              <small>短时放松</small>
+              <strong>选一款小游戏完成首局</strong>
+              <p>从贪食蛇或高低牌开始，一局结束就能随时退出。</p>
+            </div>
+            <Link className={styles.routeAction} to="/games">
+              去玩一局
+            </Link>
+          </article>
+        </div>
+
+        <aside className={styles.unlockRail} aria-label="等级解锁路线">
+          <strong>接下来的明确目标</strong>
+          <div>
+            <span data-unlocked={(farmOverview?.farm.level ?? 1) >= 2}>
+              农场 Lv.2 · 咖啡豆
+            </span>
+            <span data-unlocked={(platformOverview?.profile.level ?? 1) >= 3}>
+              全站 Lv.3 · 午休斗技场
+            </span>
+            <span data-unlocked={(farmOverview?.farm.level ?? 1) >= 5}>
+              农场 Lv.5 · 第 5 块地
+            </span>
+          </div>
+        </aside>
+      </section>
 
       <section className={styles.systems} aria-labelledby="systems-title">
         <div className={styles.sectionHeading}>
@@ -187,7 +298,11 @@ export function HomePage(): JSX.Element {
         </nav>
       </section>
 
-      <section className={styles.today} aria-labelledby="today-title">
+      <section
+        id="today-growth"
+        className={styles.today}
+        aria-labelledby="today-title"
+      >
         <div className={styles.sectionHeading}>
           <div>
             <span className={styles.eyebrow}>今日状态</span>
@@ -199,6 +314,7 @@ export function HomePage(): JSX.Element {
         className={styles.overview}
         refreshKey={overviewRefreshKey}
         onCheckinComplete={handleCheckinComplete}
+        onOverviewChange={handlePlatformOverviewChange}
       />
       <EngagementDashboard
         refreshKey={engagementRefreshKey}

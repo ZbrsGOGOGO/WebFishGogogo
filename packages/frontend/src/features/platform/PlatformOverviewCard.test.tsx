@@ -77,6 +77,29 @@ describe('PlatformOverviewCard', () => {
     expect(screen.getByText(/290 EXP/)).toBeInTheDocument();
   });
 
+  it('将首次加载和签到后的最新总览同步给父页面', async () => {
+    const checkedIn: PlatformOverview = {
+      ...OVERVIEW,
+      checkin: { checkedInToday: true },
+    };
+    vi.spyOn(platformApi, 'getOverview')
+      .mockResolvedValueOnce(OVERVIEW)
+      .mockResolvedValueOnce(checkedIn);
+    vi.spyOn(platformApi, 'checkInToday').mockResolvedValue({
+      checkedInToday: true,
+    });
+    const onOverviewChange = vi.fn();
+
+    render(
+      <PlatformOverviewCard onOverviewChange={onOverviewChange} />,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: '今日签到' }));
+    await waitFor(() => expect(onOverviewChange).toHaveBeenCalledTimes(2));
+    expect(onOverviewChange).toHaveBeenNthCalledWith(1, OVERVIEW);
+    expect(onOverviewChange).toHaveBeenNthCalledWith(2, checkedIn);
+  });
+
   it('总览加载失败时展示错误并支持重试', async () => {
     const overviewSpy = vi
       .spyOn(platformApi, 'getOverview')
