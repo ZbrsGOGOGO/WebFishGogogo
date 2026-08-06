@@ -41,7 +41,7 @@ check_required_text() {
   exit 1
 }
 
-for file in Dockerfile deploy/review.nginx.conf deploy/docker-compose.review.yml; do
+for file in Dockerfile deploy/review.nginx.conf deploy/docker-compose.review.yml deploy/Caddyfile.review; do
   [ -f "$ROOT_DIR/$file" ] || fail "missing required review deployment file: $file"
 done
 
@@ -74,6 +74,11 @@ check_required_text SITE_NAME
 check_required_text SITE_DOMAIN
 check_required_text SITE_OPERATOR
 check_required_text SITE_CONTACT
+check_required_text ACME_EMAIL
+
+ACME_EMAIL=$(env_value ACME_EMAIL)
+printf '%s\n' "$ACME_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' ||
+  fail "ACME_EMAIL must be a valid email address for TLS certificate notices"
 
 SITE_CONTACT=$(env_value SITE_CONTACT)
 case "$SITE_CONTACT" in
