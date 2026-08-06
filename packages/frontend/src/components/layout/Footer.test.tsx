@@ -11,7 +11,7 @@ import { USER_CONTENT_FOOTER_STATEMENT } from '../compliance/content-declaration
 function renderFooter() {
   return render(
     <MemoryRouter>
-      <Footer />
+      <Footer reviewMode={false} />
     </MemoryRouter>,
   );
 }
@@ -50,6 +50,6 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/暂不提供注册、上传、互动/)).toBeInTheDocument();
-    expect(screen.getByText('ICP备案审核中')).toBeInTheDocument();
+    expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
   });
 });

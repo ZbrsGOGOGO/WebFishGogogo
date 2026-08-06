@@ -76,9 +76,41 @@ COPY --from=build /app/packages/frontend/dist /usr/share/nginx/html
 EXPOSE 80
 
 
+FROM dependencies AS review-build
+
+COPY tsconfig.base.json ./
+COPY packages/shared ./packages/shared
+COPY packages/frontend ./packages/frontend
+
+ARG VITE_API_BASE_URL=/api
+ARG VITE_SITE_NAME="ZBRS 技术工具工坊"
+ARG VITE_SITE_OPERATOR=
+ARG VITE_SITE_CONTACT=
+ARG VITE_SITE_DOMAIN=
+ARG VITE_ICP_BEIAN_NUMBER=
+ARG VITE_PUBLIC_SECURITY_BEIAN_NUMBER=
+ARG VITE_PUBLIC_SECURITY_BEIAN_URL=
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
+    VITE_SITE_MODE=review \
+    VITE_SITE_NAME=${VITE_SITE_NAME} \
+    VITE_SITE_OPERATOR=${VITE_SITE_OPERATOR} \
+    VITE_SITE_CONTACT=${VITE_SITE_CONTACT} \
+    VITE_SITE_DOMAIN=${VITE_SITE_DOMAIN} \
+    VITE_ICP_BEIAN_NUMBER=${VITE_ICP_BEIAN_NUMBER} \
+    VITE_PUBLIC_SECURITY_BEIAN_NUMBER=${VITE_PUBLIC_SECURITY_BEIAN_NUMBER} \
+    VITE_PUBLIC_SECURITY_BEIAN_URL=${VITE_PUBLIC_SECURITY_BEIAN_URL}
+
+RUN test -n "$VITE_SITE_OPERATOR" \
+    && test -n "$VITE_SITE_CONTACT" \
+    && test -n "$VITE_SITE_DOMAIN" \
+    && npm run build --workspace @stealth-reader/shared \
+    && npm run build --workspace @stealth-reader/frontend \
+    && ! grep -R -E '创建本机账户|俄罗斯方块|/api/auth/register' packages/frontend/dist
+
+
 FROM nginx:1.30.4-alpine AS review-web
 
 COPY deploy/review.nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/packages/frontend/dist /usr/share/nginx/html
+COPY --from=review-build /app/packages/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80

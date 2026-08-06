@@ -47,12 +47,16 @@ done
 
 check_single_key IMAGE_TAG
 IMAGE_TAG=$(env_value IMAGE_TAG)
-if printf '%s\n' "$IMAGE_TAG" | grep -Eq '^[0-9A-Fa-f]{7,40}$'; then
-  git -C "$ROOT_DIR" rev-parse --verify --quiet "${IMAGE_TAG}^{commit}" >/dev/null ||
-    fail "IMAGE_TAG does not resolve to a commit in this repository"
+if printf '%s\n' "$IMAGE_TAG" | grep -Eq '^[0-9a-f]{40}$'; then
+  HEAD_SHA=$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true)
+  [ "$IMAGE_TAG" = "$HEAD_SHA" ] ||
+    fail "IMAGE_TAG must equal the full current HEAD commit SHA"
 else
-  fail "IMAGE_TAG must be a 7-40 character hexadecimal Git commit SHA"
+  fail "IMAGE_TAG must be a full 40-character lowercase Git commit SHA"
 fi
+
+[ -z "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=normal 2>/dev/null || printf 'git-unavailable')" ] ||
+  fail "repository must be clean before building the review image"
 
 check_single_key HTTP_BIND
 [ "$(env_value HTTP_BIND)" = "127.0.0.1" ] ||
@@ -71,6 +75,16 @@ check_required_text SITE_DOMAIN
 check_required_text SITE_OPERATOR
 check_required_text SITE_CONTACT
 
+SITE_CONTACT=$(env_value SITE_CONTACT)
+case "$SITE_CONTACT" in
+  *@*.*) ;;
+  +[0-9]*|[0-9]*)
+    printf '%s\n' "$SITE_CONTACT" | grep -Eq '^\+?[0-9 -]{7,20}$' ||
+      fail "SITE_CONTACT must be a public email address or phone number"
+    ;;
+  *) fail "SITE_CONTACT must be a public email address or phone number" ;;
+esac
+
 SITE_DOMAIN=$(env_value SITE_DOMAIN)
 printf '%s\n' "$SITE_DOMAIN" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$' ||
   fail "SITE_DOMAIN must be a hostname without protocol, path, port, or wildcard"
@@ -80,6 +94,8 @@ ICP_BEIAN_NUMBER=$(env_value ICP_BEIAN_NUMBER)
 case "$ICP_BEIAN_NUMBER" in
   *X*|*x*|*待*|*示例*|*example*) fail "ICP_BEIAN_NUMBER must be empty until a real number is issued" ;;
 esac
+[ -z "$ICP_BEIAN_NUMBER" ] || printf '%s\n' "$ICP_BEIAN_NUMBER" | grep -Eq '^.+ICP备[0-9]+号(-[0-9]+)?$' ||
+  fail "ICP_BEIAN_NUMBER does not match the expected ICP filing number format"
 [ -n "$ICP_BEIAN_NUMBER" ] || warn "ICP_BEIAN_NUMBER is empty; the page will truthfully display ICP filing under review"
 
 check_single_key PUBLIC_SECURITY_BEIAN_NUMBER
@@ -89,6 +105,10 @@ PUBLIC_SECURITY_BEIAN_URL=$(env_value PUBLIC_SECURITY_BEIAN_URL)
 if [ -n "$PUBLIC_SECURITY_BEIAN_NUMBER" ] || [ -n "$PUBLIC_SECURITY_BEIAN_URL" ]; then
   [ -n "$PUBLIC_SECURITY_BEIAN_NUMBER" ] && [ -n "$PUBLIC_SECURITY_BEIAN_URL" ] ||
     fail "PUBLIC_SECURITY_BEIAN_NUMBER and PUBLIC_SECURITY_BEIAN_URL must be set together"
+  case "$PUBLIC_SECURITY_BEIAN_URL" in
+    https://beian.mps.gov.cn/*|https://www.beian.gov.cn/*) ;;
+    *) fail "PUBLIC_SECURITY_BEIAN_URL must use an official public-security filing host" ;;
+  esac
 fi
 
 mode=$(stat -c '%a' "$ENV_FILE" 2>/dev/null || true)

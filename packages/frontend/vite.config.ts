@@ -7,8 +7,37 @@ const routerFile =
     ? './src/app/review-router.tsx'
     : './src/app/full-router.tsx';
 
+const siteName = process.env.VITE_SITE_NAME?.trim() || 'ZBRS 技术工具工坊';
+const siteDescription =
+  process.env.VITE_SITE_MODE === 'review'
+    ? `${siteName}上线准备页：公开站点说明、隐私政策、服务条款与备案状态，业务功能暂未开放。`
+    : `${siteName}：集私人文档阅读、实用工具、成长农场与单机小游戏于一体的个人工作台。`;
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function siteMetadataPlugin() {
+  return {
+    name: 'site-metadata',
+    transformIndexHtml(html: string): string {
+      return html
+        .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(siteName)}</title>`)
+        .replace(
+          /(<meta\s+name="description"\s+content=")[^"]*("\s*\/>)/,
+          `$1${escapeHtml(siteDescription)}$2`,
+        );
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), siteMetadataPlugin()],
   resolve: {
     alias: {
       '@site-router': fileURLToPath(new URL(routerFile, import.meta.url)),
