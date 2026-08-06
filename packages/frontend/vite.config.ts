@@ -10,7 +10,7 @@ const routerFile =
 const siteName = process.env.VITE_SITE_NAME?.trim() || 'ZBRS 技术工具工坊';
 const siteDescription =
   process.env.VITE_SITE_MODE === 'review'
-    ? `${siteName}上线准备页：公开站点说明、隐私政策、服务条款与备案状态，业务功能暂未开放。`
+    ? `${siteName}：面向个人用户的轻量效率工作台，围绕文本整理、实用工具与日常使用场景持续完善。`
     : `${siteName}：集私人文档阅读、实用工具、成长农场与单机小游戏于一体的个人工作台。`;
 
 function escapeHtml(value: string): string {

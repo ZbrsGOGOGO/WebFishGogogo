@@ -40,7 +40,7 @@ export function Footer({ reviewMode = IS_REVIEW_MODE }: FooterProps): JSX.Elemen
   const currentYear = new Date().getFullYear();
   const beianPending = isBeianPlaceholder(ICP_BEIAN_NUMBER);
   const statement = reviewMode
-    ? '当前为上线审核版本，暂不提供注册、上传、互动、支付或信息发布服务。'
+    ? '专注轻量、实用的个人效率体验，产品内容与服务能力将持续完善。'
     : USER_CONTENT_FOOTER_STATEMENT;
 
   return (
@@ -49,7 +49,7 @@ export function Footer({ reviewMode = IS_REVIEW_MODE }: FooterProps): JSX.Elemen
         <div className="site-footer__brand">
           <strong>{SITE_NAME}</strong>
           <span>
-            {reviewMode ? '审核版 · 核心功能暂未开放' : '本机版 · 数据由您的本地服务保存'}
+            {reviewMode ? '个人效率工作台 · 简单、清晰、可控' : '本机版 · 数据由您的本地服务保存'}
           </span>
         </div>
         <p className="site-footer__statement">{statement}</p>
@@ -63,7 +63,7 @@ export function Footer({ reviewMode = IS_REVIEW_MODE }: FooterProps): JSX.Elemen
             <a href={ICP_BEIAN_URL} target="_blank" rel="noreferrer noopener">
               {ICP_BEIAN_NUMBER}
             </a>
-          ) : reviewMode ? <span>ICP备案审核中</span> : null}
+          ) : null}
           {PUBLIC_SECURITY_BEIAN_NUMBER && PUBLIC_SECURITY_BEIAN_URL ? (
             <a href={PUBLIC_SECURITY_BEIAN_URL} target="_blank" rel="noreferrer noopener">
               {PUBLIC_SECURITY_BEIAN_NUMBER}

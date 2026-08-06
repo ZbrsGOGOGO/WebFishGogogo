@@ -1,16 +1,9 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 
-import {
-  SITE_CONTACT,
-  SITE_NAME,
-  SITE_OPERATOR,
-  contactHref,
-} from '../../app/site-config';
+import { SITE_NAME } from '../../app/site-config';
 
 export function ReviewPrivacyPolicyPage(): JSX.Element {
-  const contactLink = contactHref();
-
   return (
     <main aria-labelledby="privacy-policy-title" className="compliance-page">
       <p><Link to="/">← 返回站点首页</Link></p>
@@ -18,15 +11,16 @@ export function ReviewPrivacyPolicyPage(): JSX.Element {
       <p><em>最近更新：2026-08-06</em></p>
 
       <p>
-        本政策说明{SITE_OPERATOR}运营的{SITE_NAME}在当前上线审核阶段如何处理信息。
-        当前版本仅提供站点说明、隐私政策与服务条款，不开放账户注册、登录、内容上传、互动、支付或信息发布功能。
+        本政策说明您访问{SITE_NAME}时，网站如何处理与保护相关信息。
+        本网站提供公开内容浏览和浏览器本地运行的在线效率工具，不要求用户注册账户，也不提供在线支付或个性化推荐。
       </p>
 
-      <h2>1. 当前收集的信息</h2>
+      <h2>1. 我们处理的信息</h2>
       <p>
-        当前审核版本不收集账户资料、用户上传内容、支付信息或个性化偏好。服务器可能为保障安全与稳定记录必要的访问日志，
+        本网站不会主动收集账户资料、用户上传内容、支付信息或个性化偏好。服务器可能为保障安全与稳定记录必要的访问日志，
         包括访问时间、请求地址、网络地址和浏览器基本信息。
       </p>
+      <p>您在在线工具中输入的文本、JSON、日期、颜色等数据仅在当前浏览器内处理，不会发送到本站服务器。</p>
 
       <h2>2. 信息使用目的</h2>
       <ul>
@@ -36,7 +30,7 @@ export function ReviewPrivacyPolicyPage(): JSX.Element {
       </ul>
 
       <h2>3. Cookie、统计与第三方服务</h2>
-      <p>当前审核版本不使用广告、第三方行为分析、个性化推荐或跨站跟踪服务，也不通过 Cookie 建立用户画像。</p>
+      <p>本网站不使用广告、第三方行为分析、个性化推荐或跨站跟踪服务，也不通过 Cookie 建立用户画像。</p>
 
       <h2>4. 保存、共享与安全</h2>
       <p>
@@ -48,13 +42,12 @@ export function ReviewPrivacyPolicyPage(): JSX.Element {
       <p>您可以就个人信息的查阅、更正、删除、限制处理或政策问题联系我们。我们将在核验身份后依法处理合理请求。</p>
 
       <h2>6. 未成年人保护</h2>
-      <p>当前审核版本不提供注册或互动功能，也不以未成年人为特定服务对象。正式服务开放前将根据实际功能补充相应保护措施。</p>
+      <p>本网站不以未成年人为特定服务对象。未成年人应在监护人指导下浏览和使用网站内容。</p>
 
-      <h2>7. 政策更新与联系</h2>
+      <h2>7. 政策更新</h2>
       <p>服务功能或数据处理方式发生变化时，我们会更新本政策并标明日期。</p>
-      <p>联系方式：{contactLink ? <a href={contactLink}>{SITE_CONTACT}</a> : SITE_CONTACT}</p>
 
-      <nav aria-label="合规页面导航">
+      <nav aria-label="网站页面导航">
         <p>另见：<Link to="/terms-of-service">服务条款</Link></p>
       </nav>
     </main>

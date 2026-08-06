@@ -43,13 +43,14 @@ describe('Footer', () => {
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
 
-  it('审核版明确展示功能关闭与备案审核状态', () => {
+  it('公开版本使用正常站点文案且不暴露内部发布状态', () => {
     render(
       <MemoryRouter>
         <Footer reviewMode />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/暂不提供注册、上传、互动/)).toBeInTheDocument();
+    expect(screen.getByText(/专注轻量、实用的个人效率体验/)).toBeInTheDocument();
+    expect(screen.queryByText(/审核/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
   });
 });

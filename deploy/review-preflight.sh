@@ -72,23 +72,11 @@ esac
 
 check_required_text SITE_NAME
 check_required_text SITE_DOMAIN
-check_required_text SITE_OPERATOR
-check_required_text SITE_CONTACT
 check_required_text ACME_EMAIL
 
 ACME_EMAIL=$(env_value ACME_EMAIL)
 printf '%s\n' "$ACME_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' ||
   fail "ACME_EMAIL must be a valid email address for TLS certificate notices"
-
-SITE_CONTACT=$(env_value SITE_CONTACT)
-case "$SITE_CONTACT" in
-  *@*.*) ;;
-  +[0-9]*|[0-9]*)
-    printf '%s\n' "$SITE_CONTACT" | grep -Eq '^\+?[0-9 -]{7,20}$' ||
-      fail "SITE_CONTACT must be a public email address or phone number"
-    ;;
-  *) fail "SITE_CONTACT must be a public email address or phone number" ;;
-esac
 
 SITE_DOMAIN=$(env_value SITE_DOMAIN)
 printf '%s\n' "$SITE_DOMAIN" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$' ||
