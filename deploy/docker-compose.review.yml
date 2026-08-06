@@ -1,0 +1,40 @@
+name: webfish-review
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: review-web
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_SITE_MODE: review
+        VITE_SITE_NAME: ${SITE_NAME:-ZBRS 技术工具工坊}
+        VITE_SITE_OPERATOR: ${SITE_OPERATOR:?SITE_OPERATOR must be set}
+        VITE_SITE_CONTACT: ${SITE_CONTACT:?SITE_CONTACT must be set}
+        VITE_SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN must be set}
+        VITE_ICP_BEIAN_NUMBER: ${ICP_BEIAN_NUMBER:-}
+        VITE_PUBLIC_SECURITY_BEIAN_NUMBER: ${PUBLIC_SECURITY_BEIAN_NUMBER:-}
+        VITE_PUBLIC_SECURITY_BEIAN_URL: ${PUBLIC_SECURITY_BEIAN_URL:-}
+    image: webfish-review:${IMAGE_TAG:-local}
+    restart: unless-stopped
+    ports:
+      - "${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:80"
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1/healthz
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.25
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"

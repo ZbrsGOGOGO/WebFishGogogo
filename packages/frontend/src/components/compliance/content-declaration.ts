@@ -11,10 +11,17 @@
  * 或通过构建期环境变量注入。留空/占位时页脚仍展示"备案信息待补充"提示，
  * 不影响其余合规声明的呈现。
  */
-export const ICP_BEIAN_NUMBER = '皖ICP备XXXXXXXX号';
+export const ICP_BEIAN_NUMBER =
+  import.meta.env.VITE_ICP_BEIAN_NUMBER?.trim() ?? '';
 
 /** 工信部备案查询官网（页脚备案号按惯例链接至此）。 */
 export const ICP_BEIAN_URL = 'https://beian.miit.gov.cn/';
+
+/** 公安联网备案信息在取得编号后由审核构建参数注入。 */
+export const PUBLIC_SECURITY_BEIAN_NUMBER =
+  import.meta.env.VITE_PUBLIC_SECURITY_BEIAN_NUMBER?.trim() ?? '';
+export const PUBLIC_SECURITY_BEIAN_URL =
+  import.meta.env.VITE_PUBLIC_SECURITY_BEIAN_URL?.trim() ?? '';
 
 /**
  * 页脚展示的"内容为用户上传且合法"声明（Req 13.4）。

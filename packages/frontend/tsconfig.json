@@ -10,7 +10,11 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "isolatedModules": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom"]
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@site-router": ["src/app/full-router.tsx"]
+    }
   },
   "include": ["src", "vite.config.ts"]
 }

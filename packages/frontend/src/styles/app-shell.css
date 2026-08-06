@@ -306,6 +306,23 @@
   color: var(--color-text-secondary);
 }
 
+.site-footer__records {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.site-footer__records a {
+  color: var(--color-text-secondary);
+}
+
 .auth-page {
   min-height: min(780px, calc(100vh - 93px));
   padding: 56px var(--space-4);

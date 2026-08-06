@@ -1,8 +1,19 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
+
+const routerFile =
+  process.env.VITE_SITE_MODE === 'review'
+    ? './src/app/review-router.tsx'
+    : './src/app/full-router.tsx';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@site-router': fileURLToPath(new URL(routerFile, import.meta.url)),
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

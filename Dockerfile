@@ -21,6 +21,22 @@ COPY packages ./packages
 # 生产环境由同源 Nginx 代理 /api，避免把域名写死在前端产物中。
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ARG VITE_SITE_MODE=full
+ARG VITE_SITE_NAME="ZBRS 技术工具工坊"
+ARG VITE_SITE_OPERATOR=
+ARG VITE_SITE_CONTACT=
+ARG VITE_SITE_DOMAIN=
+ARG VITE_ICP_BEIAN_NUMBER=
+ARG VITE_PUBLIC_SECURITY_BEIAN_NUMBER=
+ARG VITE_PUBLIC_SECURITY_BEIAN_URL=
+ENV VITE_SITE_MODE=${VITE_SITE_MODE} \
+    VITE_SITE_NAME=${VITE_SITE_NAME} \
+    VITE_SITE_OPERATOR=${VITE_SITE_OPERATOR} \
+    VITE_SITE_CONTACT=${VITE_SITE_CONTACT} \
+    VITE_SITE_DOMAIN=${VITE_SITE_DOMAIN} \
+    VITE_ICP_BEIAN_NUMBER=${VITE_ICP_BEIAN_NUMBER} \
+    VITE_PUBLIC_SECURITY_BEIAN_NUMBER=${VITE_PUBLIC_SECURITY_BEIAN_NUMBER} \
+    VITE_PUBLIC_SECURITY_BEIAN_URL=${VITE_PUBLIC_SECURITY_BEIAN_URL}
 
 RUN npm run build --workspace @stealth-reader/shared \
     && npm run build --workspace @stealth-reader/backend \
@@ -55,6 +71,14 @@ CMD ["node", "packages/backend/dist/main.js"]
 FROM nginx:1.30.4-alpine AS web
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/packages/frontend/dist /usr/share/nginx/html
+
+EXPOSE 80
+
+
+FROM nginx:1.30.4-alpine AS review-web
+
+COPY deploy/review.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/packages/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80

@@ -42,4 +42,14 @@ describe('Footer', () => {
     renderFooter();
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
   });
+
+  it('审核版明确展示功能关闭与备案审核状态', () => {
+    render(
+      <MemoryRouter>
+        <Footer reviewMode />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/暂不提供注册、上传、互动/)).toBeInTheDocument();
+    expect(screen.getByText('ICP备案审核中')).toBeInTheDocument();
+  });
 });
