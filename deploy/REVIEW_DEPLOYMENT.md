@@ -27,6 +27,8 @@ chmod 600 .env.review
 sh deploy/review-preflight.sh .env.review
 docker compose -f deploy/docker-compose.review.yml --env-file .env.review build
 docker compose -f deploy/docker-compose.review.yml --env-file .env.review up -d
+docker compose -f deploy/docker-compose.review.yml --env-file .env.review ps
+docker compose -f deploy/docker-compose.review.yml --env-file .env.review logs --tail=100 gateway
 curl -fsS http://127.0.0.1:8080/healthz
 curl -i http://127.0.0.1:8080/api/health
 ```
@@ -37,6 +39,6 @@ curl -i http://127.0.0.1:8080/api/health
 
 编排会使用 Caddy 自动申请并续期 HTTPS 证书，公开 80/443，同时保留仅本机可访问的 `127.0.0.1:8080` 健康检查入口。服务器安全组只需开放 SSH、80 和 443，不要公开 8080。
 
-上线后检查：首页、隐私政策、服务条款、HTTPS 证书、HTTP 跳转、备案状态、主办者与联系方式；并确认 `/api/`、`/login`、`/register`、`/games`、`/library` 均无法使用。
+上线后从公网检查真实域名的首页、隐私政策、服务条款、HTTPS 证书、HTTP 跳转、`www` 跳转、备案状态、主办者与联系方式；并确认 `/api/`、`/login`、`/register`、`/games`、`/library` 均无法使用。
 
 审核通过且具备正式开放条件后，再停止审核版并按照 `deploy/README.md` 启动完整服务。正式站公开后，应按实际功能及时更新政策、备案信息和必要的安全管理措施。

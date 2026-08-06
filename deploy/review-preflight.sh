@@ -60,7 +60,7 @@ fi
 
 check_single_key HTTP_BIND
 [ "$(env_value HTTP_BIND)" = "127.0.0.1" ] ||
-  fail "HTTP_BIND must be 127.0.0.1; terminate public TLS in the host reverse proxy"
+  fail "HTTP_BIND must be 127.0.0.1; public TLS is terminated by the bundled Caddy gateway"
 
 check_single_key HTTP_PORT
 HTTP_PORT=$(env_value HTTP_PORT)
