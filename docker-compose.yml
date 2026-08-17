@@ -15,6 +15,13 @@ x-api-environment: &api-environment
   DB_SCHEMA: public
   DB_SSL: "false"
   DB_LOGGING: ${DB_LOGGING:-false}
+  DB_POOL_MAX: ${DB_POOL_MAX:-15}
+  DB_CONNECT_TIMEOUT_MS: ${DB_CONNECT_TIMEOUT_MS:-5000}
+  DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-30000}
+  DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-15000}
+  DB_QUERY_TIMEOUT_MS: ${DB_QUERY_TIMEOUT_MS:-20000}
+  DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-5000}
+  DB_IDLE_TRANSACTION_TIMEOUT_MS: ${DB_IDLE_TRANSACTION_TIMEOUT_MS:-30000}
   STORAGE_DRIVER: local
   LOCAL_STORAGE_DIR: /app/data
   STORAGE_KEY_PREFIX: documents
@@ -63,7 +70,9 @@ services:
       target: api
     image: webfish-api:${IMAGE_TAG:-local}
     restart: "no"
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      DB_POOL_MAX: ${DB_MIGRATE_POOL_MAX:-5}
     depends_on:
       postgres:
         condition: service_healthy
@@ -115,7 +124,9 @@ services:
       target: api
     image: webfish-api:${IMAGE_TAG:-local}
     restart: unless-stopped
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      DB_POOL_MAX: ${DB_WORKER_POOL_MAX:-5}
     depends_on:
       migrate:
         condition: service_completed_successfully

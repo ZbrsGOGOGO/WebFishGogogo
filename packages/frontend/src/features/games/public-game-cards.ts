@@ -1,0 +1,48 @@
+import type { GameCard } from './GamesCatalog';
+
+export const PUBLIC_GAME_CARDS: readonly GameCard[] = [
+  {
+    path: '/games/snake',
+    icon: '蛇',
+    name: '贪食蛇',
+    category: '经典街机',
+    description: '控制小蛇吃下能量点，在越来越长的身体之间寻找路线。',
+    features: ['方向键控制', '实时计分', '支持暂停'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'green',
+  },
+  {
+    path: '/games/tetris',
+    icon: '块',
+    name: '方块消除',
+    category: '经典街机',
+    description: '旋转与堆叠七种方块，消除完整横行并挑战更高速度。',
+    features: ['七种方块', '消行升级', '支持硬降'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'cyan',
+  },
+  {
+    path: '/games/tank',
+    icon: '坦',
+    name: '坦克大战',
+    category: '动作挑战',
+    description: '穿梭障碍、躲避炮弹并击破敌方坦克，守住你的阵地。',
+    features: ['键盘移动', '即时射击', '敌方追踪'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'orange',
+  },
+  {
+    path: '/games/three-sum',
+    icon: 'Σ',
+    name: '三数之和',
+    category: '心算挑战',
+    description: '每轮出现三个数字，快速算出它们的总和。',
+    features: ['随机数字', '连续答题', '正确率统计'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'blue',
+  },
+];

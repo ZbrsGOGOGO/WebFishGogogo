@@ -3,24 +3,38 @@ import { Link } from 'react-router-dom';
 
 import { SITE_NAME } from '../../app/site-config';
 
-export function ReviewPrivacyPolicyPage(): JSX.Element {
+export interface ReviewPrivacyPolicyPageProps {
+  includeGames?: boolean;
+}
+
+export function ReviewPrivacyPolicyPage({
+  includeGames = false,
+}: ReviewPrivacyPolicyPageProps): JSX.Element {
   return (
     <main aria-labelledby="privacy-policy-title" className="compliance-page">
       <p><Link to="/">← 返回站点首页</Link></p>
       <h1 id="privacy-policy-title">隐私政策</h1>
-      <p><em>最近更新：2026-08-06</em></p>
+      <p><em>最近更新：2026-08-17</em></p>
 
       <p>
         本政策说明您访问{SITE_NAME}时，网站如何处理与保护相关信息。
-        本网站提供公开内容浏览和浏览器本地运行的在线效率工具，不要求用户注册账户，也不提供在线支付或个性化推荐。
+        {includeGames
+          ? '本网站提供公开内容、浏览器本地效率工具和轻量单机游戏，不要求用户注册账户，也不提供在线支付或个性化推荐。'
+          : '本网站提供公开内容浏览和浏览器本地运行的在线效率工具，不要求用户注册账户，也不提供在线支付或个性化推荐。'}
       </p>
 
       <h2>1. 我们处理的信息</h2>
       <p>
-        本网站不会主动收集账户资料、用户上传内容、支付信息或个性化偏好。服务器可能为保障安全与稳定记录必要的访问日志，
+        本网站不会主动收集账户资料、工具输入、游戏过程、支付信息或个性化偏好。服务器可能为保障安全与稳定记录必要的访问日志，
         包括访问时间、请求地址、网络地址和浏览器基本信息。
       </p>
       <p>您在在线工具中输入的文本、JSON、日期、颜色等数据仅在当前浏览器内处理，不会发送到本站服务器。</p>
+      {includeGames ? (
+        <p>
+          部分单机游戏会使用浏览器本地存储保存最高分等本机记录。这些记录不会上传到本站服务器，
+          您可以通过浏览器的网站数据设置随时删除。
+        </p>
+      ) : null}
 
       <h2>2. 信息使用目的</h2>
       <ul>
@@ -29,8 +43,11 @@ export function ReviewPrivacyPolicyPage(): JSX.Element {
         <li>依法配合有权机关提出的合法要求。</li>
       </ul>
 
-      <h2>3. Cookie、统计与第三方服务</h2>
-      <p>本网站不使用广告、第三方行为分析、个性化推荐或跨站跟踪服务，也不通过 Cookie 建立用户画像。</p>
+      <h2>3. Cookie{includeGames ? '、本地存储' : ''}与第三方服务</h2>
+      <p>
+        本网站不使用广告、第三方行为分析、个性化推荐或跨站跟踪服务，也不通过 Cookie 建立用户画像。
+        {includeGames ? '浏览器本地存储仅用于保存部分单机游戏的本机记录。' : null}
+      </p>
 
       <h2>4. 保存、共享与安全</h2>
       <p>

@@ -1,4 +1,7 @@
 export * from './GamesPage';
+export * from './GamesCatalog';
+export * from './PublicGamesPage';
+export * from './PublicGameLayout';
 export * from './arena';
 export * from './snake';
 export * from './tetris';

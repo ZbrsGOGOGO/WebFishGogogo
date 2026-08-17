@@ -44,6 +44,6 @@ describe('Review mode', () => {
   it('redirects business routes to the review landing page', () => {
     renderReviewAt('/games/tetris');
     expect(screen.getByText('轻量个人效率工作台')).toBeInTheDocument();
-    expect(screen.queryByText('俄罗斯方块')).not.toBeInTheDocument();
+    expect(screen.queryByText('方块消除')).not.toBeInTheDocument();
   });
 });

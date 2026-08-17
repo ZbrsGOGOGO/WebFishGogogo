@@ -85,6 +85,7 @@ export function PublicToolsPage(): JSX.Element {
           <Link className={styles.currentLink} to="/tools" aria-current="page">
             实用工具
           </Link>
+          <Link to="/games">轻量游戏</Link>
           <Link to="/privacy-policy">隐私政策</Link>
           <Link to="/terms-of-service">服务条款</Link>
         </nav>

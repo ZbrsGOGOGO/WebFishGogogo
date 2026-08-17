@@ -2,16 +2,21 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
+const siteMode = process.env.VITE_SITE_MODE;
 const routerFile =
-  process.env.VITE_SITE_MODE === 'review'
+  siteMode === 'review'
     ? './src/app/review-router.tsx'
-    : './src/app/full-router.tsx';
+    : siteMode === 'public'
+      ? './src/app/public-router.tsx'
+      : './src/app/full-router.tsx';
 
 const siteName = process.env.VITE_SITE_NAME?.trim() || 'ZBRS 技术工具工坊';
 const siteDescription =
-  process.env.VITE_SITE_MODE === 'review'
-    ? `${siteName}：面向个人用户的轻量效率工作台，围绕文本整理、实用工具与日常使用场景持续完善。`
-    : `${siteName}：集私人文档阅读、实用工具、成长农场与单机小游戏于一体的个人工作台。`;
+  siteMode === 'public'
+    ? `${siteName}：无需注册即可使用的浏览器本地工具与轻量单机游戏。`
+    : siteMode === 'review'
+      ? `${siteName}：无需注册即可使用的浏览器本地效率工具。`
+      : `${siteName}：集私人文档阅读、实用工具、成长农场与单机小游戏于一体的个人工作台。`;
 
 function escapeHtml(value: string): string {
   return value

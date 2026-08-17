@@ -37,8 +37,10 @@ export class OutboxProcessorService {
             status: 'pending',
             availableAt: LessThanOrEqual(new Date()),
           },
-          order: { createdAt: 'ASC' },
-          lock: { mode: 'pessimistic_write' },
+          order: { createdAt: 'ASC', id: 'ASC' },
+          // PostgreSQL 会让并行 worker 跳过其他事务已领取的事件，而不是
+          // 阻塞在队首。投影、回执和 processed 状态仍在同一事务内提交。
+          lock: this.pendingEventLock(),
         });
         if (!event) return false;
         eventId = event.id;
@@ -99,6 +101,18 @@ export class OutboxProcessorService {
       where: { id: eventId },
       lock: { mode: 'pessimistic_write' },
     });
+  }
+
+  private pendingEventLock(): {
+    mode: 'pessimistic_write';
+    onLocked?: 'skip_locked';
+  } {
+    const extra = this.dataSource.options.extra as
+      | { outboxSkipLocked?: boolean }
+      | undefined;
+    return extra?.outboxSkipLocked === false
+      ? { mode: 'pessimistic_write' }
+      : { mode: 'pessimistic_write', onLocked: 'skip_locked' };
   }
 
   private errorMessage(error: unknown): string {

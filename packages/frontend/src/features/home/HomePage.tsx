@@ -64,7 +64,7 @@ const ENTRIES: HomeEntry[] = [
     mark: '游',
     eyebrow: '短时放松',
     name: '小游戏',
-    desc: '进入贪食蛇、俄罗斯方块、坦克大战等完整玩法。',
+    desc: '进入贪食蛇、方块消除、坦克大战等完整玩法。',
     tone: 'games',
   },
 ];

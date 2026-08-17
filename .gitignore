@@ -9,3 +9,4 @@ backups/
 !.env.example
 !deploy/.env.example
 !deploy/.env.review.example
+!deploy/.env.public.example

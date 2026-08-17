@@ -13,6 +13,7 @@ export interface PageHeaderProps {
   /** 右侧操作槽（按钮等）。 */
   actions?: ReactNode;
   className?: string;
+  headingLevel?: 1 | 2;
 }
 
 function cx(...values: Array<string | false | null | undefined>): string {
@@ -22,18 +23,21 @@ function cx(...values: Array<string | false | null | undefined>): string {
 /**
  * 页面级标题区。
  *
- * 以 `<header>` 语义包裹，标题渲染为 `<h1>`，副标题与操作槽可选。
+ * 以 `<header>` 语义包裹，标题默认渲染为 `<h1>`，嵌套内容可改为 `<h2>`。
  */
 export function PageHeader({
   title,
   subtitle,
   actions,
   className,
+  headingLevel = 1,
 }: PageHeaderProps): JSX.Element {
+  const Heading = headingLevel === 2 ? 'h2' : 'h1';
+
   return (
     <header className={cx(styles.header, className)}>
       <div className={styles.texts}>
-        <h1 className={styles.title}>{title}</h1>
+        <Heading className={styles.title}>{title}</Heading>
         {subtitle != null && <p className={styles.subtitle}>{subtitle}</p>}
       </div>
       {actions != null && <div className={styles.actions}>{actions}</div>}

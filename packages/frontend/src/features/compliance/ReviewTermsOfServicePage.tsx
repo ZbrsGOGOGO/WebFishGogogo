@@ -3,20 +3,33 @@ import { Link } from 'react-router-dom';
 
 import { SITE_NAME } from '../../app/site-config';
 
-export function ReviewTermsOfServicePage(): JSX.Element {
+export interface ReviewTermsOfServicePageProps {
+  includeGames?: boolean;
+}
+
+export function ReviewTermsOfServicePage({
+  includeGames = false,
+}: ReviewTermsOfServicePageProps): JSX.Element {
   return (
     <main aria-labelledby="terms-of-service-title" className="compliance-page">
       <p><Link to="/">← 返回站点首页</Link></p>
       <h1 id="terms-of-service-title">服务条款</h1>
-      <p><em>最近更新：2026-08-06</em></p>
+      <p><em>最近更新：2026-08-17</em></p>
 
       <p>本页面适用于{SITE_NAME}。访问和使用本网站即表示您已阅读并理解以下说明。</p>
 
       <h2>1. 服务范围</h2>
-      <p>
-        本网站提供产品与功能介绍、在线效率工具、隐私政策和服务条款等公开内容。
-        页面中有关产品方向的说明，不构成对具体功能或更新时间的承诺。
-      </p>
+      {includeGames ? (
+        <p>
+          本网站提供产品介绍、浏览器本地效率工具、轻量单机游戏、隐私政策和服务条款等公开内容。
+          工具与游戏无需账户，不提供用户间互动、充值、提现、概率付费或交易功能。
+        </p>
+      ) : (
+        <p>
+          本网站提供产品与功能介绍、在线效率工具、隐私政策和服务条款等公开内容。
+          页面中有关产品方向的说明，不构成对具体功能或更新时间的承诺。
+        </p>
+      )}
 
       <h2>2. 访问规则</h2>
       <ul>

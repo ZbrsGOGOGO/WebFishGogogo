@@ -43,9 +43,9 @@ describe('TetrisGamePage', () => {
     renderGame();
 
     expect(
-      screen.getByRole('heading', { name: '俄罗斯方块' }),
+      screen.getByRole('heading', { name: '方块消除' }),
     ).toBeInTheDocument();
-    const board = screen.getByRole('grid', { name: '俄罗斯方块棋盘' });
+    const board = screen.getByRole('grid', { name: '方块消除棋盘' });
     expect(within(board).getAllByRole('row')).toHaveLength(20);
     expect(within(board).getAllByRole('gridcell')).toHaveLength(200);
     expect(screen.getByTestId('tetris-score')).toHaveTextContent('0');

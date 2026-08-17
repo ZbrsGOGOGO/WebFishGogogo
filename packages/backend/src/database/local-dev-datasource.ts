@@ -47,6 +47,9 @@ export async function createLocalDevDataSource(): Promise<DataSource> {
 
   const dataSource: DataSource = db.adapters.createTypeormDataSource({
     type: 'postgres',
+    // pg-mem 尚不能执行 `FOR UPDATE SKIP LOCKED`。生产 PostgreSQL 不设置
+    // 此开关，因此 outbox worker 默认仍使用跳锁并发消费。
+    extra: { outboxSkipLocked: false },
     entities,
     migrations,
     synchronize: false,

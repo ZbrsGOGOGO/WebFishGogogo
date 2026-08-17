@@ -58,6 +58,7 @@
   border-radius: 9px;
   color: var(--color-text-secondary);
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .nav a:hover {
@@ -352,6 +353,7 @@
 
   .header {
     align-items: flex-start;
+    gap: 12px;
     padding: 16px 0;
   }
 
@@ -359,9 +361,13 @@
     display: none;
   }
 
+  .nav {
+    gap: 2px;
+  }
+
   .nav a {
-    padding: 8px;
-    font-size: 13px;
+    padding: 8px 6px;
+    font-size: 12px;
   }
 
   .hero {

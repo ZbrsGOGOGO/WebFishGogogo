@@ -6,7 +6,6 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Footer } from './Footer';
-import { USER_CONTENT_FOOTER_STATEMENT } from '../compliance/content-declaration';
 
 function renderFooter() {
   return render(
@@ -17,9 +16,11 @@ function renderFooter() {
 }
 
 describe('Footer', () => {
-  it('展示"内容为用户上传且合法"声明（Req 13.4）', () => {
+  it('展示本地数据说明', () => {
     renderFooter();
-    expect(screen.getByText(USER_CONTENT_FOOTER_STATEMENT)).toBeInTheDocument();
+    expect(
+      screen.getByText(/个人资料与使用记录由您的本地服务保存/),
+    ).toBeInTheDocument();
   });
 
   it('提供隐私政策与服务条款链接（Req 13.5）', () => {
@@ -46,10 +47,12 @@ describe('Footer', () => {
   it('公开版本使用正常站点文案且不暴露内部发布状态', () => {
     render(
       <MemoryRouter>
-        <Footer reviewMode />
+        <Footer reviewMode publicMode />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/专注轻量、实用的个人效率体验/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/工具与单机游戏可直接在浏览器中使用/),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/审核/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
   });

@@ -149,3 +149,38 @@ describe('OutboxProcessorService integration', () => {
     });
   });
 });
+
+describe('OutboxProcessorService worker locking', () => {
+  it('claims work with FOR UPDATE SKIP LOCKED by default', async () => {
+    const findOne = jest.fn().mockResolvedValue(null);
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({ findOne }),
+    };
+    const transaction = jest.fn(
+      async (operation: (value: typeof manager) => Promise<boolean>) =>
+        operation(manager),
+    );
+    const dataSource = {
+      options: { type: 'postgres' },
+      transaction,
+    } as unknown as DataSource;
+    const projector = {
+      project: jest.fn(),
+    } as unknown as ActivityProjectorService;
+    const processor = new OutboxProcessorService(dataSource, projector);
+
+    await expect(processor.processBatch()).resolves.toBe(0);
+
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        order: { createdAt: 'ASC', id: 'ASC' },
+        lock: {
+          mode: 'pessimistic_write',
+          onLocked: 'skip_locked',
+        },
+      }),
+    );
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(projector.project).not.toHaveBeenCalled();
+  });
+});

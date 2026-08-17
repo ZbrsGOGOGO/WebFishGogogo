@@ -61,6 +61,7 @@
   color: var(--color-text-secondary);
   font-size: 14px;
   font-weight: 650;
+  white-space: nowrap;
 }
 
 .nav a:hover,

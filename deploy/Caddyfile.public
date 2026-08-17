@@ -1,0 +1,17 @@
+{
+	email {$ACME_EMAIL}
+}
+
+www.{$SITE_DOMAIN} {
+	redir https://{$SITE_DOMAIN}{uri} permanent
+}
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy web:80
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}

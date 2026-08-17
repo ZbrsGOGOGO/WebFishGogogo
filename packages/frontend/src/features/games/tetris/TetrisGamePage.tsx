@@ -221,10 +221,10 @@ export function TetrisGamePage(): JSX.Element {
   const controlsDisabled = state.status !== 'running';
 
   return (
-    <section className={styles.page} aria-label="俄罗斯方块游戏">
+    <section className={styles.page} aria-label="方块消除游戏">
       <GameBackLink />
       <PageHeader
-        title="俄罗斯方块"
+        title="方块消除"
         subtitle="旋转并堆叠七种方块，消除完整横行；每消除 10 行提升一级。"
         actions={
           <div className={styles.headerActions}>
@@ -267,7 +267,7 @@ export function TetrisGamePage(): JSX.Element {
                 role="grid"
                 tabIndex={0}
                 ref={boardRef}
-                aria-label="俄罗斯方块棋盘"
+                aria-label="方块消除棋盘"
                 aria-rowcount={BOARD_HEIGHT}
                 aria-colcount={BOARD_WIDTH}
                 data-testid="tetris-board"

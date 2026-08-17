@@ -16,7 +16,7 @@ describe('GamesPage', () => {
       screen.getByRole('heading', { name: '小游戏中心' }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('link', { name: /午休斗技场/ }),
+      screen.getByRole('link', { name: /午休竞技场/ }),
     ).toHaveAttribute('href', '/games/arena');
     expect(screen.getByText('Lv.3 解锁')).toBeInTheDocument();
     expect(screen.getByText('AI 单人对战')).toBeInTheDocument();
@@ -24,7 +24,7 @@ describe('GamesPage', () => {
       'href',
       '/games/snake',
     );
-    expect(screen.getByRole('link', { name: /俄罗斯方块/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /方块消除/ })).toHaveAttribute(
       'href',
       '/games/tetris',
     );
