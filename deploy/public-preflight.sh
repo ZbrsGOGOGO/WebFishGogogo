@@ -31,11 +31,13 @@ check_required_text() {
   key=$1
   check_single_key "$key"
   value=$(env_value "$key")
+  meaningful_value=$(printf '%s\n' "$value" | sed "s/[[:space:]\"']//g")
   case "$value" in
     ''|*example.com*|*待配置*|*请填写*|*replace-with*|*your-*)
       fail "$key is empty or still uses a placeholder"
       ;;
   esac
+  [ -n "$meaningful_value" ] || fail "$key cannot contain only whitespace or quotes"
 }
 
 [ -f "$ENV_FILE" ] || {
@@ -56,6 +58,37 @@ grep -Eq 'target:[[:space:]]*public-web' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must build the public-web target"
 grep -Eq 'VITE_SITE_MODE:[[:space:]]*public' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must set VITE_SITE_MODE to public"
+
+grep -Eq '^FROM site-build-base AS review-build$' "$ROOT_DIR/Dockerfile" ||
+  fail "Dockerfile must define the isolated review-build stage"
+grep -Eq '^FROM site-build-base AS public-build$' "$ROOT_DIR/Dockerfile" ||
+  fail "Dockerfile must define the isolated public-build stage"
+grep -Eq '^COPY --from=public-build /app/packages/frontend/dist /usr/share/nginx/html$' \
+  "$ROOT_DIR/Dockerfile" ||
+  fail "public-web must copy only the public-build artifact"
+
+PUBLIC_BUILD_SECTION=$(sed -n \
+  '/^FROM site-build-base AS public-build$/,/^FROM .* AS review-web$/p' \
+  "$ROOT_DIR/Dockerfile")
+for build_arg in \
+  VITE_SITE_OPERATOR \
+  VITE_SITE_CONTACT \
+  PUBLIC_GAME_CLEARANCE_REFERENCE; do
+  printf '%s\n' "$PUBLIC_BUILD_SECTION" | grep -Eq "^ARG ${build_arg}=" ||
+    fail "public-build must declare and validate $build_arg"
+done
+printf '%s\n' "$PUBLIC_BUILD_SECTION" |
+  grep -Fq 'test "$VITE_SITE_MODE" = public' ||
+  fail "public-build must reject non-public VITE_SITE_MODE values"
+
+logging_none_count=$(grep -Ec \
+  '^[[:space:]]+driver:[[:space:]]+none([[:space:]]*#.*)?$' \
+  "$ROOT_DIR/$COMPOSE_FILE" || true)
+[ "$logging_none_count" -eq 2 ] ||
+  fail "$COMPOSE_FILE must disable persistent logging for both public services"
+grep -Eq '^[[:space:]]*access_log[[:space:]]+off;' \
+  "$ROOT_DIR/deploy/public.nginx.conf" ||
+  fail "public.nginx.conf must disable access logging"
 
 check_single_key IMAGE_TAG
 IMAGE_TAG=$(env_value IMAGE_TAG)
@@ -85,7 +118,20 @@ esac
 check_required_text SITE_NAME
 check_required_text SITE_DOMAIN
 check_required_text ACME_EMAIL
+check_required_text PRIVACY_PROCESSOR_NAME
+check_required_text PRIVACY_CONTACT
+check_required_text PUBLIC_GAME_CLEARANCE_REFERENCE
 check_required_text ICP_BEIAN_NUMBER
+
+PRIVACY_CONTACT=$(env_value PRIVACY_CONTACT)
+printf '%s\n' "$PRIVACY_CONTACT" | grep -Eq \
+  '(^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$)|(^https://[^[:space:]]+$)|(^\+?[0-9][0-9[:space:]-]{6,19}$)' ||
+  fail "PRIVACY_CONTACT must be an email address, HTTPS request URL, or telephone number"
+
+PUBLIC_GAME_CLEARANCE_REFERENCE=$(env_value PUBLIC_GAME_CLEARANCE_REFERENCE)
+if printf '%s\n' "$PUBLIC_GAME_CLEARANCE_REFERENCE" | grep -Eiq 'ICP'; then
+  fail "PUBLIC_GAME_CLEARANCE_REFERENCE cannot use an ICP filing number as game-publication clearance"
+fi
 
 ACME_EMAIL=$(env_value ACME_EMAIL)
 printf '%s\n' "$ACME_EMAIL" | grep -Eq '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' ||

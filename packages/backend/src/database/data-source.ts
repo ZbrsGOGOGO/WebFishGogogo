@@ -8,5 +8,3 @@ import { buildDatabaseConfig } from '../config/database.config';
  * 运行期 NestJS 通过 DatabaseModule 使用同一份配置。
  */
 export const AppDataSource = new DataSource(buildDatabaseConfig());
-
-export default AppDataSource;

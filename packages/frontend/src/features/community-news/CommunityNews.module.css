@@ -1,0 +1,303 @@
+.page {
+  width: min(100% - 40px, 1180px);
+  margin: 0 auto;
+  padding: 42px 0 72px;
+  display: grid;
+  gap: 22px;
+}
+
+.disclosure,
+.correction,
+.error,
+.notice {
+  margin: 0;
+  padding: 13px 15px;
+  border-radius: 14px;
+}
+
+.disclosure,
+.correction {
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+}
+
+.error {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+}
+
+.notice {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+}
+
+.filters,
+.sourceForm {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.sourceForm {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.filters label,
+.sourceForm > label,
+.editorForm > label,
+.selectField,
+.feedbackControls label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.filters select,
+.sourceForm select,
+.editorForm select,
+.selectField select,
+.feedbackControls select {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.filters select:focus-visible,
+.sourceForm select:focus-visible,
+.editorForm select:focus-visible,
+.selectField select:focus-visible,
+.feedbackControls select:focus-visible,
+.articleRow:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  outline-offset: 2px;
+}
+
+.filterHint,
+.counter,
+.fieldError,
+.linkUnavailable {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.fieldError {
+  color: var(--color-danger);
+}
+
+.newsList,
+.stack,
+.editorForm,
+.preferenceForm {
+  display: grid;
+  gap: 16px;
+}
+
+.newsCard,
+.detailCard {
+  padding: 22px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.detailCard {
+  padding: clamp(20px, 4vw, 36px);
+}
+
+.newsCard h2,
+.detailCard h2 {
+  margin: 13px 0 8px;
+  font-size: clamp(19px, 2.6vw, 25px);
+}
+
+.cardMeta,
+.cardActions,
+.feedbackControls,
+.professionChecks,
+.checkboxLabel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cardMeta {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.summary {
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.correction {
+  margin: 16px 0;
+}
+
+.correction p {
+  margin: 6px 0;
+}
+
+.cardActions {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border);
+}
+
+.feedbackBox {
+  margin-top: 14px;
+  color: var(--color-text-secondary);
+}
+
+.feedbackBox summary {
+  min-height: 40px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+}
+
+.feedbackControls {
+  padding: 10px 0;
+}
+
+.checkboxLabel {
+  min-height: 42px;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+.checkboxLabel input,
+.professionChecks input {
+  width: 18px;
+  height: 18px;
+}
+
+.adminLayout {
+  display: grid;
+  grid-template-columns: minmax(300px, .72fr) minmax(0, 1.28fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.articleRow {
+  width: 100%;
+  padding: 14px 6px;
+  display: grid;
+  gap: 7px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  text-align: left;
+  background: transparent;
+}
+
+.articleRow[data-selected='true'] {
+  padding-inline: 11px;
+  border-radius: 12px;
+  background: var(--color-brand-soft);
+}
+
+.articleRow small {
+  color: var(--color-text-muted);
+}
+
+.professionChecks {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+}
+
+.professionChecks legend {
+  padding: 0 5px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.professionChecks label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.counter {
+  margin-top: -12px;
+  text-align: right;
+}
+
+.auditGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.auditGrid div {
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--color-surface-2);
+}
+
+.auditGrid dt {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.auditGrid dd {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .filters,
+  .sourceForm,
+  .adminLayout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .page {
+    width: calc(100% - 28px);
+    padding-top: 28px;
+  }
+
+  .newsCard,
+  .detailCard {
+    padding: 17px;
+  }
+
+  .cardActions > *,
+  .feedbackControls > *,
+  .sourceForm button,
+  .editorForm button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .auditGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .articleRow,
+  .feedbackBox summary {
+    scroll-behavior: auto;
+  }
+}

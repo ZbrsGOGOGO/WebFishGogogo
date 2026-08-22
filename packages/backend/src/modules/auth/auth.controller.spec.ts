@@ -1,144 +1,215 @@
-import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { PATH_METADATA } from '@nestjs/common/constants';
 
-import { AuthController } from './auth.controller';
-import { AuthService, AuthUserView, LoginInput, LoginResult, RegisterInput } from './auth.service';
+import {
+  AuthController,
+  CurrentAccountController,
+} from './auth.controller';
+import type {
+  AuthService,
+  AuthSessionResult,
+  AuthUserView,
+  RegistrationResult,
+} from './auth.service';
+import type { AuthCookieResponse, CookieOptions } from './auth-cookie';
 
-/**
- * AuthController 单元测试（Requirement 1.1–1.4）。
- *
- * 使用轻量 fake AuthService 验证控制器路由行为与请求体校验：
- * - POST /auth/register 透传规整后的输入并返回账户视图（Req 1.1）。
- * - POST /auth/login 透传凭据并返回签发结果（Req 1.3）。
- * - 非法请求体返回 400；service 抛出的领域错误（冲突/认证失败）向上冒泡。
- */
-class FakeAuthService {
-  registerCalls: RegisterInput[] = [];
-  loginCalls: LoginInput[] = [];
-  currentUserCalls: string[] = [];
-  conflictOn: string | null = null;
-  rejectLogin = false;
-  currentUser: AuthUserView | null = {
-    id: 'user-1',
-    email: 'a@example.com',
-    displayName: null,
+const USER: AuthUserView = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  publicId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  email: 'person@example.com',
+  displayName: '测试同事',
+  accountStatus: 'active',
+  onboardingCompleted: false,
+  socialVerificationStatus: 'unverified',
+  avatarKey: null,
+  battleProfession: null,
+  bio: null,
+  privacy: {
+    equipment: 'friends',
+    battleRecord: 'friends',
+    plant: 'friends',
+    honors: 'friends',
+    friendCount: 'self',
+    recentActivity: 'self',
+  },
+  roles: ['member'],
+};
+
+const SESSION: AuthSessionResult = {
+  accessToken: 'access.jwt',
+  refreshToken: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.secret',
+  refreshExpiresAt: new Date(Date.now() + 60_000),
+  user: USER,
+};
+
+const REGISTRATION: RegistrationResult = {
+  registrationId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  emailMasked: 'pe****@example.com',
+  verificationExpiresAt: new Date(Date.now() + 600_000).toISOString(),
+  resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
+  accountStatus: 'pending_email',
+  devVerificationCode: '123456',
+};
+
+function registrationBody() {
+  return {
+    email: ' Person@Example.com ',
+    password: 'Strong-Office#2026',
+    displayName: '测试同事',
+    betaAccessCode: 'DEV-BETA-100',
+    consents: {
+      termsVersion: '2026-08-22',
+      privacyVersion: '2026-08-22',
+      communityGuidelinesVersion: '2026-08-22',
+      adultDeclarationVersion: '2026-08-22',
+    },
   };
+}
 
-  async register(input: RegisterInput): Promise<AuthUserView> {
-    this.registerCalls.push(input);
-    if (this.conflictOn === input.email) {
-      throw new ConflictException('该邮箱已被注册');
-    }
-    return { id: 'user-1', email: input.email, displayName: input.displayName ?? null };
-  }
+function cookieResponse(): AuthCookieResponse & {
+  cookie: jest.Mock;
+  clearCookie: jest.Mock;
+} {
+  return {
+    cookie: jest.fn<void, [string, string, CookieOptions]>(),
+    clearCookie: jest.fn<void, [string, CookieOptions]>(),
+  };
+}
 
-  async login(input: LoginInput): Promise<LoginResult> {
-    this.loginCalls.push(input);
-    if (this.rejectLogin) {
-      throw new UnauthorizedException('邮箱或密码不正确');
-    }
-    return {
-      accessToken: 'signed.jwt.token',
-      user: { id: 'user-1', email: input.email, displayName: null },
+describe('AuthController community contract', () => {
+  const originalEnv = { ...process.env };
+  let service: {
+    register: jest.Mock;
+    verifyEmail: jest.Mock;
+    login: jest.Mock;
+    refresh: jest.Mock;
+    logout: jest.Mock;
+    logoutAll: jest.Mock;
+    getCurrentUser: jest.Mock;
+    resendVerification: jest.Mock;
+    listSessions: jest.Mock;
+    revokeDeviceSession: jest.Mock;
+    updateProfile: jest.Mock;
+    updatePrivacy: jest.Mock;
+  };
+  let controller: AuthController;
+
+  beforeEach(() => {
+    process.env.LOCAL_DEV = 'true';
+    process.env.NODE_ENV = 'test';
+    service = {
+      register: jest.fn().mockResolvedValue(REGISTRATION),
+      verifyEmail: jest.fn().mockResolvedValue(SESSION),
+      login: jest.fn().mockResolvedValue(SESSION),
+      refresh: jest.fn().mockResolvedValue(SESSION),
+      logout: jest.fn().mockResolvedValue(undefined),
+      logoutAll: jest.fn().mockResolvedValue(undefined),
+      getCurrentUser: jest.fn().mockResolvedValue(USER),
+      resendVerification: jest.fn().mockResolvedValue({}),
+      listSessions: jest.fn().mockResolvedValue([]),
+      revokeDeviceSession: jest.fn().mockResolvedValue({ current: false }),
+      updateProfile: jest.fn().mockResolvedValue(USER),
+      updatePrivacy: jest.fn().mockResolvedValue(USER),
     };
-  }
+    controller = new AuthController(service as unknown as AuthService);
+  });
 
-  async getCurrentUser(userId: string): Promise<AuthUserView> {
-    this.currentUserCalls.push(userId);
-    if (!this.currentUser) {
-      throw new UnauthorizedException('Invalid session');
-    }
-    return this.currentUser;
-  }
-}
+  afterAll(() => {
+    process.env = originalEnv;
+  });
 
-function createController(): { controller: AuthController; service: FakeAuthService } {
-  const service = new FakeAuthService();
-  const controller = new AuthController(service as unknown as AuthService);
-  return { controller, service };
-}
+  it('maps both legacy and v1 routes to one controller', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, AuthController)).toEqual([
+      'auth',
+      'v1/auth',
+    ]);
+  });
 
-describe('AuthController', () => {
-  describe('POST /auth/register', () => {
-    it('创建账户并返回账户视图（Req 1.1）', async () => {
-      const { controller, service } = createController();
+  it('validates and normalizes registration input without activating it', async () => {
+    await expect(
+      controller.register(registrationBody(), '127.0.0.1', 'jest'),
+    ).resolves.toEqual(REGISTRATION);
+    expect(service.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'person@example.com',
+        betaAccessCode: 'DEV-BETA-100',
+      }),
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+  });
 
-      const result = await controller.register({ email: 'a@example.com', password: 'secret123' });
+  it('sets HttpOnly refresh cookie but never returns the refresh token', async () => {
+    const response = cookieResponse();
+    const result = await controller.verifyEmail(
+      {
+        registrationId: REGISTRATION.registrationId,
+        code: '123456',
+      },
+      response,
+      'http://127.0.0.1:5173',
+      '127.0.0.1',
+      'jest',
+    );
+    expect(result).toEqual({ accessToken: 'access.jwt', user: USER });
+    expect(JSON.stringify(result)).not.toContain(SESSION.refreshToken);
+    expect(response.cookie).toHaveBeenCalledWith(
+      'zbrs_refresh',
+      SESSION.refreshToken,
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'strict',
+        path: '/',
+      }),
+    );
+  });
 
-      expect(result.email).toBe('a@example.com');
-      expect(service.registerCalls).toEqual([
-        { email: 'a@example.com', password: 'secret123', displayName: undefined },
-      ]);
-    });
+  it('forwards request metadata to the resend abuse limiter', async () => {
+    await controller.resendVerification(
+      { registrationId: REGISTRATION.registrationId },
+      '203.0.113.12',
+      'jest-agent',
+    );
+    expect(service.resendVerification).toHaveBeenCalledWith(
+      { registrationId: REGISTRATION.registrationId },
+      { ipAddress: '203.0.113.12', userAgent: 'jest-agent' },
+    );
+  });
 
-    it('透传 displayName', async () => {
-      const { controller, service } = createController();
+  it('rejects login cookie creation from an untrusted production Origin', async () => {
+    process.env.LOCAL_DEV = 'false';
+    process.env.NODE_ENV = 'production';
+    process.env.PUBLIC_SITE_ORIGIN = 'https://zbrshyyzxx.top';
 
-      await controller.register({ email: 'a@example.com', password: 'secret123', displayName: '小明' });
+    await expect(
+      controller.login(
+        { email: 'person@example.com', password: 'Strong-Office#2026' },
+        cookieResponse(),
+        'https://evil.example',
+        '203.0.113.10',
+        'jest',
+      ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(service.login).not.toHaveBeenCalled();
+  });
 
-      expect(service.registerCalls[0].displayName).toBe('小明');
-    });
-
-    it('缺少 email 时返回 400', async () => {
-      const { controller } = createController();
-
-      await expect(
-        controller.register({ password: 'secret123' } as unknown as { email: string; password: string }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('重复邮箱冲突错误向上冒泡（Req 1.2）', async () => {
-      const { controller, service } = createController();
-      service.conflictOn = 'dup@example.com';
-
-      await expect(
-        controller.register({ email: 'dup@example.com', password: 'secret123' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+  it('reads refresh cookie and enforces local trusted Origin', async () => {
+    const response = cookieResponse();
+    await controller.refresh(
+      `zbrs_refresh=${encodeURIComponent(SESSION.refreshToken)}`,
+      'http://127.0.0.1:5173',
+      response,
+      '127.0.0.1',
+      'jest',
+    );
+    expect(service.refresh).toHaveBeenCalledWith(SESSION.refreshToken, {
+      ipAddress: '127.0.0.1',
+      userAgent: 'jest',
     });
   });
 
-  describe('POST /auth/login', () => {
-    it('凭据匹配时返回访问令牌（Req 1.3）', async () => {
-      const { controller, service } = createController();
-
-      const result = await controller.login({ email: 'a@example.com', password: 'secret123' });
-
-      expect(result.accessToken).toBe('signed.jwt.token');
-      expect(service.loginCalls).toEqual([{ email: 'a@example.com', password: 'secret123' }]);
-    });
-
-    it('缺少 password 时返回 400', async () => {
-      const { controller } = createController();
-
-      await expect(
-        controller.login({ email: 'a@example.com' } as unknown as { email: string; password: string }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-    });
-
-    it('凭据不匹配时认证失败错误向上冒泡（Req 1.4）', async () => {
-      const { controller, service } = createController();
-      service.rejectLogin = true;
-
-      await expect(
-        controller.login({ email: 'a@example.com', password: 'wrong' }),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
-    });
-  });
-
-  describe('GET /auth/me', () => {
-    it('返回 JWT 对应的当前账户视图', async () => {
-      const { controller, service } = createController();
-
-      await expect(controller.me('user-1')).resolves.toEqual(service.currentUser);
-      expect(service.currentUserCalls).toEqual(['user-1']);
-    });
-
-    it('账户不存在时认证失败错误向上冒泡', async () => {
-      const { controller, service } = createController();
-      service.currentUser = null;
-
-      await expect(controller.me('missing-user')).rejects.toBeInstanceOf(
-        UnauthorizedException,
-      );
-    });
+  it('exposes the same current-user view at /v1/me', async () => {
+    const current = new CurrentAccountController(
+      service as unknown as AuthService,
+    );
+    await expect(current.me('internal-user-id')).resolves.toEqual(USER);
   });
 });

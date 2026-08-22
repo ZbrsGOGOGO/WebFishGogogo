@@ -1,11 +1,11 @@
-import type { JSX } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { SITE_NAME } from '../../app/site-config';
 import { ToolRunnerModal } from './runtime/ToolRunnerModal';
 import styles from './PublicToolsPage.module.css';
 
-interface PublicToolDefinition {
+export interface PublicToolDefinition {
   slug: string;
   name: string;
   category: string;
@@ -20,6 +20,48 @@ interface PublicToolDefinition {
  * 浏览器持久化。未列在这里的完整站工具不会出现在公开页面或深链接中。
  */
 export const PUBLIC_TOOLS: readonly PublicToolDefinition[] = [
+  {
+    slug: 'off-work-countdown',
+    name: '下班倒计时',
+    category: '时间',
+    description: '设置下班时间，实时查看今天或明天还剩多久。',
+    mark: 'OFF',
+  },
+  {
+    slug: 'timer',
+    name: '计时器',
+    category: '时间',
+    description: '使用正计时、倒计时和番茄钟安排专注与休息。',
+    mark: '00:00',
+  },
+  {
+    slug: 'date-calculator',
+    name: '日期计算',
+    category: '时间',
+    description: '计算两个日期的间隔，或在指定日期上加减天数。',
+    mark: '31',
+  },
+  {
+    slug: 'calculator',
+    name: '计算器',
+    category: '计算',
+    description: '快速完成四则运算、百分比与正负数计算。',
+    mark: '±',
+  },
+  {
+    slug: 'currency-converter',
+    name: '汇率换算',
+    category: '计算',
+    description: '按手动输入的参考汇率换算常用货币金额。',
+    mark: '¥$',
+  },
+  {
+    slug: 'unit-converter',
+    name: '单位换算',
+    category: '转换',
+    description: '换算常用长度、重量与温度单位。',
+    mark: '⇄',
+  },
   {
     slug: 'text-tools',
     name: '文本整理',
@@ -49,13 +91,6 @@ export const PUBLIC_TOOLS: readonly PublicToolDefinition[] = [
     mark: 'UTC',
   },
   {
-    slug: 'date-calculator',
-    name: '日期计算',
-    category: '时间',
-    description: '计算两个日期的间隔，或在指定日期上加减天数。',
-    mark: '31',
-  },
-  {
     slug: 'color-converter',
     name: '颜色转换',
     category: '设计',
@@ -64,11 +99,42 @@ export const PUBLIC_TOOLS: readonly PublicToolDefinition[] = [
   },
 ] as const;
 
+const TOOL_CATEGORIES = [
+  '全部',
+  '时间',
+  '计算',
+  '转换',
+  '文本',
+  '开发',
+  '设计',
+] as const;
+
+type ToolCategory = (typeof TOOL_CATEGORIES)[number];
+
 export function PublicToolsPage(): JSX.Element {
   const { toolId } = useParams<{ toolId?: string }>();
   const navigate = useNavigate();
   const activeTool = PUBLIC_TOOLS.find((tool) => tool.slug === toolId) ?? null;
   const unknownTool = toolId !== undefined && activeTool === null;
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<ToolCategory>('全部');
+  const filteredTools = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN');
+    return PUBLIC_TOOLS.filter((tool) => {
+      const categoryMatches = category === '全部' || tool.category === category;
+      const queryMatches =
+        normalizedQuery.length === 0 ||
+        `${tool.name} ${tool.category} ${tool.description}`
+          .toLocaleLowerCase('zh-CN')
+          .includes(normalizedQuery);
+      return categoryMatches && queryMatches;
+    });
+  }, [category, query]);
+
+  const clearFilters = (): void => {
+    setQuery('');
+    setCategory('全部');
+  };
 
   return (
     <main className={styles.page} aria-labelledby="public-tools-title">
@@ -95,7 +161,7 @@ export function PublicToolsPage(): JSX.Element {
         <span className={styles.eyebrow}>浏览器本地工具</span>
         <h1 id="public-tools-title">常用的小工具，打开就能用</h1>
         <p>
-          无需注册或登录。工具输入内容只在当前浏览器内处理，
+          无需注册或登录。11 款工具的输入内容只在当前浏览器内处理，
           不发送到本站接口，也不会保存到服务器。
         </p>
         <div className={styles.trustRow} aria-label="工具特点">
@@ -119,13 +185,43 @@ export function PublicToolsPage(): JSX.Element {
         <div className={styles.sectionHeading}>
           <div>
             <span>实用工具</span>
-            <h2 id="tool-catalog-title">6 款轻量工具</h2>
+            <h2 id="tool-catalog-title">11 款轻量工具</h2>
           </div>
-          <p>所有计算均在当前页面完成。</p>
+          <p>
+            {filteredTools.length === PUBLIC_TOOLS.length
+              ? '按场景挑选，所有计算均在当前页面完成。'
+              : `当前显示 ${filteredTools.length} 款工具。`}
+          </p>
         </div>
 
-        <ul className={styles.toolGrid}>
-          {PUBLIC_TOOLS.map((tool) => {
+        <div className={styles.filterPanel} aria-label="筛选工具">
+          <label className={styles.searchField}>
+            <span>搜索工具</span>
+            <input
+              type="search"
+              value={query}
+              placeholder="搜索名称、分类或用途"
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <div className={styles.categoryFilters} aria-label="工具分类">
+            {TOOL_CATEGORIES.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={category === item ? styles.activeFilter : undefined}
+                aria-pressed={category === item}
+                onClick={() => setCategory(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {filteredTools.length > 0 ? (
+          <ul className={styles.toolGrid}>
+          {filteredTools.map((tool) => {
             const headingId = `public-tool-${tool.slug}`;
             return (
               <li key={tool.slug}>
@@ -148,7 +244,14 @@ export function PublicToolsPage(): JSX.Element {
               </li>
             );
           })}
-        </ul>
+          </ul>
+        ) : (
+          <div className={styles.emptyTools} role="status">
+            <strong>没有找到匹配的工具</strong>
+            <p>换个关键词，或查看全部 11 款工具。</p>
+            <button type="button" onClick={clearFilters}>查看全部工具</button>
+          </div>
+        )}
       </section>
 
       <ToolRunnerModal

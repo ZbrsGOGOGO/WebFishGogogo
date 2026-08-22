@@ -1,0 +1,463 @@
+.page {
+  width: min(100% - 40px, 1180px);
+  margin: 0 auto;
+  padding: 32px 0 72px;
+  display: grid;
+  gap: 20px;
+}
+
+.experienceNav {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.experienceNav a {
+  min-height: 40px;
+  padding: 8px 13px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.experienceNav a[aria-current='page'] {
+  border-color: var(--color-brand);
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+}
+
+.roomGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.roomCard {
+  min-width: 0;
+}
+
+.roomCard p {
+  color: var(--color-text-secondary);
+}
+
+.roomCard dl {
+  display: grid;
+  gap: 7px;
+}
+
+.roomCard dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roomCard dt {
+  color: var(--color-text-secondary);
+}
+
+.roomCard dd {
+  margin: 0;
+  text-align: right;
+}
+
+.primaryLink,
+.disabledAction {
+  width: 100%;
+  min-height: 40px;
+  margin-top: 14px;
+  padding: 9px 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-weight: 750;
+}
+
+.primaryLink {
+  color: #fff;
+  background: var(--color-brand);
+}
+
+.primaryLink:hover {
+  color: #fff;
+  background: var(--color-brand-hover);
+}
+
+.disabledAction {
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+}
+
+.rulesList {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-secondary);
+}
+
+.error,
+.warning,
+.notice,
+.safetyNote {
+  margin: 0;
+  padding: 11px 13px;
+  border-radius: 11px;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+}
+
+div.error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+div.error p {
+  margin: 0;
+}
+
+.warning {
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-surface));
+}
+
+.notice {
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface));
+}
+
+.safetyNote {
+  margin-top: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+  font-size: 12px;
+}
+
+.roomStatusBar {
+  padding: 12px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-size: 12px;
+}
+
+.roomStatusBar span:first-child {
+  color: var(--color-brand-strong);
+  font-weight: 800;
+}
+
+.roomStatusBar span[data-status='failed'] {
+  color: var(--color-danger);
+}
+
+.roomStatusBar span[data-status='reconnecting'] {
+  color: var(--color-warning);
+}
+
+.chatLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 16px;
+  align-items: start;
+}
+
+.messageColumn {
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.composerColumn {
+  position: sticky;
+  top: 64px;
+  min-width: 0;
+}
+
+.messageList {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 9px;
+  list-style: none;
+}
+
+.messageList > li {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 15px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.messageList > li[data-visibility='blocked_placeholder'],
+.messageList > li[data-visibility='withdrawn_placeholder'],
+.messageList > li[data-visibility='moderated_placeholder'] {
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+}
+
+.messageList header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.messageList header span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.messageList blockquote {
+  margin: 10px 0;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+  font-size: 12px;
+}
+
+.messageList > li > p {
+  margin: 10px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+}
+
+.messageActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.messageActions button,
+.replyingTo button {
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.messageActions button:hover,
+.replyingTo button:hover {
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+}
+
+.outbox {
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: 15px;
+  background: var(--color-surface-2);
+}
+
+.outbox h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.outbox article {
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+  border-radius: 10px;
+  background: var(--color-surface);
+}
+
+.outbox article[data-state='failed'] {
+  border: 1px solid color-mix(in srgb, var(--color-danger) 25%, var(--color-border));
+}
+
+.outbox p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.outbox span {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.composer,
+.reportForm {
+  display: grid;
+  gap: 13px;
+}
+
+.composerMeta {
+  margin-top: -8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.replyingTo {
+  margin-bottom: 12px;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 10px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+  font-size: 12px;
+}
+
+.mentionSelect,
+.reportForm label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.mentionSelect select,
+.reportForm select,
+.reportForm textarea {
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.reportForm textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.mentionChips,
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mentionChips button {
+  min-height: 34px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+  font: inherit;
+  font-size: 12px;
+}
+
+.experienceNav a:focus-visible,
+.primaryLink:focus-visible,
+.messageActions button:focus-visible,
+.replyingTo button:focus-visible,
+.mentionSelect select:focus-visible,
+.mentionChips button:focus-visible,
+.reportForm select:focus-visible,
+.reportForm textarea:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-brand) 38%, transparent);
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .roomGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chatLayout {
+    grid-template-columns: 1fr;
+  }
+
+  .composerColumn {
+    position: static;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .page {
+    width: calc(100% - 28px);
+    padding: 24px 0 56px;
+    gap: 16px;
+  }
+
+  .roomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  div.error,
+  .messageList header,
+  .roomCard dl > div {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .roomCard dd {
+    text-align: left;
+  }
+
+  .roomStatusBar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .messageActions button {
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 380px) {
+  .page {
+    width: calc(100% - 20px);
+  }
+
+  .composerMeta,
+  .replyingTo,
+  .inlineActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .inlineActions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .experienceNav a,
+  .messageList > li {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

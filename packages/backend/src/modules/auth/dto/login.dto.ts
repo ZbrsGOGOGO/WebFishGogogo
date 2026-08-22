@@ -1,6 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
-
-import { LoginInput } from '../auth.service';
+import type { LoginInput } from '../auth.service';
+import {
+  normalizeEmail,
+  objectBody,
+  validateLoginPassword,
+} from './auth-validation';
 
 /**
  * POST /auth/login 请求体。
@@ -18,20 +21,10 @@ export interface LoginDto {
  * email / password 必须为非空字符串。凭据匹配校验由 AuthService 负责。
  */
 export function toLoginInput(body: unknown): LoginInput {
-  if (typeof body !== 'object' || body === null) {
-    throw new BadRequestException('请求体必须为对象');
-  }
-  const raw = body as Record<string, unknown>;
+  const raw = objectBody(body);
 
   return {
-    email: expectNonEmptyString(raw.email, 'email'),
-    password: expectNonEmptyString(raw.password, 'password'),
+    email: normalizeEmail(raw.email),
+    password: validateLoginPassword(raw.password),
   };
-}
-
-function expectNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new BadRequestException(`${field} 必须为非空字符串`);
-  }
-  return value;
 }

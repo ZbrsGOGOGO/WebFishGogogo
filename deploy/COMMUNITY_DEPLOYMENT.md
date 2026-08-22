@@ -1,0 +1,197 @@
+# 社区版部署
+
+社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容和审核 API；旧文档上传、私人阅读、便签、偏好、工具目录以及尚未实现的社区前缀一律返回 404。
+
+这套 Compose 是阶段性单机发布骨架，不是“1000 同时在线已经通过”的证明。社区部署明确不启动遗留 `main.worker.js` / `ActivityProjector`：它会把事件级 `processed` 状态误当成多消费者投递状态。认证邮件使用独立加密 Outbox，账号注销补偿使用数据库租约；其他社区领域事件在完成逐消费者回执审计前不得接入旧 Worker，也不得把积压写成已投递。
+
+## 1. 上线前条件
+
+- 仓库为准备发布的干净提交，`IMAGE_TAG` 使用该提交完整 40 位 SHA。
+- 已准备真实 ICP、隐私处理者、专用隐私渠道和游戏发布书面依据。
+- `AUTH_EMAIL_WEBHOOK_URL` 的受保护 HTTPS 服务已验证可发送验证码、找回和安全通知。
+- 已确认数据库/Redis 数据卷、异机备份、恢复演练和监控负责人。
+- 已在 Linux Docker 隔离环境用真实 PostgreSQL 16 完成 0007 快照的迁移演练并保留证据。
+- `packages/backend/src/main.community.ts` 只装载社区模块；不能导入旧完整 `AppModule`。
+
+## 2. 准备环境文件
+
+```bash
+cd /opt/webfish-community
+cp deploy/.env.community.example .env.community
+chmod 600 .env.community
+```
+
+分别为 JWT、认证 pepper、数据库、Redis、邮件 webhook 和 Beta 引导码生成独立随机值。下面只演示安全字符格式，不要在多个字段复用同一个输出：
+
+```bash
+openssl rand -hex 32
+```
+
+填写 `.env.community`。`BETA_BOOTSTRAP_CODE` 是首批邀请制注册的唯一引导码，至少 16 字符并严格限制使用次数；认证邮件 webhook 必须验证 Bearer token。预检会拒绝空密钥、占位域名、非 HTTPS 邮件 webhook、缺失隐私配置、`DB_LOGGING=true`、前后端功能开关不同源、认证限流缺失、ICP 号被误当游戏依据、非当前提交镜像标签和脏工作区，并且不会打印密钥。
+
+```bash
+sh deploy/community-preflight.sh .env.community
+```
+
+### PostgreSQL 16 迁移发布门禁
+
+`community-preflight.sh` 只做静态和 Compose 检查，不能替代真实 PostgreSQL 演练。先从已停在 `1700000000007` 的脱敏数据库制作 plain SQL 快照；快照不得包含真实邮箱、密码哈希或其他个人数据：
+
+```bash
+pg_dump \
+  --format=plain \
+  --no-owner \
+  --no-privileges \
+  --file=/secure/rehearsal/community-0007.sanitized.sql \
+  webfish_0007_sanitized
+```
+
+构建待发布的 `community-api` 镜像后，在 Linux Docker 主机执行：
+
+```bash
+sh deploy/community-migration-rehearsal.sh \
+  "webfish-community-api:${IMAGE_TAG}" \
+  /secure/rehearsal/community-0007.sanitized.sql \
+  | tee "/secure/rehearsal/community-migration-${IMAGE_TAG}.log"
+```
+
+脚本只会创建无公网端口的一次性 Docker 网络和 PostgreSQL `16.14-alpine` 容器，不读取 `.env.community`，也不连接现网数据库。它会依次验证：
+
+- 干净 0007 快照 `up → down 到 0007 → up`；
+- 两次升级均必须完整登记至最新迁移 `1700000000016`：账号安全 `0013` 的密码找回、社交核验、申诉和注销表及单个未消费找回令牌约束，聊天室 `0014` 的房间、票据、消息、提及与举报表，新闻 `0015` 的来源、文章、修订、独立复核、偏好与负反馈表，以及 `0016` 的会话、通知、关系、内容、聊天、新闻和乐斗热点查询索引；
+- 逐个回滚到 `0007` 后，上述 `0013`—`0015` 表、`0016` 索引和相关迁移记录必须全部消失，再次升级必须重新完整创建；
+- `trim/lower` 后邮箱冲突必须在 schema 变更前中止；
+- `user_profiles` 表锁竞争必须在 `lock_timeout` 内失败，并回滚此前已执行的 `users` DDL/数据更改；
+- 释放锁后同一快照可正常升级。
+
+只有脚本返回 0、输出最终 passed，且日志与镜像 SHA 一起归档，才可放行迁移。本次代码交付所在的 Windows 工作站未执行容器演练；这是 Linux 发布环境必须补齐的显式门禁，不得把静态检查写成“迁移已通过”。
+
+## 3. 构建但不切流
+
+社区版始终使用独立 Compose 项目 `webfish-community`，不与原 `webfish-public`/review 共用容器、网络或数据卷。构建阶段不会占用线上端口：
+
+```bash
+docker compose \
+  -p webfish-community \
+  -f deploy/docker-compose.community.yml \
+  --env-file .env.community \
+  config -q
+
+docker compose \
+  -p webfish-community \
+  -f deploy/docker-compose.community.yml \
+  --env-file .env.community \
+  build
+```
+
+构建必须产出 `packages/backend/dist/main.community.js`。不要把 `main.js` 或旧 `full` 前端作为替代品。
+
+## 4. 启动与迁移
+
+首次切换前保留当前公开镜像和 `.env.public`，并对服务器做可恢复快照。原 `webfish-public` 的 gateway/web 与社区版会竞争 80、443 和 8080；先只停服原容器（不执行 `down -v`），并确认端口已释放：
+
+```bash
+docker compose \
+  -p webfish-public \
+  -f deploy/docker-compose.public.yml \
+  --env-file .env.public \
+  stop gateway web
+
+if ss -H -ltn | awk '{print $4}' | grep -Eq '(^|:)(80|443|8080)$'; then
+  echo 'required ports are still occupied' >&2
+  exit 1
+fi
+```
+
+只有端口检查通过后才启动独立社区项目：
+
+```bash
+docker compose \
+  -p webfish-community \
+  -f deploy/docker-compose.community.yml \
+  --env-file .env.community \
+  up -d
+
+docker compose \
+  -p webfish-community \
+  -f deploy/docker-compose.community.yml \
+  --env-file .env.community \
+  ps --all
+```
+
+`migrate` 成功后显示 `Exited (0)` 是正常状态。确认 PostgreSQL、Redis、API、Web 和 Gateway 状态；不得跳过失败迁移强行启动 API。
+
+## 5. 烟测
+
+先验证本机入口：
+
+```bash
+curl -fsS http://127.0.0.1:8080/healthz
+curl -fsS http://127.0.0.1:8080/api/health
+curl -fsS http://127.0.0.1:8080/api/health/ready
+```
+
+再从公网执行低流量烟测：
+
+```bash
+sh deploy/community-smoke.sh https://zbrshyyzxx.top
+```
+
+发布验收必须再使用一个无生产数据的专用测试账号验证刷新 Cookie：
+
+```bash
+COMMUNITY_SMOKE_EMAIL=release-smoke@example.test \
+COMMUNITY_SMOKE_PASSWORD='replace-with-dedicated-safe-password' \
+REQUIRE_AUTH_SMOKE=1 \
+sh deploy/community-smoke.sh https://zbrshyyzxx.top
+```
+
+脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档 API 为 404、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
+
+带专用测试账号运行时，脚本还会验证合法 `Origin` 登录、生产 `__Host-` 刷新 Cookie 的 `Secure`、`HttpOnly`、`SameSite=Strict`、`Path=/` 和无 `Domain` 属性，以及缺少 `Origin` 的刷新被拒绝、合法同源刷新成功并在结束时注销测试会话。不要使用真实用户账号，也不要把测试凭据写进仓库或命令历史。
+
+## 6. 分阶段开启
+
+1. 首次部署保持全部业务开关为 `false`，只验证 health、登录安全、迁移、旧 API 拒绝和回滚路径。
+2. 先开启注册与账号恢复；社交核验、账号注销分别使用独立开关，只有外部 Provider 与补偿任务验收后才开启。
+3. 再开启好友、邀请、投喂、工位绿植等社区事务；公开主页与这些写能力使用同一社区总闸。
+4. 内容读取、内容写入、审核操作使用三个独立开关。先由值班审核员在写入关闭状态验收审核台，再开放发帖、评论和互动。
+5. 聊天室先开读取和连接，发送保持关闭；审核 Provider、Redis 故障只读和重连演练通过后，再按 50 → 200 → 500 → 1000 连接逐级开放写入。
+6. 新闻总闸与后台闸同时开启后，公开列表在首篇稿件通过双人复核前仍为空；只录入真实授权来源，不得使用抓取、全文镜像或虚假种子填充页面。
+7. 服务端乐斗在迁移、资产账本、幂等与好友隐私验收后单独开启；匿名本机试玩与正式档案不得互相兑换。
+8. 社区领域若以后引入新的异步事件消费者，必须先实现逐消费者回执与积压/重试/死信监控；禁止直接启用遗留 `main.worker.js`。
+
+白名单不是实现状态说明：后端模块、授权、治理和验收必须同时完成。每次扩大白名单后重新构建并执行完整烟测。
+
+## 7. 回滚
+
+应用失败时，先完整停止 `webfish-community` 容器并确认 80、443、8080 已释放，再启动保留的独立 `webfish-public` 项目：
+
+```bash
+docker compose \
+  -p webfish-community \
+  -f deploy/docker-compose.community.yml \
+  --env-file .env.community \
+  stop
+
+if ss -H -ltn | awk '{print $4}' | grep -Eq '(^|:)(80|443|8080)$'; then
+  echo 'community ports are still occupied; public rollback was not started' >&2
+  exit 1
+fi
+
+docker compose \
+  -p webfish-public \
+  -f deploy/docker-compose.public.yml \
+  --env-file .env.public \
+  up -d
+
+sh deploy/public-smoke.sh https://zbrshyyzxx.top
+```
+
+`stop` 只停容器，不会删除 `webfish-community` 的 PostgreSQL、Redis 或 Caddy 命名数据卷，因此排查后仍可恢复社区项目。不要运行 `down -v`、`docker volume prune` 或全局带卷清理。数据库迁移可能不可逆；如果已有真实社区写入，必须按演练过的数据库恢复流程处理，不能只切旧镜像。
+
+## 8. 容量声明门禁
+
+现有 `loadtest/k6/capacity.mjs` 只覆盖公开静态页和少量只读 API。它即使通过，也不能证明社区版达到 4000 账号、1000 会话或 1000 WebSocket。
+
+`loadtest/k6/community-capacity-gate.mjs` 当前会固定返回失败，直到合成数据、混合写请求、1000 WebSocket、重连、实例故障、Redis 故障和持续运行场景全部实现并评审。门禁被正式替换、隔离环境连续通过三次之前，不得对外宣称容量目标已经通过。

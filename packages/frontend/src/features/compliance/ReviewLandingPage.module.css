@@ -258,6 +258,174 @@
   line-height: 1.75;
 }
 
+.systemGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.systemCard {
+  --system-accent: var(--color-brand);
+  min-height: 230px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  color: var(--color-text);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--system-accent) 7%, transparent), transparent 55%),
+    var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+a.systemCard:hover,
+a.systemCard:focus-visible {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--system-accent) 45%, var(--color-border));
+  color: var(--color-text);
+  box-shadow: var(--shadow-md);
+}
+
+.systemCard[data-tone='green'] { --system-accent: #16865c; }
+.systemCard[data-tone='cyan'] { --system-accent: #1883a3; }
+.systemCard[data-tone='orange'] { --system-accent: #c47720; }
+.systemCard[data-tone='rose'] { --system-accent: #c44c6a; }
+.systemCard[data-tone='blue'] { --system-accent: #4a73d4; }
+.systemCard[data-tone='violet'] { --system-accent: #6a55c8; }
+
+.systemTopline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 25px;
+}
+
+.systemMark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: color-mix(in srgb, var(--system-accent) 78%, #111827);
+  background: color-mix(in srgb, var(--system-accent) 13%, var(--color-surface));
+  font-weight: 850;
+}
+
+.systemTopline small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+}
+
+.systemCard h3 {
+  margin-bottom: 7px;
+  font-size: 19px;
+}
+
+.systemCard p {
+  flex: 1;
+  color: var(--color-text-secondary);
+  line-height: 1.7;
+}
+
+.systemCard > strong {
+  margin-top: 10px;
+  color: var(--system-accent);
+  font-size: 12px;
+}
+
+.careerGrid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.careerGrid article {
+  min-width: 0;
+  min-height: 235px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+}
+
+.careerGrid article > span {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.careerGrid small {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.careerGrid h3 {
+  margin: 3px 0 7px;
+  font-size: 17px;
+}
+
+.careerGrid p {
+  flex: 1;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.careerGrid strong {
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.utilityStrip {
+  margin-top: 86px;
+  padding: 28px 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  background: var(--color-surface-2);
+}
+
+.utilityStrip p {
+  margin: 4px 0 0;
+  color: var(--color-text-secondary);
+}
+
+.utilityStrip nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.utilityStrip a {
+  min-height: 40px;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-brand);
+  background: var(--color-surface);
+  font-weight: 750;
+}
+
 .statusSection {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(360px, 1.1fr);
@@ -341,6 +509,14 @@
     grid-template-columns: 1fr;
   }
 
+  .systemGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .careerGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .scopeCard {
     min-height: auto;
   }
@@ -384,6 +560,23 @@
   .scopeCard,
   .operator {
     padding: 22px;
+  }
+
+  .systemGrid,
+  .careerGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .systemCard,
+  .careerGrid article {
+    min-height: auto;
+  }
+
+  .utilityStrip {
+    margin-top: 64px;
+    padding: 22px;
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .section,

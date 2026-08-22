@@ -16,9 +16,12 @@
     "verify": "npm run typecheck && npm test && npm run build"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
   },
   "overrides": {
-    "vite": "5.4.21"
+    "vite": "8.2.2"
   }
 }

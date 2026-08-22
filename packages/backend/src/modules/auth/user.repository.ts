@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 
 import { User } from '../../database/entities';
 
@@ -34,10 +35,19 @@ export class UserRepository {
    *   - 返回已入库的 User 实体（含生成的 id 与时间戳）
    */
   async createUser(input: CreateUserInput): Promise<User> {
+    const now = new Date();
+    const normalizedEmail = input.email.trim().normalize('NFC').toLowerCase();
     const user = this.repo.create({
-      email: input.email,
+      email: normalizedEmail,
+      emailNormalized: normalizedEmail,
       passwordHash: input.passwordHash,
       displayName: input.displayName ?? null,
+      publicId: randomUUID(),
+      accountStatus: 'pending_email',
+      socialVerificationStatus: 'unverified',
+      emailVerifiedAt: null,
+      passwordChangedAt: now,
+      onboardingCompleted: false,
     });
     return this.repo.save(user);
   }
@@ -49,7 +59,9 @@ export class UserRepository {
    *   - 无副作用
    */
   async findByEmail(email: string): Promise<User | null> {
-    return this.repo.findOne({ where: { email } });
+    return this.repo.findOne({
+      where: { emailNormalized: email.trim().normalize('NFC').toLowerCase() },
+    });
   }
 
   /**

@@ -40,7 +40,8 @@ describe('JsonFormatter', () => {
         const r = formatJson(text);
         expect(r.ok).toBe(true);
         if (r.ok) {
-          expect(JSON.parse(r.value)).toEqual(value);
+          const jsonRoundTripValue = JSON.parse(JSON.stringify(value));
+          expect(JSON.parse(r.value)).toEqual(jsonRoundTripValue);
         }
       }),
     );

@@ -18,7 +18,7 @@ afterEach(() => {
 });
 
 describe('PublicToolsPage', () => {
-  it('shows only the six public browser tools without API or storage access', () => {
+  it('shows the eleven safe browser tools without API or storage access', () => {
     const fetchSpy = vi.fn();
     const storageGetSpy = vi.spyOn(Storage.prototype, 'getItem');
     const storageSetSpy = vi.spyOn(Storage.prototype, 'setItem');
@@ -26,15 +26,16 @@ describe('PublicToolsPage', () => {
 
     renderReviewAt('/tools');
 
-    expect(screen.getByRole('heading', { name: '6 款轻量工具' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /^打开/ })).toHaveLength(6);
+    expect(screen.getByRole('heading', { name: '11 款轻量工具' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /^打开/ })).toHaveLength(11);
     expect(screen.getByRole('link', { name: '打开文本整理' })).toHaveAttribute(
       'href',
       '/tools/text-tools',
     );
     expect(screen.getByRole('link', { name: '打开颜色转换' })).toBeInTheDocument();
     expect(screen.queryByText('正则测试')).not.toBeInTheDocument();
-    expect(screen.queryByText('汇率换算')).not.toBeInTheDocument();
+    expect(screen.getByText('汇率换算')).toBeInTheDocument();
+    expect(screen.getByText('下班倒计时')).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(storageGetSpy).not.toHaveBeenCalled();
     expect(storageSetSpy).not.toHaveBeenCalled();
@@ -54,7 +55,7 @@ describe('PublicToolsPage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
-    expect(screen.getByRole('heading', { name: '6 款轻量工具' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '11 款轻量工具' })).toBeInTheDocument();
   });
 
   it('does not expose a non-whitelisted registry tool through a deep link', () => {
@@ -62,5 +63,21 @@ describe('PublicToolsPage', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('这个工具不存在或暂未公开');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('filters tools by keyword and category', () => {
+    renderReviewAt('/tools');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索工具' }), {
+      target: { value: '时间戳' },
+    });
+    expect(screen.getByRole('link', { name: '打开时间戳转换' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '打开文本整理' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '搜索工具' }), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '文本' }));
+    expect(screen.getAllByRole('link', { name: /^打开/ })).toHaveLength(2);
   });
 });

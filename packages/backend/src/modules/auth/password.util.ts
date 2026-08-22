@@ -11,6 +11,13 @@ import * as bcrypt from 'bcrypt';
 export const DEFAULT_SALT_ROUNDS = 10;
 
 /**
+ * Fixed cost-10 bcrypt hash used only to equalize missing-account login work.
+ * It is not an application credential and its corresponding input is unused.
+ */
+export const DUMMY_PASSWORD_HASH =
+  '$2b$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
+
+/**
  * 对明文密码进行加盐哈希。
  *
  * Preconditions:

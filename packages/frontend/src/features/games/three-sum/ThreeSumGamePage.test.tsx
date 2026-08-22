@@ -13,9 +13,7 @@ describe('ThreeSumGamePage', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-      >
+      <MemoryRouter>
         <ThreeSumGamePage />
       </MemoryRouter>,
     );

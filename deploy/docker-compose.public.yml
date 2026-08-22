@@ -10,6 +10,9 @@ services:
         VITE_API_BASE_URL: /api
         VITE_SITE_MODE: public
         VITE_SITE_NAME: ${SITE_NAME:-ZBRS 技术工具工坊}
+        VITE_SITE_OPERATOR: ${PRIVACY_PROCESSOR_NAME:?PRIVACY_PROCESSOR_NAME must be set}
+        VITE_SITE_CONTACT: ${PRIVACY_CONTACT:?PRIVACY_CONTACT must be set}
+        PUBLIC_GAME_CLEARANCE_REFERENCE: ${PUBLIC_GAME_CLEARANCE_REFERENCE:?PUBLIC_GAME_CLEARANCE_REFERENCE must be set}
         VITE_SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN must be set}
         VITE_ICP_BEIAN_NUMBER: ${ICP_BEIAN_NUMBER:-}
         VITE_PUBLIC_SECURITY_BEIAN_NUMBER: ${PUBLIC_SECURITY_BEIAN_NUMBER:-}
@@ -28,10 +31,7 @@ services:
     cpus: 1.0
     stop_grace_period: 15s
     logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "5"
+      driver: none
 
   gateway:
     image: caddy:2.11.4-alpine
@@ -54,10 +54,7 @@ services:
     cpus: 1.0
     stop_grace_period: 15s
     logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "5"
+      driver: none
 
 volumes:
   caddy_data:

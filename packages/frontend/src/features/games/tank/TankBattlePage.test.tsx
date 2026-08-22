@@ -21,9 +21,7 @@ describe('TankBattlePage', () => {
     const setIntervalSpy = vi.spyOn(window, 'setInterval');
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-      >
+      <MemoryRouter>
         <TankBattlePage />
       </MemoryRouter>,
     );
@@ -55,9 +53,7 @@ describe('TankBattlePage', () => {
   it('leaves text input shortcuts alone and auto-pauses when focus is lost', () => {
     const clearIntervalSpy = vi.spyOn(window, 'clearInterval');
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-      >
+      <MemoryRouter>
         <TankBattlePage />
       </MemoryRouter>,
     );

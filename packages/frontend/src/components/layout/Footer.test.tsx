@@ -2,7 +2,7 @@
 // 页脚合规信息渲染测试（Req 13.4, 13.5）。
 
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import { Footer } from './Footer';
@@ -51,9 +51,25 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/工具与单机游戏可直接在浏览器中使用/),
+      screen.getByText(/办公室乐斗、工具与单机游戏均在浏览器中运行/),
     ).toBeInTheDocument();
+    expect(screen.getByText(/办公室轻社区 · 本机试玩版/)).toBeInTheDocument();
     expect(screen.queryByText(/审核/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
+  });
+
+  it('社区版本只展示合规链接和备案，不展示主办者姓名或个人邮箱', () => {
+    render(
+      <MemoryRouter>
+        <Footer reviewMode={false} publicMode={false} communityMode />
+      </MemoryRouter>,
+    );
+    const footer = screen.getByRole('contentinfo', { name: '站点信息' });
+    expect(footer).toHaveTextContent('办公室轻社区 · 社区版');
+    expect(within(footer).getByRole('link', { name: '社区规范' })).toHaveAttribute(
+      'href',
+      '/community-guidelines',
+    );
+    expect(footer).not.toHaveTextContent(/主办者|联系邮箱|@/);
   });
 });

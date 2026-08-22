@@ -333,6 +333,12 @@ async function createArenaTestDataSource(): Promise<DataSource> {
     implementation: () => 'stealth_reader',
     impure: true,
   });
+  db.public.registerFunction({
+    name: 'char_length',
+    args: ['text' as never],
+    returns: 'integer' as never,
+    implementation: (value: string) => [...value].length,
+  });
   db.registerExtension('pgcrypto', () => {});
   db.registerExtension('uuid-ossp', () => {});
 
@@ -346,6 +352,7 @@ async function createArenaTestDataSource(): Promise<DataSource> {
   ];
   const source = db.adapters.createTypeormDataSource({
     type: 'postgres',
+    extra: { contentSearchFallback: true },
     entities: arenaEntities,
     migrations,
     synchronize: false,

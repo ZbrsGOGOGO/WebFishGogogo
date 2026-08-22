@@ -9,14 +9,25 @@ const PRODUCTION_HOSTS = new Set([
   'www.zbrshyyzxx.top',
 ]);
 
+// This legacy scenario proves only the public/read-only baseline. Requiring an
+// explicit target mode prevents a community deployment from treating a static
+// HTML/GET result as proof of write or WebSocket capacity.
+const targetMode = (__ENV.TARGET_MODE || 'public').trim().toLowerCase();
+if (targetMode !== 'public') {
+  throw new Error(
+    'capacity.mjs is a public/read-only baseline only. Community capacity must use the dedicated mixed HTTP/WebSocket suite; the current community gate intentionally fails closed.',
+  );
+}
+
 const PUBLIC_ROUTES = [
-  { path: '/', weight: 25 },
-  { path: '/tools', weight: 20 },
-  { path: '/games', weight: 15 },
-  { path: '/games/snake', weight: 10 },
-  { path: '/games/tetris', weight: 10 },
-  { path: '/games/tank', weight: 8 },
-  { path: '/games/three-sum', weight: 7 },
+  { path: '/', weight: 22 },
+  { path: '/ledou', weight: 18 },
+  { path: '/tools', weight: 18 },
+  { path: '/games', weight: 12 },
+  { path: '/games/snake', weight: 7 },
+  { path: '/games/tetris', weight: 7 },
+  { path: '/games/tank', weight: 6 },
+  { path: '/games/three-sum', weight: 5 },
   { path: '/privacy-policy', weight: 3 },
   { path: '/terms-of-service', weight: 2 },
 ];
@@ -207,15 +218,30 @@ export const options = {
   thresholds: buildThresholds(authEnabled, assetEnabled, profileName),
   tags: {
     application: 'webfish',
+    coverage: 'public-read-only',
     profile: profileName,
   },
   userAgent: 'WebFish-capacity-test/1.0',
 };
 
 export function setup() {
+  const modeProbe = http.get(`${baseUrl}/healthz`, {
+    redirects: 0,
+    tags: { flow: 'safety-probe', endpoint: '/healthz' },
+  });
+  const deployedMode = Object.entries(modeProbe.headers)
+    .find(([name]) => name.toLowerCase() === 'x-webfish-site-mode')?.[1]
+    ?.trim()
+    .toLowerCase();
+  if (deployedMode === 'community') {
+    throw new Error(
+      'Refusing to run the public/read-only capacity suite against a community deployment. Use the reviewed mixed HTTP/WebSocket suite.',
+    );
+  }
   console.log(
     [
       `WebFish load test: profile=${profileName}`,
+      'coverage=public-read-only (not a community capacity result)',
       `target=${baseUrl}`,
       `auth=${authEnabled ? `enabled (${Math.round(authShare * 100)}%)` : 'disabled'}`,
       `assets=${assetEnabled ? `enabled (${Math.round(assetShare * 100)}% of public traffic)` : 'disabled'}`,

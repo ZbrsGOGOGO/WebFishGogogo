@@ -10,9 +10,7 @@ function headPosition(): string | null {
 
 function renderGame(): ReturnType<typeof render> {
   return render(
-    <MemoryRouter
-      future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-    >
+    <MemoryRouter>
       <SnakeGamePage />
     </MemoryRouter>,
   );

@@ -91,10 +91,12 @@ describe('ReaderPage (Req 5.1, 5.3)', () => {
       expect(
         screen.getByRole('heading', { name: 'Redis 高可用架构实践' }),
       ).toBeInTheDocument();
+      expect(document.title).toBe(
+        'Redis 高可用架构实践 - ZBRS 阅读工作台',
+      );
     });
 
     expect(getArticleMock).toHaveBeenCalledWith('d1', undefined);
-    expect(document.title).toBe('Redis 高可用架构实践 - ZBRS 阅读工作台');
     expect(await screen.findByText('有效阅读计时中')).toBeInTheDocument();
     expect(startSessionMock).toHaveBeenCalledWith(
       'd1',

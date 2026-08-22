@@ -1,6 +1,12 @@
-import { BadRequestException } from '@nestjs/common';
-
-import { RegisterInput } from '../auth.service';
+import type { RegisterInput } from '../auth.service';
+import {
+  normalizeEmail,
+  objectBody,
+  requiredString,
+  validateDisplayName,
+  validateNewPassword,
+  validateVersion,
+} from './auth-validation';
 
 /**
  * POST /auth/register 请求体。
@@ -9,7 +15,15 @@ import { RegisterInput } from '../auth.service';
 export interface RegisterDto {
   email: string;
   password: string;
-  displayName?: string | null;
+  displayName: string;
+  betaAccessCode: string;
+  referralToken?: string;
+  consents: {
+    termsVersion: string;
+    privacyVersion: string;
+    communityGuidelinesVersion: string;
+    adultDeclarationVersion: string;
+  };
 }
 
 /**
@@ -22,31 +36,36 @@ export interface RegisterDto {
  * 邮箱唯一性等业务规则由 AuthService 负责。
  */
 export function toRegisterInput(body: unknown): RegisterInput {
-  if (typeof body !== 'object' || body === null) {
-    throw new BadRequestException('请求体必须为对象');
-  }
-  const raw = body as Record<string, unknown>;
+  const raw = objectBody(body);
+  const email = normalizeEmail(raw.email);
+  const password = validateNewPassword(raw.password, email);
+  const consents = objectBody(raw.consents);
 
-  const email = expectNonEmptyString(raw.email, 'email');
-  const password = expectNonEmptyString(raw.password, 'password');
-
-  let displayName: string | null | undefined;
-  if ('displayName' in raw) {
-    if (raw.displayName === null) {
-      displayName = null;
-    } else if (typeof raw.displayName === 'string') {
-      displayName = raw.displayName;
-    } else {
-      throw new BadRequestException('displayName 必须为字符串或 null');
-    }
-  }
-
-  return { email, password, displayName };
-}
-
-function expectNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new BadRequestException(`${field} 必须为非空字符串`);
-  }
-  return value;
+  return {
+    email,
+    password,
+    displayName: validateDisplayName(raw.displayName),
+    betaAccessCode: requiredString(raw.betaAccessCode, 'betaAccessCode', 128),
+    ...(raw.referralToken === undefined
+      ? {}
+      : {
+          referralToken: requiredString(
+            raw.referralToken,
+            'referralToken',
+            200,
+          ),
+        }),
+    consents: {
+      termsVersion: validateVersion(consents.termsVersion, 'termsVersion'),
+      privacyVersion: validateVersion(consents.privacyVersion, 'privacyVersion'),
+      communityGuidelinesVersion: validateVersion(
+        consents.communityGuidelinesVersion,
+        'communityGuidelinesVersion',
+      ),
+      adultDeclarationVersion: validateVersion(
+        consents.adultDeclarationVersion,
+        'adultDeclarationVersion',
+      ),
+    },
+  };
 }

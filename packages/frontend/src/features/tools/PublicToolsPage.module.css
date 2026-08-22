@@ -177,6 +177,67 @@
   color: var(--color-text-secondary);
 }
 
+.filterPanel {
+  margin-bottom: 24px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+  align-items: end;
+  gap: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-brand-soft));
+}
+
+.searchField {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.searchField input {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 11px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.searchField input:focus {
+  border-color: var(--color-brand);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-brand-soft);
+}
+
+.categoryFilters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.categoryFilters button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.categoryFilters button:hover,
+.categoryFilters .activeFilter {
+  border-color: color-mix(in srgb, var(--color-brand) 42%, var(--color-border));
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+}
+
 .toolGrid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -266,9 +327,50 @@
   transform: translateX(3px);
 }
 
+.emptyTools {
+  min-height: 250px;
+  padding: 42px 24px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 20px;
+  color: var(--color-text-secondary);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.emptyTools strong {
+  color: var(--color-text);
+  font-size: 17px;
+}
+
+.emptyTools p {
+  margin: 6px 0 16px;
+}
+
+.emptyTools button {
+  min-height: 40px;
+  padding: 8px 15px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  background: var(--color-brand);
+  font-weight: 750;
+}
+
 @media (max-width: 900px) {
   .toolGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filterPanel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .categoryFilters {
+    justify-content: flex-start;
   }
 }
 
@@ -312,6 +414,10 @@
   .notice {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .filterPanel {
+    padding: 14px;
   }
 
   .toolGrid {

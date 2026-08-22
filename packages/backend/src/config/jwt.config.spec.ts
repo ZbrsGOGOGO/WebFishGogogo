@@ -28,4 +28,19 @@ describe('buildJwtConfig', () => {
       }).secret,
     ).toBe(secret);
   });
+
+  it('validates and normalizes the access-token lifetime', () => {
+    expect(
+      buildJwtConfig({
+        NODE_ENV: 'development',
+        JWT_ACCESS_EXPIRES_IN: '900',
+      }).signOptions?.expiresIn,
+    ).toBe(900);
+    expect(() =>
+      buildJwtConfig({
+        NODE_ENV: 'development',
+        JWT_ACCESS_EXPIRES_IN: 'forever',
+      }),
+    ).toThrow(/JWT_ACCESS_EXPIRES_IN/);
+  });
 });

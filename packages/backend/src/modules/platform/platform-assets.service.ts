@@ -14,7 +14,10 @@ import { EnergyState } from '../../database/entities/energy-state.entity';
 import { InventoryLedger } from '../../database/entities/inventory-ledger.entity';
 import { InventoryStack } from '../../database/entities/inventory-stack.entity';
 import { ItemDefinition } from '../../database/entities/item-definition.entity';
-import { PlayerProfile } from '../../database/entities/player-profile.entity';
+import {
+  DEFAULT_COMMUNITY_PRIVACY,
+  PlayerProfile,
+} from '../../database/entities/player-profile.entity';
 import { PlayerProgression } from '../../database/entities/player-progression.entity';
 import {
   RewardGrant,
@@ -632,6 +635,9 @@ export class PlatformAssetsService {
         userId,
         nickname: null,
         avatarKey: null,
+        bio: null,
+        battleProfession: null,
+        privacySettings: { ...DEFAULT_COMMUNITY_PRIVACY },
         title: INITIAL_PLAYER_TITLE,
       }),
     );

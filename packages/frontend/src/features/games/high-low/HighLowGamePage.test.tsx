@@ -15,9 +15,7 @@ describe('HighLowGamePage', () => {
       .mockReturnValueOnce(0.1);
 
     render(
-      <MemoryRouter
-        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
-      >
+      <MemoryRouter>
         <HighLowGamePage />
       </MemoryRouter>,
     );

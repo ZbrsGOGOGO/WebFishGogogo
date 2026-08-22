@@ -1,79 +1,101 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { DataSource } from 'typeorm';
 
-import { JwtPayload } from './auth.service';
-import { AuthenticatedRequest, JwtAuthGuard } from './jwt-auth.guard';
+import { AuthSession } from '../../database/entities/auth-session.entity';
+import { User } from '../../database/entities/user.entity';
+import {
+  AuthenticatedRequest,
+  JwtAuthGuard,
+} from './jwt-auth.guard';
 
-/**
- * JwtAuthGuard 单元测试（Requirement 1.5 / 1.6）。
- *
- * 使用真实 JwtService（无 mock）签发/验签，验证：
- * - 有效 JWT 放行且将 sub 写入 request.user.id（Req 1.5）。
- * - 缺失 / 格式错误 / 无效签名 / 过期令牌统一返回未授权错误（Req 1.6）。
- */
-const SECRET = 'test-secret';
+const SECRET = 'guard-test-secret-with-at-least-32-characters';
 
-function createContext(authorization?: string | string[]): {
+function contextWith(token: string): {
   context: ExecutionContext;
   request: AuthenticatedRequest;
 } {
   const request: AuthenticatedRequest = {
-    headers: authorization === undefined ? {} : { authorization },
+    headers: { authorization: `Bearer ${token}` },
   };
-  const context = {
-    switchToHttp: () => ({ getRequest: <T>() => request as unknown as T }),
-  } as unknown as ExecutionContext;
-  return { context, request };
+  return {
+    request,
+    context: {
+      switchToHttp: () => ({
+        getRequest: <T>() => request as unknown as T,
+      }),
+    } as unknown as ExecutionContext,
+  };
 }
 
-describe('JwtAuthGuard', () => {
-  let jwtService: JwtService;
-  let guard: JwtAuthGuard;
+describe('JwtAuthGuard session-aware authorization', () => {
+  let jwt: JwtService;
 
   beforeEach(() => {
-    jwtService = new JwtService({ secret: SECRET, signOptions: { expiresIn: '1h' } });
-    guard = new JwtAuthGuard(jwtService);
+    jwt = new JwtService({ secret: SECRET });
   });
 
-  it('放行携带有效 JWT 的请求并写入 request.user.id（Req 1.5）', async () => {
-    const payload: JwtPayload = { sub: 'user-123', email: 'a@example.com' };
-    const token = await jwtService.signAsync(payload);
-    const { context, request } = createContext(`Bearer ${token}`);
+  function guardFor(accountStatus: User['accountStatus'], revoked = false) {
+    const session = {
+      id: 'session-1',
+      userId: 'user-1',
+      revokedAt: revoked ? new Date() : null,
+      expiresAt: new Date(Date.now() + 60_000),
+    } as AuthSession;
+    const user = { id: 'user-1', accountStatus } as User;
+    const dataSource = {
+      getRepository: (entity: unknown) => ({
+        findOne: jest
+          .fn()
+          .mockResolvedValue(entity === AuthSession ? session : user),
+      }),
+    } as unknown as DataSource;
+    return new JwtAuthGuard(jwt, dataSource);
+  }
 
-    await expect(guard.canActivate(context)).resolves.toBe(true);
-    expect(request.user).toEqual({ id: 'user-123' });
+  it('requires typ=access and sid, then attaches both user and session ids', async () => {
+    const token = await jwt.signAsync({
+      sub: 'user-1',
+      sid: 'session-1',
+      typ: 'access',
+    });
+    const { context, request } = contextWith(token);
+    await expect(guardFor('active').canActivate(context)).resolves.toBe(true);
+    expect(request.user).toEqual({ id: 'user-1', sessionId: 'session-1' });
   });
 
-  it('缺失 Authorization 头时拒绝（Req 1.6）', async () => {
-    const { context } = createContext(undefined);
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
+  it.each(['pending_email', 'banned', 'suspended', 'deleting', 'deleted'] as const)(
+    'rejects a valid token when account status is %s',
+    async (status) => {
+      const token = await jwt.signAsync({
+        sub: 'user-1',
+        sid: 'session-1',
+        typ: 'access',
+      });
+      const { context } = contextWith(token);
+      await expect(guardFor(status).canActivate(context)).rejects.toBeInstanceOf(
+        UnauthorizedException,
+      );
+    },
+  );
+
+  it('rejects a revoked server-side session immediately', async () => {
+    const token = await jwt.signAsync({
+      sub: 'user-1',
+      sid: 'session-1',
+      typ: 'access',
+    });
+    const { context } = contextWith(token);
+    await expect(
+      guardFor('active', true).canActivate(context),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('非 Bearer 方案时拒绝（Req 1.6）', async () => {
-    const { context } = createContext('Basic abc');
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('Bearer 后为空令牌时拒绝（Req 1.6）', async () => {
-    const { context } = createContext('Bearer ');
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('签名密钥不匹配的令牌时拒绝（Req 1.6）', async () => {
-    const otherService = new JwtService({ secret: 'another-secret' });
-    const token = await otherService.signAsync({ sub: 'user-1', email: 'a@example.com' });
-    const { context } = createContext(`Bearer ${token}`);
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
-  });
-
-  it('已过期令牌时拒绝（Req 1.6）', async () => {
-    const token = await jwtService.signAsync(
-      { sub: 'user-1', email: 'a@example.com' },
-      { expiresIn: '-1s' },
+  it('rejects legacy tokens without sid', async () => {
+    const token = await jwt.signAsync({ sub: 'user-1' });
+    const { context } = contextWith(token);
+    await expect(guardFor('active').canActivate(context)).rejects.toBeInstanceOf(
+      UnauthorizedException,
     );
-    const { context } = createContext(`Bearer ${token}`);
-
-    await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

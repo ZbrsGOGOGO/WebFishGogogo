@@ -1,0 +1,279 @@
+name: webfish-community
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  APP_MODE: community
+  LOCAL_DEV: "false"
+  PORT: "3000"
+  TRUST_PROXY_HOPS: "2"
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+  JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+  AUTH_TOKEN_PEPPER: ${AUTH_TOKEN_PEPPER:?AUTH_TOKEN_PEPPER must be set}
+  AUTH_REFRESH_COOKIE_NAME: __Host-zbrs_refresh
+  PUBLIC_SITE_ORIGIN: https://${SITE_DOMAIN:?SITE_DOMAIN must be set}
+  CORS_ORIGIN: ""
+  DB_HOST: postgres
+  DB_PORT: "5432"
+  DB_USERNAME: ${DB_USERNAME:-webfish}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+  DB_DATABASE: ${DB_DATABASE:-webfish_community}
+  DB_SCHEMA: public
+  DB_SSL: "false"
+  # 生产禁止 TypeORM 输出可能含邮箱/令牌参数的完整 SQL。
+  DB_LOGGING: "false"
+  DB_POOL_MAX: ${DB_POOL_MAX:-15}
+  DB_CONNECT_TIMEOUT_MS: ${DB_CONNECT_TIMEOUT_MS:-5000}
+  DB_POOL_IDLE_TIMEOUT_MS: ${DB_POOL_IDLE_TIMEOUT_MS:-30000}
+  DB_STATEMENT_TIMEOUT_MS: ${DB_STATEMENT_TIMEOUT_MS:-15000}
+  DB_QUERY_TIMEOUT_MS: ${DB_QUERY_TIMEOUT_MS:-20000}
+  DB_LOCK_TIMEOUT_MS: ${DB_LOCK_TIMEOUT_MS:-5000}
+  DB_IDLE_TRANSACTION_TIMEOUT_MS: ${DB_IDLE_TRANSACTION_TIMEOUT_MS:-30000}
+  REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0
+  CHAT_MODERATION_ENDPOINT: ${CHAT_MODERATION_ENDPOINT:-}
+  CHAT_MODERATION_API_TOKEN: ${CHAT_MODERATION_API_TOKEN:-}
+  AUTH_EMAIL_WEBHOOK_URL: ${AUTH_EMAIL_WEBHOOK_URL:?AUTH_EMAIL_WEBHOOK_URL must be set}
+  AUTH_EMAIL_WEBHOOK_TOKEN: ${AUTH_EMAIL_WEBHOOK_TOKEN:?AUTH_EMAIL_WEBHOOK_TOKEN must be set}
+  AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY: ${AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY:?AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY must be set}
+  AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY_ID: ${AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY_ID:-v1}
+  AUTH_EMAIL_OUTBOX_PUMP_ENABLED: "true"
+  SOCIAL_VERIFICATION_PROVIDER_NAME: ${SOCIAL_VERIFICATION_PROVIDER_NAME:-}
+  SOCIAL_VERIFICATION_PROVIDER_SESSION_URL: ${SOCIAL_VERIFICATION_PROVIDER_SESSION_URL:-}
+  SOCIAL_VERIFICATION_CALLBACK_URL: ${SOCIAL_VERIFICATION_CALLBACK_URL:-}
+  SOCIAL_VERIFICATION_PROVIDER_TOKEN: ${SOCIAL_VERIFICATION_PROVIDER_TOKEN:-}
+  SOCIAL_VERIFICATION_CALLBACK_SECRET: ${SOCIAL_VERIFICATION_CALLBACK_SECRET:-}
+  BETA_BOOTSTRAP_CODE: ${BETA_BOOTSTRAP_CODE:?BETA_BOOTSTRAP_CODE must be set}
+  BETA_BOOTSTRAP_USES: ${BETA_BOOTSTRAP_USES:-100}
+  COMMUNITY_MAX_ACTIVE_USERS: ${COMMUNITY_MAX_ACTIVE_USERS:?COMMUNITY_MAX_ACTIVE_USERS must be set}
+  FEATURE_REGISTRATION_ENABLED: ${FEATURE_REGISTRATION_ENABLED:-false}
+  FEATURE_PASSWORD_RESET_ENABLED: ${FEATURE_PASSWORD_RESET_ENABLED:-false}
+  FEATURE_SOCIAL_VERIFICATION_ENABLED: ${FEATURE_SOCIAL_VERIFICATION_ENABLED:-false}
+  FEATURE_ACCOUNT_DELETION_ENABLED: ${FEATURE_ACCOUNT_DELETION_ENABLED:-false}
+  FEATURE_COMMUNITY_WRITES_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+  FEATURE_COMMUNITY_CONTENT_ENABLED: ${FEATURE_COMMUNITY_CONTENT_ENABLED:-false}
+  FEATURE_CONTENT_WRITES_ENABLED: ${FEATURE_COMMUNITY_CONTENT_WRITES_ENABLED:-false}
+  FEATURE_MODERATION_OPERATIONS_ENABLED: ${FEATURE_COMMUNITY_MODERATION_ENABLED:-false}
+  FEATURE_COMMUNITY_CHAT_ENABLED: ${FEATURE_COMMUNITY_CHAT_ENABLED:-false}
+  FEATURE_CHAT_WRITES_ENABLED: ${FEATURE_COMMUNITY_CHAT_WRITES_ENABLED:-false}
+  FEATURE_COMMUNITY_NEWS_ENABLED: ${FEATURE_COMMUNITY_NEWS_ENABLED:-false}
+  FEATURE_NEWS_ADMIN_ENABLED: ${FEATURE_NEWS_ADMIN_ENABLED:-false}
+  FEATURE_COMMUNITY_BATTLE_ENABLED: ${FEATURE_COMMUNITY_BATTLE_ENABLED:-false}
+  PRIVACY_PROCESSOR_NAME: ${PRIVACY_PROCESSOR_NAME:?PRIVACY_PROCESSOR_NAME must be set}
+  PRIVACY_CONTACT: ${PRIVACY_CONTACT:?PRIVACY_CONTACT must be set}
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16.14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-webfish}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
+      POSTGRES_DB: ${DB_DATABASE:-webfish_community}
+    command:
+      - postgres
+      - -c
+      - max_connections=80
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - effective_cache_size=768MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    mem_limit: 1024m
+    cpus: 0.60
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - backend
+
+  redis:
+    image: redis:7.4.7-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
+    command:
+      - /bin/sh
+      - -ec
+      - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$${REDIS_PASSWORD}" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    mem_limit: 256m
+    cpus: 0.20
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - backend
+
+  migrate:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: community-api
+      args: &community-build-args
+        VITE_API_BASE_URL: /api
+        VITE_SITE_MODE: community
+        VITE_SITE_NAME: ${SITE_NAME:-ZBRS 技术工具工坊}
+        # 社区公开包不嵌入主办者姓名或个人联系地址；以下信息只保留在服务端合规配置中。
+        VITE_SITE_OPERATOR: ""
+        VITE_SITE_CONTACT: ""
+        VITE_SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN must be set}
+        VITE_ICP_BEIAN_NUMBER: ${ICP_BEIAN_NUMBER:?ICP_BEIAN_NUMBER must be set}
+        VITE_PUBLIC_SECURITY_BEIAN_NUMBER: ${PUBLIC_SECURITY_BEIAN_NUMBER:-}
+        VITE_PUBLIC_SECURITY_BEIAN_URL: ${PUBLIC_SECURITY_BEIAN_URL:-}
+        VITE_COMMUNITY_REGISTRATION_ENABLED: ${FEATURE_REGISTRATION_ENABLED:-false}
+        VITE_COMMUNITY_PASSWORD_RESET_ENABLED: ${FEATURE_PASSWORD_RESET_ENABLED:-false}
+        VITE_COMMUNITY_SOCIAL_VERIFICATION_ENABLED: ${FEATURE_SOCIAL_VERIFICATION_ENABLED:-false}
+        VITE_COMMUNITY_ACCOUNT_DELETION_ENABLED: ${FEATURE_ACCOUNT_DELETION_ENABLED:-false}
+        VITE_COMMUNITY_PROFILE_ENABLED: "true"
+        VITE_COMMUNITY_PUBLIC_PROFILE_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+        VITE_COMMUNITY_FRIENDS_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+        VITE_COMMUNITY_INVITE_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+        VITE_COMMUNITY_FEED_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+        VITE_COMMUNITY_FARM_ENABLED: ${FEATURE_COMMUNITY_WRITES_ENABLED:-false}
+        VITE_COMMUNITY_CONTENT_ENABLED: ${FEATURE_COMMUNITY_CONTENT_ENABLED:-false}
+        VITE_COMMUNITY_MODERATION_ENABLED: ${FEATURE_COMMUNITY_MODERATION_ENABLED:-false}
+        VITE_COMMUNITY_CHAT_ENABLED: ${FEATURE_COMMUNITY_CHAT_ENABLED:-false}
+        VITE_COMMUNITY_NEWS_ENABLED: ${FEATURE_COMMUNITY_NEWS_ENABLED:-false}
+        VITE_COMMUNITY_NEWS_ADMIN_ENABLED: ${FEATURE_NEWS_ADMIN_ENABLED:-false}
+        VITE_COMMUNITY_LEDOU_ENABLED: "true"
+        VITE_COMMUNITY_BATTLE_SERVER_ENABLED: ${FEATURE_COMMUNITY_BATTLE_ENABLED:-false}
+        PUBLIC_GAME_CLEARANCE_REFERENCE: ${PUBLIC_GAME_CLEARANCE_REFERENCE:?PUBLIC_GAME_CLEARANCE_REFERENCE must be set}
+    image: webfish-community-api:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: "no"
+    environment:
+      <<: *api-environment
+      DB_POOL_MAX: ${DB_MIGRATE_POOL_MAX:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - node
+      - node_modules/typeorm/cli.js
+      - migration:run
+      - -d
+      - packages/backend/dist/database/data-source.js
+    mem_limit: 512m
+    cpus: 0.30
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - backend
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: community-api
+      args: *community-build-args
+    image: webfish-community-api:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    init: true
+    environment: *api-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    mem_limit: 896m
+    cpus: 0.70
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - application
+      - backend
+
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: community-web
+      args: *community-build-args
+    image: webfish-community-web:${IMAGE_TAG:?IMAGE_TAG must be set}
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+    healthcheck:
+      test: [CMD, wget, -qO-, http://127.0.0.1/healthz]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    mem_limit: 128m
+    cpus: 0.10
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - frontend
+      - application
+
+  gateway:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN must be set}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL must be set}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.community:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 256m
+    cpus: 0.20
+    stop_grace_period: 15s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - frontend
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  frontend:
+  application:
+    internal: true
+  backend:
+    internal: true

@@ -6,7 +6,12 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 
-import { IS_PUBLIC_MODE, IS_PUBLIC_SITE, SITE_NAME } from '../../app/site-config';
+import {
+  IS_COMMUNITY_MODE,
+  IS_PUBLIC_MODE,
+  IS_PUBLIC_SITE,
+  SITE_NAME,
+} from '../../app/site-config';
 
 import {
   ICP_BEIAN_NUMBER,
@@ -23,6 +28,7 @@ function isBeianPlaceholder(value: string): boolean {
 export interface FooterProps {
   reviewMode?: boolean;
   publicMode?: boolean;
+  communityMode?: boolean;
 }
 
 /**
@@ -37,11 +43,14 @@ export interface FooterProps {
 export function Footer({
   reviewMode = IS_PUBLIC_SITE,
   publicMode = IS_PUBLIC_MODE,
+  communityMode = IS_COMMUNITY_MODE,
 }: FooterProps): JSX.Element {
   const currentYear = new Date().getFullYear();
   const beianPending = isBeianPlaceholder(ICP_BEIAN_NUMBER);
   const statement = publicMode
-    ? '工具与单机游戏可直接在浏览器中使用，保持简单、清晰、可控。'
+    ? '办公室乐斗、工具与单机游戏均在浏览器中运行，试玩进度只保存在本机。'
+    : communityMode
+      ? '账号、资料和社区互动由服务端保存；公开范围可在隐私设置中调整。'
     : reviewMode
       ? '专注轻量、实用的个人效率体验，产品内容与服务能力将持续完善。'
       : '个人资料与使用记录由您的本地服务保存，请仅处理本人合法拥有的内容。';
@@ -52,13 +61,20 @@ export function Footer({
         <div className="site-footer__brand">
           <strong>{SITE_NAME}</strong>
           <span>
-            {reviewMode ? '个人效率工作台 · 简单、清晰、可控' : '本机版 · 数据由您的本地服务保存'}
+            {publicMode
+              ? '办公室轻社区 · 本机试玩版'
+              : communityMode
+                ? '办公室轻社区 · 社区版'
+              : reviewMode
+                ? '个人效率工作台 · 简单、清晰、可控'
+                : '本机版 · 数据由您的本地服务保存'}
           </span>
         </div>
         <p className="site-footer__statement">{statement}</p>
         <nav className="site-footer__links" aria-label="合规页面">
           <Link to="/privacy-policy">隐私政策</Link>
           <Link to="/terms-of-service">服务条款</Link>
+          {communityMode ? <Link to="/community-guidelines">社区规范</Link> : null}
           <span>© {currentYear} ZBRS</span>
         </nav>
         <div className="site-footer__records" aria-label="备案信息">

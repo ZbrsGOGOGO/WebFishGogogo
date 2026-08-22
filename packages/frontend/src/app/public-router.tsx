@@ -2,6 +2,7 @@ import { lazy, Suspense, type JSX } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { PublicLandingPage } from '../features/compliance/PublicLandingPage';
+import { PublicSiteLayout } from '../components/layout/PublicSiteLayout';
 import { ReviewPrivacyPolicyPage } from '../features/compliance/ReviewPrivacyPolicyPage';
 import { ReviewTermsOfServicePage } from '../features/compliance/ReviewTermsOfServicePage';
 import { PublicGameLayout } from '../features/games/PublicGameLayout';
@@ -32,6 +33,11 @@ const ThreeSumGamePage = lazy(() =>
     default: module.ThreeSumGamePage,
   })),
 );
+const OfficeBattlePage = lazy(() =>
+  import('../features/office-battle/OfficeBattlePage').then((module) => ({
+    default: module.OfficeBattlePage,
+  })),
+);
 
 function loading(element: JSX.Element): JSX.Element {
   return (
@@ -44,7 +50,11 @@ function loading(element: JSX.Element): JSX.Element {
 export function PublicModeRouter(): JSX.Element {
   return (
     <Routes>
-      <Route path="/" element={<PublicLandingPage />} />
+      <Route element={<PublicSiteLayout />}>
+        <Route path="/" element={<PublicLandingPage />} />
+        <Route path="/ledou" element={loading(<OfficeBattlePage />)} />
+        <Route path="/battle" element={<Navigate to="/ledou" replace />} />
+      </Route>
       <Route path="/tools" element={<PublicToolsPage />} />
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<PublicGameLayout />}>

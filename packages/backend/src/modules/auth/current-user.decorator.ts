@@ -18,3 +18,21 @@ export const CurrentUserId = createParamDecorator(
     return userId;
   },
 );
+
+export const CurrentSessionId = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string => {
+    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    const sessionId = req.user?.sessionId;
+    if (!sessionId) {
+      throw new UnauthorizedException('Unauthenticated request');
+    }
+    return sessionId;
+  },
+);
+
+export const OptionalCurrentUserId = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): string | null => {
+    const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+    return req.user?.id ?? null;
+  },
+);
