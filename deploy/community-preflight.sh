@@ -347,7 +347,7 @@ if grep -E '^    location ~ .*\b(documents|reading|memo|preferences|tools|skins)
   "$ROOT_DIR/deploy/community.nginx.conf" >/dev/null; then
   fail "legacy private APIs must not appear in the community allowlist"
 fi
-for implemented_prefix in users friends friend-requests blocks referrals feeds farm notifications; do
+for implemented_prefix in users friends friend-requests blocks referrals feeds farm notifications guilds; do
   grep -Eq "location ~ .*${implemented_prefix}" "$ROOT_DIR/deploy/community.nginx.conf" ||
     fail "implemented community API prefix is missing from Nginx allowlist: $implemented_prefix"
 done

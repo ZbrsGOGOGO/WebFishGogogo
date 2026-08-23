@@ -209,6 +209,7 @@ done
 
 # 认证路由必须存在，但未登录不能取得本人数据。
 request_status GET /api/v1/me "$SMOKE_TMP/me.json" "$SMOKE_TMP/me.headers" 401 403
+request_status GET /api/v1/guilds/me "$SMOKE_TMP/guild-me.json" "$SMOKE_TMP/guild-me.headers" 401 403
 
 # 旧 full 站的上传、阅读、便签、偏好、工具目录和旧鉴权入口必须在代理层返回 404。
 for path in \
