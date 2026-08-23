@@ -17,10 +17,6 @@ export interface PlatformProfileOverview {
 /** 可在工作台展示的基础经济余额。 */
 export interface PlatformBalances {
   officeCoin: number;
-  decorationCoin: number;
-  water: number;
-  sunlight: number;
-  fertilizer: number;
 }
 
 export interface PlatformCheckinOverview {

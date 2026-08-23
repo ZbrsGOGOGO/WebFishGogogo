@@ -53,7 +53,7 @@ const farmOverview: CommunityFarmOverview = {
     cycleSeconds: 72_000,
     firstCycle: false,
   },
-  growth: { farmCoins: 42, totalHarvests: 1, farmVersion: 2, skillPointsEarned: 1, skillPointsAvailable: 1, nextUnlock: { level: 3, name: '会议番茄', kind: 'crop' } },
+  growth: { farmCoins: 0, officeCoins: 620, totalHarvests: 1, farmVersion: 2, skillPointsEarned: 1, skillPointsAvailable: 1, nextUnlock: { level: 3, name: '会议番茄', kind: 'crop' }, ordersCompleted: 1, ordersTotal: 3 },
   crops: [],
   tools: [],
   skills: [],

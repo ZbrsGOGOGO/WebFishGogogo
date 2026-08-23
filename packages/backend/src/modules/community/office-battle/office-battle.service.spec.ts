@@ -9,6 +9,7 @@ import {
   OfficeBattleProfile,
   OfficeBattleRecord,
   PlayerProfile,
+  EnergyState,
   RewardGrant,
   User,
   UserBlock,
@@ -97,7 +98,8 @@ describe('OfficeBattleService transactions', () => {
       rewardId,
     );
     expect(await service.getBattleByRequest(user.id, rewardId)).toEqual(settled);
-    expect((await dataSource.getRepository(OfficeBattleProfile).findOneByOrFail({ userId: user.id })).energy).toBe(11);
+    expect((await dataSource.getRepository(OfficeBattleProfile).findOneByOrFail({ userId: user.id })).energy).toBe(12);
+    expect((await dataSource.getRepository(EnergyState).findOneByOrFail({ userId: user.id })).balance).toBe(110);
     expect(await dataSource.getRepository(RewardGrant).count({ where: { userId: user.id } })).toBe(1);
   });
 
@@ -161,18 +163,18 @@ describe('OfficeBattleService transactions', () => {
     ) as any;
     const skill = await service.upgradeSkill(
       user.id,
-      'logic_overclock',
+      'pve_batch_script',
       initial.profile.profileVersion,
       'upgrade-skill-0001',
     ) as any;
     const skillReplay = await service.upgradeSkill(
       user.id,
-      'logic_overclock',
+      'pve_batch_script',
       initial.profile.profileVersion,
       'upgrade-skill-0001',
     );
     expect(skillReplay).toEqual(skill);
-    expect(skill.profile.skillLevels.logic_overclock).toBe(1);
+    expect(skill.profile.skillLevels.pve_batch_script).toBe(1);
     expect(skill.profile.skillPointsAvailable).toBe(0);
     expect(skill.profile.power).toBeGreaterThan(initial.profile.power);
 

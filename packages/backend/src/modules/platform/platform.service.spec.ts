@@ -20,7 +20,7 @@ import { WalletLedger } from '../../database/entities/wallet-ledger.entity';
 import type { OutboxService } from '../outbox';
 import {
   DAILY_CHECKIN_EXP_REWARD,
-  DAILY_CHECKIN_WATER_REWARD,
+  DAILY_CHECKIN_OFFICE_COIN_REWARD,
   PlatformClock,
 } from './platform.constants';
 import { PlatformAssetsService } from './platform-assets.service';
@@ -216,22 +216,18 @@ describe('PlatformService', () => {
         exp: 0,
         expToNextLevel: 100,
         title: '初入工位',
-        energy: 10,
-        energyCap: 15,
+        energy: 120,
+        energyCap: 120,
       },
       balances: {
-        officeCoin: 0,
-        decorationCoin: 0,
-        water: 0,
-        sunlight: 0,
-        fertilizer: 0,
+        officeCoin: 500,
       },
       checkin: { checkedInToday: false },
     });
     expect(dataSource.transactionCalls).toBe(1);
   });
 
-  it('grants +10 EXP and +5 water with receipt and ledger in one transaction', async () => {
+  it('grants +10 EXP and +50 office coins with receipt and ledger in one transaction', async () => {
     const { service, store, dataSource, userId } = createFixture();
 
     const result = await service.checkinToday(userId);
@@ -243,27 +239,27 @@ describe('PlatformService', () => {
       localDate: '2026-07-24',
       reward: {
         exp: DAILY_CHECKIN_EXP_REWARD,
-        water: DAILY_CHECKIN_WATER_REWARD,
+        officeCoin: DAILY_CHECKIN_OFFICE_COIN_REWARD,
       },
     });
     expect(overview.profile.exp).toBe(10);
-    expect(overview.balances.water).toBe(5);
+    expect(overview.balances.officeCoin).toBe(550);
     expect(overview.checkin.checkedInToday).toBe(true);
 
     const grants = store.all(RewardGrant);
     expect(grants).toHaveLength(1);
     expect(grants[0].rewardSnapshot).toEqual({
       experience: 10,
-      currencies: { water: 5 },
+      currencies: { office_coin: 50 },
     });
 
     const ledger = store.all(WalletLedger);
-    expect(ledger).toHaveLength(1);
-    expect(ledger[0]).toMatchObject({
+    expect(ledger).toHaveLength(2);
+    expect(ledger[1]).toMatchObject({
       userId,
-      currency: 'water',
-      delta: '5',
-      balanceAfter: '5',
+      currency: 'office_coin',
+      delta: '50',
+      balanceAfter: '550',
       sourceType: 'checkin',
       sourceId: '2026-07-24',
     });
@@ -282,10 +278,10 @@ describe('PlatformService', () => {
     expect(repeated.alreadyCheckedIn).toBe(true);
     expect(repeated.rewardGrantId).toBe(first.rewardGrantId);
     expect(overview.profile.exp).toBe(10);
-    expect(overview.balances.water).toBe(5);
+    expect(overview.balances.officeCoin).toBe(550);
     expect(store.all(Checkin)).toHaveLength(1);
     expect(store.all(RewardGrant)).toHaveLength(1);
-    expect(store.all(WalletLedger)).toHaveLength(1);
+    expect(store.all(WalletLedger)).toHaveLength(2);
   });
 
   it('allows a new grant after the Shanghai day boundary', async () => {
@@ -301,10 +297,10 @@ describe('PlatformService', () => {
     expect(second.localDate).toBe('2026-07-24');
     expect(second.alreadyCheckedIn).toBe(false);
     expect(overview.profile.exp).toBe(20);
-    expect(overview.balances.water).toBe(10);
+    expect(overview.balances.officeCoin).toBe(600);
     expect(store.all(Checkin)).toHaveLength(2);
     expect(store.all(RewardGrant)).toHaveLength(2);
-    expect(store.all(WalletLedger)).toHaveLength(2);
+    expect(store.all(WalletLedger)).toHaveLength(3);
   });
 
   it('rejects a JWT subject that no longer maps to an active user', async () => {
@@ -323,5 +319,19 @@ describe('PlatformService', () => {
     expect(store.all(PlayerProgression)).toHaveLength(1);
     expect(store.all(EnergyState)).toHaveLength(1);
     expect(store.all(WalletBalance)).toHaveLength(6);
+  });
+
+  it('recovers one shared energy every ten minutes without a background timer', async () => {
+    const { service, store, clock, userId } = createFixture();
+    await service.getOverview(userId);
+    const energy = store.all(EnergyState)[0];
+    energy.balance = 100;
+    energy.lastRecoveredAt = new Date('2026-07-23T16:30:00.000Z');
+
+    clock.set('2026-07-23T16:55:00.000Z');
+    const overview = await service.getOverview(userId);
+
+    expect(overview.profile.energy).toBe(102);
+    expect(energy.lastRecoveredAt.toISOString()).toBe('2026-07-23T16:50:00.000Z');
   });
 });

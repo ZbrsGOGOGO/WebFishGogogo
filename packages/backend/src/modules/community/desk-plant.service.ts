@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DataSource, EntityManager, IsNull } from 'typeorm';
+import { DataSource, EntityManager, IsNull, Like } from 'typeorm';
 
 import { CommunityCommandReceipt } from '../../database/entities/community-command-receipt.entity';
 import { DeskPlantCycle } from '../../database/entities/desk-plant-cycle.entity';
@@ -15,6 +15,8 @@ import {
   type DeskPlantToolId,
 } from '../../database/entities/desk-plant.entity';
 import { FriendEncouragement } from '../../database/entities/friend-encouragement.entity';
+import { Guild } from '../../database/entities/guild.entity';
+import { GuildMember } from '../../database/entities/guild-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { PlatformAssetsService } from '../platform';
 import { COMMUNITY_CLOCK, CommunityClock } from './community-clock';
@@ -25,8 +27,10 @@ import {
 import { requestHash } from './community-validation';
 import { assertCommunityWritesEnabled } from './community-write-gate';
 import { FeedService } from './feed.service';
+import { normalizeGuildBuildings } from './guild.rules';
 import {
   calculateFarmCycle,
+  FARM_DAILY_ORDER_LIMIT,
   FARM_CROPS,
   FARM_FIRST_CYCLE_SECONDS,
   FARM_SKILLS,
@@ -35,6 +39,7 @@ import {
   FARM_TOOL_MAX_LEVEL,
   farmCrop,
   farmLevelSnapshot,
+  farmOrderReward,
   farmSkillPointsAvailable,
   farmSkillPointsEarned,
   farmToolUpgradeCost,
@@ -46,13 +51,15 @@ import { NotificationService } from './notification.service';
 import { RelationshipPolicyService } from './relationship-policy.service';
 
 const ONBOARDING_PLANT_EXPERIENCE = 40;
-const ONBOARDING_FARM_COINS = 30;
 
 export interface FarmRewardView {
   standardRewardGranted: boolean;
   onboardingRewardGranted: boolean;
+  orderRewardGranted: boolean;
+  ordersCompleted: number;
+  ordersTotal: number;
   farmExperience: number;
-  farmCoins: number;
+  officeCoins: number;
   levelUp: boolean;
   summary: string | null;
 }
@@ -70,10 +77,13 @@ export class DeskPlantService {
 
   async overview(userId: string) {
     const now = this.clock.now();
-    const plant = await this.dataSource.getRepository(DeskPlant).findOne({
-      where: { userId },
+    return this.dataSource.transaction(async (manager) => {
+      await this.assets.ensurePlatformState(manager, userId);
+      const plant = await manager.getRepository(DeskPlant).findOne({
+        where: { userId },
+      });
+      return this.view(manager, userId, plant, now, null);
     });
-    return this.view(this.dataSource.manager, userId, plant, now, null);
   }
 
   async care(userId: string, idempotencyKey: string) {
@@ -161,34 +171,53 @@ export class DeskPlantService {
         normalizeFarmSkillLevels(plant.skillLevels),
       );
       plant.plantExperience += harvest.experience;
-      plant.farmCoins = Math.max(0, Number(plant.farmCoins ?? 0)) + harvest.coins;
       plant.totalHarvests = Math.max(0, Number(plant.totalHarvests ?? 0)) + 1;
+      plant.state = 'idle';
       const serviceDate = toCommunityServiceDate(now);
-      const standardRewardGranted = await this.claimReward(
-        manager,
-        userId,
-        cycle,
-        'standard',
-        `STANDARD:${serviceDate}`,
-        serviceDate,
-      );
-      if (standardRewardGranted) {
-        await this.assets.grantReward(manager, {
-          userId,
-          sourceType: 'desk_plant',
-          sourceId: serviceDate,
-          ruleKey: 'standard-v1',
-          reward: {
-            experience: 20,
-            currencies: { office_coin: 5 },
+      const completedBefore = await manager
+        .getRepository(DeskPlantRewardClaim)
+        .count({
+          where: {
+            userId,
+            rewardKey: Like(`ORDER:${serviceDate}:%`),
           },
         });
-        plant.streakDays = this.nextStreak(
-          plant.lastStandardRewardServiceDate,
+      let officeCoins = 0;
+      let orderRewardGranted = false;
+      if (completedBefore < FARM_DAILY_ORDER_LIMIT) {
+        orderRewardGranted = await this.claimReward(
+          manager,
+          userId,
+          cycle,
+          'standard',
+          `ORDER:${serviceDate}:${completedBefore + 1}`,
           serviceDate,
-          plant.streakDays,
         );
-        plant.lastStandardRewardServiceDate = serviceDate;
+      }
+      if (orderRewardGranted) {
+        officeCoins = farmOrderReward(
+          completedBefore,
+          normalizeFarmToolLevels(plant.toolLevels),
+          normalizeFarmSkillLevels(plant.skillLevels),
+        );
+        await this.assets.grantReward(manager, {
+          userId,
+          sourceType: 'farm_order',
+          sourceId: `${serviceDate}:${completedBefore + 1}`,
+          ruleKey: 'farm-order-v1',
+          reward: {
+            experience: 8,
+            currencies: { office_coin: officeCoins },
+          },
+        });
+        if (completedBefore === 0) {
+          plant.streakDays = this.nextStreak(
+            plant.lastStandardRewardServiceDate,
+            serviceDate,
+            plant.streakDays,
+          );
+          plant.lastStandardRewardServiceDate = serviceDate;
+        }
       }
       const onboardingRewardGranted = await this.claimReward(
         manager,
@@ -200,7 +229,6 @@ export class DeskPlantService {
       );
       if (onboardingRewardGranted) {
         plant.plantExperience += ONBOARDING_PLANT_EXPERIENCE;
-        plant.farmCoins += ONBOARDING_FARM_COINS;
         plant.firstHarvestedAt = now;
         plant.appearanceKey = 'desk_leaf';
       }
@@ -214,19 +242,27 @@ export class DeskPlantService {
         cycle.sequence + 1,
         false,
         now,
+        true,
       );
 
       const farmExperience = harvest.experience + (onboardingRewardGranted ? ONBOARDING_PLANT_EXPERIENCE : 0);
-      const farmCoins = harvest.coins + (onboardingRewardGranted ? ONBOARDING_FARM_COINS : 0);
       const reward: FarmRewardView = {
-        standardRewardGranted,
+        standardRewardGranted: orderRewardGranted,
         onboardingRewardGranted,
+        orderRewardGranted,
+        ordersCompleted: Math.min(
+          FARM_DAILY_ORDER_LIMIT,
+          completedBefore + (orderRewardGranted ? 1 : 0),
+        ),
+        ordersTotal: FARM_DAILY_ORDER_LIMIT,
         farmExperience,
-        farmCoins,
+        officeCoins,
         levelUp: plant.level > previousLevel,
         summary: [
-          `${crop.name}收获：农场经验 +${farmExperience}、农场币 +${farmCoins}`,
-          standardRewardGranted ? '今日额外：20 账号经验、5 办公币' : null,
+          `${crop.name}收获：农场经验 +${farmExperience}`,
+          orderRewardGranted
+            ? `今日订单 ${completedBefore + 1}/${FARM_DAILY_ORDER_LIMIT}：职场经验 +8、办公币 +${officeCoins}`
+            : '今日三份办公币订单已完成，作物继续进入仓库进度',
           plant.level > previousLevel ? `农场升到 Lv.${plant.level}` : null,
         ].filter(Boolean).join('；'),
       };
@@ -305,11 +341,12 @@ export class DeskPlantService {
         throw new ConflictException({ code: 'FARM_TOOL_MAX_LEVEL' });
       }
       const cost = farmToolUpgradeCost(currentLevel);
-      const currentCoins = Math.max(0, Number(plant.farmCoins ?? 0));
-      if (currentCoins < cost) {
-        throw new ConflictException({ code: 'FARM_COINS_INSUFFICIENT', required: cost });
-      }
-      plant.farmCoins = currentCoins - cost;
+      await this.assets.debitWallet(manager, userId, 'office_coin', cost, {
+        sourceType: 'farm_tool',
+        sourceId: toolId,
+        reason: `farm-tool-upgrade-${currentLevel + 1}`,
+        idempotencyKey: `${idempotencyKey}:office-coin`,
+      });
       plant.toolLevels = { ...levels, [toolId]: currentLevel + 1 };
       plant.farmVersion = Math.max(1, Number(plant.farmVersion ?? 1)) + 1;
       await manager.getRepository(DeskPlant).save(plant);
@@ -360,14 +397,48 @@ export class DeskPlantService {
     sequence: number,
     firstCycle: boolean,
     now: Date,
-  ): Promise<DeskPlantCycle> {
+    allowInsufficientBalance = false,
+  ): Promise<DeskPlantCycle | null> {
     const crop = farmCrop(plant.selectedCropKey) ?? FARM_CROPS[0];
     const calculated = calculateFarmCycle(
       crop,
       normalizeFarmToolLevels(plant.toolLevels),
       normalizeFarmSkillLevels(plant.skillLevels),
     );
-    const durationSeconds = firstCycle ? FARM_FIRST_CYCLE_SECONDS : calculated.durationSeconds;
+    const guildReduction = firstCycle
+      ? 0
+      : await this.guildFarmDurationReductionPercent(manager, user.id);
+    const durationSeconds = firstCycle
+      ? FARM_FIRST_CYCLE_SECONDS
+      : Math.max(30, Math.ceil(calculated.durationSeconds * (100 - guildReduction) / 100));
+    if (!firstCycle) {
+      const state = await this.assets.ensurePlatformState(manager, user.id);
+      const current = Number(state.balances.get('office_coin')?.balance ?? 0);
+      if (current < crop.seedCost) {
+        if (!allowInsufficientBalance) {
+          throw new ConflictException({
+            code: 'OFFICE_COIN_INSUFFICIENT',
+            required: crop.seedCost,
+            current,
+          });
+        }
+        plant.state = 'idle';
+        await manager.getRepository(DeskPlant).save(plant);
+        return null;
+      }
+      await this.assets.debitWallet(
+        manager,
+        user.id,
+        'office_coin',
+        crop.seedCost,
+        {
+          sourceType: 'farm_seed',
+          sourceId: `${user.id}:${sequence}`,
+          reason: `plant-${crop.key}`,
+          idempotencyKey: `farm-seed:${user.id}:${sequence}`,
+        },
+      );
+    }
     const maturesAt = new Date(now.getTime() + durationSeconds * 1_000);
     const repo = manager.getRepository(DeskPlantCycle);
     const cycle = await repo.save(
@@ -420,6 +491,16 @@ export class DeskPlantService {
     return true;
   }
 
+  private async guildFarmDurationReductionPercent(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<number> {
+    const member = await manager.getRepository(GuildMember).findOne({ where: { userId } });
+    if (!member) return 0;
+    const guild = await manager.getRepository(Guild).findOne({ where: { id: member.guildId } });
+    return normalizeGuildBuildings(guild?.buildings).pantry;
+  }
+
   private nextStreak(
     previousDate: string | null,
     currentDate: string,
@@ -441,9 +522,12 @@ export class DeskPlantService {
       where: { userId, harvestedAt: IsNull() },
     });
     const serviceDate = toCommunityServiceDate(now);
-    const dailyRewardClaimed = await manager
+    const ordersCompleted = await manager
       .getRepository(DeskPlantRewardClaim)
-      .exist({ where: { userId, rewardKey: `STANDARD:${serviceDate}` } });
+      .count({
+        where: { userId, rewardKey: Like(`ORDER:${serviceDate}:%`) },
+      });
+    const dailyRewardClaimed = ordersCompleted >= FARM_DAILY_ORDER_LIMIT;
     const pendingEncouragements = await manager
       .getRepository(FriendEncouragement)
       .count({ where: { recipientId: userId, serviceDate } });
@@ -458,6 +542,10 @@ export class DeskPlantService {
     const selectedCrop = farmCrop(plant?.selectedCropKey ?? '') ?? FARM_CROPS[0];
     const currentCrop = farmCrop(cycle?.cropKey ?? selectedCrop.key) ?? selectedCrop;
     const selectedCycle = calculateFarmCycle(selectedCrop, toolLevels, skillLevels);
+    const assets = await this.assets.ensurePlatformState(manager, userId);
+    const officeCoins = Number(
+      assets.balances.get('office_coin')?.balance ?? 0,
+    );
     return {
       serverTime: now.toISOString(),
       state,
@@ -475,12 +563,15 @@ export class DeskPlantService {
         firstCycle: cycle ? cycle.sequence === 1 : true,
       },
       growth: {
-        farmCoins: plant?.farmCoins ?? 0,
+        farmCoins: 0,
+        officeCoins,
         totalHarvests: plant?.totalHarvests ?? 0,
         farmVersion: plant?.farmVersion ?? 1,
         skillPointsEarned: farmSkillPointsEarned(level.level),
         skillPointsAvailable: farmSkillPointsAvailable(level.level, skillLevels),
         nextUnlock: nextFarmUnlock(level.level),
+        ordersCompleted,
+        ordersTotal: FARM_DAILY_ORDER_LIMIT,
       },
       crops: FARM_CROPS.map((crop) => {
         const reward = calculateFarmCycle(crop, toolLevels, skillLevels);
@@ -489,6 +580,7 @@ export class DeskPlantService {
           durationSeconds: reward.durationSeconds,
           experience: reward.experience,
           coins: reward.coins,
+          seedCost: crop.seedCost,
           unlocked: level.level >= crop.unlockLevel,
           selected: selectedCrop.key === crop.key,
           growing: currentCrop.key === crop.key && state !== 'idle',

@@ -14,10 +14,8 @@ import {
 
 import {
   CurrentUserId,
-  OptionalCurrentUserId,
 } from '../../auth/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
 import { CommunityRbacGuard } from '../community-rbac.guard';
 import { idempotencyKey } from '../community-validation';
 import { expectedVersion } from '../content-validation';
@@ -38,14 +36,13 @@ import {
 } from './news-validation';
 
 @Controller('v1/news')
-@UseGuards(CommunityNewsFeatureGuard)
+@UseGuards(CommunityNewsFeatureGuard, JwtAuthGuard)
 export class NewsPublicController {
   constructor(private readonly news: NewsService) {}
 
   @Get()
-  @UseGuards(OptionalJwtAuthGuard)
   list(
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
     @Query() query: Record<string, unknown>,
   ) {
     const allowed = ['feed', 'profession', 'topic', 'cursor'];
@@ -78,7 +75,6 @@ export class NewsPublicController {
   }
 
   @Get(':id')
-  @UseGuards(OptionalJwtAuthGuard)
   detail(@Param('id') id: string) {
     return this.news.getPublic(uuid(id, 'newsId'));
   }

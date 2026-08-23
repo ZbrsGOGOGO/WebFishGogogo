@@ -38,9 +38,9 @@ export interface CommunityBattleCatalog {
   balanceVersion: string;
   minClientVersion: string;
   energy: {
-    dailyMax: number;
-    resetHour: number;
-    resetTimeZone: 'Asia/Shanghai';
+    max: number;
+    costPerBattle: number;
+    recoveryMinutes: number;
   };
   inventoryLimit: number;
   rarityRates: Array<{
@@ -51,7 +51,14 @@ export interface CommunityBattleCatalog {
   skills: {
     maxLevel: number;
     pointRule: string;
+    coinCosts: number[];
     definitions: CommunityBattleSkillDefinition[];
+  };
+  enhancement: {
+    maxLevel: number;
+    coinCosts: number[];
+    partCosts: number[];
+    successRate: number;
   };
   capabilities: {
     enhancementEnabled: boolean;
@@ -62,6 +69,7 @@ export interface CommunityBattleCatalog {
 export interface CommunityBattleSkillDefinition {
   id: string;
   profession: CommunityBattleProfession;
+  mode: 'pve' | 'pvp';
   name: string;
   unlockLevel: number;
   description: string;
@@ -72,7 +80,9 @@ export interface CommunityBattleEnergy {
   current: number;
   max: number;
   serviceDate: string;
-  resetsAt: string;
+  resetsAt: string | null;
+  nextRecoveryAt: string | null;
+  recoveryMinutes: number;
 }
 
 export interface CommunityBattleProfile {
@@ -93,6 +103,10 @@ export interface CommunityBattleProfile {
   skillLevels: Record<string, number>;
   skillPointsEarned: number;
   skillPointsAvailable: number;
+  skillPoints: {
+    pve: { earned: number; available: number };
+    pvp: { earned: number; available: number };
+  };
   nextUnlock: { level: number; name: string; kind: 'skill' | 'rarity' } | null;
   profileVersion: number;
   loadoutVersion: number;

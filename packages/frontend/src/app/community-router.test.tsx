@@ -62,6 +62,23 @@ describe('community mode routes', () => {
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
   });
 
+  it.each(['/community', '/farm', '/ledou', '/news', '/users/member-1'])(
+    'redirects a guest from member system %s to login',
+    async (path) => {
+      renderAt(path);
+      expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
+    },
+  );
+
+  it('keeps tools and independent mini games available to guests', async () => {
+    const { unmount } = renderAt('/tools');
+    expect(screen.getByRole('heading', { name: '常用的小工具，打开就能用' })).toBeInTheDocument();
+    unmount();
+
+    renderAt('/games');
+    expect(await screen.findByText('浏览器单机游戏')).toBeInTheDocument();
+  });
+
   it('does not present password reset as available while its backend gate is closed', async () => {
     renderAt('/password/forgot');
     expect(await screen.findByRole('heading', { name: '找回密码暂不可用' })).toBeInTheDocument();
@@ -69,30 +86,30 @@ describe('community mode routes', () => {
     expect(screen.getByRole('link', { name: '查看隐私政策与联系渠道' })).toHaveAttribute('href', '/privacy-policy');
   });
 
-  it('keeps social verification unavailable and does not call its API while the gate is closed', async () => {
+  it('requires login before showing a closed social-verification system', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/settings/verification');
 
-    expect(await screen.findByRole('heading', { name: '身份核验暂未开放' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('keeps the fixed chat route truthful while the chat release gate is closed', async () => {
+  it('requires login before showing a closed chat system', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/community/chat');
 
-    expect(await screen.findByRole('heading', { name: '固定聊天室尚未开放' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('keeps news routes truthful and does not call the API while the news gate is closed', async () => {
+  it('requires login before showing a closed news system', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     renderAt('/news/unreleased-article');
 
-    expect(await screen.findByRole('heading', { name: '热点新闻尚未开放' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

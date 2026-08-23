@@ -118,8 +118,8 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
           <strong>{settlement.mode === 'practice' ? '练习赛不产生奖励' : '完整奖励'}</strong>
           {settlement.mode === 'reward' ? (
             <p>
-              乐斗经验 +{settlement.reward.battleExperience} · 工位经验 +{settlement.reward.workspaceExperience}
-              {' · '}工位币 +{settlement.reward.workspaceCoins} · 零件 +{settlement.reward.parts}
+              职场经验 +{settlement.reward.battleExperience}
+              {' · '}办公币 +{settlement.reward.workspaceCoins} · 零件 +{settlement.reward.parts}
             </p>
           ) : null}
           {settlement.reward.droppedEquipment ? (

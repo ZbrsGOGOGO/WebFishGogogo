@@ -16,11 +16,7 @@ import {
   OfficeBattleRecord,
 } from '../../../database/entities';
 import { AuthModule } from '../../auth/auth.module';
-import {
-  PLATFORM_CLOCK,
-  PlatformAssetsService,
-  systemPlatformClock,
-} from '../../platform';
+import { PlatformAssetsModule } from '../../platform';
 import { COMMUNITY_CLOCK, systemCommunityClock } from '../community-clock';
 import { CommunityModule } from '../community.module';
 import { OfficeBattleController } from './office-battle.controller';
@@ -45,6 +41,7 @@ import { OfficeBattleService } from './office-battle.service';
       OfficeBattleRecord,
     ]),
     AuthModule,
+    PlatformAssetsModule,
     CommunityModule,
   ],
   controllers: [OfficeBattleController],
@@ -52,9 +49,7 @@ import { OfficeBattleService } from './office-battle.service';
     OfficeBattleService,
     OfficeBattleFeatureGuard,
     OfficeBattleVerifiedGuard,
-    PlatformAssetsService,
     { provide: COMMUNITY_CLOCK, useValue: systemCommunityClock },
-    { provide: PLATFORM_CLOCK, useValue: systemPlatformClock },
   ],
 })
 export class OfficeBattleModule {}

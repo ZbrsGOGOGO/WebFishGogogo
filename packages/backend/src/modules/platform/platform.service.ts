@@ -8,8 +8,8 @@ import { OutboxService } from '../outbox';
 import { getPlayerLevelSnapshot } from './level.rules';
 import {
   DAILY_CHECKIN_EXP_REWARD,
+  DAILY_CHECKIN_OFFICE_COIN_REWARD,
   DAILY_CHECKIN_RULE_KEY,
-  DAILY_CHECKIN_WATER_REWARD,
   PLATFORM_CLOCK,
   PLATFORM_TIME_ZONE,
   PlatformClock,
@@ -35,10 +35,6 @@ export interface PlatformOverview {
   };
   balances: {
     officeCoin: number;
-    decorationCoin: number;
-    water: number;
-    sunlight: number;
-    fertilizer: number;
   };
   checkin: {
     checkedInToday: boolean;
@@ -53,7 +49,7 @@ export interface CheckinTodayResult {
   rewardGrantId: string;
   reward: {
     exp: number;
-    water: number;
+    officeCoin: number;
   };
 }
 
@@ -90,7 +86,7 @@ export class PlatformService {
     const localDate = toBusinessLocalDate(now);
     const reward: RewardSnapshot = {
       experience: DAILY_CHECKIN_EXP_REWARD,
-      currencies: { water: DAILY_CHECKIN_WATER_REWARD },
+      currencies: { office_coin: DAILY_CHECKIN_OFFICE_COIN_REWARD },
     };
 
     return this.dataSource.transaction(async (manager) => {
@@ -131,7 +127,7 @@ export class PlatformService {
           occurredAt: now.toISOString(),
           metadata: {
             experience: DAILY_CHECKIN_EXP_REWARD,
-            water: DAILY_CHECKIN_WATER_REWARD,
+            officeCoin: DAILY_CHECKIN_OFFICE_COIN_REWARD,
           },
         },
       });
@@ -167,10 +163,6 @@ export class PlatformService {
       },
       balances: {
         officeCoin: this.getBalance(state.balances, 'office_coin'),
-        decorationCoin: this.getBalance(state.balances, 'decor_coin'),
-        water: this.getBalance(state.balances, 'water'),
-        sunlight: this.getBalance(state.balances, 'sunlight'),
-        fertilizer: this.getBalance(state.balances, 'fertilizer'),
       },
       checkin: { checkedInToday },
     };
@@ -204,7 +196,7 @@ export class PlatformService {
       rewardGrantId,
       reward: {
         exp: DAILY_CHECKIN_EXP_REWARD,
-        water: DAILY_CHECKIN_WATER_REWARD,
+        officeCoin: DAILY_CHECKIN_OFFICE_COIN_REWARD,
       },
     };
   }

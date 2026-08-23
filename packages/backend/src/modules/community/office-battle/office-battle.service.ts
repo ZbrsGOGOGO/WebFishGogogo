@@ -12,7 +12,10 @@ import { DataSource, EntityManager, In, IsNull, MoreThan } from 'typeorm';
 
 import {
   CommunityCommandReceipt,
+  EnergyState,
   Friendship,
+  Guild,
+  GuildMember,
   OfficeBattleAssetLedger,
   OfficeBattleDefenseConfig,
   OfficeBattleEquipment,
@@ -27,7 +30,6 @@ import {
   PlayerProfile,
   User,
   UserBlock,
-  WalletBalance,
 } from '../../../database/entities';
 import { DEFAULT_COMMUNITY_PRIVACY } from '../../../database/entities/player-profile.entity';
 import type {
@@ -36,8 +38,13 @@ import type {
   OfficeBattleStats,
 } from '../../../database/entities/office-battle-equipment.entity';
 import type { OfficeBattleProfession } from '../../../database/entities/office-battle-profile.entity';
-import { PlatformAssetsService } from '../../platform/platform-assets.service';
+import {
+  PlatformAssetsService,
+  type PlatformAssetState,
+} from '../../platform/platform-assets.service';
+import { ENERGY_RECOVERY_INTERVAL_MILLISECONDS } from '../../platform/platform.constants';
 import { COMMUNITY_CLOCK, CommunityClock } from '../community-clock';
+import { normalizeGuildBuildings } from '../guild.rules';
 import { requestHash } from '../community-validation';
 import { NotificationService } from '../notification.service';
 import { RelationshipPolicyService } from '../relationship-policy.service';
@@ -60,15 +67,19 @@ import {
   normalizeBattleSkillLevels,
   OFFICE_BATTLE_BALANCE_VERSION,
   OFFICE_BATTLE_DAILY_ENERGY,
+  OFFICE_BATTLE_ENERGY_COST,
   OFFICE_BATTLE_DAILY_FRIEND_LIMIT,
   OFFICE_BATTLE_DAILY_REWARDED_LIMIT,
   OFFICE_BATTLE_ENGINE_VERSION,
+  OFFICE_BATTLE_ENHANCE_COIN_COSTS,
+  OFFICE_BATTLE_ENHANCE_PART_COSTS,
   OFFICE_BATTLE_INVENTORY_LIMIT,
   OFFICE_BATTLE_MAX_EXPERIENCE,
   OFFICE_BATTLE_MIN_CLIENT_VERSION,
   OFFICE_BATTLE_PROFESSIONS,
   OFFICE_BATTLE_RARITIES,
   OFFICE_BATTLE_SKILL_MAX_LEVEL,
+  OFFICE_BATTLE_SKILL_COIN_COSTS,
   OFFICE_BATTLE_SKILLS,
   OFFICE_BATTLE_SLOTS,
   PROFESSION_LABELS,
@@ -158,7 +169,11 @@ export class OfficeBattleService {
       engineVersion: OFFICE_BATTLE_ENGINE_VERSION,
       balanceVersion: OFFICE_BATTLE_BALANCE_VERSION,
       minClientVersion: OFFICE_BATTLE_MIN_CLIENT_VERSION,
-      energy: { dailyMax: OFFICE_BATTLE_DAILY_ENERGY, resetHour: 5, resetTimeZone: 'Asia/Shanghai' as const },
+      energy: {
+        max: OFFICE_BATTLE_DAILY_ENERGY,
+        costPerBattle: OFFICE_BATTLE_ENERGY_COST,
+        recoveryMinutes: ENERGY_RECOVERY_INTERVAL_MILLISECONDS / 60_000,
+      },
       inventoryLimit: OFFICE_BATTLE_INVENTORY_LIMIT,
       rarityRates: OFFICE_BATTLE_RARITIES.map((rarity) => ({
         rarity,
@@ -167,8 +182,15 @@ export class OfficeBattleService {
       })),
       skills: {
         maxLevel: OFFICE_BATTLE_SKILL_MAX_LEVEL,
-        pointRule: 'Lv.1 获得 1 点，此后每 2 级再获得 1 点，每个职业独立加点。',
+        pointRule: 'PVE 与 PVP 分别获得技能点，培养一边不会消耗另一边的点数。',
+        coinCosts: OFFICE_BATTLE_SKILL_COIN_COSTS,
         definitions: OFFICE_BATTLE_SKILLS,
+      },
+      enhancement: {
+        maxLevel: OFFICE_BATTLE_ENHANCE_COIN_COSTS.length,
+        coinCosts: OFFICE_BATTLE_ENHANCE_COIN_COSTS,
+        partCosts: OFFICE_BATTLE_ENHANCE_PART_COSTS,
+        successRate: 100,
       },
       capabilities: { enhancementEnabled: true, friendChallengesEnabled: true },
     };
@@ -182,8 +204,10 @@ export class OfficeBattleService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!profile) return this.emptyBootstrap();
+      let unified = await this.assets.ensurePlatformState(manager, userId);
+      await this.syncUnifiedProgression(manager, profile, unified);
       await this.applyDailyReset(manager, profile);
-      return this.buildBootstrap(manager, user, profile);
+      return this.buildBootstrap(manager, user, profile, unified);
     });
   }
 
@@ -196,6 +220,7 @@ export class OfficeBattleService {
     const hash = requestHash({ profession, expectedVersion });
     return this.dataSource.transaction(async (manager) => {
       const user = await this.lockVerifiedUser(manager, userId);
+      const unified = await this.assets.ensurePlatformState(manager, userId);
       const replay = await this.replay<Record<string, unknown>>(manager, userId, 'battle.class', key, hash);
       if (replay) return replay;
       let profile = await manager.getRepository(OfficeBattleProfile).findOne({
@@ -211,7 +236,8 @@ export class OfficeBattleService {
           totalBattleExperience: 0,
           wins: 0,
           losses: 0,
-          energy: OFFICE_BATTLE_DAILY_ENERGY,
+          // Compatibility-only column: shared energy_states is the gameplay truth.
+          energy: 12,
           serviceDate: communityServiceDate(now),
           parts: 0,
           skillLevels: {},
@@ -228,7 +254,8 @@ export class OfficeBattleService {
       } else {
         if (expectedVersion !== profile.profileVersion) throw this.versionConflict(profile.profileVersion);
         if (profile.profession === profession) {
-          const result = await this.buildBootstrap(manager, user, profile);
+          await this.syncUnifiedProgression(manager, profile, unified);
+          const result = await this.buildBootstrap(manager, user, profile, unified);
           return this.record(manager, userId, 'battle.class', key, hash, result);
         }
         if (
@@ -253,7 +280,8 @@ export class OfficeBattleService {
         profile.defenseVersion += 1;
       }
 
-      const level = battleLevelSnapshot(profile.totalBattleExperience).level;
+      await this.syncUnifiedProgression(manager, profile, unified);
+      const level = unified.progression.level;
       let starters = await manager.getRepository(OfficeBattleEquipment).find({
         where: { userId, profession, starterBound: true, salvagedAt: IsNull() },
       });
@@ -306,7 +334,7 @@ export class OfficeBattleService {
       const sharedProfile = await this.ensurePlayerProfile(manager, userId);
       sharedProfile.battleProfession = profession;
       await manager.getRepository(PlayerProfile).save(sharedProfile);
-      const result = await this.buildBootstrap(manager, user, profile);
+      const result = await this.buildBootstrap(manager, user, profile, unified);
       return this.record(manager, userId, 'battle.class', key, hash, result);
     });
   }
@@ -494,10 +522,17 @@ export class OfficeBattleService {
         if (item.enhancementLevel >= 6) {
           throw new ConflictException({ code: 'EQUIPMENT_MAX_ENHANCEMENT' });
         }
-        const partsSpent = (item.enhancementLevel + 1) * 2;
+        const partsSpent = OFFICE_BATTLE_ENHANCE_PART_COSTS[item.enhancementLevel];
+        const coinsSpent = OFFICE_BATTLE_ENHANCE_COIN_COSTS[item.enhancementLevel];
         if (profile.parts < partsSpent) {
           throw new ConflictException({ code: 'PARTS_INSUFFICIENT', required: partsSpent });
         }
+        await this.assets.debitWallet(manager, userId, 'office_coin', coinsSpent, {
+          sourceType: 'office_battle_enhancement',
+          sourceId: equipmentId,
+          reason: `equipment-enhance-${item.enhancementLevel + 1}`,
+          idempotencyKey: `${key}:office-coin`,
+        });
         const previousLevel = item.enhancementLevel;
         const stats = { ...item.stats };
         for (const [stat, value] of Object.entries(stats) as Array<[keyof OfficeBattleStats, number]>) {
@@ -518,10 +553,10 @@ export class OfficeBattleService {
           item.id,
           null,
           'enhance',
-          { previousLevel, enhancementLevel: item.enhancementLevel, partsSpent },
+          { previousLevel, enhancementLevel: item.enhancementLevel, partsSpent, coinsSpent },
           `${key}:equipment`,
         );
-        return { ...(await this.mutationView(manager, profile, item.id)), partsSpent };
+        return { ...(await this.mutationView(manager, profile, item.id)), partsSpent, coinsSpent };
       },
     );
   }
@@ -544,7 +579,9 @@ export class OfficeBattleService {
         const definition = battleSkillsForProfession(profile.profession)
           .find((skill) => skill.id === skillId);
         if (!definition) throw new NotFoundException({ code: 'BATTLE_SKILL_NOT_FOUND' });
-        const level = battleLevelSnapshot(profile.totalBattleExperience).level;
+        const unified = await this.assets.ensurePlatformState(manager, userId);
+        await this.syncUnifiedProgression(manager, profile, unified);
+        const level = unified.progression.level;
         if (definition.unlockLevel > level) {
           throw new ConflictException({ code: 'BATTLE_SKILL_LOCKED', unlockLevel: definition.unlockLevel });
         }
@@ -552,16 +589,30 @@ export class OfficeBattleService {
         if ((current[skillId] ?? 0) >= OFFICE_BATTLE_SKILL_MAX_LEVEL) {
           throw new ConflictException({ code: 'BATTLE_SKILL_MAX_LEVEL' });
         }
-        if (battleSkillPointsAvailable(level, profile.profession, current) < 1) {
+        if (
+          battleSkillPointsAvailable(
+            level,
+            profile.profession,
+            current,
+            definition.mode,
+          ) < 1
+        ) {
           throw new ConflictException({ code: 'BATTLE_SKILL_POINTS_INSUFFICIENT' });
         }
+        const coinCost = OFFICE_BATTLE_SKILL_COIN_COSTS[current[skillId] ?? 0];
+        await this.assets.debitWallet(manager, userId, 'office_coin', coinCost, {
+          sourceType: 'office_battle_skill',
+          sourceId: skillId,
+          reason: `skill-upgrade-${(current[skillId] ?? 0) + 1}`,
+          idempotencyKey: `${key}:office-coin`,
+        });
         profile.skillLevels = {
           ...(profile.skillLevels ?? {}),
           [skillId]: (current[skillId] ?? 0) + 1,
         };
         profile.profileVersion += 1;
         await manager.getRepository(OfficeBattleProfile).save(profile);
-        return this.mutationView(manager, profile);
+        return { ...(await this.mutationView(manager, profile)), coinsSpent: coinCost };
       },
     );
   }
@@ -680,6 +731,8 @@ export class OfficeBattleService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!profile) throw new ConflictException({ code: 'BATTLE_PROFILE_REQUIRED' });
+      let unified = await this.assets.ensurePlatformState(manager, userId);
+      await this.syncUnifiedProgression(manager, profile, unified);
       await this.applyDailyReset(manager, profile);
       if (profile.loadoutVersion !== command.loadoutVersion) {
         throw new ConflictException({ code: 'BATTLE_EQUIPMENT_CONFLICT', currentVersion: profile.loadoutVersion });
@@ -696,17 +749,18 @@ export class OfficeBattleService {
           throw new ConflictException({ code: 'INVENTORY_FULL' });
         }
         if (
-          profile.energy < 1 ||
+          unified.energy.balance < OFFICE_BATTLE_ENERGY_COST ||
           profile.rewardedBattlesUsed >= OFFICE_BATTLE_DAILY_REWARDED_LIMIT
         ) {
           throw new ConflictException({
             code: 'BATTLE_ENERGY_INSUFFICIENT',
-            resetsAt: nextCommunityReset(now).toISOString(),
+            required: OFFICE_BATTLE_ENERGY_COST,
+            current: unified.energy.balance,
           });
         }
       }
 
-      const playerLevel = battleLevelSnapshot(profile.totalBattleExperience).level;
+      const playerLevel = unified.progression.level;
       const playerSnapshot = this.fighterSnapshot(
         user,
         profile.profession,
@@ -714,6 +768,7 @@ export class OfficeBattleService {
         context.loadout,
         true,
         profile.skillLevels,
+        command.opponent.kind === 'npc' ? 'pve' : 'pvp',
       );
       let opponentSnapshot: FighterSnapshot;
       let opponentEquipmentVisible = true;
@@ -757,6 +812,8 @@ export class OfficeBattleService {
           where: { userId: defender.id },
         });
         if (!defenderProfile) throw new ConflictException({ code: 'DEFENDER_BATTLE_PROFILE_REQUIRED' });
+        const defenderUnified = await this.assets.ensurePlatformState(manager, defender.id);
+        await this.syncUnifiedProgression(manager, defenderProfile, defenderUnified);
         const defense = await manager.getRepository(OfficeBattleDefenseConfig).findOne({
           where: { userId: defender.id },
         });
@@ -769,7 +826,7 @@ export class OfficeBattleService {
         if (defenderEquipment.length !== OFFICE_BATTLE_SLOTS.length) {
           throw new ConflictException({ code: 'DEFENSE_LOADOUT_INVALID' });
         }
-        const defenderLevel = battleLevelSnapshot(defenderProfile.totalBattleExperience).level;
+        const defenderLevel = defenderUnified.progression.level;
         opponentSnapshot = this.fighterSnapshot(
           defender,
           defense.profession,
@@ -777,6 +834,7 @@ export class OfficeBattleService {
           this.slotOrder(defenderEquipment),
           true,
           defenderProfile.skillLevels,
+          'pvp',
         );
         opponentEquipmentVisible = defense.equipmentVisibility !== 'private';
         playerEquipmentVisibleToDefender =
@@ -813,38 +871,51 @@ export class OfficeBattleService {
         context,
         battleId,
         command.mode,
+        command.opponent.kind,
         engineResult.winner,
         rewardMultiplier,
         seed,
       );
+      if (command.mode === 'reward' && command.opponent.kind === 'npc') {
+        const guildBonus = await this.guildPveExperienceBonusPercent(manager, userId);
+        reward.battleExperience = this.multiplyReward(
+          reward.battleExperience,
+          100 + guildBonus,
+        );
+      }
 
       if (command.mode === 'reward') {
-        profile.energy -= 1;
+        await this.assets.changeEnergy(
+          manager,
+          userId,
+          -OFFICE_BATTLE_ENERGY_COST,
+        );
         profile.rewardedBattlesUsed += 1;
         if (defender) profile.rewardedFriendBattlesUsed += 1;
-        profile.totalBattleExperience = Math.min(
-          OFFICE_BATTLE_MAX_EXPERIENCE,
-          profile.totalBattleExperience + reward.battleExperience,
-        );
         if (engineResult.winner === 'player') profile.wins += 1;
         else profile.losses += 1;
         profile.parts += reward.parts;
         profile.profileVersion += 1;
         if (reward.parts > 0 || reward.equipment || reward.pendingRewardId) profile.inventoryVersion += 1;
-        await this.assets.grantReward(manager, {
+        const granted = await this.assets.grantReward(manager, {
           userId,
           sourceType: 'office_battle',
           sourceId: battleId,
           ruleKey: OFFICE_BATTLE_BALANCE_VERSION,
           reward: {
-            experience: reward.workspaceExperience,
+            experience: reward.battleExperience,
             currencies: { office_coin: reward.workspaceCoins },
           },
         });
+        unified = granted.state;
+        profile.totalBattleExperience = Math.min(
+          OFFICE_BATTLE_MAX_EXPERIENCE,
+          Number(granted.state.progression.experience),
+        );
       }
       await manager.getRepository(OfficeBattleProfile).save(profile);
 
-      const energy = this.energyView(profile, now);
+      const energy = this.energyView(unified.energy, now);
       const rewardView = {
         battleExperience: reward.battleExperience,
         workspaceExperience: reward.workspaceExperience,
@@ -884,8 +955,6 @@ export class OfficeBattleService {
       await manager.getRepository(OfficeBattleRecord).save(record);
 
       if (command.mode === 'reward') {
-        await this.assetLedger(manager, profile, battleId, 'energy', -1, 'reward_battle', `${battleId}:energy`);
-        await this.assetLedger(manager, profile, battleId, 'battle_experience', reward.battleExperience, 'battle_reward', `${battleId}:battle-xp`);
         if (reward.parts > 0) {
           await this.assetLedger(manager, profile, battleId, 'parts', reward.parts, 'upgrade_protection_fallback', `${battleId}:parts`);
         }
@@ -985,7 +1054,7 @@ export class OfficeBattleService {
         const rewardSummary =
           record.mode === 'practice'
             ? '练习战 · 无奖励'
-            : `乐斗经验 +${Number(reward.battleExperience ?? 0)} · 办公币 +${Number(reward.workspaceCoins ?? 0)}`;
+            : `职场经验 +${Number(reward.battleExperience ?? 0)} · 办公币 +${Number(reward.workspaceCoins ?? 0)}`;
         return {
           battleId: record.id,
           battleRequestId: record.battleRequestId,
@@ -1094,7 +1163,10 @@ export class OfficeBattleService {
     manager: EntityManager,
     user: User,
     profile: OfficeBattleProfile,
+    unified?: PlatformAssetState,
   ): Promise<Record<string, unknown>> {
+    const assets = unified ?? (await this.assets.ensurePlatformState(manager, user.id));
+    await this.syncUnifiedProgression(manager, profile, assets);
     const context = await this.equipmentContext(manager, profile);
     const offerRows = await this.ensureOffers(manager, user, profile, context);
     const pending = await manager.getRepository(OfficeBattlePendingReward).find({
@@ -1110,7 +1182,7 @@ export class OfficeBattleService {
         message: null,
       },
       catalog: this.catalog(),
-      profile: await this.profileView(manager, user, profile, context.loadout),
+      profile: await this.profileView(manager, user, profile, context.loadout, assets),
       loadout: this.loadoutView(context, profile.loadoutVersion),
       defense: this.defenseView(context.defense),
       offers: offerRows.map((offer) => this.offerView(offer, context.loadout, profile)),
@@ -1122,7 +1194,13 @@ export class OfficeBattleService {
         rewardedFriendBattlesLimit: OFFICE_BATTLE_DAILY_FRIEND_LIMIT,
       },
       pendingRewards: pending.map((reward) => this.pendingRewardView(reward)),
-      friendCandidates: await this.friendCandidates(manager, user.id, profile, now),
+      friendCandidates: await this.friendCandidates(
+        manager,
+        user.id,
+        profile,
+        now,
+        assets.energy.balance,
+      ),
     };
   }
 
@@ -1149,31 +1227,34 @@ export class OfficeBattleService {
     return profile;
   }
 
+  /** Keep the legacy battle EXP column as a read-compatible mirror only. */
+  private async syncUnifiedProgression(
+    manager: EntityManager,
+    profile: OfficeBattleProfile,
+    unified: PlatformAssetState,
+  ): Promise<void> {
+    const experience = Math.min(
+      OFFICE_BATTLE_MAX_EXPERIENCE,
+      Number(unified.progression.experience),
+    );
+    if (profile.totalBattleExperience === experience) return;
+    profile.totalBattleExperience = experience;
+    profile.profileVersion += 1;
+    await manager.getRepository(OfficeBattleProfile).save(profile);
+  }
+
   private async applyDailyReset(
     manager: EntityManager,
     profile: OfficeBattleProfile,
   ): Promise<void> {
     const nextDate = communityServiceDate(this.clock.now());
     if (profile.serviceDate === nextDate) return;
-    const energyDelta = OFFICE_BATTLE_DAILY_ENERGY - profile.energy;
-    profile.energy = OFFICE_BATTLE_DAILY_ENERGY;
     profile.serviceDate = nextDate;
     profile.rewardedBattlesUsed = 0;
     profile.rewardedFriendBattlesUsed = 0;
     profile.upgradeProtectionUsed = false;
     profile.profileVersion += 1;
     await manager.getRepository(OfficeBattleProfile).save(profile);
-    if (energyDelta !== 0) {
-      await this.assetLedger(
-        manager,
-        profile,
-        null,
-        'energy',
-        energyDelta,
-        'daily_reset',
-        `daily-reset:${profile.userId}:${nextDate}`,
-      );
-    }
   }
 
   private async ensureOffers(
@@ -1331,8 +1412,8 @@ export class OfficeBattleService {
       powerDifferencePercent: Math.round(difference * 10) / 10,
       rewardPreview: {
         battleExperience: 30,
-        workspaceExperience: 10,
-        workspaceCoins: this.multiplyReward(10, offer.rewardMultiplierPercent),
+        workspaceExperience: 0,
+        workspaceCoins: this.multiplyReward(80, offer.rewardMultiplierPercent),
         dropEligible: true,
         note: '基础稀有度概率不受对手档位影响',
       },
@@ -1344,6 +1425,7 @@ export class OfficeBattleService {
     userId: string,
     profile: OfficeBattleProfile,
     now: Date,
+    sharedEnergy = profile.energy,
   ) {
     const friendships = await manager
       .getRepository(Friendship)
@@ -1414,7 +1496,11 @@ export class OfficeBattleService {
       ) continue;
       const oldEnough = now.getTime() - friendship.currentStartedAt.getTime() >= FRIEND_REWARD_AGE_MS;
       const claimed = claimedUsers.has(targetId);
-      const eligible = oldEnough && !claimed && profile.rewardedFriendBattlesUsed < OFFICE_BATTLE_DAILY_FRIEND_LIMIT && profile.energy > 0;
+      const eligible =
+        oldEnough &&
+        !claimed &&
+        profile.rewardedFriendBattlesUsed < OFFICE_BATTLE_DAILY_FRIEND_LIMIT &&
+        sharedEnergy >= OFFICE_BATTLE_ENERGY_COST;
       result.push({
         publicId: target.publicId,
         displayName: this.displayName(target, playerProfileByUser.get(targetId)),
@@ -1430,7 +1516,7 @@ export class OfficeBattleService {
               ? '今日与该好友的奖励场次已结算'
               : profile.rewardedFriendBattlesUsed >= OFFICE_BATTLE_DAILY_FRIEND_LIMIT
                 ? '今日好友奖励场次已达上限'
-                : '今日项目精力不足',
+                : '战斗体力不足',
       });
     }
     return result;
@@ -1554,8 +1640,11 @@ export class OfficeBattleService {
     user: User,
     profile: OfficeBattleProfile,
     equipment: OfficeBattleEquipment[],
+    unified?: PlatformAssetState,
   ) {
-    const level = battleLevelSnapshot(profile.totalBattleExperience);
+    const assets = unified ?? (await this.assets.ensurePlatformState(manager, user.id));
+    await this.syncUnifiedProgression(manager, profile, assets);
+    const level = battleLevelSnapshot(Number(assets.progression.experience));
     const skillLevels = normalizeBattleSkillLevels(profile.profession, profile.skillLevels);
     const stats = deriveBattleStats({
       profession: profile.profession,
@@ -1563,9 +1652,7 @@ export class OfficeBattleService {
       equipment,
       skillLevels,
     });
-    const balance = await manager.getRepository(WalletBalance).findOne({
-      where: { userId: user.id, currency: 'office_coin' },
-    });
+    const balance = assets.balances.get('office_coin');
     return {
       publicId: user.publicId,
       displayName: this.displayName(user),
@@ -1578,12 +1665,46 @@ export class OfficeBattleService {
       losses: profile.losses,
       power: fighterPower(stats),
       stats,
-      energy: this.energyView(profile, this.clock.now()),
+      energy: this.energyView(assets.energy, this.clock.now()),
       workspaceCoins: Number(balance?.balance ?? 0),
       parts: profile.parts,
       skillLevels,
-      skillPointsEarned: battleSkillPointsEarned(level.level),
-      skillPointsAvailable: battleSkillPointsAvailable(level.level, profile.profession, skillLevels),
+      skillPoints: {
+        pve: {
+          earned: battleSkillPointsEarned(level.level, 'pve'),
+          available: battleSkillPointsAvailable(
+            level.level,
+            profile.profession,
+            skillLevels,
+            'pve',
+          ),
+        },
+        pvp: {
+          earned: battleSkillPointsEarned(level.level, 'pvp'),
+          available: battleSkillPointsAvailable(
+            level.level,
+            profile.profession,
+            skillLevels,
+            'pvp',
+          ),
+        },
+      },
+      skillPointsEarned:
+        battleSkillPointsEarned(level.level, 'pve') +
+        battleSkillPointsEarned(level.level, 'pvp'),
+      skillPointsAvailable:
+        battleSkillPointsAvailable(
+          level.level,
+          profile.profession,
+          skillLevels,
+          'pve',
+        ) +
+        battleSkillPointsAvailable(
+          level.level,
+          profile.profession,
+          skillLevels,
+          'pvp',
+        ),
       nextUnlock: nextBattleUnlock(level.level, profile.profession),
       profileVersion: profile.profileVersion,
       loadoutVersion: profile.loadoutVersion,
@@ -1594,12 +1715,21 @@ export class OfficeBattleService {
     };
   }
 
-  private energyView(profile: OfficeBattleProfile, now: Date) {
+  private energyView(energy: EnergyState, now: Date) {
+    const nextRecoveryAt =
+      energy.balance >= energy.capacity
+        ? null
+        : new Date(
+            energy.lastRecoveredAt.getTime() +
+              ENERGY_RECOVERY_INTERVAL_MILLISECONDS,
+          ).toISOString();
     return {
-      current: profile.energy,
-      max: OFFICE_BATTLE_DAILY_ENERGY,
-      serviceDate: profile.serviceDate,
-      resetsAt: nextCommunityReset(now).toISOString(),
+      current: energy.balance,
+      max: energy.capacity,
+      serviceDate: communityServiceDate(now),
+      resetsAt: nextRecoveryAt,
+      nextRecoveryAt,
+      recoveryMinutes: ENERGY_RECOVERY_INTERVAL_MILLISECONDS / 60_000,
     };
   }
 
@@ -1610,8 +1740,18 @@ export class OfficeBattleService {
     equipment: OfficeBattleEquipment[],
     includeEquipment: boolean,
     skillLevels?: Readonly<Record<string, number>>,
+    skillMode: 'pve' | 'pvp' = 'pve',
   ): FighterSnapshot {
-    const stats = deriveBattleStats({ profession, level, equipment, skillLevels });
+    const effectiveEquipment = equipment.map((item) => ({
+      stats: skillMode === 'pvp' ? this.pvpEquipmentStats(item) : item.stats,
+    }));
+    const stats = deriveBattleStats({
+      profession,
+      level,
+      equipment: effectiveEquipment,
+      skillLevels,
+      skillMode,
+    });
     return {
       publicId: user.publicId,
       displayName: this.displayName(user),
@@ -1627,6 +1767,36 @@ export class OfficeBattleService {
           }))
         : null,
     };
+  }
+
+  private pvpEquipmentStats(item: OfficeBattleEquipment): Partial<OfficeBattleStats> {
+    if (item.enhancementLevel <= 0) return item.stats;
+    const base = createEquipmentDefinition(
+      item.profession,
+      item.slot,
+      item.equipmentLevel,
+      item.rarity,
+    ).stats;
+    const result: Partial<OfficeBattleStats> = {};
+    for (const stat of ['hp', 'attack', 'defense', 'speed', 'luck'] as const) {
+      const current = item.stats[stat];
+      const baseline = base[stat];
+      if (current === undefined) continue;
+      result[stat] = baseline === undefined
+        ? Math.round(current * 0.6)
+        : baseline + Math.round((current - baseline) * 0.6);
+    }
+    return result;
+  }
+
+  private async guildPveExperienceBonusPercent(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<number> {
+    const member = await manager.getRepository(GuildMember).findOne({ where: { userId } });
+    if (!member) return 0;
+    const guild = await manager.getRepository(Guild).findOne({ where: { id: member.guildId } });
+    return normalizeGuildBuildings(guild?.buildings).training_room;
   }
 
   private opponentSummary(opponent: FighterSnapshot) {
@@ -1709,6 +1879,7 @@ export class OfficeBattleService {
     context: EquipmentContext,
     battleId: string,
     mode: BattleMode,
+    opponentKind: 'npc' | 'friend',
     winner: 'player' | 'opponent',
     multiplier: number,
     seedHex: string,
@@ -1724,10 +1895,14 @@ export class OfficeBattleService {
       };
     }
     const won = winner === 'player';
+    const isPvp = opponentKind === 'friend';
     const plan: RewardPlan = {
-      battleExperience: won ? 30 : 10,
-      workspaceExperience: won ? 10 : 3,
-      workspaceCoins: this.multiplyReward(won ? 10 : 3, multiplier),
+      battleExperience: isPvp ? (won ? 25 : 12) : won ? 30 : 15,
+      workspaceExperience: 0,
+      workspaceCoins: this.multiplyReward(
+        isPvp ? (won ? 120 : 60) : won ? 80 : 40,
+        multiplier,
+      ),
       parts: 0,
       equipment: null,
       pendingRewardId: null,

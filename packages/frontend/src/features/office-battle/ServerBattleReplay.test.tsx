@@ -34,7 +34,7 @@ const settlement: CommunityBattleSettlement = {
     parts: 1,
     droppedEquipment: null,
   },
-  energy: { current: 11, max: 12, serviceDate: '2026-08-22', resetsAt: '2026-08-22T21:00:00.000Z' },
+  energy: { current: 110, max: 120, serviceDate: '2026-08-22', resetsAt: '2026-08-22T10:10:00.000Z', nextRecoveryAt: '2026-08-22T10:10:00.000Z', recoveryMinutes: 10 },
   profileVersion: 2,
   loadoutVersion: 1,
   inventoryVersion: 1,

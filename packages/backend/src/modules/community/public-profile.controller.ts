@@ -8,19 +8,19 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { OptionalCurrentUserId } from '../auth/current-user.decorator';
-import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
+import { CurrentUserId } from '../auth/current-user.decorator';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { publicId } from './community-validation';
 import { PublicProfileService } from './public-profile.service';
 
 @Controller('v1/users')
-@UseGuards(OptionalJwtAuthGuard)
+@UseGuards(JwtAuthGuard)
 export class PublicProfileController {
   constructor(private readonly profiles: PublicProfileService) {}
 
   @Get('search')
   async exactSearch(
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
     @Query() query: Record<string, unknown>,
   ) {
     if (
@@ -43,7 +43,7 @@ export class PublicProfileController {
   @Get(':publicId')
   get(
     @Param('publicId') value: string,
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
   ) {
     return this.profiles.get(publicId(value), viewerId);
   }

@@ -11,7 +11,12 @@ export const systemPlatformClock: PlatformClock = {
   now: () => new Date(),
 };
 
-/** 首期钱包币种。 */
+/**
+ * 历史钱包币种。
+ *
+ * 统一经济 v2 之后只有 office_coin 会继续作为玩家可见、可消费的货币。
+ * 其余键暂留用于读取旧资产和执行无损迁移，禁止新玩法继续投放。
+ */
 export const WALLET_CURRENCIES = [
   'office_coin',
   'decor_coin',
@@ -24,9 +29,12 @@ export const WALLET_CURRENCIES = [
 export type WalletCurrency = (typeof WALLET_CURRENCIES)[number];
 
 export const INITIAL_PLAYER_TITLE = '初入工位';
-export const INITIAL_ENERGY = 10;
-export const INITIAL_ENERGY_CAPACITY = 15;
+export const INITIAL_ENERGY = 120;
+export const INITIAL_ENERGY_CAPACITY = 120;
+export const ENERGY_RECOVERY_INTERVAL_MILLISECONDS = 10 * 60 * 1_000;
+export const INITIAL_OFFICE_COIN = 500;
+export const UNIFIED_ECONOMY_RULE_VERSION = 'unified-economy-v1';
 
 export const DAILY_CHECKIN_RULE_KEY = 'daily-checkin-v1';
 export const DAILY_CHECKIN_EXP_REWARD = 10;
-export const DAILY_CHECKIN_WATER_REWARD = 5;
+export const DAILY_CHECKIN_OFFICE_COIN_REWARD = 50;

@@ -213,7 +213,7 @@ describe('ReferralService attribution and reward caps', () => {
       userId: inviter.id,
       currency: 'office_coin',
     });
-    expect(Number(inviterWallet.balance)).toBe(150);
+    expect(Number(inviterWallet.balance)).toBe(650);
     const sixthWallet = await dataSource.getRepository(WalletBalance).findOne({
       where: {
         userId: redemptions[5].inviteeId,

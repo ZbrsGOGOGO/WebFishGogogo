@@ -67,8 +67,8 @@ describe('ArenaService integration', () => {
       profile: {
         level: 1,
         title: '初入工位',
-        energy: 10,
-        energyCap: 15,
+        energy: 120,
+        energyCap: 120,
         battleClass: null,
         attributes: {
           focus: 10,
@@ -149,7 +149,7 @@ describe('ArenaService integration', () => {
       experience: expectedReward.experience,
       currencies: { officeCoin: expectedReward.officeCoin },
     });
-    expect(first.energy).toBe(9);
+    expect(first.energy).toBe(119);
 
     const replay = await service.startBattle(
       userId,
@@ -163,7 +163,7 @@ describe('ArenaService integration', () => {
     ).resolves.toBe(1);
     await expect(
       dataSource.getRepository(EnergyState).findOneByOrFail({ userId }),
-    ).resolves.toMatchObject({ balance: 9 });
+    ).resolves.toMatchObject({ balance: 119 });
     const progression = await dataSource
       .getRepository(PlayerProgression)
       .findOneByOrFail({ userId });
@@ -176,7 +176,7 @@ describe('ArenaService integration', () => {
         userId,
         currency: 'office_coin',
       });
-    expect(Number(officeCoin.balance)).toBe(expectedReward.officeCoin);
+    expect(Number(officeCoin.balance)).toBe(500 + expectedReward.officeCoin);
     await expect(
       dataSource.getRepository(ArenaProfile).findOneByOrFail({ userId }),
     ).resolves.toMatchObject(

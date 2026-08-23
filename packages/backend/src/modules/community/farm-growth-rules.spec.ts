@@ -41,7 +41,7 @@ describe('farm growth rules', () => {
     expect(improved.durationSeconds).toBeGreaterThanOrEqual(30);
     expect(improved.experience).toBeGreaterThan(base.experience);
     expect(improved.coins).toBeGreaterThan(base.coins);
-    expect(farmToolUpgradeCost(0)).toBe(20);
+    expect(farmToolUpgradeCost(0)).toBe(200);
     expect(farmToolUpgradeCost(FARM_TOOL_MAX_LEVEL)).toBe(0);
   });
 });

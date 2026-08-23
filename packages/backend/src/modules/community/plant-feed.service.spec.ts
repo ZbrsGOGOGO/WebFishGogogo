@@ -92,7 +92,8 @@ describe('DeskPlantService and FeedService integration', () => {
     expect((harvested as any).farm.plant.cycleSeconds).toBe(5 * 60);
     expect((harvested as any).farm.plant.level).toBe(2);
     expect((harvested as any).farm.growth).toMatchObject({
-      farmCoins: 42,
+      farmCoins: 0,
+      officeCoins: 590,
       totalHarvests: 1,
       skillPointsAvailable: 1,
     });
@@ -111,13 +112,13 @@ describe('DeskPlantService and FeedService integration', () => {
         userId: user.id,
       }))
         .experience,
-    ).toBe(20);
+    ).toBe(8);
     expect(
       (await dataSource.getRepository(WalletBalance).findOneByOrFail({
         userId: user.id,
         currency: 'office_coin',
       })).balance,
-    ).toBe(5);
+    ).toBe(590);
     expect(await dataSource.getRepository(OutboxEvent).count()).toBe(0);
   });
 
@@ -177,8 +178,9 @@ describe('DeskPlantService and FeedService integration', () => {
       harvested.farm.growth.farmVersion,
       'growth-tool',
     ) as any;
-    expect(tool.cost).toBe(20);
-    expect(tool.farm.growth.farmCoins).toBe(22);
+    expect(tool.cost).toBe(200);
+    expect(tool.farm.growth.farmCoins).toBe(0);
+    expect(tool.farm.growth.officeCoins).toBe(390);
     expect(tool.farm.tools.find((item: any) => item.id === 'watering_can').level).toBe(1);
     await expect(plants.upgradeTool(user.id, 'planter_box', 2, 'growth-stale-tool'))
       .rejects.toMatchObject({ response: { code: 'FARM_VERSION_CONFLICT' } });
@@ -199,7 +201,7 @@ describe('DeskPlantService and FeedService integration', () => {
     )).rejects.toMatchObject({ response: { code: 'FARM_CROP_LOCKED' } });
   });
 
-  it('uses the 05:00 service-day boundary and grants the standard reward once per day', async () => {
+  it('uses the 05:00 service-day boundary and grants three daily orders', async () => {
     // 21:01Z = 次日北京时间 05:01；跨多轮后仍按 05:00 划分业务日。
     now = new Date('2026-08-21T21:01:00.000Z');
     const user = await activeUser('boundary@example.com', 'Boundary');
@@ -214,7 +216,7 @@ describe('DeskPlantService and FeedService integration', () => {
       user.id,
       'boundary-same-day-harvest',
     );
-    expect((sameServiceDay as any).reward.standardRewardGranted).toBe(false);
+    expect((sameServiceDay as any).reward.standardRewardGranted).toBe(true);
 
     now = new Date(now.getTime() + 20 * 60 * 60 * 1_000 + 1_000);
     const nextServiceDay = await plants.harvestAndCare(
@@ -222,12 +224,12 @@ describe('DeskPlantService and FeedService integration', () => {
       'boundary-next-day-harvest',
     );
     expect((nextServiceDay as any).reward.standardRewardGranted).toBe(true);
-    expect(await dataSource.getRepository(RewardGrant).count()).toBe(2);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(3);
     expect(
       await dataSource.getRepository(DeskPlantRewardClaim).countBy({
         rewardType: 'standard',
       }),
-    ).toBe(2);
+    ).toBe(3);
     const plant = await dataSource.getRepository(DeskPlant).findOneByOrFail({
       userId: user.id,
     });

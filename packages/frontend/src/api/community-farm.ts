@@ -6,8 +6,11 @@ export type CommunityPlantState = 'idle' | 'growing' | 'ready';
 export interface CommunityFarmReward {
   standardRewardGranted: boolean;
   onboardingRewardGranted: boolean;
+  orderRewardGranted: boolean;
+  ordersCompleted: number;
+  ordersTotal: number;
   farmExperience: number;
-  farmCoins: number;
+  officeCoins: number;
   levelUp: boolean;
   summary: string | null;
 }
@@ -23,6 +26,7 @@ export interface CommunityFarmCrop {
   durationSeconds: number;
   experience: number;
   coins: number;
+  seedCost: number;
   description: string;
   unlocked: boolean;
   selected: boolean;
@@ -67,11 +71,14 @@ export interface CommunityFarmOverview {
   };
   growth: {
     farmCoins: number;
+    officeCoins: number;
     totalHarvests: number;
     farmVersion: number;
     skillPointsEarned: number;
     skillPointsAvailable: number;
     nextUnlock: { level: number; name: string; kind: 'crop' | 'skill' } | null;
+    ordersCompleted: number;
+    ordersTotal: number;
   };
   crops: CommunityFarmCrop[];
   tools: CommunityFarmTool[];

@@ -46,6 +46,9 @@ import { Friendship } from './friendship.entity';
 import { InventoryLedger } from './inventory-ledger.entity';
 import { InventoryStack } from './inventory-stack.entity';
 import { ItemDefinition } from './item-definition.entity';
+import { Guild } from './guild.entity';
+import { GuildLedger } from './guild-ledger.entity';
+import { GuildMember } from './guild-member.entity';
 import { Memo } from './memo.entity';
 import { ModerationAction } from './moderation-action.entity';
 import { ModerationCase } from './moderation-case.entity';
@@ -151,6 +154,9 @@ export {
   FriendEncouragement,
   FriendRequest,
   Friendship,
+  Guild,
+  GuildLedger,
+  GuildMember,
   InventoryLedger,
   InventoryStack,
   ItemDefinition,
@@ -289,6 +295,9 @@ export const entities = [
   FriendEncouragement,
   FriendRequest,
   Friendship,
+  Guild,
+  GuildLedger,
+  GuildMember,
   ReferralClaimToken,
   ReferralCode,
   ReferralRedemption,

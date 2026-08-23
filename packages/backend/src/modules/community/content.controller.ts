@@ -15,12 +15,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import {
-  CurrentUserId,
-  OptionalCurrentUserId,
-} from '../auth/current-user.decorator';
+import { CurrentUserId } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { OptionalJwtAuthGuard } from '../auth/optional-jwt-auth.guard';
 import { ContentService } from './content.service';
 import { CommunityContentFeatureGuard } from './content-gates';
 import {
@@ -33,33 +29,30 @@ import {
 import { idempotencyKey, publicId } from './community-validation';
 
 @Controller('v1/community')
-@UseGuards(CommunityContentFeatureGuard)
+@UseGuards(CommunityContentFeatureGuard, JwtAuthGuard)
 export class ContentController {
   constructor(private readonly content: ContentService) {}
 
   @Get('posts')
-  @UseGuards(OptionalJwtAuthGuard)
   listPosts(
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
     @Query() query: Record<string, unknown>,
   ) {
     return this.content.listPosts(viewerId, this.postFilters(query));
   }
 
   @Get('search')
-  @UseGuards(OptionalJwtAuthGuard)
   search(
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
     @Query() query: Record<string, unknown>,
   ) {
     return this.content.listPosts(viewerId, this.postFilters(query));
   }
 
   @Get('posts/:id')
-  @UseGuards(OptionalJwtAuthGuard)
   getPost(
     @Param('id') id: string,
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
   ) {
     return this.content.getPost(publicId(id, 'postId'), viewerId);
   }
@@ -168,19 +161,17 @@ export class ContentController {
   }
 
   @Get('posts/:id/revisions')
-  @UseGuards(OptionalJwtAuthGuard)
   listPostRevisions(
     @Param('id') id: string,
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
   ) {
     return this.content.listPostRevisions(publicId(id, 'postId'), viewerId);
   }
 
   @Get('posts/:id/comments')
-  @UseGuards(OptionalJwtAuthGuard)
   listComments(
     @Param('id') id: string,
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
     @Query('cursor') cursor?: string,
   ) {
     return this.content.listComments(publicId(id, 'postId'), viewerId, cursor);
@@ -290,10 +281,9 @@ export class ContentController {
   }
 
   @Get('comments/:id/revisions')
-  @UseGuards(OptionalJwtAuthGuard)
   listCommentRevisions(
     @Param('id') id: string,
-    @OptionalCurrentUserId() viewerId: string | null,
+    @CurrentUserId() viewerId: string,
   ) {
     return this.content.listCommentRevisions(publicId(id, 'commentId'), viewerId);
   }

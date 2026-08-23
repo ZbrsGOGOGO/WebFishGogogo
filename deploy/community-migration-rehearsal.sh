@@ -6,7 +6,10 @@ HARDENING_TIMESTAMP=1700000000008
 ACCOUNT_SECURITY_TIMESTAMP=1700000000013
 CHAT_TIMESTAMP=1700000000014
 NEWS_TIMESTAMP=1700000000015
-LATEST_TIMESTAMP=1700000000017
+GAME_GROWTH_TIMESTAMP=1700000000018
+UNIFIED_ECONOMY_TIMESTAMP=1700000000019
+GUILD_TIMESTAMP=1700000000020
+LATEST_TIMESTAMP=1700000000020
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -105,6 +108,12 @@ assert_target_applied() {
   [ "$chat_count" = 1 ] || fail "$database did not record migration $CHAT_TIMESTAMP"
   news_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $NEWS_TIMESTAMP;")
   [ "$news_count" = 1 ] || fail "$database did not record migration $NEWS_TIMESTAMP"
+  growth_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GAME_GROWTH_TIMESTAMP;")
+  [ "$growth_count" = 1 ] || fail "$database did not record migration $GAME_GROWTH_TIMESTAMP"
+  economy_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $UNIFIED_ECONOMY_TIMESTAMP;")
+  [ "$economy_count" = 1 ] || fail "$database did not record migration $UNIFIED_ECONOMY_TIMESTAMP"
+  guild_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_TIMESTAMP;")
+  [ "$guild_count" = 1 ] || fail "$database did not record migration $GUILD_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 1 ] || fail "$database did not record migration $LATEST_TIMESTAMP"
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
@@ -132,6 +141,18 @@ assert_target_applied() {
   [ "$username_column_count" = 2 ] || fail "$database is missing the 0017 username columns"
   username_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_users_username_normalized';")
   [ "$username_index_count" = 1 ] || fail "$database is missing the 0017 username uniqueness index"
+  farm_growth_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND ((table_name = 'desk_plants' AND column_name IN ('farm_coins', 'total_harvests', 'selected_crop_key', 'tool_levels', 'skill_levels', 'farm_version')) OR (table_name = 'desk_plant_cycles' AND column_name = 'crop_key') OR (table_name = 'office_battle_profiles' AND column_name = 'skill_levels'));")
+  [ "$farm_growth_column_count" = 8 ] || fail "$database is missing one or more 0018 game-growth columns"
+  energy_default_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'energy_states' AND column_name IN ('balance', 'capacity') AND column_default = '120';")
+  [ "$energy_default_count" = 2 ] || fail "$database is missing the 0019 unified 120-energy defaults"
+  unified_constraint_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_constraint WHERE conname = 'chk_energy_state_capacity' AND pg_get_constraintdef(oid) LIKE '%capacity = 120%';")
+  [ "$unified_constraint_count" = 1 ] || fail "$database is missing the 0019 fixed-capacity energy constraint"
+  for guild_table in guilds guild_members guild_ledger; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$guild_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $guild_table after migration"
+  done
+  guild_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_guild_members_guild_joined', 'idx_guild_ledger_guild_created');")
+  [ "$guild_index_count" = 2 ] || fail "$database is missing one or more 0020 guild indexes"
 }
 
 assert_target_absent() {
@@ -144,6 +165,12 @@ assert_target_absent() {
   [ "$chat_count" = 0 ] || fail "$database still records migration $CHAT_TIMESTAMP"
   news_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $NEWS_TIMESTAMP;")
   [ "$news_count" = 0 ] || fail "$database still records migration $NEWS_TIMESTAMP"
+  growth_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GAME_GROWTH_TIMESTAMP;")
+  [ "$growth_count" = 0 ] || fail "$database still records migration $GAME_GROWTH_TIMESTAMP"
+  economy_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $UNIFIED_ECONOMY_TIMESTAMP;")
+  [ "$economy_count" = 0 ] || fail "$database still records migration $UNIFIED_ECONOMY_TIMESTAMP"
+  guild_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_TIMESTAMP;")
+  [ "$guild_count" = 0 ] || fail "$database still records migration $GUILD_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 0 ] || fail "$database still records migration $LATEST_TIMESTAMP"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
@@ -160,6 +187,10 @@ assert_target_absent() {
   [ "$username_column_count" = 0 ] || fail "$database retained 0017 username columns after rollback/failure"
   username_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_users_username_normalized';")
   [ "$username_index_count" = 0 ] || fail "$database retained the 0017 username uniqueness index after rollback/failure"
+  farm_growth_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND ((table_name = 'desk_plants' AND column_name IN ('farm_coins', 'total_harvests', 'selected_crop_key', 'tool_levels', 'skill_levels', 'farm_version')) OR (table_name = 'desk_plant_cycles' AND column_name = 'crop_key') OR (table_name = 'office_battle_profiles' AND column_name = 'skill_levels'));")
+  [ "$farm_growth_column_count" = 0 ] || fail "$database retained 0018 game-growth columns after rollback/failure"
+  guild_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('guilds', 'guild_members', 'guild_ledger');")
+  [ "$guild_table_count" = 0 ] || fail "$database retained 0020 guild tables after rollback/failure"
 }
 
 restore_snapshot() {
@@ -339,4 +370,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through username-accounts 0017 (including account-security 0013, chat 0014, news 0015 and indexes 0016), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through guild foundation 0020 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018 and unified economy 0019), normalized-email collision abort, lock-timeout rollback and recovery."

@@ -22,14 +22,16 @@ import {
 } from './office-battle-domain';
 import { submitBattleWithRecovery } from './battle-request-recovery';
 import { ServerBattleReplay } from './ServerBattleReplay';
+import { CommunityGuildPanel } from './CommunityGuildPanel';
 import styles from './CommunityBattlePage.module.css';
 
-type BattleTab = 'overview' | 'skills' | 'equipment' | 'history' | 'defense';
+type BattleTab = 'overview' | 'skills' | 'equipment' | 'guild' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'overview', label: '今日行动' },
   { id: 'skills', label: '职业技能' },
   { id: 'equipment', label: '六件装备' },
+  { id: 'guild', label: '帮派' },
   { id: 'history', label: '战斗记录' },
   { id: 'defense', label: '防守与规则' },
 ];
@@ -472,10 +474,10 @@ export function CommunityBattlePage(): JSX.Element {
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
 
       <section className={styles.summaryGrid} aria-label="正式档案摘要">
-        <div><span>乐斗等级</span><strong>Lv.{profile.battleLevel}</strong><small>总经验 {profile.totalBattleExperience}</small></div>
-        <div><span>今日体力</span><strong>{profile.energy.current} / {profile.energy.max}</strong><small>{formatDateTime(profile.energy.resetsAt)} 重置</small></div>
+        <div><span>职场等级</span><strong>Lv.{profile.battleLevel}</strong><small>统一经验 {profile.totalBattleExperience}</small></div>
+        <div><span>战斗体力</span><strong>{profile.energy.current} / {profile.energy.max}</strong><small>{profile.energy.nextRecoveryAt ? `${formatDateTime(profile.energy.nextRecoveryAt)} 恢复 1 点` : '体力已满'}</small></div>
         <div><span>正式战绩</span><strong>{profile.wins} 胜</strong><small>{profile.losses} 负 · 战力 {profile.power}</small></div>
-        <div><span>成长资源</span><strong>{profile.skillPointsAvailable} 技能点</strong><small>零件 {profile.parts} · 工位币 {profile.workspaceCoins}</small></div>
+        <div><span>成长资源</span><strong>PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available} 点</strong><small>零件 {profile.parts} · 办公币 {profile.workspaceCoins}</small></div>
       </section>
       <div className={styles.levelProgress}>
         <div><span>当前等级进度</span><strong>{levelProgress}%</strong></div>
@@ -503,21 +505,21 @@ export function CommunityBattlePage(): JSX.Element {
         <div role="tabpanel" className={styles.stack}>
           <Card title="一眼看懂成长路线" headerActions={profile.nextUnlock ? <Tag color="neutral">Lv.{profile.nextUnlock.level} 解锁 {profile.nextUnlock.name}</Tag> : <Tag color="success">全部解锁</Tag>}>
             <div className={styles.growthRoute}>
-              <div><b>1</b><strong>行动升级</strong><small>正式行动获得乐斗经验，失败也有经验。</small></div>
+              <div><b>1</b><strong>PVE / PVP 升级</strong><small>两类正式战斗都获得统一职场经验，失败也有成长。</small></div>
               <div><b>2</b><strong>替换六件装备</strong><small>胜利掉落职业装备，颜色越稀有属性越高。</small></div>
               <div><b>3</b><strong>分解与强化</strong><small>分解闲置装备拿零件，强化当前主力装备。</small></div>
-              <div><b>4</b><strong>升级职业技能</strong><small>技能点随等级获得，直接提升服务端战斗属性。</small></div>
+              <div><b>4</b><strong>培养双技能树</strong><small>PVE 与 PVP 技能点独立，升级同时消耗办公币。</small></div>
             </div>
           </Card>
           <Card
-            title="今日行动"
+            title="PVE 项目副本"
             headerActions={<Button variant="secondary" onClick={() => void loadBootstrap()} loading={loading}>刷新候选</Button>}
           >
             {bootstrap.dailyActions ? (
               <p className={styles.muted}>
-                正式行动 {bootstrap.dailyActions.rewardedBattlesUsed}/{bootstrap.dailyActions.rewardedBattlesLimit}
-                {' · '}好友奖励 {bootstrap.dailyActions.rewardedFriendBattlesUsed}/{bootstrap.dailyActions.rewardedFriendBattlesLimit}
-                {' · '}每日 05:00（Asia/Shanghai）重置
+                今日奖励战斗 {bootstrap.dailyActions.rewardedBattlesUsed}/{bootstrap.dailyActions.rewardedBattlesLimit}
+                {' · '}PVP 奖励 {bootstrap.dailyActions.rewardedFriendBattlesUsed}/{bootstrap.dailyActions.rewardedFriendBattlesLimit}
+                {' · '}体力每 {bootstrap.catalog.energy.recoveryMinutes} 分钟自然恢复 1 点
               </p>
             ) : null}
             {bootstrap.offers.length === 0 ? (
@@ -535,16 +537,16 @@ export function CommunityBattlePage(): JSX.Element {
                       <div><dt>有效至</dt><dd>{formatDateTime(offer.expiresAt)}</dd></div>
                     </dl>
                     <p className={styles.preview}>
-                      预览：经验 +{offer.rewardPreview.battleExperience} · 工位币 +{offer.rewardPreview.workspaceCoins}
+                      预览：职场经验 +{offer.rewardPreview.battleExperience} · 办公币 +{offer.rewardPreview.workspaceCoins}
                       {offer.rewardPreview.dropEligible ? ' · 可掉落装备' : ''}
                     </p>
                     <div className={styles.inlineActions}>
                       <Button
                         loading={busyKey === `battle:${offer.offerId}`}
-                        disabled={!canMutate || profile.energy.current <= 0}
+                        disabled={!canMutate || profile.energy.current < bootstrap.catalog.energy.costPerBattle}
                         onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'reward')}
                       >
-                        消耗 1 体力行动
+                        消耗 {bootstrap.catalog.energy.costPerBattle} 体力挑战 PVE
                       </Button>
                       <Button
                         variant="secondary"
@@ -561,7 +563,7 @@ export function CommunityBattlePage(): JSX.Element {
             )}
           </Card>
 
-          <Card title="好友挑战">
+          <Card title="PVP 好友竞技">
             {!bootstrap.catalog.capabilities.friendChallengesEnabled ? (
               <EmptyState title="服务端尚未开放" message="好友挑战能力关闭时不会伪造候选或成功状态。" />
             ) : bootstrap.friendCandidates.length === 0 ? (
@@ -614,7 +616,7 @@ export function CommunityBattlePage(): JSX.Element {
         <div role="tabpanel" className={styles.stack}>
           <Card
             title={`${professionName(profile.profession)}职业技能`}
-            headerActions={<Tag color={profile.skillPointsAvailable > 0 ? 'success' : 'neutral'}>可用 {profile.skillPointsAvailable} / 已获 {profile.skillPointsEarned}</Tag>}
+            headerActions={<Tag color={profile.skillPointsAvailable > 0 ? 'success' : 'neutral'}>PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</Tag>}
           >
             <p className={styles.muted}>{bootstrap.catalog.skills.pointRule} 技能效果会进入服务端战斗快照。</p>
             <div className={styles.skillGrid}>
@@ -624,16 +626,18 @@ export function CommunityBattlePage(): JSX.Element {
                   const level = profile.skillLevels[skill.id] ?? 0;
                   const locked = profile.battleLevel < skill.unlockLevel;
                   const maxed = level >= bootstrap.catalog.skills.maxLevel;
+                  const points = profile.skillPoints[skill.mode];
+                  const coinCost = bootstrap.catalog.skills.coinCosts[level] ?? 0;
                   return (
                     <article key={skill.id} data-locked={locked}>
-                      <div><span>{locked ? `Lv.${skill.unlockLevel} 解锁` : '已解锁'}</span><strong>{skill.name}</strong><small>{skill.description}</small></div>
+                      <div><span>{skill.mode.toUpperCase()} · {locked ? `Lv.${skill.unlockLevel} 解锁` : '已解锁'}</span><strong>{skill.name}</strong><small>{skill.description}</small></div>
                       <div className={styles.skillLevel}><b>Lv.{level}</b><span>/ {bootstrap.catalog.skills.maxLevel}</span></div>
                       <Button
                         loading={busyKey === `skill:${skill.id}`}
-                        disabled={!canMutate || locked || maxed || profile.skillPointsAvailable < 1}
+                        disabled={!canMutate || locked || maxed || points.available < 1 || profile.workspaceCoins < coinCost}
                         onClick={() => void upgradeSkill(skill.id, skill.name)}
                       >
-                        {locked ? `Lv.${skill.unlockLevel} 解锁` : maxed ? '已满级' : '消耗 1 点升级'}
+                        {locked ? `Lv.${skill.unlockLevel} 解锁` : maxed ? '已满级' : `1 点 + ${coinCost} 办公币`}
                       </Button>
                     </article>
                   );
@@ -665,8 +669,10 @@ export function CommunityBattlePage(): JSX.Element {
             {inventory ? (
               <ul className={styles.inventoryList}>
                 {inventory.items.map((item) => {
-                  const enhancementCost = (item.enhancementLevel + 1) * 2;
-                  const maxEnhanced = item.enhancementLevel >= 6;
+                  const enhancementCoins = bootstrap.catalog.enhancement.coinCosts[item.enhancementLevel] ?? 0;
+                  const enhancementParts = bootstrap.catalog.enhancement.partCosts[item.enhancementLevel] ?? 0;
+                  const maxEnhanced = item.enhancementLevel >= bootstrap.catalog.enhancement.maxLevel;
+                  const cannotAffordEnhancement = profile.parts < enhancementParts || profile.workspaceCoins < enhancementCoins;
                   return (
                   <li key={item.id} data-equipped={item.equipped}>
                     <div>
@@ -683,11 +689,11 @@ export function CommunityBattlePage(): JSX.Element {
                       <Button
                         variant="secondary"
                         loading={busyKey === `enhance:${item.id}`}
-                        disabled={!canMutate || !bootstrap.catalog.capabilities.enhancementEnabled || maxEnhanced || profile.parts < enhancementCost}
-                        title={maxEnhanced ? '已达到 +6' : profile.parts < enhancementCost ? `需要 ${enhancementCost} 个零件` : '强化必定成功，属性由服务端增加'}
+                        disabled={!canMutate || !bootstrap.catalog.capabilities.enhancementEnabled || maxEnhanced || cannotAffordEnhancement}
+                        title={maxEnhanced ? `已达到 +${bootstrap.catalog.enhancement.maxLevel}` : cannotAffordEnhancement ? `需要 ${enhancementCoins} 办公币与 ${enhancementParts} 个零件` : `强化成功率 ${bootstrap.catalog.enhancement.successRate}%`}
                         onClick={() => void enhanceEquipment(item)}
                       >
-                        {!bootstrap.catalog.capabilities.enhancementEnabled ? '强化未开放' : maxEnhanced ? '强化已满' : `${enhancementCost} 零件强化`}
+                        {!bootstrap.catalog.capabilities.enhancementEnabled ? '强化未开放' : maxEnhanced ? '强化已满' : `${enhancementCoins} 币 + ${enhancementParts} 零件`}
                       </Button>
                       <Button variant="danger" loading={busyKey === `salvage:${item.id}`} disabled={!canMutate || item.equipped || item.locked || !item.canSalvage} onClick={() => void salvageEquipment(item)}>{confirmKey === `salvage:${item.id}` ? '确认分解' : '分解'}</Button>
                     </div>
@@ -720,6 +726,8 @@ export function CommunityBattlePage(): JSX.Element {
         </Card>
       ) : null}
 
+      {tab === 'guild' ? <CommunityGuildPanel /> : null}
+
       {tab === 'defense' ? (
         <div role="tabpanel" className={styles.stack}>
           <Card title="好友挑战与装备可见范围">
@@ -746,10 +754,10 @@ export function CommunityBattlePage(): JSX.Element {
 
           <Card title="公开规则与概率">
             <dl className={styles.rulesList}>
-              <div><dt>每日体力</dt><dd>{bootstrap.catalog.energy.dailyMax} 点，05:00（Asia/Shanghai）重置</dd></div>
+              <div><dt>体力恢复</dt><dd>上限 {bootstrap.catalog.energy.max}，每 {bootstrap.catalog.energy.recoveryMinutes} 分钟恢复 1 点</dd></div>
               <div><dt>仓库上限</dt><dd>{bootstrap.catalog.inventoryLimit} 件，满仓掉落进入待领取区</dd></div>
               <div><dt>练习赛</dt><dd>不限次数，消耗 0，奖励 0</dd></div>
-              <div><dt>好友奖励</dt><dd>每天最多 3 场，同一好友每天最多 1 场；超出可确认转为练习赛</dd></div>
+              <div><dt>PVP 奖励</dt><dd>每天最多 {bootstrap.dailyActions?.rewardedFriendBattlesLimit ?? 5} 场，同一好友每天最多 1 场；超出可确认转为练习赛</dd></div>
               <div><dt>回合上限</dt><dd>最多 10 回合，完整事件由服务端保存</dd></div>
               <div><dt>引擎版本</dt><dd>{bootstrap.catalog.engineVersion} / {bootstrap.catalog.balanceVersion}</dd></div>
             </dl>

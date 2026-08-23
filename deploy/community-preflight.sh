@@ -431,7 +431,13 @@ grep -Fq 'CHAT_TIMESTAMP=1700000000014' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'NEWS_TIMESTAMP=1700000000015' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000017' \
+grep -Fq 'GAME_GROWTH_TIMESTAMP=1700000000018' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'UNIFIED_ECONOMY_TIMESTAMP=1700000000019' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'GUILD_TIMESTAMP=1700000000020' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000020' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -440,8 +446,12 @@ grep -Fq 'news_review_decisions' \
 grep -Fq 'idx_chat_messages_author_room_created' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'uq_users_username_normalized' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'farm_version' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'guild_ledger' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016 and username accounts 0017"
+  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019 and guilds 0020"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

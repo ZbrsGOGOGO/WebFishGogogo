@@ -297,19 +297,20 @@ describe('PlatformAssetsService', () => {
   it('changes EXP level and caps positive energy at capacity', async () => {
     const { assets, manager, userId } = fixture();
 
+    await assets.changeEnergy(manager, userId, -110);
     const progression = await assets.addExperience(
       manager,
       userId,
       100,
     );
-    const energy = await assets.changeEnergy(manager, userId, 10);
+    const energy = await assets.changeEnergy(manager, userId, 100);
 
     expect(progression).toMatchObject({
       level: 2,
       experience: '100',
     });
-    expect(energy.state.balance).toBe(15);
-    expect(energy.appliedDelta).toBe(5);
+    expect(energy.state.balance).toBe(120);
+    expect(energy.appliedDelta).toBe(90);
   });
 
   it('grants a composite reward once with all receipts in the same manager', async () => {
@@ -331,14 +332,14 @@ describe('PlatformAssetsService', () => {
     const replay = await assets.grantReward(manager, command);
 
     expect(first.applied).toBe(true);
-    expect(first.snapshot).toEqual(command.reward);
+    expect(first.snapshot).toEqual({ ...command.reward, energy: 0 });
     expect(replay.applied).toBe(false);
     expect(replay.grant.id).toBe(first.grant.id);
     expect(store.all(RewardGrant)).toHaveLength(1);
-    expect(store.all(WalletLedger)).toHaveLength(1);
+    expect(store.all(WalletLedger)).toHaveLength(2);
     expect(store.all(InventoryLedger)).toHaveLength(1);
     expect(first.state.progression.experience).toBe('10');
-    expect(first.state.energy.balance).toBe(13);
+    expect(first.state.energy.balance).toBe(120);
     expect(first.state.balances.get('water')?.balance).toBe('5');
   });
 

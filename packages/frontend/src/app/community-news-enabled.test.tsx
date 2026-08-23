@@ -26,11 +26,19 @@ describe('community news release flag', () => {
     expect(screen.getByText('卡片状态与当前发布闸门同步；已开放系统可直接进入，账号功能会在进入后安全校验。')).toBeInTheDocument();
   });
 
-  it('mounts the real public page at /news instead of the unavailable page when enabled', async () => {
+  it('mounts the real member page at /news instead of the unavailable page when enabled', async () => {
     vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
     vi.resetModules();
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/v1/me/news-preferences')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          personalizationEnabled: false,
+          topicPreferences: [],
+          selectedProfession: null,
+          version: null,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
       if (url.includes('/v1/news')) {
         return Promise.resolve(new Response(JSON.stringify({
           feed: 'latest',
@@ -42,11 +50,24 @@ describe('community news release flag', () => {
       return Promise.resolve(new Response('', { status: 401 }));
     });
     vi.stubGlobal('fetch', fetchMock);
-    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests }] = await Promise.all([
+    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests, useCommunityAuthStore }] = await Promise.all([
       import('./community-router'),
       import('./store/community-auth-store'),
     ]);
     resetCommunityAuthStoreForTests();
+    useCommunityAuthStore.setState({
+      phase: 'active',
+      sessionReady: true,
+      user: {
+        id: 'member-news',
+        publicId: 'member-news',
+        email: 'member@example.com',
+        displayName: '新闻读者',
+        accountStatus: 'active',
+        onboardingCompleted: true,
+        socialVerificationStatus: 'unverified',
+      },
+    });
 
     render(<MemoryRouter initialEntries={['/news']}><CommunityModeRouter /></MemoryRouter>);
 
@@ -55,17 +76,30 @@ describe('community news release flag', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(true);
   });
 
-  it('keeps /news public but makes /news/admin unavailable without the independent admin flag', async () => {
+  it('keeps /news member-only and makes /news/admin unavailable without the independent admin flag', async () => {
     vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
     vi.stubEnv('VITE_COMMUNITY_NEWS_ADMIN_ENABLED', 'false');
     vi.resetModules();
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests }] = await Promise.all([
+    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests, useCommunityAuthStore }] = await Promise.all([
       import('./community-router'),
       import('./store/community-auth-store'),
     ]);
     resetCommunityAuthStoreForTests();
+    useCommunityAuthStore.setState({
+      phase: 'active',
+      sessionReady: true,
+      user: {
+        id: 'member-news-admin-closed',
+        publicId: 'member-news-admin-closed',
+        email: 'member@example.com',
+        displayName: '普通成员',
+        accountStatus: 'active',
+        onboardingCompleted: true,
+        socialVerificationStatus: 'unverified',
+      },
+    });
 
     render(<MemoryRouter initialEntries={['/news/admin']}><CommunityModeRouter /></MemoryRouter>);
 

@@ -28,6 +28,8 @@ import { WalletBalance } from '../../database/entities/wallet-balance.entity';
 import { WalletLedger } from '../../database/entities/wallet-ledger.entity';
 import { getPlayerLevelSnapshot } from './level.rules';
 import {
+  ENERGY_RECOVERY_INTERVAL_MILLISECONDS,
+  INITIAL_OFFICE_COIN,
   INITIAL_ENERGY,
   INITIAL_ENERGY_CAPACITY,
   INITIAL_PLAYER_TITLE,
@@ -115,10 +117,12 @@ export class PlatformAssetsService {
       manager.getRepository(EnergyState),
       userId,
     );
+    await this.recoverEnergyState(manager, energy);
     const balances = await this.ensureWalletBalances(
       manager.getRepository(WalletBalance),
       userId,
     );
+    await this.ensureInitialOfficeCoin(manager, userId, balances);
     return { profile, progression, energy, balances };
   }
 
@@ -233,11 +237,24 @@ export class PlatformAssetsService {
       manager.getRepository(PlayerProgression),
       userId,
     );
-    return this.addExperienceToProgression(
+    const previousLevel = progression.level;
+    const updated = await this.addExperienceToProgression(
       manager,
       progression,
       this.positiveInteger(amount, 'experience'),
     );
+    if (updated.level > previousLevel) {
+      const energy = await this.ensureEnergy(
+        manager.getRepository(EnergyState),
+        userId,
+      );
+      await this.changeEnergyState(
+        manager,
+        energy,
+        20 * (updated.level - previousLevel),
+      );
+    }
+    return updated;
   }
 
   /**
@@ -293,12 +310,23 @@ export class PlatformAssetsService {
         command.reward.experience,
         'reward.experience',
       );
+      const previousLevel = state.progression.level;
       await this.addExperienceToProgression(
         manager,
         state.progression,
         experience,
       );
       appliedSnapshot.experience = experience;
+      if (state.progression.level > previousLevel) {
+        const energyResult = await this.changeEnergyState(
+          manager,
+          state.energy,
+          20 * (state.progression.level - previousLevel),
+        );
+        if (energyResult.appliedDelta > 0) {
+          appliedSnapshot.energy = energyResult.appliedDelta;
+        }
+      }
     }
 
     const currencies = Object.entries(command.reward.currencies ?? {}).sort(
@@ -368,7 +396,8 @@ export class PlatformAssetsService {
         state.energy,
         requestedEnergy,
       );
-      appliedSnapshot.energy = energyResult.appliedDelta;
+      appliedSnapshot.energy =
+        (appliedSnapshot.energy ?? 0) + energyResult.appliedDelta;
     }
 
     const grant = await grantRepo.save(
@@ -586,6 +615,8 @@ export class PlatformAssetsService {
     if (!Number.isSafeInteger(delta) || delta === 0) {
       throw new BadRequestException('energy delta must be a non-zero integer');
     }
+    await this.recoverEnergyState(manager, energy);
+    const wasAtCapacity = energy.balance >= energy.capacity;
     const requested = energy.balance + delta;
     if (requested < 0) {
       throw new ConflictException({ code: 'INSUFFICIENT_ENERGY' });
@@ -593,6 +624,9 @@ export class PlatformAssetsService {
     const next = Math.min(requested, energy.capacity);
     const appliedDelta = next - energy.balance;
     if (appliedDelta !== 0) {
+      if (delta < 0 && wasAtCapacity) {
+        energy.lastRecoveredAt = this.clock.now();
+      }
       energy.balance = next;
       await manager.getRepository(EnergyState).save(energy);
     }
@@ -651,7 +685,16 @@ export class PlatformAssetsService {
       where: { userId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (existing) return existing;
+    if (existing) {
+      const normalizedLevel = getPlayerLevelSnapshot(
+        this.toSafeInteger(existing.experience, 'experience'),
+      ).level;
+      if (existing.level !== normalizedLevel) {
+        existing.level = normalizedLevel;
+        return repo.save(existing);
+      }
+      return existing;
+    }
     return repo.save(
       repo.create({
         userId,
@@ -680,6 +723,33 @@ export class PlatformAssetsService {
     );
   }
 
+  /**
+   * 体力按读取时懒恢复，避免为每个账号启动计时任务。
+   * 达到容量后丢弃多余的离线时间，不允许在满体力阶段预存恢复量。
+   */
+  private async recoverEnergyState(
+    manager: EntityManager,
+    energy: EnergyState,
+  ): Promise<void> {
+    if (energy.balance >= energy.capacity) return;
+    const now = this.clock.now();
+    const elapsed = now.getTime() - energy.lastRecoveredAt.getTime();
+    const recovered = Math.floor(
+      Math.max(0, elapsed) / ENERGY_RECOVERY_INTERVAL_MILLISECONDS,
+    );
+    if (recovered < 1) return;
+    const next = Math.min(energy.capacity, energy.balance + recovered);
+    energy.balance = next;
+    energy.lastRecoveredAt =
+      next >= energy.capacity
+        ? now
+        : new Date(
+            energy.lastRecoveredAt.getTime() +
+              recovered * ENERGY_RECOVERY_INTERVAL_MILLISECONDS,
+          );
+    await manager.getRepository(EnergyState).save(energy);
+  }
+
   private async ensureWalletBalances(
     repo: Repository<WalletBalance>,
     userId: string,
@@ -692,6 +762,27 @@ export class PlatformAssetsService {
       );
     }
     return balances;
+  }
+
+  private async ensureInitialOfficeCoin(
+    manager: EntityManager,
+    userId: string,
+    balances: Map<WalletCurrency, WalletBalance>,
+  ): Promise<void> {
+    const balance = balances.get('office_coin');
+    if (!balance) throw new Error('office_coin balance was not initialized');
+    const result = await this.mutateWalletWithBalance(
+      manager,
+      balance,
+      INITIAL_OFFICE_COIN,
+      {
+        sourceType: 'platform_onboarding',
+        sourceId: userId,
+        reason: 'unified-economy-starting-balance-v1',
+        idempotencyKey: `platform-onboarding:${userId}`,
+      },
+    );
+    balances.set('office_coin', result.balanceEntity);
   }
 
   private async ensureWalletBalance(
@@ -721,7 +812,7 @@ export class PlatformAssetsService {
     if (
       ledger.userId !== balance.userId ||
       ledger.currency !== balance.currency ||
-      ledger.delta !== String(expectedDelta)
+      String(ledger.delta) !== String(expectedDelta)
     ) {
       throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
     }
@@ -735,7 +826,7 @@ export class PlatformAssetsService {
     if (
       ledger.userId !== stack.userId ||
       ledger.itemId !== stack.itemId ||
-      ledger.delta !== String(expectedDelta)
+      String(ledger.delta) !== String(expectedDelta)
     ) {
       throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
     }

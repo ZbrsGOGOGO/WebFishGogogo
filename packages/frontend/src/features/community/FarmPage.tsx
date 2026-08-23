@@ -18,24 +18,24 @@ const GUEST_FIRST_CYCLE_SECONDS = 30;
 const GUEST_STANDARD_CYCLE_SECONDS = 5 * 60;
 
 const GUEST_CROPS: CommunityFarmOverview['crops'] = [
-  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, coins: 12, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
-  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, coins: 36, description: '稳定产出，适合短时回来收获。', unlocked: false, selected: false, growing: false },
-  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 3600, experience: 70, coins: 84, description: '经验与办公币都很均衡。', unlocked: false, selected: false, growing: false },
-  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 7200, experience: 125, coins: 165, description: '偏向农场币产出，适合升级工具。', unlocked: false, selected: false, growing: false },
-  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 14400, experience: 230, coins: 280, description: '中后期主力作物。', unlocked: false, selected: false, growing: false },
-  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 28800, experience: 420, coins: 540, description: '长周期高收益作物。', unlocked: false, selected: false, growing: false },
+  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, seedCost: 10, coins: 100, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
+  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, seedCost: 25, coins: 100, description: '稳定产出，适合短时回来收获。', unlocked: false, selected: false, growing: false },
+  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 3600, experience: 70, seedCost: 60, coins: 100, description: '经验与订单效率均衡。', unlocked: false, selected: false, growing: false },
+  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 7200, experience: 125, seedCost: 110, coins: 100, description: '适合离线两小时后回来收获。', unlocked: false, selected: false, growing: false },
+  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 14400, experience: 230, seedCost: 180, coins: 100, description: '中后期主力作物。', unlocked: false, selected: false, growing: false },
+  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 28800, experience: 420, seedCost: 300, coins: 100, description: '适合完整工作日的长周期作物。', unlocked: false, selected: false, growing: false },
 ];
 
 const GUEST_TOOLS: CommunityFarmTool[] = [
-  { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。', level: 0, maxLevel: 5, nextCost: 20 },
-  { id: 'planter_box', name: '透气种植箱', slot: '种植容器', description: '每级让农场经验增加 8%。', level: 0, maxLevel: 5, nextCost: 20 },
-  { id: 'harvest_basket', name: '分类收获篮', slot: '收获工具', description: '每级让农场币增加 10%。', level: 0, maxLevel: 5, nextCost: 20 },
+  { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。', level: 0, maxLevel: 5, nextCost: 200 },
+  { id: 'planter_box', name: '透气种植箱', slot: '种植容器', description: '每级让农场经验增加 8%。', level: 0, maxLevel: 5, nextCost: 200 },
+  { id: 'harvest_basket', name: '分类收获篮', slot: '收获工具', description: '每级让订单办公币增加 10%。', level: 0, maxLevel: 5, nextCost: 200 },
 ];
 
 const GUEST_SKILLS: CommunityFarmSkill[] = [
   { id: 'quick_care', name: '快速照料', unlockLevel: 2, description: '每级让成熟时间额外缩短 3%。', level: 0, maxLevel: 5, unlocked: false },
   { id: 'green_thumb', name: '绿手指', unlockLevel: 5, description: '每级让农场经验额外增加 5%。', level: 0, maxLevel: 5, unlocked: false },
-  { id: 'abundant_harvest', name: '丰收心得', unlockLevel: 8, description: '每级让农场币额外增加 6%。', level: 0, maxLevel: 5, unlocked: false },
+  { id: 'abundant_harvest', name: '丰收心得', unlockLevel: 8, description: '每级让订单办公币额外增加 6%。', level: 0, maxLevel: 5, unlocked: false },
 ];
 
 function createGuestFarm(): CommunityFarmOverview {
@@ -57,11 +57,14 @@ function createGuestFarm(): CommunityFarmOverview {
     },
     growth: {
       farmCoins: 0,
+      officeCoins: 500,
       totalHarvests: 0,
       farmVersion: 1,
       skillPointsEarned: 0,
       skillPointsAvailable: 0,
       nextUnlock: { level: 2, name: '快速照料', kind: 'skill' },
+      ordersCompleted: 0,
+      ordersTotal: 3,
     },
     crops: GUEST_CROPS,
     tools: GUEST_TOOLS,
@@ -179,6 +182,10 @@ export function CommunityFarmPage(): JSX.Element {
         const harvesting = overview.state === 'ready';
         const experience = overview.plant.experience + (harvesting ? 20 : 0);
         const level = Math.floor(experience / 100) + 1;
+        const orderReward = [100, 120, 140][overview.growth.ordersCompleted] ?? 0;
+        const nextOrdersCompleted = harvesting
+          ? Math.min(3, overview.growth.ordersCompleted + 1)
+          : overview.growth.ordersCompleted;
         const cycleSeconds = overview.plant.firstCycle
           ? GUEST_FIRST_CYCLE_SECONDS
           : GUEST_STANDARD_CYCLE_SECONDS;
@@ -186,7 +193,7 @@ export function CommunityFarmPage(): JSX.Element {
           ...overview,
           serverTime: new Date(now).toISOString(),
           state: 'growing',
-          dailyRewardClaimed: overview.dailyRewardClaimed || harvesting,
+          dailyRewardClaimed: nextOrdersCompleted >= 3,
           plant: {
             ...overview.plant,
             level,
@@ -201,7 +208,10 @@ export function CommunityFarmPage(): JSX.Element {
           },
           growth: {
             ...overview.growth,
-            farmCoins: overview.growth.farmCoins + (harvesting ? 12 : 0),
+            farmCoins: 0,
+            officeCoins:
+              overview.growth.officeCoins + (harvesting ? orderReward : 0),
+            ordersCompleted: nextOrdersCompleted,
             totalHarvests: overview.growth.totalHarvests + (harvesting ? 1 : 0),
             farmVersion: overview.growth.farmVersion + 1,
           },
@@ -256,9 +266,9 @@ export function CommunityFarmPage(): JSX.Element {
         createCommunityIdempotencyKey('farm-tool'),
       );
       applyOverview(result.farm);
-      setNotice(`${tool.name}已升到 Lv.${result.farm.tools.find((item) => item.id === tool.id)?.level ?? tool.level + 1}，消耗 ${result.cost} 农场币。`);
+      setNotice(`${tool.name}已升到 Lv.${result.farm.tools.find((item) => item.id === tool.id)?.level ?? tool.level + 1}，消耗 ${result.cost} 办公币。`);
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '工具升级没有成功，请确认农场币和档案状态'));
+      setError(communityRequestErrorMessage(requestError, '工具升级没有成功，请确认办公币余额和档案状态'));
     } finally {
       setGrowthBusy(undefined);
     }
@@ -312,7 +322,7 @@ export function CommunityFarmPage(): JSX.Element {
 
       <section className={styles.growthSummary} aria-label="农场成长摘要">
         <article><span>农场等级</span><strong>Lv.{overview.plant.level}</strong><small>{overview.plant.experience} 总经验</small></article>
-        <article><span>农场币</span><strong>{overview.growth.farmCoins}</strong><small>只用于农场工具</small></article>
+        <article><span>办公币</span><strong>{overview.growth.officeCoins}</strong><small>农场、乐斗共用</small></article>
         <article><span>技能点</span><strong>{overview.growth.skillPointsAvailable}</strong><small>累计获得 {overview.growth.skillPointsEarned}</small></article>
         <article><span>下一解锁</span><strong>{overview.growth.nextUnlock ? `Lv.${overview.growth.nextUnlock.level}` : '已完成'}</strong><small>{overview.growth.nextUnlock?.name ?? '全部内容已开放'}</small></article>
         <div className={styles.farmLevelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
@@ -352,7 +362,7 @@ export function CommunityFarmPage(): JSX.Element {
           <Button className={styles.mainAction} fullWidth loading={busy} disabled={!idle && !ready} onClick={() => void mainAction()}>
             {actionLabel}
           </Button>
-          <small className={styles.actionHint}>{overview.dailyRewardClaimed ? '今天的成长奖励已拿到，明天再来看看。' : '今天第一次收获会拿到成长奖励。'}</small>
+          <small className={styles.actionHint}>今日订单 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}；前三次收获会获得办公币。</small>
         </div>
       </section>
 
@@ -363,7 +373,7 @@ export function CommunityFarmPage(): JSX.Element {
             <article key={crop.key} data-selected={crop.selected} data-locked={!crop.unlocked}>
               <b>{crop.mark}</b>
               <div><strong>{crop.name}</strong><small>{crop.description}</small></div>
-              <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>收获</dt><dd>经验 {crop.experience} · 币 {crop.coins}</dd></div></dl>
+              <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>成本</dt><dd>{crop.seedCost} 办公币</dd></div><div><dt>收获</dt><dd>熟练经验 {crop.experience}</dd></div></dl>
               <Button
                 variant={crop.selected ? 'secondary' : 'primary'}
                 loading={growthBusy === `crop:${crop.key}`}
@@ -383,7 +393,7 @@ export function CommunityFarmPage(): JSX.Element {
           <div className={styles.upgradeList}>
             {overview.tools.map((tool) => {
               const maxed = tool.level >= tool.maxLevel;
-              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || overview.growth.farmCoins < tool.nextCost || Boolean(growthBusy)} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 币升级`}</Button></article>;
+              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || overview.growth.officeCoins < tool.nextCost || Boolean(growthBusy)} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 办公币升级`}</Button></article>;
             })}
           </div>
         </div>
@@ -402,7 +412,7 @@ export function CommunityFarmPage(): JSX.Element {
         <div className={styles.sectionHeading}><div><span>TODAY</span><h2 id="farm-today-title">今天只做这些</h2></div><small>养成是可选深度</small></div>
         <div className={styles.taskGrid}>
           <article data-done={!idle}><span>{!idle ? '✓' : '1'}</span><div><strong>照料一次</strong><p>{!idle ? '今天已经照料过了' : '点上面的绿色按钮完成'}</p></div></article>
-          <article data-done={overview.dailyRewardClaimed}><span>{overview.dailyRewardClaimed ? '✓' : '2'}</span><div><strong>收一次成熟绿植</strong><p>{overview.dailyRewardClaimed ? '今天的成长奖励已领取' : '成熟后回来点一下收获'}</p></div></article>
+          <article data-done={overview.growth.ordersCompleted > 0}><span>{overview.growth.ordersCompleted > 0 ? '✓' : '2'}</span><div><strong>完成农场订单</strong><p>今日 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}，前三份订单产出办公币</p></div></article>
           <article data-done={overview.pendingEncouragements > 0}><span>{overview.pendingEncouragements > 0 ? '✓' : '3'}</span><div><strong>看看好友鼓励</strong><p>{overview.pendingEncouragements > 0 ? `收到 ${overview.pendingEncouragements} 份鼓励` : '有好友鼓励时叶子会闪光'}</p></div></article>
         </div>
       </section>

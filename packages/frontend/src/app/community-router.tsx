@@ -127,15 +127,17 @@ export function CommunityModeRouter(): JSX.Element {
           <Route path="/register/verify" element={<CommunityVerifyEmailPage />} />
         </Route>
 
-        <Route
-          path="/ledou"
-          element={
-            COMMUNITY_FEATURE_FLAGS.ledou
-              ? loading(<OfficeBattlePage />)
-              : <CommunityUnavailablePage system="ledou" />
-          }
-        />
-        <Route path="/battle" element={<Navigate to="/ledou" replace />} />
+        <Route element={<RequireCommunityAccount />}>
+          <Route
+            path="/ledou"
+            element={
+              COMMUNITY_FEATURE_FLAGS.ledou
+                ? loading(<OfficeBattlePage />)
+                : <CommunityUnavailablePage system="ledou" />
+            }
+          />
+          <Route path="/battle" element={<Navigate to="/ledou" replace />} />
+        </Route>
 
         <Route element={<RequireCommunityAccount skipOnboarding />}>
           <Route path="/onboarding" element={<CommunityOnboardingPage />} />
@@ -150,62 +152,78 @@ export function CommunityModeRouter(): JSX.Element {
           <Route path="/notifications" element={<CommunityNotificationsPage />} />
         </Route>
         {!COMMUNITY_FEATURE_FLAGS.socialVerification ? (
-          <Route
-            path="/settings/verification"
-            element={<CommunityUnavailablePage system="profile" title="身份核验暂未开放" />}
-          />
+          <Route element={<RequireCommunityAccount />}>
+            <Route
+              path="/settings/verification"
+              element={<CommunityUnavailablePage system="profile" title="身份核验暂未开放" />}
+            />
+          </Route>
         ) : null}
-        {COMMUNITY_FEATURE_FLAGS.friends ? (
-          <Route element={<RequireCommunityAccount />}>
+        <Route element={<RequireCommunityAccount />}>
+          {COMMUNITY_FEATURE_FLAGS.friends ? (
             <Route path="/friends" element={<CommunityFriendsPage />} />
-          </Route>
-        ) : <Route path="/friends" element={<CommunityUnavailablePage system="friends" />} />}
-        {COMMUNITY_FEATURE_FLAGS.invite ? (
-          <Route element={<RequireCommunityAccount />}>
+          ) : <Route path="/friends" element={<CommunityUnavailablePage system="friends" />} />}
+          {COMMUNITY_FEATURE_FLAGS.invite ? (
             <Route path="/invite" element={<CommunityInvitePage />} />
-          </Route>
-        ) : <Route path="/invite" element={<CommunityUnavailablePage system="invite" />} />}
-        {COMMUNITY_FEATURE_FLAGS.feed ? (
-          <Route element={<RequireCommunityAccount />}>
+          ) : <Route path="/invite" element={<CommunityUnavailablePage system="invite" />} />}
+          {COMMUNITY_FEATURE_FLAGS.feed ? (
             <Route path="/feed" element={<CommunityFeedPage />} />
-          </Route>
-        ) : <Route path="/feed" element={<CommunityUnavailablePage system="feed" />} />}
-        {COMMUNITY_FEATURE_FLAGS.farm ? (
-          <Route path="/farm" element={<CommunityFarmPage />} />
-        ) : <Route path="/farm" element={<CommunityUnavailablePage system="farm" />} />}
+          ) : <Route path="/feed" element={<CommunityUnavailablePage system="feed" />} />}
+          {COMMUNITY_FEATURE_FLAGS.farm ? (
+            <Route path="/farm" element={<CommunityFarmPage />} />
+          ) : <Route path="/farm" element={<CommunityUnavailablePage system="farm" />} />}
+        </Route>
         <Route element={<RequireRestrictedCommunityAccount />}>
           <Route path="/account/status" element={<CommunityAccountStatusPage />} />
         </Route>
 
-        {COMMUNITY_FEATURE_FLAGS.news ? (
-          <>
-            <Route path="/news" element={<CommunityNewsPage />} />
-            {COMMUNITY_FEATURE_FLAGS.newsAdmin ? (
-              <Route element={<RequireCommunityModerator scope="news" />}>
-                <Route path="/news/admin" element={<CommunityNewsAdminPage />} />
-              </Route>
-            ) : (
-              <Route path="/news/admin" element={<CommunityUnavailablePage system="news" title="热点资讯编辑发布台尚未开放" />} />
-            )}
-            <Route path="/news/:id" element={<CommunityNewsDetailPage />} />
-          </>
-        ) : (
-          <>
-            <Route path="/news" element={<CommunityUnavailablePage system="news" />} />
-            <Route path="/news/*" element={<CommunityUnavailablePage system="news" />} />
-          </>
-        )}
-        <Route
-          path="/community"
-          element={COMMUNITY_FEATURE_FLAGS.community
-            ? <CommunityPostsPage />
-            : COMMUNITY_FEATURE_FLAGS.chat
-              ? <Navigate to="/community/chat" replace />
+        <Route element={<RequireCommunityAccount />}>
+          {COMMUNITY_FEATURE_FLAGS.news ? (
+            <>
+              <Route path="/news" element={<CommunityNewsPage />} />
+              <Route path="/news/:id" element={<CommunityNewsDetailPage />} />
+            </>
+          ) : (
+            <>
+              <Route path="/news" element={<CommunityUnavailablePage system="news" />} />
+              <Route path="/news/*" element={<CommunityUnavailablePage system="news" />} />
+            </>
+          )}
+          <Route
+            path="/community"
+            element={COMMUNITY_FEATURE_FLAGS.community
+              ? <CommunityPostsPage />
+              : COMMUNITY_FEATURE_FLAGS.chat
+                ? <Navigate to="/community/chat" replace />
+                : <CommunityUnavailablePage system="community" />}
+          />
+          {COMMUNITY_FEATURE_FLAGS.community ? (
+            <Route path="/community/posts/:id" element={<CommunityPostDetailPage />} />
+          ) : null}
+          <Route
+            path="/community/*"
+            element={COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat
+              ? <NotFoundPage />
               : <CommunityUnavailablePage system="community" />}
-        />
+          />
+          <Route
+            path="/users/:publicId"
+            element={COMMUNITY_FEATURE_FLAGS.publicProfile
+              ? <CommunityPublicProfilePage />
+              : <CommunityUnavailablePage system="profile" title="公开主页尚未开放" />}
+          />
+        </Route>
+        {COMMUNITY_FEATURE_FLAGS.news && COMMUNITY_FEATURE_FLAGS.newsAdmin ? (
+          <Route element={<RequireCommunityModerator scope="news" />}>
+            <Route path="/news/admin" element={<CommunityNewsAdminPage />} />
+          </Route>
+        ) : (
+          <Route element={<RequireCommunityAccount />}>
+            <Route path="/news/admin" element={<CommunityUnavailablePage system="news" title="热点资讯编辑发布台尚未开放" />} />
+          </Route>
+        )}
         {COMMUNITY_FEATURE_FLAGS.community ? (
           <>
-            <Route path="/community/posts/:id" element={<CommunityPostDetailPage />} />
             <Route element={<RequireCommunityAccount />}>
               <Route path="/community/new" element={<CommunityPostEditorPage />} />
               <Route path="/community/posts/:id/edit" element={<CommunityPostEditorPage />} />
@@ -215,11 +233,15 @@ export function CommunityModeRouter(): JSX.Element {
                 <Route path="/moderation" element={<CommunityModerationPage />} />
               </Route>
             ) : (
-              <Route path="/moderation" element={<CommunityUnavailablePage system="community" title="内容审核台尚未开放" />} />
+              <Route element={<RequireCommunityAccount />}>
+                <Route path="/moderation" element={<CommunityUnavailablePage system="community" title="内容审核台尚未开放" />} />
+              </Route>
             )}
           </>
         ) : (
-          <Route path="/moderation" element={<CommunityUnavailablePage system="community" title="内容审核台尚未开放" />} />
+          <Route element={<RequireCommunityAccount />}>
+            <Route path="/moderation" element={<CommunityUnavailablePage system="community" title="内容审核台尚未开放" />} />
+          </Route>
         )}
         {COMMUNITY_FEATURE_FLAGS.chat ? (
           <Route element={<RequireCommunityAccount />}>
@@ -227,24 +249,11 @@ export function CommunityModeRouter(): JSX.Element {
             <Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} />
           </Route>
         ) : (
-          <>
+          <Route element={<RequireCommunityAccount />}>
             <Route path="/community/chat" element={<CommunityUnavailablePage system="community" title="固定聊天室尚未开放" />} />
             <Route path="/community/chat/*" element={<CommunityUnavailablePage system="community" title="固定聊天室尚未开放" />} />
-          </>
+          </Route>
         )}
-        <Route
-          path="/community/*"
-          element={COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat
-            ? <NotFoundPage />
-            : <CommunityUnavailablePage system="community" />}
-        />
-        <Route
-          path="/users/:publicId"
-          element={COMMUNITY_FEATURE_FLAGS.publicProfile
-            ? <CommunityPublicProfilePage />
-            : <CommunityUnavailablePage system="profile" title="公开主页尚未开放" />}
-        />
-
         <Route path="/privacy-policy" element={<CommunityPrivacyPolicyPage />} />
         <Route path="/terms-of-service" element={<CommunityTermsOfServicePage />} />
         <Route path="/community-guidelines" element={<CommunityGuidelinesPage />} />

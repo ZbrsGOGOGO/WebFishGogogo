@@ -23,10 +23,6 @@ const BALANCE_ITEMS: ReadonlyArray<{
   label: string;
 }> = [
   { key: 'officeCoin', label: '办公币' },
-  { key: 'decorationCoin', label: '装饰币' },
-  { key: 'water', label: '水滴' },
-  { key: 'sunlight', label: '阳光' },
-  { key: 'fertilizer', label: '肥料' },
 ];
 
 const numberFormatter = new Intl.NumberFormat('zh-CN');
@@ -159,7 +155,7 @@ export function PlatformOverviewCard({
           </span>
         </div>
         <div className={styles.energy}>
-          <span>精力</span>
+          <span>体力</span>
           <strong>
             {numberFormatter.format(profile.energy)} /{' '}
             {numberFormatter.format(profile.energyCap)}

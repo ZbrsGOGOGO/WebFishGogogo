@@ -17,6 +17,8 @@ import { AddEditorialNews1700000000015 } from './1700000000015-AddEditorialNews'
 import { AddCommunityOperationalIndexes1700000000016 } from './1700000000016-AddCommunityOperationalIndexes';
 import { AddUsernameAccounts1700000000017 } from './1700000000017-AddUsernameAccounts';
 import { AddGameGrowthSystems1700000000018 } from './1700000000018-AddGameGrowthSystems';
+import { UnifyGameEconomy1700000000019 } from './1700000000019-UnifyGameEconomy';
+import { AddGuildFoundation1700000000020 } from './1700000000020-AddGuildFoundation';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -39,4 +41,6 @@ export const migrations = [
   AddCommunityOperationalIndexes1700000000016,
   AddUsernameAccounts1700000000017,
   AddGameGrowthSystems1700000000018,
+  UnifyGameEconomy1700000000019,
+  AddGuildFoundation1700000000020,
 ];

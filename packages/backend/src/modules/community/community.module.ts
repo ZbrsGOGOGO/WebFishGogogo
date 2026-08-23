@@ -10,17 +10,16 @@ import {
   FriendEncouragement,
   FriendRequest,
   Friendship,
+  Guild,
+  GuildLedger,
+  GuildMember,
   ReferralClaimToken,
   ReferralCode,
   ReferralRedemption,
   UserBlock,
 } from '../../database/entities';
 import { AuthModule } from '../auth/auth.module';
-import {
-  PLATFORM_CLOCK,
-  PlatformAssetsService,
-  systemPlatformClock,
-} from '../platform';
+import { PlatformAssetsModule } from '../platform';
 import {
   COMMUNITY_CLOCK,
   systemCommunityClock,
@@ -29,6 +28,8 @@ import { DeskPlantController } from './desk-plant.controller';
 import { DeskPlantService } from './desk-plant.service';
 import { FeedController } from './feed.controller';
 import { FeedService } from './feed.service';
+import { GuildController } from './guild.controller';
+import { GuildService } from './guild.service';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
 import { PublicProfileController } from './public-profile.controller';
@@ -50,12 +51,16 @@ import { RelationshipService } from './relationship.service';
       FriendEncouragement,
       FriendRequest,
       Friendship,
+      Guild,
+      GuildLedger,
+      GuildMember,
       ReferralClaimToken,
       ReferralCode,
       ReferralRedemption,
       UserBlock,
     ]),
     AuthModule,
+    PlatformAssetsModule,
   ],
   controllers: [
     RelationshipController,
@@ -63,6 +68,7 @@ import { RelationshipService } from './relationship.service';
     ReferralController,
     FeedController,
     DeskPlantController,
+    GuildController,
     NotificationController,
   ],
   providers: [
@@ -72,10 +78,9 @@ import { RelationshipService } from './relationship.service';
     ReferralService,
     FeedService,
     DeskPlantService,
+    GuildService,
     NotificationService,
-    PlatformAssetsService,
     { provide: COMMUNITY_CLOCK, useValue: systemCommunityClock },
-    { provide: PLATFORM_CLOCK, useValue: systemPlatformClock },
   ],
   exports: [
     RelationshipPolicyService,
@@ -83,6 +88,7 @@ import { RelationshipService } from './relationship.service';
     ReferralService,
     FeedService,
     DeskPlantService,
+    GuildService,
     NotificationService,
   ],
 })

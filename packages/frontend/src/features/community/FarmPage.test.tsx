@@ -21,16 +21,17 @@ const overview: CommunityFarmOverview = {
     cycleSeconds: 300, firstCycle: false,
   },
   growth: {
-    farmCoins: 42, totalHarvests: 1, farmVersion: 2,
+    farmCoins: 0, officeCoins: 620, totalHarvests: 1, farmVersion: 2,
     skillPointsEarned: 1, skillPointsAvailable: 1,
     nextUnlock: { level: 3, name: '会议番茄', kind: 'crop' },
+    ordersCompleted: 1, ordersTotal: 3,
   },
   crops: [
-    { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, coins: 12, description: '成熟最快。', unlocked: true, selected: true, growing: true },
-    { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, coins: 36, description: '稳定产出。', unlocked: false, selected: false, growing: false },
+    { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, coins: 100, seedCost: 10, description: '成熟最快。', unlocked: true, selected: true, growing: true },
+    { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, coins: 120, seedCost: 25, description: '稳定产出。', unlocked: false, selected: false, growing: false },
   ],
   tools: [
-    { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。', level: 0, maxLevel: 5, nextCost: 20 },
+    { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。', level: 0, maxLevel: 5, nextCost: 200 },
   ],
   skills: [
     { id: 'quick_care', name: '快速照料', unlockLevel: 2, description: '每级让成熟时间额外缩短 3%。', level: 0, maxLevel: 5, unlocked: true },
@@ -64,13 +65,13 @@ describe('CommunityFarmPage growth system', () => {
   it('sends versioned tool upgrades and refreshes the server state', async () => {
     const upgraded: CommunityFarmOverview = {
       ...overview,
-      growth: { ...overview.growth, farmCoins: 22, farmVersion: 3 },
-      tools: overview.tools.map((tool) => ({ ...tool, level: 1, nextCost: 80 })),
+      growth: { ...overview.growth, officeCoins: 420, farmVersion: 3 },
+      tools: overview.tools.map((tool) => ({ ...tool, level: 1, nextCost: 500 })),
     };
-    const upgrade = vi.spyOn(communityFarmApi, 'upgradeTool').mockResolvedValue({ farm: upgraded, cost: 20 });
+    const upgrade = vi.spyOn(communityFarmApi, 'upgradeTool').mockResolvedValue({ farm: upgraded, cost: 200 });
     render(<CommunityFarmPage />);
     const tool = await screen.findByText('定时浇水壶');
-    fireEvent.click(within(tool.closest('article')!).getByRole('button', { name: '20 币升级' }));
+    fireEvent.click(within(tool.closest('article')!).getByRole('button', { name: '200 办公币升级' }));
     expect(upgrade).toHaveBeenCalledWith('watering_can', 2, expect.any(String));
     expect(await screen.findByText(/定时浇水壶已升到 Lv\.1/)).toBeInTheDocument();
   });

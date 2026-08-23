@@ -10,15 +10,11 @@ const OVERVIEW: PlatformOverview = {
     exp: 280,
     expToNextLevel: 120,
     title: '阅读摸鱼员',
-    energy: 8,
-    energyCap: 15,
+    energy: 108,
+    energyCap: 120,
   },
   balances: {
     officeCoin: 1260,
-    decorationCoin: 32,
-    water: 6,
-    sunlight: 9,
-    fertilizer: 2,
   },
   checkin: {
     checkedInToday: false,
@@ -39,11 +35,9 @@ describe('PlatformOverviewCard', () => {
     expect(await screen.findByText('阅读摸鱼员')).toBeInTheDocument();
     expect(screen.getByText('Lv.3')).toBeInTheDocument();
     expect(screen.getByText(/280 EXP/)).toHaveTextContent('距升级还需 120 EXP');
-    expect(screen.getByText('8 / 15')).toBeInTheDocument();
+    expect(screen.getByText('108 / 120')).toBeInTheDocument();
 
-    for (const label of ['办公币', '装饰币', '水滴', '阳光', '肥料']) {
-      expect(screen.getByText(label)).toBeInTheDocument();
-    }
+    expect(screen.getByText('办公币')).toBeInTheDocument();
     expect(screen.getByText('1,260')).toBeInTheDocument();
   });
 
@@ -51,7 +45,7 @@ describe('PlatformOverviewCard', () => {
     const checkedIn: PlatformOverview = {
       ...OVERVIEW,
       profile: { ...OVERVIEW.profile, exp: 290 },
-      balances: { ...OVERVIEW.balances, water: 7 },
+      balances: { ...OVERVIEW.balances, officeCoin: 1310 },
       checkin: { checkedInToday: true },
     };
     const overviewSpy = vi

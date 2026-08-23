@@ -14,3 +14,4 @@ export * from './community-moderation';
 export * from './community-battle';
 export * from './community-chat';
 export * from './community-news';
+export * from './community-guild';

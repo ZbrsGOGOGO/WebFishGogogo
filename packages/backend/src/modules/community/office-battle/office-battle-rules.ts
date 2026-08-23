@@ -9,11 +9,15 @@ export const OFFICE_BATTLE_ENGINE_VERSION = 'office-battle-engine-1';
 export const OFFICE_BATTLE_BALANCE_VERSION = 'office-battle-balance-2';
 export const OFFICE_BATTLE_MIN_CLIENT_VERSION = '1.0.0';
 export const OFFICE_BATTLE_INVENTORY_LIMIT = 120;
-export const OFFICE_BATTLE_DAILY_ENERGY = 12;
-export const OFFICE_BATTLE_DAILY_REWARDED_LIMIT = 12;
-export const OFFICE_BATTLE_DAILY_FRIEND_LIMIT = 3;
+export const OFFICE_BATTLE_DAILY_ENERGY = 120;
+export const OFFICE_BATTLE_ENERGY_COST = 10;
+export const OFFICE_BATTLE_DAILY_REWARDED_LIMIT = 14;
+export const OFFICE_BATTLE_DAILY_FRIEND_LIMIT = 5;
 export const OFFICE_BATTLE_MAX_EXPERIENCE = 40120;
 export const OFFICE_BATTLE_SKILL_MAX_LEVEL = 5;
+export const OFFICE_BATTLE_SKILL_COIN_COSTS = [100, 300, 700, 1500, 3000] as const;
+export const OFFICE_BATTLE_ENHANCE_COIN_COSTS = [100, 250, 500, 900, 1500, 2400] as const;
+export const OFFICE_BATTLE_ENHANCE_PART_COSTS = [2, 4, 6, 8, 10, 12] as const;
 
 export const OFFICE_BATTLE_PROFESSIONS: readonly OfficeBattleProfession[] = [
   'developer',
@@ -57,6 +61,7 @@ export const BASE_STATS: Record<OfficeBattleProfession, OfficeBattleStats> = {
 export interface OfficeBattleSkillDefinition {
   id: string;
   profession: OfficeBattleProfession;
+  mode: 'pve' | 'pvp';
   name: string;
   unlockLevel: number;
   description: string;
@@ -64,21 +69,40 @@ export interface OfficeBattleSkillDefinition {
 }
 
 export const OFFICE_BATTLE_SKILLS: readonly OfficeBattleSkillDefinition[] = [
-  { id: 'logic_overclock', profession: 'developer', name: '逻辑超频', unlockLevel: 1, description: '每级攻击 +3，强化代码输出。', bonusPerLevel: { attack: 3 } },
-  { id: 'exception_shield', profession: 'developer', name: '异常兜底', unlockLevel: 5, description: '每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
-  { id: 'rapid_deploy', profession: 'developer', name: '快速发布', unlockLevel: 10, description: '每级速度 +1、幸运 +1。', bonusPerLevel: { speed: 1, luck: 1 } },
-  { id: 'priority_cut', profession: 'product', name: '优先级裁决', unlockLevel: 1, description: '每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
-  { id: 'scope_control', profession: 'product', name: '范围管理', unlockLevel: 5, description: '每级生命 +6、防御 +2。', bonusPerLevel: { hp: 6, defense: 2 } },
-  { id: 'user_insight', profession: 'product', name: '用户洞察', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
-  { id: 'boundary_strike', profession: 'qa', name: '边界突击', unlockLevel: 1, description: '每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
-  { id: 'regression_armor', profession: 'qa', name: '回归护甲', unlockLevel: 5, description: '每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
-  { id: 'bug_trace', profession: 'qa', name: '缺陷追踪', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
-  { id: 'opening_pitch', profession: 'sales', name: '开场提案', unlockLevel: 1, description: '每级攻击 +3。', bonusPerLevel: { attack: 3 } },
-  { id: 'deal_rhythm', profession: 'sales', name: '成交节奏', unlockLevel: 5, description: '每级速度 +2。', bonusPerLevel: { speed: 2 } },
-  { id: 'client_insight', profession: 'sales', name: '客户洞察', unlockLevel: 10, description: '每级生命 +2、幸运 +2。', bonusPerLevel: { hp: 2, luck: 2 } },
-  { id: 'talent_link', profession: 'hr', name: '人才连接', unlockLevel: 1, description: '每级生命 +3、攻击 +2。', bonusPerLevel: { hp: 3, attack: 2 } },
-  { id: 'culture_shield', profession: 'hr', name: '文化护盾', unlockLevel: 5, description: '每级生命 +5、防御 +2。', bonusPerLevel: { hp: 5, defense: 2 } },
-  { id: 'empathy_field', profession: 'hr', name: '共情力场', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+  { id: 'pve_batch_script', profession: 'developer', mode: 'pve', name: '批量脚本', unlockLevel: 1, description: 'PVE 每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+  { id: 'pve_hotfix', profession: 'developer', mode: 'pve', name: '紧急热修', unlockLevel: 4, description: 'PVE 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'pve_auto_rollback', profession: 'developer', mode: 'pve', name: '自动回滚', unlockLevel: 8, description: 'PVE 每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'pvp_logic_overclock', profession: 'developer', mode: 'pvp', name: '逻辑超频', unlockLevel: 5, description: 'PVP 每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+  { id: 'pvp_exception_guard', profession: 'developer', mode: 'pvp', name: '异常兜底', unlockLevel: 9, description: 'PVP 每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'pvp_rapid_deploy', profession: 'developer', mode: 'pvp', name: '快速发布', unlockLevel: 13, description: 'PVP 每级速度 +1、幸运 +1。', bonusPerLevel: { speed: 1, luck: 1 } },
+
+  { id: 'pve_priority_mark', profession: 'product', mode: 'pve', name: '优先级排序', unlockLevel: 1, description: 'PVE 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'pve_requirement_split', profession: 'product', mode: 'pve', name: '需求拆分', unlockLevel: 4, description: 'PVE 每级攻击 +2、速度 +1。', bonusPerLevel: { attack: 2, speed: 1 } },
+  { id: 'pve_acceptance', profession: 'product', mode: 'pve', name: '验收标准', unlockLevel: 8, description: 'PVE 每级生命 +5、防御 +2。', bonusPerLevel: { hp: 5, defense: 2 } },
+  { id: 'pvp_requirement_freeze', profession: 'product', mode: 'pvp', name: '需求冻结', unlockLevel: 5, description: 'PVP 每级幸运 +2。', bonusPerLevel: { luck: 2 } },
+  { id: 'pvp_priority_cut', profession: 'product', mode: 'pvp', name: '优先级裁决', unlockLevel: 9, description: 'PVP 每级攻击 +2、速度 +1。', bonusPerLevel: { attack: 2, speed: 1 } },
+  { id: 'pvp_user_insight', profession: 'product', mode: 'pvp', name: '用户洞察', unlockLevel: 13, description: 'PVP 每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+
+  { id: 'pve_boundary_scan', profession: 'qa', mode: 'pve', name: '边界扫描', unlockLevel: 1, description: 'PVE 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'pve_bug_tracking', profession: 'qa', mode: 'pve', name: '缺陷追踪', unlockLevel: 4, description: 'PVE 每级攻击 +2、防御 +1。', bonusPerLevel: { attack: 2, defense: 1 } },
+  { id: 'pve_regression_armor', profession: 'qa', mode: 'pve', name: '回归护甲', unlockLevel: 8, description: 'PVE 每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'pvp_boundary_strike', profession: 'qa', mode: 'pvp', name: '边界突击', unlockLevel: 5, description: 'PVP 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'pvp_regression_armor', profession: 'qa', mode: 'pvp', name: '回归护甲', unlockLevel: 9, description: 'PVP 每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'pvp_bug_tracking', profession: 'qa', mode: 'pvp', name: '缺陷追踪', unlockLevel: 13, description: 'PVP 每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+
+  { id: 'pve_bulk_pitch', profession: 'sales', mode: 'pve', name: '批量提案', unlockLevel: 1, description: 'PVE 每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+  { id: 'pve_key_account', profession: 'sales', mode: 'pve', name: '关键客户', unlockLevel: 4, description: 'PVE 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'pve_final_signing', profession: 'sales', mode: 'pve', name: '临门签单', unlockLevel: 8, description: 'PVE 每级速度 +2。', bonusPerLevel: { speed: 2 } },
+  { id: 'pvp_opening_pitch', profession: 'sales', mode: 'pvp', name: '开场提案', unlockLevel: 5, description: 'PVP 每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+  { id: 'pvp_deal_rhythm', profession: 'sales', mode: 'pvp', name: '成交节奏', unlockLevel: 9, description: 'PVP 每级速度 +2。', bonusPerLevel: { speed: 2 } },
+  { id: 'pvp_final_signing', profession: 'sales', mode: 'pvp', name: '临门签单', unlockLevel: 13, description: 'PVP 每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+
+  { id: 'pve_talent_link', profession: 'hr', mode: 'pve', name: '人才连接', unlockLevel: 1, description: 'PVE 每级生命 +3、攻击 +2。', bonusPerLevel: { hp: 3, attack: 2 } },
+  { id: 'pve_culture_shield', profession: 'hr', mode: 'pve', name: '文化护盾', unlockLevel: 4, description: 'PVE 每级生命 +5、防御 +2。', bonusPerLevel: { hp: 5, defense: 2 } },
+  { id: 'pve_team_motivation', profession: 'hr', mode: 'pve', name: '团队激励', unlockLevel: 8, description: 'PVE 每级生命 +4、幸运 +1。', bonusPerLevel: { hp: 4, luck: 1 } },
+  { id: 'pvp_team_motivation', profession: 'hr', mode: 'pvp', name: '团队激励', unlockLevel: 5, description: 'PVP 每级生命 +4、攻击 +1。', bonusPerLevel: { hp: 4, attack: 1 } },
+  { id: 'pvp_culture_shield', profession: 'hr', mode: 'pvp', name: '文化护盾', unlockLevel: 9, description: 'PVP 每级生命 +5、防御 +2。', bonusPerLevel: { hp: 5, defense: 2 } },
+  { id: 'pvp_empathy_field', profession: 'hr', mode: 'pvp', name: '共情力场', unlockLevel: 13, description: 'PVP 每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
 ] as const;
 
 export const SLOT_BASE_STATS: Record<OfficeBattleEquipmentSlot, Partial<OfficeBattleStats>> = {
@@ -164,6 +188,7 @@ export interface FighterDefinition {
   level: number;
   equipment: ReadonlyArray<{ stats: Partial<OfficeBattleStats> }>;
   skillLevels?: Readonly<Record<string, number>>;
+  skillMode?: 'pve' | 'pvp';
 }
 
 export interface BattleLevelSnapshot {
@@ -257,7 +282,10 @@ export function deriveBattleStats(fighter: FighterDefinition): OfficeBattleStats
     }
   }
   const skillLevels = normalizeBattleSkillLevels(fighter.profession, fighter.skillLevels);
-  for (const skill of battleSkillsForProfession(fighter.profession)) {
+  for (const skill of battleSkillsForProfession(
+    fighter.profession,
+    fighter.skillMode ?? 'pve',
+  )) {
     const skillLevel = skillLevels[skill.id] ?? 0;
     for (const [key, amount] of Object.entries(skill.bonusPerLevel) as Array<
       [keyof OfficeBattleStats, number]
@@ -268,8 +296,13 @@ export function deriveBattleStats(fighter: FighterDefinition): OfficeBattleStats
   return result;
 }
 
-export function battleSkillsForProfession(profession: OfficeBattleProfession): OfficeBattleSkillDefinition[] {
-  return OFFICE_BATTLE_SKILLS.filter((skill) => skill.profession === profession);
+export function battleSkillsForProfession(
+  profession: OfficeBattleProfession,
+  mode?: 'pve' | 'pvp',
+): OfficeBattleSkillDefinition[] {
+  return OFFICE_BATTLE_SKILLS.filter(
+    (skill) => skill.profession === profession && (!mode || skill.mode === mode),
+  );
 }
 
 export function normalizeBattleSkillLevels(
@@ -284,17 +317,30 @@ export function normalizeBattleSkillLevels(
   );
 }
 
-export function battleSkillPointsEarned(level: number): number {
-  return Math.min(15, 1 + Math.floor((Math.max(1, level) - 1) / 2));
+export function battleSkillPointsEarned(
+  level: number,
+  mode: 'pve' | 'pvp',
+): number {
+  const normalized = Math.max(1, Math.min(60, Math.trunc(level)));
+  if (mode === 'pve') {
+    return Math.min(15, 1 + Math.floor(normalized / 4));
+  }
+  if (normalized < 5) return 0;
+  return Math.min(15, 1 + Math.floor((normalized - 5) / 4) + (normalized >= 60 ? 1 : 0));
 }
 
 export function battleSkillPointsAvailable(
   level: number,
   profession: OfficeBattleProfession,
   skillLevels: Readonly<Record<string, number>> | null | undefined,
+  mode: 'pve' | 'pvp',
 ): number {
   const normalized = normalizeBattleSkillLevels(profession, skillLevels);
-  return Math.max(0, battleSkillPointsEarned(level) - Object.values(normalized).reduce((sum, value) => sum + value, 0));
+  const spent = battleSkillsForProfession(profession, mode).reduce(
+    (sum, skill) => sum + (normalized[skill.id] ?? 0),
+    0,
+  );
+  return Math.max(0, battleSkillPointsEarned(level, mode) - spent);
 }
 
 export function nextBattleUnlock(

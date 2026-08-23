@@ -15,7 +15,7 @@ import { User } from './user.entity';
  * 跨阅读、农场与小游戏共享的玩家等级和累计经验。
  */
 @Entity({ name: 'player_progression' })
-@Check('chk_player_progression_level', '"level" BETWEEN 1 AND 100')
+@Check('chk_player_progression_level', '"level" BETWEEN 1 AND 60')
 @Check('chk_player_progression_experience', '"experience" >= 0')
 export class PlayerProgression {
   @PrimaryColumn({ name: 'user_id', type: 'uuid' })

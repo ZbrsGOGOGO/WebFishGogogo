@@ -1,21 +1,21 @@
 /**
- * 等级曲线 v1。
+ * 统一职场等级曲线 v2。
  *
  * - 初始为 Lv.1、累计经验 0。
- * - 从 Lv.N 升到 Lv.N+1 需要额外 `100 * N` EXP。
- * - 等级上限为 100；累计经验保留，等级不会超过上限。
+ * - 从 Lv.N 升到 Lv.N+1 需要额外 `80 + 20 * N` EXP。
+ * - 等级上限为 60；累计经验保留，等级不会超过上限。
  *
  * 曲线保持为纯函数，未来调整时应新增版本，而不是原地改写历史战斗/奖励语义。
  */
-export const PLAYER_LEVEL_RULE_VERSION = 'v1';
+export const PLAYER_LEVEL_RULE_VERSION = 'v2';
 export const MIN_PLAYER_LEVEL = 1;
-export const MAX_PLAYER_LEVEL = 100;
+export const MAX_PLAYER_LEVEL = 60;
 
 /** 到达指定等级所需的累计 EXP。 */
 export function cumulativeExperienceForLevel(level: number): number {
   assertLevel(level);
-  // 100 * (1 + 2 + ... + level - 1)
-  return 50 * level * (level - 1);
+  // sum(80 + 20N), N = 1 .. level - 1
+  return 80 * (level - 1) + 10 * level * (level - 1);
 }
 
 /** 由累计 EXP 解析玩家等级。 */

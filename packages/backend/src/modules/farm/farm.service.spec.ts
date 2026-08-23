@@ -118,7 +118,7 @@ describe('FarmService integration', () => {
 
     const platformAfterHarvest = await platformService.getOverview(userId);
     expect(platformAfterHarvest.profile.exp).toBe(20);
-    expect(platformAfterHarvest.balances.officeCoin).toBe(5);
+    expect(platformAfterHarvest.balances.officeCoin).toBe(505);
 
     await farmService.harvest(
       userId,
@@ -127,7 +127,7 @@ describe('FarmService integration', () => {
     );
     const platformAfterReplay = await platformService.getOverview(userId);
     expect(platformAfterReplay.profile.exp).toBe(20);
-    expect(platformAfterReplay.balances.officeCoin).toBe(5);
+    expect(platformAfterReplay.balances.officeCoin).toBe(505);
 
     const secondPlanting = await farmService.plant(
       userId,
