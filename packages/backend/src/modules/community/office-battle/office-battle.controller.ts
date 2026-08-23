@@ -40,6 +40,32 @@ export class OfficeBattleController {
     return this.battles.bootstrap(userId);
   }
 
+  @Get('leaderboard')
+  leaderboard(
+    @Query('mode') rawMode?: string,
+    @Query('profession') rawProfession?: string,
+    @Query('limit') rawLimit?: string,
+  ) {
+    const mode = rawMode ?? 'pve';
+    if (mode !== 'pve' && mode !== 'pvp') throw this.battles.invalid('BATTLE_RANKING_MODE_INVALID');
+    const profession = rawProfession ?? 'all';
+    if (
+      profession !== 'all' &&
+      !['developer', 'product', 'qa', 'sales', 'hr'].includes(profession)
+    ) {
+      throw this.battles.invalid('BATTLE_RANKING_PROFESSION_INVALID');
+    }
+    const limit = rawLimit === undefined ? 50 : Number(rawLimit);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw this.battles.invalid('BATTLE_RANKING_LIMIT_INVALID');
+    }
+    return this.battles.leaderboard(
+      mode,
+      profession as 'all' | 'developer' | 'product' | 'qa' | 'sales' | 'hr',
+      limit,
+    );
+  }
+
   @Put('profile/class')
   chooseProfession(
     @CurrentUserId() userId: string,

@@ -29,8 +29,8 @@ describe('CommunityPostEditorPage', () => {
     render(<MemoryRouter initialEntries={['/community/posts/p-1/edit']}><Routes><Route path="/community/posts/:id/edit" element={<CommunityPostEditorPage />} /></Routes></MemoryRouter>);
     expect(await screen.findByDisplayValue(post.title)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '保存草稿' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('没有覆盖服务器内容');
-    expect(screen.getByText('服务器当前版本：v4')).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('没有覆盖最新内容');
+    expect(screen.getByText('内容已更新：v4')).toBeInTheDocument();
     expect(communityContentApi.updatePost).toHaveBeenCalledWith('p-1', expect.any(Object), 3, expect.stringContaining('post-update:p-1'));
   });
 });

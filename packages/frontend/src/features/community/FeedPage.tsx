@@ -24,8 +24,8 @@ export function CommunityFeedPage(): JSX.Element {
   return (
     <main className={styles.page}>
       <PageHeader
-        title="投喂站长"
-        subtitle="如果这个小站对你有用，可以自愿支持服务器和后续开发。"
+        title="支持小站"
+        subtitle="如果这里让你感到轻松或有用，欢迎自愿支持小站继续成长。"
       />
 
       <div className={styles.twoColumn}>
@@ -43,8 +43,8 @@ export function CommunityFeedPage(): JSX.Element {
               </a>
             ) : (
               <div className={styles.heroAside}>
-                <strong>爱发电接入中</strong>
-                <p>入口尚未配置，本页不会展示二维码、收款账号或模拟支付按钮。</p>
+                <strong>常来看看，就是最好的支持</strong>
+                <p>你可以继续免费使用现有功能，支持入口准备好后会自然出现在这里。</p>
               </div>
             )}
           </div>
@@ -52,10 +52,10 @@ export function CommunityFeedPage(): JSX.Element {
 
         <Card title="投喂说明">
           <ul className={styles.plainList}>
-            <li>投喂对象是网站维护者，不是好友或游戏角色</li>
+            <li>支持对象是网站的持续维护与内容更新</li>
             <li>订单和支付由爱发电页面处理</li>
             <li>暂不赠送办公币、装备、属性或排行榜优势</li>
-            <li>本网站当前不接收、保存支付卡或支付密码</li>
+            <li>支付信息只在爱发电页面处理</li>
           </ul>
         </Card>
       </div>

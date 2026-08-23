@@ -48,9 +48,9 @@ export function Footer({
   const currentYear = new Date().getFullYear();
   const beianPending = isBeianPlaceholder(ICP_BEIAN_NUMBER);
   const statement = publicMode
-    ? '办公室乐斗、工具与单机游戏均在浏览器中运行，试玩进度只保存在本机。'
+      ? '轻量工具、经典小游戏和办公室主题玩法，随时开始，轻松使用。'
     : communityMode
-      ? '账号、资料和社区互动由服务端保存；公开范围可在隐私设置中调整。'
+      ? '热点、交流、农场、乐斗和小游戏，组成你的在线办公室社区。'
     : reviewMode
       ? '专注轻量、实用的个人效率体验，产品内容与服务能力将持续完善。'
       : '个人资料与使用记录由您的本地服务保存，请仅处理本人合法拥有的内容。';
@@ -62,7 +62,7 @@ export function Footer({
           <strong>{SITE_NAME}</strong>
           <span>
             {publicMode
-              ? '办公室轻社区 · 本机试玩版'
+              ? '办公室轻社区'
               : communityMode
                 ? '办公室轻社区 · 社区版'
               : reviewMode

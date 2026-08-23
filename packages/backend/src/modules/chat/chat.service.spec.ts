@@ -222,6 +222,38 @@ describe('ChatService safety and persistence invariants', () => {
     expect(blockFind).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps only the latest 200 messages in each room', async () => {
+    const author = await activeUser('retention@example.com', 'Retention');
+    const repo = dataSource.getRepository(ChatMessage);
+    await repo.save(Array.from({ length: 205 }, (_, index) => repo.create({
+      id: randomUUID(),
+      roomSlug: 'general',
+      authorId: author.id,
+      clientMessageId: randomUUID(),
+      requestHash: index.toString(16).padStart(64, '0'),
+      sequence: index + 1,
+      body: `Message ${index + 1}`,
+      replyToMessageId: null,
+      status: 'visible',
+      version: 1,
+      moderationProvider: 'local-test',
+      moderationDecision: 'allow',
+      moderationReference: null,
+      withdrawnAt: null,
+    })));
+    await dataSource.getRepository(ChatRoom).update(
+      { slug: 'general' },
+      { latestSequence: 205 },
+    );
+
+    await service.onModuleInit();
+
+    const retained = await repo.find({ where: { roomSlug: 'general' }, order: { sequence: 'ASC' } });
+    expect(retained).toHaveLength(200);
+    expect(retained[0].sequence).toBe(6);
+    expect(retained.at(-1)?.sequence).toBe(205);
+  });
+
   it('replaces deleted chat identities and removes deleted mention public ids', async () => {
     const author = await activeUser('deleted-chat-author@example.com', 'Deleted Chat Author');
     const mentioned = await activeUser('deleted-chat-mention@example.com', 'Deleted Mention');

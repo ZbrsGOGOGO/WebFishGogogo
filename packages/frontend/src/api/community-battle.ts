@@ -96,6 +96,8 @@ export interface CommunityBattleProfile {
   wins: number;
   losses: number;
   power: number;
+  pvePower?: number;
+  pvpPower?: number;
   stats: CommunityBattleStats;
   energy: CommunityBattleEnergy;
   workspaceCoins: number;
@@ -327,6 +329,23 @@ export interface CommunityBattleMutationResult {
   changedEquipment?: CommunityBattleEquipment | null;
 }
 
+export interface CommunityBattleLeaderboard {
+  mode: 'pve' | 'pvp';
+  profession: CommunityBattleProfession | 'all';
+  formulaVersion: string;
+  updatedAt: string;
+  items: Array<{
+    rank: number;
+    publicId: string;
+    displayName: string;
+    profession: CommunityBattleProfession;
+    battleLevel: number;
+    power: number;
+    wins: number;
+    losses: number;
+  }>;
+}
+
 export interface CommunityBattleRequest {
   battleRequestId: string;
   opponent:
@@ -350,6 +369,15 @@ export function getCommunityBattleCatalog(): Promise<CommunityBattleCatalog> {
 
 export function getCommunityBattleBootstrap(): Promise<CommunityBattleBootstrap> {
   return communityHttp.get(`${BATTLE_ROOT}/bootstrap`);
+}
+
+export function getCommunityBattleLeaderboard(
+  mode: 'pve' | 'pvp',
+  profession: CommunityBattleProfession | 'all',
+): Promise<CommunityBattleLeaderboard> {
+  return communityHttp.get(`${BATTLE_ROOT}/leaderboard`, {
+    query: { mode, profession, limit: 50 },
+  });
 }
 
 export function chooseCommunityBattleProfession(
@@ -589,6 +617,7 @@ export function communityBattleErrorMessage(error: unknown): string {
 export const communityBattleApi = {
   getCatalog: getCommunityBattleCatalog,
   getBootstrap: getCommunityBattleBootstrap,
+  getLeaderboard: getCommunityBattleLeaderboard,
   chooseProfession: chooseCommunityBattleProfession,
   getInventory: getCommunityBattleInventory,
   updateLoadout: updateCommunityBattleLoadout,

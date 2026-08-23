@@ -9,6 +9,7 @@ import {
   type CommunityBattleEquipment,
   type CommunityBattleFriendCandidate,
   type CommunityBattleInventoryPage,
+  type CommunityBattleLeaderboard,
   type CommunityBattleOffer,
   type CommunityBattleProfession,
   type CommunityBattleRequest,
@@ -25,12 +26,13 @@ import { ServerBattleReplay } from './ServerBattleReplay';
 import { CommunityGuildPanel } from './CommunityGuildPanel';
 import styles from './CommunityBattlePage.module.css';
 
-type BattleTab = 'overview' | 'skills' | 'equipment' | 'guild' | 'history' | 'defense';
+type BattleTab = 'overview' | 'skills' | 'equipment' | 'ranking' | 'guild' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'overview', label: '战斗' },
   { id: 'equipment', label: '装备' },
   { id: 'skills', label: '技能' },
+  { id: 'ranking', label: '排行' },
   { id: 'guild', label: '帮派' },
   { id: 'history', label: '记录' },
   { id: 'defense', label: '设置' },
@@ -43,7 +45,7 @@ const TIER_LABELS: Record<CommunityBattleOffer['tier'], string> = {
 };
 
 function formatDateTime(value: string | null | undefined): string {
-  if (!value) return '以服务端时间为准';
+  if (!value) return '待更新';
   const date = new Date(value);
   return Number.isNaN(date.getTime())
     ? value
@@ -75,6 +77,9 @@ export function CommunityBattlePage(): JSX.Element {
   const [bootstrap, setBootstrap] = useState<CommunityBattleBootstrap | null>(null);
   const [inventory, setInventory] = useState<CommunityBattleInventoryPage | null>(null);
   const [history, setHistory] = useState<Awaited<ReturnType<typeof communityBattleApi.getHistory>> | null>(null);
+  const [ranking, setRanking] = useState<CommunityBattleLeaderboard | null>(null);
+  const [rankingMode, setRankingMode] = useState<'pve' | 'pvp'>('pve');
+  const [rankingProfession, setRankingProfession] = useState<CommunityBattleProfession | 'all'>('all');
   const [settlement, setSettlement] = useState<CommunityBattleSettlement | null>(null);
   const [tab, setTab] = useState<BattleTab>('overview');
   const [loading, setLoading] = useState(true);
@@ -122,6 +127,15 @@ export function CommunityBattlePage(): JSX.Element {
       .finally(() => setBusyKey(null));
   }, [bootstrap?.profile, history, tab]);
 
+  useEffect(() => {
+    if (tab !== 'ranking' || !bootstrap?.profile) return;
+    setBusyKey('ranking:load');
+    communityBattleApi.getLeaderboard(rankingMode, rankingProfession)
+      .then(setRanking)
+      .catch((requestError) => setError(communityBattleErrorMessage(requestError)))
+      .finally(() => setBusyKey(null));
+  }, [bootstrap?.profile, rankingMode, rankingProfession, tab]);
+
   const canMutate = Boolean(
     bootstrap?.profile &&
     !isRestricted(bootstrap) &&
@@ -147,7 +161,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-class'),
       );
       setBootstrap(result);
-      setNotice(`正式档案已选择游戏职业：${professionName(profession)}`);
+      setNotice(`已选择职业：${professionName(profession)}`);
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -169,7 +183,7 @@ export function CommunityBattlePage(): JSX.Element {
     const key = opponent.kind === 'npc' ? `battle:${opponent.offerId}` : `friend:${opponent.publicId}`;
     setBusyKey(key);
     setError(null);
-    setNotice('请求已提交；网络中断时会先按请求编号查单，不会生成第二场战斗。');
+    setNotice('战斗开始，正在生成战报…');
     try {
       const result = await submitBattleWithRecovery(
         request,
@@ -183,7 +197,7 @@ export function CommunityBattlePage(): JSX.Element {
         communityBattleApi.getBattleByRequest,
       );
       setSettlement(result);
-      setNotice('服务端已完成结算；下方演出仅播放返回的完整事件。');
+      setNotice('战斗结束，完整战报已生成。');
       setBootstrap(await communityBattleApi.getBootstrap());
       setHistory(null);
       setInventory(null);
@@ -209,7 +223,7 @@ export function CommunityBattlePage(): JSX.Element {
   async function replaceEquipment(item: CommunityBattleEquipment): Promise<void> {
     if (!inventory || !bootstrap?.profile || !canMutate) return;
     if (item.profession !== bootstrap.profile.profession || item.requiredLevel > bootstrap.profile.battleLevel) {
-      setError('这件装备的游戏职业或等级门槛与当前正式档案不匹配');
+      setError('这件装备的职业或等级要求与当前角色不匹配');
       return;
     }
     const equipmentIds = inventory.loadout.equipment
@@ -225,7 +239,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-loadout'),
       );
       await refreshAssets();
-      setNotice(`服务端已确认替换 ${slotName(item.slot)}：${item.name}`);
+      setNotice(`已换上 ${slotName(item.slot)}：${item.name}`);
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -245,7 +259,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-lock'),
       );
       await refreshAssets();
-      setNotice(item.locked ? '服务端已解除装备锁定' : '服务端已锁定装备');
+      setNotice(item.locked ? '已解除装备锁定' : '已锁定装备');
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -271,7 +285,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-salvage'),
       );
       await refreshAssets();
-      setNotice(`服务端已完成分解，获得 ${result.partsGranted} 个零件`);
+      setNotice(`分解完成，获得 ${result.partsGranted} 个零件`);
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -309,7 +323,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-skill'),
       );
       setBootstrap({ ...bootstrap, profile: result.profile });
-      setNotice(`${skillName}已升到 Lv.${result.profile.skillLevels[skillId] ?? 0}，战力已由服务端重新计算`);
+      setNotice(`${skillName}已升到 Lv.${result.profile.skillLevels[skillId] ?? 0}，战力已更新`);
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -333,7 +347,7 @@ export function CommunityBattlePage(): JSX.Element {
       }
       await loadBootstrap();
       setInventory(null);
-      setNotice(action === 'claim' ? '装备已领取到仓库' : '待领取装备已由服务端分解');
+      setNotice(action === 'claim' ? '装备已领取到仓库' : '装备已分解');
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -356,7 +370,7 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-defense'),
       );
       setBootstrap({ ...bootstrap, defense: result, profile: { ...bootstrap.profile, defenseVersion: result.version } });
-      setNotice('服务端已保存防守阵容和独立可见范围');
+      setNotice('防守阵容和可见范围已保存');
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -369,7 +383,7 @@ export function CommunityBattlePage(): JSX.Element {
     setError(null);
     try {
       setSettlement(await communityBattleApi.getBattle(battleId));
-      setNotice('已加载服务端保存的完整战斗记录');
+      setNotice('完整战斗记录已打开');
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -399,13 +413,13 @@ export function CommunityBattlePage(): JSX.Element {
   }, [bootstrap?.profile]);
 
   if (loading && !bootstrap) {
-    return <main className={styles.page}><p role="status">正在从服务端加载办公室乐斗正式档案…</p></main>;
+    return <main className={styles.page}><p role="status">正在加载办公室乐斗…</p></main>;
   }
 
   if (!bootstrap) {
     return (
       <main className={styles.page}>
-        <PageHeader title="办公室乐斗正式档案" subtitle="服务端档案暂时无法加载" />
+        <PageHeader title="办公室乐斗" subtitle="角色资料暂时无法加载" />
         <p className={styles.error} role="alert">{error}</p>
         <Button variant="secondary" onClick={() => void loadBootstrap()}>重新加载</Button>
       </main>
@@ -416,9 +430,9 @@ export function CommunityBattlePage(): JSX.Element {
     return (
       <main className={styles.page}>
         <PageHeader
-          title="创建办公室乐斗正式档案"
-          subtitle="选择的是游戏职业，不代表真实职业，也不会读取或导入游客本机存档。"
-          actions={<Tag color="success">服务端正式档案</Tag>}
+          title="创建乐斗角色"
+          subtitle="先选择一个职业方向，职业会影响基础属性、技能和专属装备。"
+          actions={<Tag color="success">在线角色</Tag>}
         />
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         <Card title="选择一个游戏职业">
@@ -438,9 +452,7 @@ export function CommunityBattlePage(): JSX.Element {
               </button>
             ))}
           </div>
-          <p className={styles.safetyNote}>
-            正式档案从服务端初始资产开始。本机试玩的等级、装备、战绩和货币不会上传或兑换。
-          </p>
+          <p className={styles.safetyNote}>职业可以在冷却期结束后更换；不同职业拥有独立的装备名称与战斗路线。</p>
         </Card>
       </main>
     );
@@ -462,17 +474,17 @@ export function CommunityBattlePage(): JSX.Element {
       ) : null}
       {profile.accountState !== 'active' ? (
         <p className={styles.error} role="alert">
-          {profile.accountState === 'banned' ? '正式档案已被封禁' : '正式档案当前受限'}
+          {profile.accountState === 'banned' ? '当前角色已被封禁' : '当前角色受到限制'}
           {profile.restrictionReason ? `：${profile.restrictionReason}` : '，资产操作和对战已停止。'}
         </p>
       ) : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
 
-      <section className={styles.summaryGrid} aria-label="正式档案摘要">
+      <section className={styles.summaryGrid} aria-label="角色摘要">
         <div><span>等级</span><strong>Lv.{profile.battleLevel}</strong><small>{profile.wins} 胜 {profile.losses} 负</small></div>
         <div><span>体力</span><strong>{profile.energy.current}/{profile.energy.max}</strong><small>{profile.energy.nextRecoveryAt ? `${formatDateTime(profile.energy.nextRecoveryAt)} +1` : '已满'}</small></div>
-        <div><span>战力</span><strong>{profile.power}</strong><small>零件 {profile.parts}</small></div>
+        <div><span>PVE / PVP 战力</span><strong>{profile.pvePower ?? profile.power} / {profile.pvpPower ?? profile.power}</strong><small>零件 {profile.parts}</small></div>
         <div><span>办公币</span><strong>{profile.workspaceCoins}</strong><small>技能点 PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</small></div>
       </section>
       <div className={styles.levelProgress}>
@@ -511,7 +523,7 @@ export function CommunityBattlePage(): JSX.Element {
               </p>
             ) : null}
             {bootstrap.offers.length === 0 ? (
-              <EmptyState title="暂无有效候选" message="候选可能已过期，刷新后由服务端重新生成。" />
+              <EmptyState title="暂无对手" message="点击刷新候选，寻找新的对手。" />
             ) : (
               <div className={styles.offerGrid}>
                 {bootstrap.offers.map((offer) => (
@@ -553,9 +565,9 @@ export function CommunityBattlePage(): JSX.Element {
 
           <Card title="好友对战">
             {!bootstrap.catalog.capabilities.friendChallengesEnabled ? (
-              <EmptyState title="服务端尚未开放" message="好友挑战能力关闭时不会伪造候选或成功状态。" />
+              <EmptyState title="好友挑战暂不可用" message="稍后再来看看。" />
             ) : bootstrap.friendCandidates.length === 0 ? (
-              <EmptyState title="暂无可挑战好友" message="成为好友满 24 小时且双方允许挑战后，候选会由服务端显示。" />
+              <EmptyState title="暂无可挑战好友" message="成为好友满 24 小时且双方允许挑战后，即可在这里发起切磋。" />
             ) : (
               <ul className={styles.friendList}>
                 {bootstrap.friendCandidates.map((friend) => (
@@ -606,7 +618,7 @@ export function CommunityBattlePage(): JSX.Element {
             title={`${professionName(profile.profession)}职业技能`}
             headerActions={<Tag color={profile.skillPointsAvailable > 0 ? 'success' : 'neutral'}>PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</Tag>}
           >
-            <p className={styles.muted}>{bootstrap.catalog.skills.pointRule} 技能效果会进入服务端战斗快照。</p>
+            <p className={styles.muted}>{bootstrap.catalog.skills.pointRule} 升级技能会立即影响对应模式的战力。</p>
             <div className={styles.skillGrid}>
               {bootstrap.catalog.skills.definitions
                 .filter((skill) => skill.profession === profile.profession)
@@ -635,6 +647,53 @@ export function CommunityBattlePage(): JSX.Element {
         </div>
       ) : null}
 
+      {tab === 'ranking' ? (
+        <Card title="战力排行榜">
+          <div className={styles.rankingFilters}>
+            <label>
+              对战类型
+              <select value={rankingMode} onChange={(event) => setRankingMode(event.target.value as 'pve' | 'pvp')}>
+                <option value="pve">PVE 战力</option>
+                <option value="pvp">PVP 战力</option>
+              </select>
+            </label>
+            <label>
+              职业分榜
+              <select value={rankingProfession} onChange={(event) => setRankingProfession(event.target.value as CommunityBattleProfession | 'all')}>
+                <option value="all">全职业</option>
+                {PROFESSION_DEFINITIONS.map((profession) => (
+                  <option key={profession.id} value={profession.id}>{profession.name}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className={styles.muted}>
+            PVE 计入装备全部强化和 PVE 技能；PVP 使用 PVP 技能，并按强化增量的 60% 计入。战力相同时依次比较等级与胜场。
+          </p>
+          {busyKey === 'ranking:load' ? <p role="status">排行榜加载中…</p> : null}
+          {ranking && ranking.items.length === 0 ? <EmptyState title="暂无排名" message="完成职业选择和装备配置后即可参与排名。" /> : null}
+          {ranking && ranking.items.length > 0 ? (
+            <div className={styles.rankingScroller}>
+              <div className={styles.rankingTable} role="table" aria-label="办公室乐斗战力排行榜">
+                <div role="row" className={styles.rankingHeader}>
+                  <span role="columnheader">排名</span><span role="columnheader">玩家</span><span role="columnheader">职业</span><span role="columnheader">等级</span><span role="columnheader">战力</span><span role="columnheader">战绩</span>
+                </div>
+                {ranking.items.map((item) => (
+                  <div role="row" key={item.publicId}>
+                    <strong role="cell">#{item.rank}</strong>
+                    <span role="cell">{item.displayName}</span>
+                    <span role="cell">{professionName(item.profession)}</span>
+                    <span role="cell">Lv.{item.battleLevel}</span>
+                    <b role="cell">{item.power}</b>
+                    <span role="cell">{item.wins} 胜 {item.losses} 负</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       {tab === 'equipment' ? (
         <div role="tabpanel" className={styles.stack}>
           <Card title="当前六件装备" headerActions={<Tag color="neutral">版本 {inventory?.loadout.version ?? profile.loadoutVersion}</Tag>}>
@@ -643,7 +702,7 @@ export function CommunityBattlePage(): JSX.Element {
               <div className={styles.loadoutGrid}>
                 {EQUIPMENT_SLOTS.map((slot) => {
                   const item = inventory.loadout.equipment.find((entry) => entry.slot === slot.id);
-                  return <div key={slot.id}><span>{slot.name}</span><strong>{item?.name ?? '服务端保底装备'}</strong><small>{item ? `${rarityName(item.rarity)} · Lv.${item.requiredLevel} · +${item.enhancementLevel}` : '不可为空'}</small></div>;
+                  return <div key={slot.id}><span>{slot.name}</span><strong>{item?.name ?? '基础装备'}</strong><small>{item ? `${rarityName(item.rarity)} · Lv.${item.requiredLevel} · +${item.enhancementLevel}` : '不可为空'}</small></div>;
                 })}
               </div>
             ) : null}
@@ -653,7 +712,7 @@ export function CommunityBattlePage(): JSX.Element {
             title="装备仓库"
             headerActions={inventory ? <Tag color={inventory.total >= inventory.limit ? 'danger' : 'neutral'}>{inventory.total}/{inventory.limit}</Tag> : null}
           >
-            {inventory && inventory.items.length === 0 ? <EmptyState title="仓库为空" message="正式行动的服务端掉落会显示在这里。" /> : null}
+            {inventory && inventory.items.length === 0 ? <EmptyState title="仓库为空" message="完成有奖励的战斗后，掉落装备会显示在这里。" /> : null}
             {inventory ? (
               <ul className={styles.inventoryList}>
                 {inventory.items.map((item) => {
@@ -695,9 +754,9 @@ export function CommunityBattlePage(): JSX.Element {
       ) : null}
 
       {tab === 'history' ? (
-        <Card title="服务端战斗记录" headerActions={<Button variant="secondary" onClick={() => { setHistory(null); setSettlement(null); }}>刷新记录</Button>}>
+        <Card title="战斗记录" headerActions={<Button variant="secondary" onClick={() => { setHistory(null); setSettlement(null); }}>刷新记录</Button>}>
           {busyKey === 'history:load' ? <p role="status">正在加载战斗记录…</p> : null}
-          {history && history.items.length === 0 ? <EmptyState title="还没有正式战斗" message="游客本机试玩战绩不会出现在正式记录中。" /> : null}
+          {history && history.items.length === 0 ? <EmptyState title="还没有战斗记录" message="完成第一场战斗后，战报会保存在这里。" /> : null}
           {history ? (
             <ul className={styles.historyList}>
               {history.items.map((item) => (
@@ -736,8 +795,8 @@ export function CommunityBattlePage(): JSX.Element {
                 </select>
               </label>
             </div>
-            <p className={styles.muted}>挑战权限与装备展示是两项独立隐私设置；公开页只渲染服务端已裁剪字段。被挑战者不扣体力，也不会损失装备或其他资产。</p>
-            <Button loading={busyKey === 'defense:save'} disabled={!canMutate} onClick={() => void saveDefense()}>保存到服务端</Button>
+            <p className={styles.muted}>挑战权限与装备展示可以分别设置。被挑战者不扣体力，也不会损失装备或其他资产。</p>
+            <Button loading={busyKey === 'defense:save'} disabled={!canMutate} onClick={() => void saveDefense()}>保存设置</Button>
           </Card>
 
           <Card title="公开规则与概率">
@@ -746,15 +805,14 @@ export function CommunityBattlePage(): JSX.Element {
               <div><dt>仓库上限</dt><dd>{bootstrap.catalog.inventoryLimit} 件，满仓掉落进入待领取区</dd></div>
               <div><dt>练习赛</dt><dd>不限次数，消耗 0，奖励 0</dd></div>
               <div><dt>PVP 奖励</dt><dd>每天最多 {bootstrap.dailyActions?.rewardedFriendBattlesLimit ?? 5} 场，同一好友每天最多 1 场；超出可确认转为练习赛</dd></div>
-              <div><dt>回合上限</dt><dd>最多 10 回合，完整事件由服务端保存</dd></div>
-              <div><dt>引擎版本</dt><dd>{bootstrap.catalog.engineVersion} / {bootstrap.catalog.balanceVersion}</dd></div>
+              <div><dt>回合上限</dt><dd>最多 10 回合，战斗结束后可查看完整战报</dd></div>
             </dl>
             <div className={styles.rarityGrid}>
               {bootstrap.catalog.rarityRates.map((item) => (
                 <div key={item.rarity}><strong>{item.label}</strong><span>{item.rate}%</span></div>
               ))}
             </div>
-            <p className={styles.safetyNote}>概率、掉落和结算由服务端固定版本处理；前端不会自行抽取或修改。</p>
+            <p className={styles.safetyNote}>掉落概率会随对手难度变化，稀有度越高的装备越难获得。</p>
           </Card>
         </div>
       ) : null}

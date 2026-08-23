@@ -97,7 +97,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
     try {
       next = await communityAccountApi.requestDeletion(deletionKey.current);
       setDeletion(next);
-      setNotice('注销申请已由服务端接收，正在确认账号状态。');
+      setNotice('注销申请已提交，正在确认账号状态。');
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '注销申请失败'));
       setBusy(undefined);
@@ -128,7 +128,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
       next = await communityAccountApi.cancelDeletion();
       setDeletion(next);
       deletionKey.current = undefined;
-      setNotice('撤销请求已由服务端接收，正在确认账号状态。');
+      setNotice('撤销请求已提交，正在确认账号状态。');
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '撤销注销失败'));
       setBusy(undefined);
@@ -137,7 +137,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
     try {
       const status = await communityAccountApi.getStatus();
       if (user) updateUser({ ...user, accountStatus: status.accountStatus });
-      setNotice('服务端已确认撤销注销。');
+      setNotice('注销申请已撤销。');
       setConfirmDeletion(false);
       setConfirmation('');
     } catch (requestError) {
@@ -171,7 +171,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
         headerActions={<Button variant="secondary" size="sm" onClick={() => void logoutAll()}>退出全部设备</Button>}
       >
         {loading ? <p role="status">正在加载设备…</p> : sessions.length === 0 ? (
-          <EmptyState icon="🔐" title="暂时没有设备记录" message="服务端返回设备记录后会显示在这里。" />
+          <EmptyState icon="🔐" title="暂时没有设备记录" message="新的登录设备会显示在这里。" />
         ) : (
           sessions.map((session) => (
             <div className={styles.sessionRow} key={session.id}>
@@ -190,16 +190,16 @@ export function CommunityAccountSecurityPage(): JSX.Element {
           {hasDeletionRequest(deletion) ? (
             <div className={styles.stack}>
               <p>注销状态：{deletion?.status}</p>
-              {displayTime(deletion?.scheduledFor) ? <p>服务端计划时间：{displayTime(deletion?.scheduledFor)}</p> : null}
+              {displayTime(deletion?.scheduledFor) ? <p>预计注销时间：{displayTime(deletion?.scheduledFor)}</p> : null}
               {deletion?.canCancel ? (
                 <Button variant="secondary" loading={busy === 'cancel-deletion'} onClick={() => void cancelDeletion()}>
                   撤销注销
                 </Button>
-              ) : <p className={styles.muted}>当前状态不能在页面撤销，请以服务端状态为准。</p>}
+              ) : <p className={styles.muted}>当前状态不能撤销。</p>}
             </div>
           ) : confirmDeletion ? (
             <div className={styles.stack}>
-              <p>注销会影响主页、好友、绿植和乐斗资产。实际冷静期和处理时间以服务端返回为准。</p>
+              <p>注销会影响主页、好友、绿植和乐斗资产。提交后会显示冷静期和预计完成时间。</p>
               <Input
                 label="输入 DELETE 确认注销"
                 value={confirmation}

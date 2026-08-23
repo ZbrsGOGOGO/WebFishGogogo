@@ -154,15 +154,13 @@ forbid_regex() {
   pass "$forbidden_label is absent"
 }
 
-# Public routes: ten serial GETs, exactly once each.
+# Public routes: eight serial GETs, exactly once each.
 fetch_exact '/' 200 "$SMOKE_TMP/home.html"
 fetch_exact '/ledou' 200 "$SMOKE_TMP/ledou.html"
 fetch_exact '/tools' 200 "$SMOKE_TMP/tools.html"
 fetch_exact '/games' 200 "$SMOKE_TMP/games.html"
-fetch_exact '/games/snake' 200 "$SMOKE_TMP/game-snake.html"
 fetch_exact '/games/tetris' 200 "$SMOKE_TMP/game-tetris.html"
 fetch_exact '/games/tank' 200 "$SMOKE_TMP/game-tank.html"
-fetch_exact '/games/three-sum' 200 "$SMOKE_TMP/game-three-sum.html"
 fetch_exact '/privacy-policy' 200 "$SMOKE_TMP/privacy.html"
 fetch_exact '/terms-of-service' 200 "$SMOKE_TMP/terms.html"
 
@@ -234,12 +232,10 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" '程序员' 'developer profess
 require_literal "$SMOKE_TMP/public-artifacts.txt" '人力资源管理' 'HR profession'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '6 个装备位' 'six equipment slots'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
-  '浏览器单机游戏' \
+  '经典小游戏' \
   'public games copy'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '贪食蛇' 'snake title'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '方块消除' 'block game title'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '俄罗斯方块' 'tetris title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '坦克大战' 'tank game title'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '三数之和' 'three-sum title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '浙ICP备2026060298号' \
   'ICP record'

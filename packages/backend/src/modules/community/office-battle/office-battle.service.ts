@@ -28,6 +28,7 @@ import {
   OfficeBattleProfile,
   OfficeBattleRecord,
   PlayerProfile,
+  PlayerProgression,
   User,
   UserBlock,
 } from '../../../database/entities';
@@ -193,6 +194,85 @@ export class OfficeBattleService {
         successRate: 100,
       },
       capabilities: { enhancementEnabled: true, friendChallengesEnabled: true },
+    };
+  }
+
+  async leaderboard(
+    mode: 'pve' | 'pvp',
+    profession: OfficeBattleProfession | 'all',
+    limit: number,
+  ) {
+    const manager = this.dataSource.manager;
+    const profiles = (await manager.getRepository(OfficeBattleProfile).find({
+      relations: { user: true },
+    })).filter(
+      (profile) =>
+        profile.user.accountStatus === 'active' &&
+        (profession === 'all' || profile.profession === profession),
+    );
+    if (profiles.length === 0) {
+      return {
+        mode,
+        profession,
+        formulaVersion: 'office-power-v2',
+        updatedAt: this.clock.now().toISOString(),
+        items: [],
+      };
+    }
+    const userIds = profiles.map((profile) => profile.userId);
+    const [progressions, loadoutRows] = await Promise.all([
+      manager.getRepository(PlayerProgression).find({ where: { userId: In(userIds) } }),
+      manager.getRepository(OfficeBattleLoadoutItem).find({ where: { userId: In(userIds) } }),
+    ]);
+    const equipmentIds = loadoutRows.map((row) => row.equipmentId);
+    const equipment = equipmentIds.length === 0
+      ? []
+      : await manager.getRepository(OfficeBattleEquipment).find({
+          where: { id: In(equipmentIds), salvagedAt: IsNull() },
+        });
+    const progressionByUser = new Map(progressions.map((row) => [row.userId, row]));
+    const equipmentById = new Map(equipment.map((item) => [item.id, item]));
+    const loadoutByUser = new Map<string, OfficeBattleEquipment[]>();
+    for (const row of loadoutRows) {
+      const item = equipmentById.get(row.equipmentId);
+      if (!item) continue;
+      loadoutByUser.set(row.userId, [...(loadoutByUser.get(row.userId) ?? []), item]);
+    }
+    const ranked = profiles.map((profile) => {
+      const progression = progressionByUser.get(profile.userId);
+      const level = progression?.level ?? battleLevelSnapshot(profile.totalBattleExperience).level;
+      const snapshot = this.fighterSnapshot(
+        profile.user,
+        profile.profession,
+        level,
+        loadoutByUser.get(profile.userId) ?? [],
+        false,
+        normalizeBattleSkillLevels(profile.profession, profile.skillLevels),
+        mode,
+      );
+      return {
+        publicId: profile.user.publicId,
+        displayName: this.displayName(profile.user),
+        profession: profile.profession,
+        battleLevel: level,
+        power: snapshot.power,
+        wins: profile.wins,
+        losses: profile.losses,
+      };
+    });
+    ranked.sort(
+      (left, right) =>
+        right.power - left.power ||
+        right.battleLevel - left.battleLevel ||
+        right.wins - left.wins ||
+        left.publicId.localeCompare(right.publicId),
+    );
+    return {
+      mode,
+      profession,
+      formulaVersion: 'office-power-v2',
+      updatedAt: this.clock.now().toISOString(),
+      items: ranked.slice(0, limit).map((item, index) => ({ ...item, rank: index + 1 })),
     };
   }
 
@@ -1652,6 +1732,13 @@ export class OfficeBattleService {
       equipment,
       skillLevels,
     });
+    const pvpStats = deriveBattleStats({
+      profession: profile.profession,
+      level: level.level,
+      equipment: equipment.map((item) => ({ stats: this.pvpEquipmentStats(item) })),
+      skillLevels,
+      skillMode: 'pvp',
+    });
     const balance = assets.balances.get('office_coin');
     return {
       publicId: user.publicId,
@@ -1664,6 +1751,8 @@ export class OfficeBattleService {
       wins: profile.wins,
       losses: profile.losses,
       power: fighterPower(stats),
+      pvePower: fighterPower(stats),
+      pvpPower: fighterPower(pvpStats),
       stats,
       energy: this.energyView(assets.energy, this.clock.now()),
       workspaceCoins: Number(balance?.balance ?? 0),

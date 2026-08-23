@@ -11,7 +11,8 @@ UNIFIED_ECONOMY_TIMESTAMP=1700000000019
 GUILD_TIMESTAMP=1700000000020
 GUILD_BOSS_TIMESTAMP=1700000000021
 HOT_NEWS_TIMESTAMP=1700000000022
-LATEST_TIMESTAMP=1700000000022
+ARCADE_TIMESTAMP=1700000000023
+LATEST_TIMESTAMP=1700000000023
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -120,6 +121,8 @@ assert_target_applied() {
   [ "$guild_boss_count" = 1 ] || fail "$database did not record migration $GUILD_BOSS_TIMESTAMP"
   hot_news_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $HOT_NEWS_TIMESTAMP;")
   [ "$hot_news_count" = 1 ] || fail "$database did not record migration $HOT_NEWS_TIMESTAMP"
+  arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ARCADE_TIMESTAMP;")
+  [ "$arcade_count" = 1 ] || fail "$database did not record migration $ARCADE_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 1 ] || fail "$database did not record migration $LATEST_TIMESTAMP"
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
@@ -140,6 +143,10 @@ assert_target_applied() {
   for news_table in news_sources news_articles news_article_revisions news_review_decisions news_user_preferences news_negative_feedback; do
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$news_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $news_table after migration"
+  done
+  for arcade_table in arcade_game_runs arcade_best_scores; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$arcade_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $arcade_table after migration"
   done
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 8 ] || fail "$database is missing one or more 0016 operational indexes"
@@ -191,6 +198,8 @@ assert_target_absent() {
   [ "$guild_boss_count" = 0 ] || fail "$database still records migration $GUILD_BOSS_TIMESTAMP"
   hot_news_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $HOT_NEWS_TIMESTAMP;")
   [ "$hot_news_count" = 0 ] || fail "$database still records migration $HOT_NEWS_TIMESTAMP"
+  arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ARCADE_TIMESTAMP;")
+  [ "$arcade_count" = 0 ] || fail "$database still records migration $ARCADE_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 0 ] || fail "$database still records migration $LATEST_TIMESTAMP"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
@@ -201,6 +210,8 @@ assert_target_absent() {
   [ "$chat_table_count" = 0 ] || fail "$database retained chat tables after rollback/failure"
   news_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('news_sources', 'news_articles', 'news_article_revisions', 'news_review_decisions', 'news_user_preferences', 'news_negative_feedback');")
   [ "$news_table_count" = 0 ] || fail "$database retained news tables after rollback/failure"
+  arcade_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('arcade_game_runs', 'arcade_best_scores');")
+  [ "$arcade_table_count" = 0 ] || fail "$database retained arcade tables after rollback/failure"
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 0 ] || fail "$database retained 0016 operational indexes after rollback/failure"
   username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")

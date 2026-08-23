@@ -28,6 +28,8 @@ import { OutboxProcessorService } from './modules/outbox/outbox-processor.servic
 import { OutboxService } from './modules/outbox/outbox.service';
 import { OfficeBattleController } from './modules/community/office-battle/office-battle.controller';
 import { OfficeBattleModule } from './modules/community/office-battle/office-battle.module';
+import { ArcadeController } from './modules/community/arcade/arcade.controller';
+import { ArcadeModule } from './modules/community/arcade/arcade.module';
 import {
   NewsAdminController,
   NewsPreferenceController,
@@ -58,6 +60,7 @@ describe('CommunityAppModule route allowlist', () => {
         ContentController,
         ModerationController,
         OfficeBattleController,
+        ArcadeController,
         NewsPublicController,
         NewsPreferenceController,
         NewsAdminController,
@@ -68,6 +71,7 @@ describe('CommunityAppModule route allowlist', () => {
 
     const modules = collectModules(CommunityAppModule);
     expect(modules).toContain(OfficeBattleModule);
+    expect(modules).toContain(ArcadeModule);
     expect(modules).toContain(NewsModule);
     expect(modules).not.toContain(OutboxModule);
     expect(modules).not.toContain(WorkerModule);

@@ -41,7 +41,7 @@ const settlement: CommunityBattleSettlement = {
 };
 
 describe('ServerBattleReplay', () => {
-  it('renders only the complete service events and exposes the seed as audit data', () => {
+  it('renders the complete battle events without internal audit data', () => {
     render(<ServerBattleReplay settlement={settlement} />);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /减少动态效果/ }));
@@ -51,7 +51,7 @@ describe('ServerBattleReplay', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('服务端事件一');
     expect(items[1]).toHaveTextContent('服务端事件二');
-    expect(screen.getByText('server-seed-for-audit-only')).toBeInTheDocument();
-    expect(screen.getByText(/本页面没有据此计算胜负/)).toBeInTheDocument();
+    expect(screen.queryByText('server-seed-for-audit-only')).not.toBeInTheDocument();
+    expect(screen.queryByText(/结算审计信息|请求编号|服务端种子/)).not.toBeInTheDocument();
   });
 });

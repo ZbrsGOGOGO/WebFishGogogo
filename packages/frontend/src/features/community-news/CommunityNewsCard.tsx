@@ -93,7 +93,7 @@ export function CommunityNewsCard({
         <details className={styles.feedbackBox}>
           <summary>{feedbackDone ? '反馈已记录' : '减少类似内容'}</summary>
           {feedbackDone ? (
-            <p role="status">服务端已记录这次偏好反馈。</p>
+            <p role="status">这次偏好反馈已记录。</p>
           ) : (
             <div className={styles.feedbackControls}>
               <label>

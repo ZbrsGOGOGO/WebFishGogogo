@@ -144,7 +144,7 @@ export function CommunityPostEditorPage(): JSX.Element {
           const submitted = await communityContentApi.submitPostReview(saved.id, saved.version);
           navigate(`/community/posts/${encodeURIComponent(submitted.id)}`, { replace: true });
         } catch (submitError) {
-          setNotice('草稿已由服务端保存，但提交审核未完成；不会重复创建草稿。');
+          setNotice('草稿已保存，但提交审核未完成；你可以稍后重试。');
           throw submitError;
         }
       } else {
@@ -156,7 +156,7 @@ export function CommunityPostEditorPage(): JSX.Element {
           ? Number((error.body as { currentVersion?: unknown }).currentVersion)
           : undefined;
         setConflictVersion(Number.isFinite(currentVersion) ? currentVersion : undefined);
-        setRequestError('其他设备或窗口已经保存了新版本。当前表单没有覆盖服务器内容，请重新加载后合并。');
+        setRequestError('其他设备或窗口已经保存了新版本。当前表单没有覆盖最新内容，请重新加载后合并。');
       } else {
         setRequestError(communityRequestErrorMessage(error, submitForReview ? '提交审核失败' : '草稿保存失败'));
       }
@@ -179,7 +179,7 @@ export function CommunityPostEditorPage(): JSX.Element {
       />
       {loading ? <p role="status">正在加载草稿…</p> : null}
       {!writeEnabled && !loading ? <p className={styles.warning}>经验交流当前为只读，不能保存或提交内容。</p> : !verified ? <p className={styles.warning}>当前账号尚未完成适用的社交核验，可以阅读，但不能保存或提交内容。</p> : null}
-      {requestError ? <div className={styles.error} role="alert"><p>{requestError}</p>{conflictVersion ? <p>服务器当前版本：v{conflictVersion}</p> : null}{routePostId ? <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>重新加载服务器版本</Button> : null}</div> : null}
+      {requestError ? <div className={styles.error} role="alert"><p>{requestError}</p>{conflictVersion ? <p>内容已更新：v{conflictVersion}</p> : null}{routePostId ? <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>加载最新内容</Button> : null}</div> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
       {existing ? <ContentStateBadges state={existing} /> : null}
       {existing?.lastReviewDecision === 'rejected' ? (

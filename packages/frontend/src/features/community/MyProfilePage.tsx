@@ -158,7 +158,7 @@ export function CommunityMyProfilePage(): JSX.Element {
                 {PROFESSION_DEFINITIONS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
-            <small className={styles.muted}>昵称默认每 7 天可修改一次；服务端规则为最终判断。</small>
+            <small className={styles.muted}>昵称默认每 7 天可以修改一次。</small>
             <Button type="submit" loading={saving}>保存资料</Button>
           </form>
         </Card>
@@ -167,12 +167,10 @@ export function CommunityMyProfilePage(): JSX.Element {
       <div className={styles.grid}>
         <Card title="办公室乐斗">
           <p>
-            等级 {profile?.battleLevel ?? 1} · {COMMUNITY_FEATURE_FLAGS.battleServer
-              ? '六件装备、仓库与战绩由服务端正式档案管理。'
-              : '六件装备将在服务端乐斗接入后展示。'}
+            等级 {profile?.battleLevel ?? 1} · 六件装备、仓库、技能和战绩会跟随账号保存。
           </p>
           <Link to="/ledou">
-            {COMMUNITY_FEATURE_FLAGS.battleServer ? '进入正式乐斗' : '进入本机试玩'}
+            {COMMUNITY_FEATURE_FLAGS.battleServer ? '进入办公室乐斗' : '进入乐斗'}
           </Link>
         </Card>
         <Card title="工位绿植"><p>{plantSummary}</p></Card>

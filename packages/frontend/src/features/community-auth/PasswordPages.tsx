@@ -14,7 +14,7 @@ export function CommunityPasswordResetUnavailablePage(): JSX.Element {
   return (
     <CommunityAuthShell
       title="找回密码暂不可用"
-      intro="当前社区版本尚未开放密码找回与重置，页面不会收集邮箱或伪装发送成功。"
+      intro="暂不支持在线找回密码。如需帮助，请通过站点联系渠道与我们联系。"
       footer={<Link to="/login">返回登录</Link>}
     >
       <p role="status">如需账号协助，请前往隐私政策查看当前联系渠道。</p>

@@ -90,7 +90,7 @@ export function CommunityLoginPage(): JSX.Element {
             <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
             显示密码
           </label>
-          {COMMUNITY_FEATURE_FLAGS.passwordReset ? <Link to="/password/forgot">忘记密码？</Link> : <span>找回密码暂未开放</span>}
+          {COMMUNITY_FEATURE_FLAGS.passwordReset ? <Link to="/password/forgot">忘记密码？</Link> : null}
         </div>
         {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
         <Button type="submit" loading={loading} fullWidth>

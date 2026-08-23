@@ -78,7 +78,7 @@ export function CommunityPostsPage(): JSX.Element {
       <CommunityExperienceNav />
       <PageHeader
         title="经验交流"
-        subtitle="真实用户的经验、问答和复盘。职业频道只代表主题，不证明作者的现实职业。"
+        subtitle="分享经验、提出问题，也记录一次值得复盘的解决过程。"
         actions={canPublish
           ? <Link className={styles.primaryLink} to="/community/new">发布内容</Link>
           : phase === 'guest'
@@ -107,10 +107,10 @@ export function CommunityPostsPage(): JSX.Element {
       </Card>
 
       {error ? <div className={styles.error} role="alert"><p>{error}</p><Button variant="secondary" size="sm" onClick={() => void load()}>重试</Button></div> : null}
-      {loading ? <p role="status">正在加载真实帖子…</p> : items.length === 0 ? (
+      {loading ? <p role="status">正在加载内容…</p> : items.length === 0 ? (
         <EmptyState
-          title="当前还没有真实帖子"
-          message={query || tag || channel !== 'all' || type !== 'all' ? '没有符合当前筛选的内容，可以调整搜索条件。' : '社区不会用假用户、假评论或假热度填充列表。'}
+          title="这里还没有帖子"
+          message={query || tag || channel !== 'all' || type !== 'all' ? '没有符合当前筛选的内容，可以调整搜索条件。' : '写下第一篇经验，和大家一起开始交流。'}
           actions={canPublish ? <Link className={styles.primaryLink} to="/community/new">写第一篇内容</Link> : undefined}
         />
       ) : (

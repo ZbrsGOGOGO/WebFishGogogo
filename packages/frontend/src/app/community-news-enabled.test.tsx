@@ -23,7 +23,7 @@ describe('community news release flag', () => {
     render(<MemoryRouter><PublicLandingPage /></MemoryRouter>);
 
     expect(screen.getByRole('link', { name: /热点新闻/ })).toHaveAttribute('href', '/news');
-    expect(screen.getByText('卡片状态与当前发布闸门同步；已开放系统可直接进入，账号功能会在进入后安全校验。')).toBeInTheDocument();
+    expect(screen.getByText('选择你感兴趣的系统直接进入；需要保存成长进度的功能会请你先登录。')).toBeInTheDocument();
   });
 
   it('mounts the real member page at /news instead of the unavailable page when enabled', async () => {
@@ -72,7 +72,7 @@ describe('community news release flag', () => {
     render(<MemoryRouter initialEntries={['/news']}><CommunityModeRouter /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: '热点新闻' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: '当前没有可展示的真实资讯' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '当前没有可展示的资讯' })).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(true);
   });
 

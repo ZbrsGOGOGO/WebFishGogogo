@@ -36,15 +36,16 @@ describe('community mode routes', () => {
     resetCommunityAuthStoreForTests();
   });
 
-  it('renders the playable workbench homepage and exposes all nine systems', () => {
+  it('renders the playable workbench homepage without advertising disabled systems', () => {
     renderAt('/');
 
     expect(screen.getByRole('heading', { name: '你的办公室成长社区' })).toBeInTheDocument();
     const systemNavigation = screen.getByRole('navigation', { name: '全部系统' });
     expect(within(systemNavigation).getByRole('link', { name: '首页' })).toHaveAttribute('href', '/');
     expect(within(systemNavigation).getByRole('link', { name: '乐斗' })).toHaveAttribute('href', '/ledou');
-    for (const label of ['热点新闻', '经验交流', '农场', '投喂', '邀请', '我的主页', '好友']) {
-      expect(systemNavigation).toHaveTextContent(label);
+    expect(within(systemNavigation).getByRole('link', { name: '我的主页' })).toHaveAttribute('href', '/me');
+    for (const label of ['热点新闻', '经验交流', '农场', '投喂', '邀请', '好友']) {
+      expect(systemNavigation).not.toHaveTextContent(label);
     }
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: '注册工位' })).toHaveAttribute('href', '/register');
@@ -76,7 +77,7 @@ describe('community mode routes', () => {
     unmount();
 
     renderAt('/games');
-    expect(await screen.findByText('浏览器单机游戏')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '随时开始，也能随时停下' })).toBeInTheDocument();
   });
 
   it('does not present password reset as available while its backend gate is closed', async () => {

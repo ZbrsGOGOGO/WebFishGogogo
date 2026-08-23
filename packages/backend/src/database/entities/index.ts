@@ -4,6 +4,7 @@ import { ActivityEvent } from './activity-event.entity';
 import { ArenaBattle } from './arena-battle.entity';
 import { ArenaOpponentOffer } from './arena-opponent-offer.entity';
 import { ArenaProfile } from './arena-profile.entity';
+import { ArcadeBestScore, ArcadeGameRun } from './arcade-score.entity';
 import { AccountAppeal } from './account-appeal.entity';
 import { AccountDeletionRequest } from './account-deletion-request.entity';
 import { AccountRestriction } from './account-restriction.entity';
@@ -122,6 +123,8 @@ export {
   ArenaBattle,
   ArenaOpponentOffer,
   ArenaProfile,
+  ArcadeBestScore,
+  ArcadeGameRun,
   AuthRefreshToken,
   AuthEmailOutbox,
   AuthRateLimitBucket,
@@ -220,6 +223,8 @@ export {
 /** 所有实体的集合，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const entities = [
   User,
+  ArcadeBestScore,
+  ArcadeGameRun,
   AccountAppeal,
   AccountDeletionRequest,
   AccountRestriction,

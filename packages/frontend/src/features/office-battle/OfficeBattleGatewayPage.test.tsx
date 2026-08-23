@@ -24,8 +24,8 @@ describe('OfficeBattleGatewayPage default gate', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('单机畅玩模式')).toBeInTheDocument();
-    expect(screen.getByText(/等级和装备会保存在当前设备/)).toBeInTheDocument();
+    expect(screen.getByText('游客试玩')).toBeInTheDocument();
+    expect(screen.getByText(/登录后即可创建在线角色/)).toBeInTheDocument();
     expect(screen.getByText('无需登录')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /选择程序员/ })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();

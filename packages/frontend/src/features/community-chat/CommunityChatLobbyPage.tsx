@@ -53,7 +53,7 @@ export function CommunityChatLobbyPage(): JSX.Element {
       <CommunityExperienceNav />
       <PageHeader
         title="固定聊天室"
-        subtitle="六个固定职业主题房间。只展示真实消息和近似活跃档位，不展示无法核验的精确在线人数。"
+        subtitle="选择感兴趣的话题，和站内伙伴一起聊聊。每个房间保留最近 200 条消息。"
         actions={<Tag color="neutral">纯文本实时交流</Tag>}
       />
 
@@ -63,7 +63,7 @@ export function CommunityChatLobbyPage(): JSX.Element {
           <Button variant="secondary" size="sm" onClick={() => void load()}>重新加载</Button>
         </div>
       ) : null}
-      {loading ? <p role="status">正在读取房间真实状态…</p> : null}
+      {loading ? <p role="status">正在加载聊天室…</p> : null}
 
       <section className={styles.roomGrid} aria-label="六个固定聊天室">
         {COMMUNITY_CHAT_ROOM_DEFINITIONS.map((definition) => {
@@ -86,7 +86,7 @@ export function CommunityChatLobbyPage(): JSX.Element {
                 <div><dt>当前活跃</dt><dd>{CHAT_PRESENCE_LABELS[room?.presenceBand ?? 'unavailable']}</dd></div>
                 <div><dt>发言间隔</dt><dd>{room ? room.slowModeSeconds > 0 ? `${room.slowModeSeconds} 秒` : '无额外间隔' : '未知'}</dd></div>
               </dl>
-              {room?.retryAfterSeconds ? <p className={styles.warning}>服务端要求约 {room.retryAfterSeconds} 秒后再尝试发言。</p> : null}
+              {room?.retryAfterSeconds ? <p className={styles.warning}>请等待约 {room.retryAfterSeconds} 秒后再发言。</p> : null}
               {!unavailable && !closed ? (
                 <Link className={styles.primaryLink} to={`/community/chat/${definition.slug}`}>
                   {room.readOnly ? '进入阅读' : '进入房间'}
@@ -97,11 +97,11 @@ export function CommunityChatLobbyPage(): JSX.Element {
         })}
       </section>
 
-      <Card title="聊天室边界">
+      <Card title="聊天室须知">
         <ul className={styles.rulesList}>
           <li>只支持 1–500 字符纯文本，不支持图片、文件、富文本或支付信息。</li>
-          <li>@ 候选只来自服务端允许名单和当前房间真实消息作者，不能用邮箱或手机号探测用户。</li>
-          <li>断线后的消息缺口通过 REST 序号补齐；发送失败会明确标记，不会伪装成已送达。</li>
+          <li>可以回复或 @ 房间成员，请勿公开他人的隐私信息。</li>
+          <li>网络波动时会自动重连；发送失败的消息可以手动重试。</li>
           <li>请勿发布个人隐私、骚扰、违法内容或未经授权的公司信息。</li>
         </ul>
       </Card>

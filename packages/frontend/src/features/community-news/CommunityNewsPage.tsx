@@ -141,7 +141,7 @@ export function CommunityNewsPage(): JSX.Element {
       setPreferences(next);
       setPreferenceEnabled(next.personalizationEnabled);
       setPreferenceTopics(next.topicPreferences.join('，'));
-      setNotice('资讯偏好已由服务端保存。');
+      setNotice('资讯偏好已保存。');
     } catch (requestError) {
       if (requestError instanceof CommunityApiError && requestError.status === 409) {
         setPreferenceError('偏好版本已经变化，本次没有覆盖服务器设置。请刷新后重试。');
@@ -184,7 +184,7 @@ export function CommunityNewsPage(): JSX.Element {
             ))}
           </ol>
         ) : (
-          <EmptyState title="今日热点正在准备" message="系统会在每天北京时间 08:00 从公开官方来源更新；暂时不会用假标题填充。" />
+          <EmptyState title="今日热点正在准备" message="每天北京时间 08:00 更新，稍后再来看看。" />
         )}
         {headlines?.updatedAt ? <p className={styles.filterHint}>更新时间：{new Date(headlines.updatedAt).toLocaleString('zh-CN')}</p> : null}
       </Card>
@@ -223,7 +223,7 @@ export function CommunityNewsPage(): JSX.Element {
         </form>
         {feed === 'for_you' ? (
           <p className={styles.filterHint} role="status">
-            {personalized ? '当前结果已按你的服务端偏好排序。' : '当前未启用个性化，将按最新内容展示。'}
+            {personalized ? '当前结果已按你的偏好排序。' : '当前未启用个性化，将按最新内容展示。'}
           </p>
         ) : null}
       </Card>
@@ -250,11 +250,11 @@ export function CommunityNewsPage(): JSX.Element {
         </Card>
       ) : null}
 
-      {loading ? <p role="status">正在加载真实资讯…</p> : items.length === 0 ? (
+      {loading ? <p role="status">正在加载资讯…</p> : items.length === 0 ? (
         <EmptyState
           icon="报"
-          title="当前没有可展示的真实资讯"
-          message="列表不会用虚构来源、假标题或演示热度填充。可以调整筛选条件后再试。"
+          title="当前没有可展示的资讯"
+          message="可以调整筛选条件后再试。"
         />
       ) : (
         <section className={styles.newsList} aria-label="热点资讯列表">

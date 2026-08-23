@@ -43,11 +43,11 @@ export function OfficeBattleGatewayPage(): JSX.Element {
     <div className={styles.gateway}>
       <aside className={styles.modeNotice} aria-labelledby="battle-mode-title">
         <div>
-          <strong id="battle-mode-title">{formalReady ? '我的乐斗档案' : '单机畅玩模式'}</strong>
+          <strong id="battle-mode-title">{formalReady ? '我的乐斗角色' : '游客试玩'}</strong>
           <p>
             {formalReady
               ? '等级、装备和战绩会跟随当前账号保存。'
-              : '打开就能玩，等级和装备会保存在当前设备。登录后还可以使用社区、好友和农场。'}
+              : '登录后即可创建在线角色，并使用好友对战、排行榜和成长系统。'}
           </p>
         </div>
         {!COMMUNITY_FEATURE_FLAGS.battleServer ? (

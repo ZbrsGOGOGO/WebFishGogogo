@@ -134,7 +134,7 @@ export function CommunityPostDetailPage(): JSX.Element {
       );
       setCommentBody('');
       setReplyTo(null);
-      setNotice('评论已由服务端接收，显示状态以审核结果为准');
+      setNotice('评论已提交，显示状态以审核结果为准');
       await load();
     } catch (requestError) {
       setCommentError(communityRequestErrorMessage(requestError, '评论提交失败'));
@@ -176,7 +176,7 @@ export function CommunityPostDetailPage(): JSX.Element {
   }
 
   function commentBodyForViewer(comment: CommunityComment): string {
-    if (comment.deletedAt) return '该评论已软删除。';
+    if (comment.deletedAt) return '该评论已删除。';
     if (comment.moderationStatus === 'hidden' && !comment.permissions.canEdit) return '该评论已被审核隐藏。';
     return comment.body;
   }
@@ -202,7 +202,7 @@ export function CommunityPostDetailPage(): JSX.Element {
               accepted ? '已取消采纳' : '回答已采纳',
             )}>{accepted ? '取消采纳' : '采纳回答'}</Button>
           ) : null}
-          {comment.permissions.canDelete && !comment.deletedAt ? <Button variant="danger" size="sm" loading={busyKey === `delete-comment:${comment.id}`} onClick={() => void mutate(`delete-comment:${comment.id}`, () => communityContentApi.deleteComment(comment.id, comment.version), '评论已软删除')}>删除</Button> : null}
+          {comment.permissions.canDelete && !comment.deletedAt ? <Button variant="danger" size="sm" loading={busyKey === `delete-comment:${comment.id}`} onClick={() => void mutate(`delete-comment:${comment.id}`, () => communityContentApi.deleteComment(comment.id, comment.version), '评论已删除')}>删除</Button> : null}
           {comment.permissions.canRestore && comment.deletedAt ? <Button variant="secondary" size="sm" loading={busyKey === `restore-comment:${comment.id}`} onClick={() => void mutate(`restore-comment:${comment.id}`, () => communityContentApi.restoreComment(comment.id, comment.version), '评论已恢复，原治理状态仍然有效')}>恢复</Button> : null}
           {comment.permissions.canReport && !comment.deletedAt ? <Button variant="ghost" size="sm" onClick={() => setReportTarget({ type: 'comment', id: comment.id })}>举报</Button> : null}
         </div>
@@ -215,7 +215,7 @@ export function CommunityPostDetailPage(): JSX.Element {
   return (
     <main className={styles.page}>
       {loading ? <p role="status">正在加载帖子…</p> : null}
-      {error ? <div className={styles.error} role="alert"><p>{error}</p>{conflictVersion ? <p>服务器当前版本：v{conflictVersion}</p> : null}<Button variant="secondary" size="sm" onClick={() => void load()}>刷新服务器状态</Button></div> : null}
+      {error ? <div className={styles.error} role="alert"><p>{error}</p>{conflictVersion ? <p>内容已更新：v{conflictVersion}</p> : null}<Button variant="secondary" size="sm" onClick={() => void load()}>加载最新内容</Button></div> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
       {!loading && !post ? <EmptyState title="无法显示这篇内容" message="内容可能不存在、已隐藏，或你没有查看权限。" actions={<Link to="/community">返回经验交流</Link>} /> : null}
 
@@ -232,7 +232,7 @@ export function CommunityPostDetailPage(): JSX.Element {
 
           <Card>
             {post.deletedAt ? (
-              <div className={styles.deletedBody}><strong>这篇内容已软删除</strong><p>作者删除后最多 30 天内可申请恢复，实际资格和截止时间以服务端为准。</p><p>删除时间：{new Date(post.deletedAt).toLocaleString('zh-CN')}</p>{post.restoreUntil ? <p>可恢复截止：{new Date(post.restoreUntil).toLocaleString('zh-CN')}</p> : null}</div>
+              <div className={styles.deletedBody}><strong>这篇内容已删除</strong><p>作者删除后最多 30 天内可申请恢复，具体截止时间见下方。</p><p>删除时间：{new Date(post.deletedAt).toLocaleString('zh-CN')}</p>{post.restoreUntil ? <p>可恢复截止：{new Date(post.restoreUntil).toLocaleString('zh-CN')}</p> : null}</div>
             ) : post.moderationStatus === 'hidden' && !post.permissions.canEdit ? (
               <p>这篇内容已被审核隐藏。</p>
             ) : (
@@ -253,8 +253,8 @@ export function CommunityPostDetailPage(): JSX.Element {
               {post.permissions.canWithdrawReview && !post.deletedAt ? <Button variant="secondary" size="sm" loading={busyKey === 'withdraw-review'} onClick={() => void mutate('withdraw-review', () => communityContentApi.withdrawPostReview(post.id, post.version), '已撤回审核')}>撤回审核</Button> : null}
               {post.permissions.canDelete && !post.deletedAt ? <Button variant="danger" size="sm" loading={busyKey === 'delete-post'} onClick={() => {
                 if (!confirmDelete) { setConfirmDelete(true); return; }
-                void mutate('delete-post', () => communityContentApi.deletePost(post.id, post.version), '内容已软删除，可在服务端给出的期限内恢复');
-              }}>{confirmDelete ? '确认软删除' : '删除'}</Button> : null}
+                void mutate('delete-post', () => communityContentApi.deletePost(post.id, post.version), '内容已删除，可在页面显示的期限内恢复');
+              }}>{confirmDelete ? '确认删除' : '删除'}</Button> : null}
               {post.permissions.canRestore && post.deletedAt ? <Button size="sm" loading={busyKey === 'restore-post'} onClick={() => void mutate('restore-post', () => communityContentApi.restorePost(post.id, post.version), '内容已恢复，原审核与治理状态仍然有效')}>恢复内容</Button> : null}
               {post.permissions.canReport && !post.deletedAt ? <Button variant="ghost" size="sm" onClick={() => setReportTarget({ type: 'post', id: post.id })}>举报</Button> : null}
             </div>

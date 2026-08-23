@@ -47,7 +47,6 @@ export function CommunitySiteLayout(): JSX.Element {
   const user = useCommunityAuthStore((state) => state.user);
   const restoreSession = useCommunityAuthStore((state) => state.restoreSession);
   const logout = useCommunityAuthStore((state) => state.logout);
-  const bootstrapError = useCommunityAuthStore((state) => state.bootstrapError);
   const currentSystem = communitySystemByPath(location.pathname);
 
   useEffect(() => {
@@ -121,10 +120,6 @@ export function CommunitySiteLayout(): JSX.Element {
         </div>
       </header>
 
-      {bootstrapError ? (
-        <p className={styles.bootstrapNotice} role="status">会话连接暂时不稳定，已切换为游客浏览。</p>
-      ) : null}
-
       <div className={workspaceRoute ? styles.workspace : styles.publicFrame} data-home={location.pathname === '/'}>
         {workspaceRoute ? (
           <aside className={styles.leftRail} aria-label="我的工作台">
@@ -139,7 +134,7 @@ export function CommunitySiteLayout(): JSX.Element {
 
             <nav className={styles.sideNav} aria-label="全部系统">
               <p>工作台</p>
-              {COMMUNITY_SYSTEM_NAV.map((item) => item.enabled ? (
+              {COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).map((item) => (
                 <Link
                   key={item.id}
                   to={item.path}
@@ -149,12 +144,6 @@ export function CommunitySiteLayout(): JSX.Element {
                   <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
                   <b>{item.label}</b>
                 </Link>
-              ) : (
-                <span className={styles.disabledNav} key={item.id} title={`${item.label}暂未开放`}>
-                  <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
-                  <b>{item.label}</b>
-                  <small>稍后</small>
-                </span>
               ))}
             </nav>
 
@@ -191,7 +180,7 @@ export function CommunitySiteLayout(): JSX.Element {
             </section>
             <section className={styles.tipWidget}>
               <small>工位提示</small>
-              <p>{signedIn ? '通知、好友请求和成长进度都集中在左侧工作台。' : '不登录也能玩乐斗和种绿植，进度会保存在这台设备。'}</p>
+              <p>{signedIn ? '通知、好友请求和成长进度都集中在左侧工作台。' : '登录后可以进入农场、乐斗和社区；工具与小游戏无需登录。'}</p>
             </section>
           </aside>
         ) : null}

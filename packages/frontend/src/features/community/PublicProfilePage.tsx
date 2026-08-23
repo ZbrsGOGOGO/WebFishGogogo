@@ -124,7 +124,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
         { recipientPublicId: profile.publicId, type },
         createCommunityIdempotencyKey(key),
       );
-      setNotice(`服务端已确认投喂：${result.event.type}`);
+      setNotice(`投喂成功：${result.event.type}`);
       await load();
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '投喂失败，请重试'));
@@ -149,7 +149,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
         createCommunityIdempotencyKey(key),
       );
       setEncouraged(true);
-      setNotice('服务端已确认鼓励；这只会播放动画，不改变奖励或成长进度');
+      setNotice('鼓励已送达');
       encouragementTimer.current = window.setTimeout(() => setEncouraged(false), 1800);
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '鼓励失败，请重试'));
@@ -189,7 +189,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
                   <Button disabled={socialWriteBlocked} loading={busyKey === `friend-request:${profile.publicId}`} onClick={() => void mutate(
                     `friend-request:${profile.publicId}`,
                     (key) => communityRelationshipsApi.sendRequest(profile.publicId, key),
-                    '好友申请已由服务端确认发送',
+                    '好友申请已发送',
                   )}>发送好友申请</Button>
                 ) : null}
                 {profile.relationship.status === 'incoming_pending' && COMMUNITY_FEATURE_FLAGS.friends ? <Link to="/friends">处理好友申请</Link> : null}
@@ -247,7 +247,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
 
           {canLoadServerBattleRecord ? (
             <Card title="办公室乐斗公开战绩">
-              {battleRecordLoading ? <p role="status">正在加载经服务端隐私裁剪的战绩…</p> : null}
+              {battleRecordLoading ? <p role="status">正在加载公开战绩…</p> : null}
               {battleRecordError ? <p className={styles.error} role="alert">{battleRecordError}</p> : null}
               {battleRecord ? (
                 <div className={styles.grid}>
@@ -265,7 +265,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
                   </div>
                 </div>
               ) : null}
-              <p className={styles.muted}>页面只展示服务端按关系与隐私规则返回的字段，不从其他资料推断隐藏战绩或装备。</p>
+              <p className={styles.muted}>展示范围由对方的隐私设置决定。</p>
             </Card>
           ) : (
           <div className={styles.grid}>

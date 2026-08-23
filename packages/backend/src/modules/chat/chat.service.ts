@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   DataSource,
@@ -6,6 +6,7 @@ import {
   In,
   IsNull,
   LessThan,
+  LessThanOrEqual,
   MoreThan,
 } from 'typeorm';
 
@@ -49,7 +50,8 @@ const TICKET_TTL_MS = 60_000;
 const WITHDRAW_WINDOW_MS = 120_000;
 const DELETED_USER_PUBLIC_ID = '00000000-0000-4000-8000-000000000000';
 const HISTORY_DEFAULT_LIMIT = 50;
-const HISTORY_MAX_LIMIT = 100;
+const HISTORY_MAX_LIMIT = 200;
+const ROOM_MESSAGE_RETENTION = 200;
 const REPORT_REASONS = new Set<ChatReportReason>([
   'harassment',
   'spam',
@@ -75,12 +77,24 @@ interface ChatHistoryViewContext {
 }
 
 @Injectable()
-export class ChatService {
+export class ChatService implements OnModuleInit {
   constructor(
     private readonly dataSource: DataSource,
     private readonly realtime: ChatRealtimeService,
     private readonly moderation: ChatModerationService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    const rooms = await this.dataSource.getRepository(ChatRoom).find();
+    for (const room of rooms) {
+      const oldestRetainedSequence = room.latestSequence - ROOM_MESSAGE_RETENTION + 1;
+      if (oldestRetainedSequence <= 1) continue;
+      await this.dataSource.getRepository(ChatMessage).delete({
+        roomSlug: room.slug,
+        sequence: LessThanOrEqual(oldestRetainedSequence - 1),
+      });
+    }
+  }
 
   async listRooms(userId: string): Promise<{ items: ChatRoomView[]; serverTime: string }> {
     assertCommunityChatEnabled();
@@ -116,7 +130,7 @@ export class ChatService {
     }
     const limit = query.limit ?? HISTORY_DEFAULT_LIMIT;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > HISTORY_MAX_LIMIT) {
-      throw chatException('CHAT_INVALID_LIMIT', 'limit 必须在 1 到 100 之间。');
+      throw chatException('CHAT_INVALID_LIMIT', 'limit 必须在 1 到 200 之间。');
     }
     for (const value of [query.afterSequence, query.beforeSequence]) {
       if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
@@ -323,6 +337,13 @@ export class ChatService {
           );
         }
         await this.createMessageNotifications(manager, message, author, reply, mentionedUsers);
+        const oldestRetainedSequence = room.latestSequence - ROOM_MESSAGE_RETENTION + 1;
+        if (oldestRetainedSequence > 1) {
+          await manager.getRepository(ChatMessage).delete({
+            roomSlug: room.slug,
+            sequence: LessThanOrEqual(oldestRetainedSequence - 1),
+          });
+        }
         return message;
       });
     } catch (error) {

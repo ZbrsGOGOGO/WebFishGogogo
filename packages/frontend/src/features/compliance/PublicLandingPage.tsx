@@ -134,8 +134,8 @@ export function PublicLandingPage(): JSX.Element {
           <h2 id="systems-title">九个系统，围绕职业、成长和好友展开</h2>
           <p>
             {IS_PUBLIC_MODE
-              ? '首页和乐斗提供公开体验，其余系统会在社区版通过各自发布闸门后开放。'
-              : '卡片状态与当前发布闸门同步；已开放系统可直接进入，账号功能会在进入后安全校验。'}
+              ? '首页和乐斗可以直接体验，更多社区功能会陆续与大家见面。'
+              : '选择你感兴趣的系统直接进入；需要保存成长进度的功能会请你先登录。'}
           </p>
         </div>
         <div className={styles.systemGrid}>
@@ -148,7 +148,7 @@ export function PublicLandingPage(): JSX.Element {
                 </div>
                 <h3>{system.title}</h3>
                 <p>{system.description}</p>
-                <strong>{system.available ? '进入系统 →' : '已纳入产品路线'}</strong>
+                <strong>{system.available ? '进入系统 →' : '敬请期待'}</strong>
               </>
             );
             return system.available && system.path ? (

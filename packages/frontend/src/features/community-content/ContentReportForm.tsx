@@ -64,7 +64,7 @@ export function ContentReportForm({
   if (receipt) {
     return (
       <div className={styles.reportBox} role="status">
-        <strong>举报已由服务端确认接收</strong>
+        <strong>举报已提交</strong>
         <p>受理编号：{receipt}</p>
         <Button variant="secondary" size="sm" onClick={onClose}>关闭</Button>
       </div>

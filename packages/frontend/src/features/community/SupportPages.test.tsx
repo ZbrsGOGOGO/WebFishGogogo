@@ -10,8 +10,8 @@ describe('support and invitation placeholders', () => {
 
   it('explains site-owner support without presenting a fake payment control', () => {
     render(<CommunityFeedPage />);
-    expect(screen.getByRole('heading', { name: '投喂站长' })).toBeInTheDocument();
-    expect(screen.getByText('爱发电接入中')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '支持小站' })).toBeInTheDocument();
+    expect(screen.getByText('常来看看，就是最好的支持')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '前往爱发电' })).not.toBeInTheDocument();
     expect(screen.getByText(/不赠送办公币/)).toBeInTheDocument();
   });
@@ -38,7 +38,7 @@ describe('support and invitation placeholders', () => {
     });
     render(<CommunityInvitePage />);
     expect(await screen.findByText('3')).toBeInTheDocument();
-    expect(screen.getByText(/邀请流程稍后上线/)).toBeInTheDocument();
+    expect(screen.getByText(/查看通过邀请获得的邀请币/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /推荐码|邀请链接/ })).not.toBeInTheDocument();
   });
 });

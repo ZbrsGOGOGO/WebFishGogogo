@@ -26,7 +26,7 @@
 | `soak` | 400 RPS × 30 分钟 | 内存、连接池和慢查询趋势检查；正式上线前建议延长到 2 小时 |
 | `online` | 3 分钟升至 1000 VU，保持 10 分钟，再回落 | 验证 1000 个活跃会话；每个 VU 以 2.5 秒节拍请求，稳态约 400 RPS |
 
-公开请求按权重访问 `/`、`/ledou`、`/tools`、`/games`、四个游戏直达页（`/games/snake`、`/games/tetris`、`/games/tank`、`/games/three-sum`）、`/privacy-policy` 和 `/terms-of-service`。九系统地图中尚未开放的热点新闻、经验交流、农场、投喂、邀请、我的主页和好友没有独立公开路由，不加入请求集合。认证场景只执行以下 GET 请求：
+公开请求按权重访问 `/`、`/ledou`、`/tools`、`/games`、两个游戏直达页（`/games/tetris`、`/games/tank`）、`/privacy-policy` 和 `/terms-of-service`。认证场景只执行以下 GET 请求：
 
 - `/api/auth/me`
 - `/api/v1/platform/overview`

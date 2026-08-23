@@ -1,10 +1,14 @@
-import type { JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 
 import { SITE_NAME } from '../../app/site-config';
 import publicStyles from '../tools/PublicToolsPage.module.css';
+import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import { IS_COMMUNITY_MODE } from '../../app/site-config';
 
 export function PublicGameLayout(): JSX.Element {
+  const restoreSession = useCommunityAuthStore((state) => state.restoreSession);
+  useEffect(() => { if (IS_COMMUNITY_MODE) void restoreSession(); }, [restoreSession]);
   return (
     <main className={publicStyles.page}>
       <header className={publicStyles.header}>

@@ -9,7 +9,9 @@ import {
 
 import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
+import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
 import { shouldIgnoreGameKeyboard } from '../game-input';
+import { useArcadeRun } from '../useArcadeRun';
 import {
   TANK_BOARD_HEIGHT,
   TANK_BOARD_WIDTH,
@@ -49,6 +51,7 @@ export function TankBattlePage(): JSX.Element {
   );
   const [autoPaused, setAutoPaused] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
+  const arcade = useArcadeRun('tank');
 
   const focusBoard = useCallback((): void => {
     boardRef.current?.focus({ preventScroll: true });
@@ -61,6 +64,15 @@ export function TankBattlePage(): JSX.Element {
     }, TANK_TICK_MS);
     return () => window.clearInterval(timer);
   }, [game.status]);
+
+  useEffect(() => {
+    if (game.status === 'won' || game.status === 'lost') {
+      void arcade.finish(game.score, {
+        outcome: game.status,
+        enemiesDefeated: game.score / 100,
+      });
+    }
+  }, [arcade.finish, game.score, game.status]);
 
   useEffect(() => {
     if (game.status !== 'running') {
@@ -152,12 +164,14 @@ export function TankBattlePage(): JSX.Element {
 
   const restart = (): void => {
     setAutoPaused(false);
+    arcade.begin();
     setGame({ ...createTankGameState(), status: 'running' });
     focusBoard();
   };
 
   const toggle = (): void => {
     setAutoPaused(false);
+    if (game.status === 'idle') arcade.begin();
     setGame((current) => ({
       ...current,
       status:
@@ -350,6 +364,7 @@ export function TankBattlePage(): JSX.Element {
         </Card>
 
         <aside className={styles.sidePanel}>
+          {arcade.notice ? <p className={styles.rankNotice} role="status">{arcade.notice}</p> : null}
           <Card title="战斗控制">
             <dl className={styles.keyList}>
               <div>
@@ -389,6 +404,7 @@ export function TankBattlePage(): JSX.Element {
               1 点生命，生命归零则挑战失败。
             </p>
           </Card>
+          <ArcadeLeaderboard gameKey="tank" refreshKey={arcade.revision} />
         </aside>
       </div>
     </section>

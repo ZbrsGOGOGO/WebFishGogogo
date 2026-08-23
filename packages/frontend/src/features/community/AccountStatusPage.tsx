@@ -17,7 +17,7 @@ import { communityRequestErrorMessage } from './request-error';
 const COPY: Record<CommunityRestrictedAccountStatus, { title: string; detail: string }> = {
   active: {
     title: '账号状态正常',
-    detail: '服务端已确认账号可以正常使用。',
+    detail: '你的账号可以正常使用。',
   },
   suspended: {
     title: '账号暂时停用',
@@ -25,11 +25,11 @@ const COPY: Record<CommunityRestrictedAccountStatus, { title: string; detail: st
   },
   banned: {
     title: '账号已被封禁',
-    detail: '普通业务权限已经关闭。如认为处置有误，可在服务端允许时提交一次说明。',
+    detail: '社区功能已经停用。如认为处置有误，可在下方提交申诉。',
   },
   deleting: {
     title: '账号处于注销流程',
-    detail: '普通会话和社区互动已经停止。服务端允许撤销时，可在这里明确撤销。',
+    detail: '会话和社区互动已经停止。在注销完成前，可按页面提示撤销。',
   },
 };
 
@@ -102,7 +102,7 @@ export function CommunityAccountStatusPage(): JSX.Element {
     try {
       nextDeletion = await communityAccountApi.cancelDeletion();
       setDeletion(nextDeletion);
-      setNotice('撤销请求已由服务端接收，正在确认账号状态。');
+      setNotice('撤销请求已提交，正在确认账号状态。');
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '撤销注销失败'));
       setBusy(undefined);
@@ -145,7 +145,7 @@ export function CommunityAccountStatusPage(): JSX.Element {
       const next = await communityAccountApi.submitAppeal(reason);
       setAppeal(next);
       setAppealReason('');
-      setNotice(`申诉已由服务端接收，当前状态：${APPEAL_LABEL[next.status]}。`);
+      setNotice(`申诉已提交，当前状态：${APPEAL_LABEL[next.status]}。`);
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '申诉提交失败'));
     } finally {
@@ -163,7 +163,7 @@ export function CommunityAccountStatusPage(): JSX.Element {
 
   return (
     <main className={styles.page}>
-      <PageHeader title="账号状态" subtitle="受限状态不会开放普通社区操作；页面只展示服务端确认的状态。" />
+      <PageHeader title="账号状态" subtitle="在这里查看账号限制、注销和申诉进度。" />
       {loading ? <p role="status">正在读取账号状态…</p> : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
@@ -172,7 +172,7 @@ export function CommunityAccountStatusPage(): JSX.Element {
           <div><Tag color={currentStatus === 'deleting' ? 'neutral' : currentStatus === 'active' ? 'success' : 'danger'}>{currentStatus}</Tag></div>
           <h1>{copy.title}</h1>
           <p>{copy.detail}</p>
-          {status?.reason ? <p>服务端说明：{status.reason}</p> : user?.restrictionReason ? <p>服务端说明：{user.restrictionReason}</p> : null}
+          {status?.reason ? <p>状态说明：{status.reason}</p> : user?.restrictionReason ? <p>状态说明：{user.restrictionReason}</p> : null}
           {status?.reasonCode ? <p>原因代码：{status.reasonCode}</p> : null}
           {displayTime(status?.restrictionEndsAt) ? <p>限制预计结束：{displayTime(status?.restrictionEndsAt)}</p> : null}
           {displayTime(deletion?.scheduledFor) ? <p>注销计划时间：{displayTime(deletion?.scheduledFor)}</p> : null}
@@ -193,9 +193,9 @@ export function CommunityAccountStatusPage(): JSX.Element {
               <div className={styles.stack}>
                 <div><Tag color={appeal.status === 'approved' ? 'success' : appeal.status === 'rejected' ? 'danger' : 'brand'}>{APPEAL_LABEL[appeal.status]}</Tag></div>
                 {displayTime(appeal.submittedAt) ? <p>提交时间：{displayTime(appeal.submittedAt)}</p> : null}
-                {appeal.decisionReason ? <p>服务端决定说明：{appeal.decisionReason}</p> : null}
+                {appeal.decisionReason ? <p>处理说明：{appeal.decisionReason}</p> : null}
               </div>
-            ) : <p className={styles.muted}>当前没有服务端返回的申诉记录。</p>}
+            ) : <p className={styles.muted}>当前没有申诉记录。</p>}
             {canAppeal ? (
               <div className={styles.form}>
                 <Textarea
@@ -211,9 +211,9 @@ export function CommunityAccountStatusPage(): JSX.Element {
                 <Button loading={busy === 'appeal'} onClick={() => void submitAppeal()}>提交申诉</Button>
               </div>
             ) : appeal?.status === 'pending' ? (
-              <p>申诉正在处理，请等待服务端结果，不要重复提交。</p>
+              <p>申诉正在处理，请耐心等待，不要重复提交。</p>
             ) : status && status.canAppeal === false ? (
-              <p>服务端当前不允许再次提交申诉。</p>
+              <p>当前不能再次提交申诉。</p>
             ) : null}
           </div>
         </Card>

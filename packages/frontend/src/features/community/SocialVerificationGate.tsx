@@ -23,7 +23,7 @@ export function CommunitySocialVerificationPrompt({
       {COMMUNITY_FEATURE_FLAGS.socialVerification ? (
         <Link to="/settings/verification">查看身份核验状态</Link>
       ) : (
-        <span>当前版本尚未开放核验入口，因此该操作暂不可用。</span>
+        <span>该功能暂不可用。</span>
       )}
     </p>
   );

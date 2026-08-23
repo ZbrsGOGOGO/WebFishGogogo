@@ -51,9 +51,9 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/办公室乐斗、工具与单机游戏均在浏览器中运行/),
+      screen.getByText(/轻量工具、经典小游戏和办公室主题玩法/),
     ).toBeInTheDocument();
-    expect(screen.getByText(/办公室轻社区 · 本机试玩版/)).toBeInTheDocument();
+    expect(screen.getByText('办公室轻社区')).toBeInTheDocument();
     expect(screen.queryByText(/审核/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
   });

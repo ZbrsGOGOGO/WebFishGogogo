@@ -207,7 +207,7 @@ export function CommunityFriendsPage(): JSX.Element {
                   onClick={() => void mutate(
                     `friend-request:${searchResult.publicId}`,
                     (key) => communityRelationshipsApi.sendRequest(searchResult.publicId, key),
-                    '好友申请已由服务端确认发送',
+                    '好友申请已发送',
                   )}
                 >
                   发送申请
@@ -251,11 +251,11 @@ export function CommunityFriendsPage(): JSX.Element {
             ? `${friends.length}/${friendLimit} 位好友`
             : tab === 'outgoing'
               ? `今日主动申请 ${dailySent}/${dailyLimit || '—'}`
-              : '关系状态和限额均以服务端返回为准'}
+              : '申请与拉黑记录'}
         </p>
 
         {loading ? <p role="status">正在加载好友关系…</p> : visibleItems.length === 0 ? (
-          <EmptyState title="这里暂时没有记录" message="新状态只会在服务端确认后显示。" />
+          <EmptyState title="这里暂时没有记录" message="新的关系记录会显示在这里。" />
         ) : null}
 
         {!loading && tab === 'friends' ? friends.map((friend) => (
@@ -273,14 +273,14 @@ export function CommunityFriendsPage(): JSX.Element {
                 '删除好友',
                 '确认删除',
                 (key) => communityRelationshipsApi.removeFriend(friend.publicId, key),
-                '好友关系已由服务端确认删除',
+                '好友已删除',
               )}
               {dangerButton(
                 `block:${friend.publicId}`,
                 '拉黑',
                 '确认拉黑',
                 (key) => communityRelationshipsApi.block(friend.publicId, key),
-                '该用户已被拉黑，既有好友与申请关系将由服务端处理',
+                '该用户已被拉黑',
               )}
             </div>
           </article>

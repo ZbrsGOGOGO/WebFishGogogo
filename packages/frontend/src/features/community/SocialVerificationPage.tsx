@@ -22,12 +22,12 @@ const STATUS_COPY: Record<
   },
   pending: {
     label: '核验处理中',
-    detail: '核验服务正在处理，请等待服务端返回最终结果，不需要重复提交。',
+    detail: '核验正在处理中，请耐心等待，不需要重复提交。',
     color: 'brand',
   },
   verified: {
     label: '已核验',
-    detail: '服务端已确认核验完成。公开主页和社区内容不会展示身份信息。',
+    detail: '核验已经完成。公开主页和社区内容不会展示身份信息。',
     color: 'success',
   },
   failed: {
@@ -116,7 +116,7 @@ export function CommunitySocialVerificationPage(): JSX.Element {
       </Card>
 
       <Card title="当前状态">
-        {loading ? <p role="status">正在从服务端读取核验状态…</p> : null}
+        {loading ? <p role="status">正在读取核验状态…</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
         {!loading && verification && copy ? (
           <div className={styles.stack}>
@@ -137,7 +137,7 @@ export function CommunitySocialVerificationPage(): JSX.Element {
       {session ? (
         <Card title="安全核验会话">
           <div className={styles.stack} role="status">
-            <p>安全地址已生成，有效期至 {formatTime(session.expiresAt) ?? '服务端指定时间'}。</p>
+            <p>安全地址已生成，有效期至 {formatTime(session.expiresAt) ?? '页面显示时间'}。</p>
             <a className={styles.primaryLink} href={session.launchUrl} rel="noopener noreferrer">
               前往安全核验服务
             </a>

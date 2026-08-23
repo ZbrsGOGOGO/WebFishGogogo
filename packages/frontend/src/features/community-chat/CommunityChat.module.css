@@ -172,15 +172,21 @@ div.error p {
 
 .chatLayout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 350px);
   gap: 16px;
   align-items: start;
 }
 
 .messageColumn {
   min-width: 0;
+  min-height: 650px;
   display: grid;
+  align-content: start;
   gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface-2);
 }
 
 .composerColumn {
@@ -190,11 +196,17 @@ div.error p {
 }
 
 .messageList {
+  max-height: min(70vh, 760px);
+  min-height: 520px;
   margin: 0;
-  padding: 0;
+  padding: 0 5px 0 0;
   display: grid;
+  align-content: start;
   gap: 9px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   list-style: none;
+  scrollbar-gutter: stable;
 }
 
 .messageList > li {
@@ -401,6 +413,15 @@ div.error p {
   .composerColumn {
     position: static;
     grid-row: 1;
+  }
+
+  .messageColumn {
+    min-height: 560px;
+  }
+
+  .messageList {
+    min-height: 440px;
+    max-height: 62vh;
   }
 }
 

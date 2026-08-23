@@ -181,7 +181,7 @@ export function CommunityHomePage(): JSX.Element {
           <Link to="/ledou"><time>01</time><div><strong>第一次来：选职业，打完一局</strong><p>不需要研究攻略，战斗自动完成；你只负责选择和成长。</p></div><span>去乐斗</span></Link>
           {COMMUNITY_FEATURE_FLAGS.farm ? <Link to="/farm"><time>02</time><div><strong>每天来：点一下照料绿植</strong><p>成熟后收获，再自动开始下一轮，进度离线继续。</p></div><span>去农场</span></Link> : null}
           <Link to="/tools"><time>03</time><div><strong>工作时：常用工具随手打开</strong><p>站点不只用来玩，也能处理日常的小任务。</p></div><span>工具箱</span></Link>
-          <Link to="/games"><time>04</time><div><strong>想放松：玩一局轻量小游戏</strong><p>俄罗斯方块、贪吃蛇等单机玩法，随开随停。</p></div><span>游戏厅</span></Link>
+          <Link to="/games"><time>04</time><div><strong>想放松：玩一局经典小游戏</strong><p>俄罗斯方块和坦克大战，随开随停，还能挑战排行榜。</p></div><span>游戏厅</span></Link>
         </div>
       </section>
     </main>

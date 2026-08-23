@@ -200,6 +200,17 @@
   gap: var(--space-4);
 }
 
+.rankNotice {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-brand) 25%, var(--color-border));
+  border-radius: var(--radius-md);
+  background: var(--color-brand-soft);
+  color: var(--color-brand);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .keyList {
   display: grid;
   gap: var(--space-2);

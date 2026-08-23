@@ -51,7 +51,7 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
     <section className={styles.replay} aria-labelledby="server-replay-title">
       <div className={styles.sectionHeading}>
         <div>
-          <span>服务端结算</span>
+          <span>战斗回放</span>
           <h2 id="server-replay-title">
             {settlement.winner === 'player' ? '本次胜出' : '本次惜败'}
           </h2>
@@ -84,7 +84,7 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
           checked={reducedMotion}
           onChange={(event) => setReducedMotion(event.target.checked)}
         />
-        减少动态效果（直接展示完整服务端记录）
+        减少动态效果（直接展示完整战报）
       </label>
 
       <div className={styles.fighterGrid}>
@@ -129,16 +129,6 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
         </div>
       ) : null}
 
-      <details className={styles.auditDetails}>
-        <summary>结算审计信息</summary>
-        <dl>
-          <div><dt>战斗编号</dt><dd>{settlement.battleId}</dd></div>
-          <div><dt>请求编号</dt><dd>{settlement.battleRequestId}</dd></div>
-          <div><dt>引擎 / 平衡</dt><dd>{settlement.engineVersion} / {settlement.balanceVersion}</dd></div>
-          <div><dt>服务端种子</dt><dd>{settlement.seed}</dd></div>
-        </dl>
-        <p>种子仅供复核；本页面没有据此计算胜负、伤害或掉落。</p>
-      </details>
     </section>
   );
 }

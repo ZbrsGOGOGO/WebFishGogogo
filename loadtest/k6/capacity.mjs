@@ -24,10 +24,8 @@ const PUBLIC_ROUTES = [
   { path: '/ledou', weight: 18 },
   { path: '/tools', weight: 18 },
   { path: '/games', weight: 12 },
-  { path: '/games/snake', weight: 7 },
-  { path: '/games/tetris', weight: 7 },
-  { path: '/games/tank', weight: 6 },
-  { path: '/games/three-sum', weight: 5 },
+  { path: '/games/tetris', weight: 13 },
+  { path: '/games/tank', weight: 12 },
   { path: '/privacy-policy', weight: 3 },
   { path: '/terms-of-service', weight: 2 },
 ];

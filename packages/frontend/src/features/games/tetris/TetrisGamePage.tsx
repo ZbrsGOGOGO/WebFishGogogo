@@ -10,7 +10,9 @@ import {
 
 import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
+import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
 import { shouldIgnoreGameKeyboard } from '../game-input';
+import { useArcadeRun } from '../useArcadeRun';
 import styles from './TetrisGamePage.module.css';
 import {
   BOARD_HEIGHT,
@@ -81,6 +83,7 @@ export function TetrisGamePage(): JSX.Element {
   );
   const [autoPaused, setAutoPaused] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
+  const arcade = useArcadeRun('tetris');
 
   const focusBoard = useCallback((): void => {
     boardRef.current?.focus({ preventScroll: true });
@@ -90,15 +93,23 @@ export function TetrisGamePage(): JSX.Element {
     setAutoPaused(false);
     dispatch({ type: 'reset', pieces: createPieceSequence(), start });
     if (start) {
+      arcade.begin();
       focusBoard();
     }
-  }, [focusBoard]);
+  }, [arcade.begin, focusBoard]);
 
   const startGame = useCallback((): void => {
     setAutoPaused(false);
+    arcade.begin();
     dispatch({ type: 'start' });
     focusBoard();
-  }, [focusBoard]);
+  }, [arcade.begin, focusBoard]);
+
+  useEffect(() => {
+    if (state.status === 'gameOver') {
+      void arcade.finish(state.score, { lines: state.lines, level: state.level });
+    }
+  }, [arcade.finish, state.level, state.lines, state.score, state.status]);
 
   useEffect(() => {
     if (state.queue.length < 7) {
@@ -221,10 +232,10 @@ export function TetrisGamePage(): JSX.Element {
   const controlsDisabled = state.status !== 'running';
 
   return (
-    <section className={styles.page} aria-label="方块消除游戏">
+    <section className={styles.page} aria-label="俄罗斯方块游戏">
       <GameBackLink />
       <PageHeader
-        title="方块消除"
+        title="俄罗斯方块"
         subtitle="旋转并堆叠七种方块，消除完整横行；每消除 10 行提升一级。"
         actions={
           <div className={styles.headerActions}>
@@ -267,7 +278,7 @@ export function TetrisGamePage(): JSX.Element {
                 role="grid"
                 tabIndex={0}
                 ref={boardRef}
-                aria-label="方块消除棋盘"
+                aria-label="俄罗斯方块棋盘"
                 aria-rowcount={BOARD_HEIGHT}
                 aria-colcount={BOARD_WIDTH}
                 data-testid="tetris-board"
@@ -396,6 +407,7 @@ export function TetrisGamePage(): JSX.Element {
         </Card>
 
         <aside className={styles.sidebar} aria-label="本局信息">
+          {arcade.notice ? <p className={styles.rankNotice} role="status">{arcade.notice}</p> : null}
           <Card title="本局数据" bodyClassName={styles.statsBody}>
             <dl className={styles.stats}>
               <div>
@@ -468,6 +480,7 @@ export function TetrisGamePage(): JSX.Element {
               </li>
             </ul>
           </Card>
+          <ArcadeLeaderboard gameKey="tetris" refreshKey={arcade.revision} />
         </aside>
       </div>
     </section>

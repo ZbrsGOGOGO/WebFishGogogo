@@ -69,14 +69,14 @@ const REPORT_REASON_LABELS: Record<CommunityChatReportReason, string> = {
 };
 
 const CONNECTION_LABELS: Record<CommunityChatConnectionSnapshot['status'], string> = {
-  idle: '尚未连接',
-  ticketing: '正在获取单次票据',
-  connecting: '正在建立实时连接',
-  authenticating: '正在认证实时连接',
-  ready: '实时连接可用',
-  reconnecting: '连接中断，正在重连并补缺',
-  failed: '实时连接失败',
-  closed: '实时连接已关闭',
+  idle: '准备连接',
+  ticketing: '正在连接',
+  connecting: '正在连接',
+  authenticating: '正在连接',
+  ready: '在线',
+  reconnecting: '网络波动，正在重连',
+  failed: '连接失败',
+  closed: '已离线',
 };
 
 function formatMessageTime(value: string): string {
@@ -174,7 +174,7 @@ export function CommunityChatRoomPage(): JSX.Element {
       ));
       if (slowModeSecondsRef.current > 0) setRetryUntil(Date.now() + slowModeSecondsRef.current * 1000);
     }
-    if (event.action === 'withdraw') setNotice('服务端已确认撤回，等待消息更新事件');
+    if (event.action === 'withdraw') setNotice('消息已撤回');
   }, []);
 
   const handleSocketError = useCallback((event: ChatErrorEvent) => {
@@ -245,7 +245,7 @@ export function CommunityChatRoomPage(): JSX.Element {
       ]);
       const selectedRoom = roomPage.items.find((item) => item.slug === roomSlug);
       if (!selectedRoom) {
-        setError('服务端没有返回这个固定房间');
+        setError('没有找到这个聊天室');
         setRoom(null);
         return;
       }
@@ -380,7 +380,7 @@ export function CommunityChatRoomPage(): JSX.Element {
         message.id,
         createCommunityIdempotencyKey('chat-withdraw'),
       );
-      setNotice('撤回请求已发送，尚未收到服务端确认');
+      setNotice('正在撤回消息…');
     } catch (withdrawError) {
       setError(withdrawError instanceof Error ? withdrawError.message : '撤回请求发送失败');
     }
@@ -397,7 +397,7 @@ export function CommunityChatRoomPage(): JSX.Element {
         { reason: reportReason, detail: reportDetail.trim() || undefined },
         createCommunityIdempotencyKey('chat-report'),
       );
-      setNotice('举报已由服务端确认接收');
+      setNotice('举报已提交');
       setReportMessageId(undefined);
       setReportDetail('');
     } catch (requestError) {
@@ -423,7 +423,7 @@ export function CommunityChatRoomPage(): JSX.Element {
       <CommunityExperienceNav />
       <PageHeader
         title={room?.name ?? '聊天室'}
-        subtitle={room?.description ?? '正在读取服务端房间状态'}
+        subtitle={room?.description ?? '正在进入聊天室'}
         actions={<Link to="/community/chat">返回六房间大厅</Link>}
       />
 
@@ -431,7 +431,7 @@ export function CommunityChatRoomPage(): JSX.Element {
         <span data-status={connectionSnapshot.status}>{CONNECTION_LABELS[connectionSnapshot.status]}</span>
         <span>活跃档位：{CHAT_PRESENCE_LABELS[room?.presenceBand ?? 'unavailable']}</span>
         {room?.slowModeSeconds ? <span>慢速模式：{room.slowModeSeconds} 秒</span> : null}
-        {gapLoading ? <span role="status">正在按序号补齐断线缺口…</span> : null}
+        {gapLoading ? <span role="status">正在同步新消息…</span> : null}
         {connectionSnapshot.status === 'failed' ? (
           <Button size="sm" variant="secondary" onClick={() => connectionRef.current?.reconnectNow()}>重新连接</Button>
         ) : null}
@@ -453,8 +453,8 @@ export function CommunityChatRoomPage(): JSX.Element {
               加载更早消息
             </Button>
           ) : null}
-          {loading ? <p role="status">正在加载真实历史消息…</p> : messages.length === 0 ? (
-            <EmptyState title="当前没有真实消息" message="聊天室不会用机器人、假用户或假热度填充内容。" />
+          {loading ? <p role="status">正在加载消息…</p> : messages.length === 0 ? (
+            <EmptyState title="还没有消息" message="来和大家说第一句话吧。" />
           ) : (
             <ol className={styles.messageList} aria-label="聊天室消息" aria-live="polite">
               {messages.map((message) => {
@@ -488,16 +488,16 @@ export function CommunityChatRoomPage(): JSX.Element {
 
           {pendingMessages.length > 0 ? (
             <section className={styles.outbox} aria-label="待发送消息">
-              <h2>本标签页发送队列</h2>
+              <h2>发送状态</h2>
               {pendingMessages.map((pending) => (
                 <article key={pending.clientMessageId} data-state={pending.state}>
                   <p>{pending.body}</p>
                   <span>
-                    {pending.state === 'pending' ? '发送中' : pending.state === 'acked' ? '服务端已确认，等待房间广播' : `发送失败：${pending.error ?? '未知原因'}`}
+                    {pending.state === 'pending' ? '发送中' : pending.state === 'acked' ? '已发送' : `发送失败：${pending.error ?? '未知原因'}`}
                   </span>
                   {pending.state === 'failed' ? (
                     <Button size="sm" variant="secondary" disabled={connectionSnapshot.status !== 'ready'} onClick={() => transmitPending(pending)}>
-                      使用同一 clientMessageId 重试
+                      重新发送
                     </Button>
                   ) : null}
                 </article>
@@ -528,7 +528,7 @@ export function CommunityChatRoomPage(): JSX.Element {
               <label className={styles.mentionSelect}>
                 添加 @ 候选（最多 5 人）
                 <select value="" disabled={mentionPublicIds.length >= 5 || mentionCandidates.length === 0} onChange={(event) => addMention(event.target.value)}>
-                  <option value="">从服务端允许名单或消息作者中选择</option>
+                  <option value="">选择想提醒的人</option>
                   {mentionCandidates.filter((candidate) => !mentionPublicIds.includes(candidate.publicId)).map((candidate) => (
                     <option key={candidate.publicId} value={candidate.publicId}>{candidate.displayName} · {candidate.publicId}</option>
                   ))}
@@ -546,7 +546,7 @@ export function CommunityChatRoomPage(): JSX.Element {
                 {room?.closed ? '房间已关闭' : room?.readOnly ? '房间只读' : retrySeconds > 0 ? `等待 ${retrySeconds} 秒` : connectionSnapshot.status !== 'ready' ? '等待实时连接' : '发送消息'}
               </Button>
             </form>
-            <p className={styles.safetyNote}>不能输入邮箱或手机号搜索 @ 对象；消息失败会保留在本标签页并明确标记。</p>
+            <p className={styles.safetyNote}>请勿发送手机号、邮箱、住址或其他敏感信息。</p>
           </Card>
         </aside>
       </section>

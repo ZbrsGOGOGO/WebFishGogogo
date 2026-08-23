@@ -13,11 +13,6 @@ const PublicGamesPage = lazy(() =>
     default: module.PublicGamesPage,
   })),
 );
-const SnakeGamePage = lazy(() =>
-  import('../features/games/snake/SnakeGamePage').then((module) => ({
-    default: module.SnakeGamePage,
-  })),
-);
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({
     default: module.TetrisGamePage,
@@ -26,11 +21,6 @@ const TetrisGamePage = lazy(() =>
 const TankBattlePage = lazy(() =>
   import('../features/games/tank/TankBattlePage').then((module) => ({
     default: module.TankBattlePage,
-  })),
-);
-const ThreeSumGamePage = lazy(() =>
-  import('../features/games/three-sum/ThreeSumGamePage').then((module) => ({
-    default: module.ThreeSumGamePage,
   })),
 );
 const OfficeBattlePage = lazy(() =>
@@ -59,10 +49,10 @@ export function PublicModeRouter(): JSX.Element {
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<PublicGameLayout />}>
         <Route index element={loading(<PublicGamesPage />)} />
-        <Route path="snake" element={loading(<SnakeGamePage />)} />
+        <Route path="snake" element={<Navigate to="/games" replace />} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />
         <Route path="tank" element={loading(<TankBattlePage />)} />
-        <Route path="three-sum" element={loading(<ThreeSumGamePage />)} />
+        <Route path="three-sum" element={<Navigate to="/games" replace />} />
       </Route>
       <Route
         path="/privacy-policy"

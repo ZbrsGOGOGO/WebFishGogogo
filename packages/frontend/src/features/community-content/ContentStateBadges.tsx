@@ -15,7 +15,7 @@ export function ContentStateBadges({ state }: { state: CommunityContentState }):
         治理：{MODERATION_LABELS[state.moderationStatus]}
       </Tag>
       <Tag color={state.deletedAt ? 'danger' : 'neutral'}>
-        删除：{state.deletedAt ? '已软删除' : '未删除'}
+        删除：{state.deletedAt ? '已删除' : '未删除'}
       </Tag>
       <Tag color="neutral">版本：v{state.version}</Tag>
     </div>

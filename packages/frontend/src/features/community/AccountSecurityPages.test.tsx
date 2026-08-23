@@ -85,7 +85,7 @@ describe('community account security pages', () => {
     vi.spyOn(communityAccountApi, 'getStatus').mockResolvedValue({
       accountStatus: 'suspended',
       reasonCode: 'RATE_LIMIT_REVIEW',
-      reason: '服务端正在复核异常操作。',
+      reason: '正在复核异常操作。',
       canAppeal: true,
       appeal: null,
     });
@@ -97,7 +97,7 @@ describe('community account security pages', () => {
 
     render(<MemoryRouter><CommunityAccountStatusPage /></MemoryRouter>);
 
-    await screen.findByText(/服务端说明：服务端正在复核异常操作。/);
+    await screen.findByText(/状态说明：正在复核异常操作。/);
     await user.type(
       screen.getByLabelText(/^申诉说明/),
       '我认为本次处置可能有误，请重新核验对应时间段内的操作记录。',

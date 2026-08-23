@@ -1,17 +1,13 @@
 import type { JSX } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 
 import { LoginPage, RegisterPage } from '../features/auth';
 import { PrivacyPolicyPage, TermsOfServicePage } from '../features/compliance';
 import { FarmPage } from '../features/farm';
 import {
-  ArenaPage,
   GamesPage,
-  HighLowGamePage,
-  SnakeGamePage,
   TankBattlePage,
   TetrisGamePage,
-  ThreeSumGamePage,
 } from '../features/games';
 import { HomePage } from '../features/home/HomePage';
 import { LibraryPage } from '../features/library';
@@ -46,12 +42,12 @@ export function RuntimeRouter(): JSX.Element {
         <Route path="/tools" element={<ToolsPage />} />
         <Route path="/farm" element={<FarmPage />} />
         <Route path="/games" element={<GamesPage />} />
-        <Route path="/games/arena" element={<ArenaPage />} />
-        <Route path="/games/snake" element={<SnakeGamePage />} />
+        <Route path="/games/arena" element={<Navigate to="/games" replace />} />
+        <Route path="/games/snake" element={<Navigate to="/games" replace />} />
         <Route path="/games/tetris" element={<TetrisGamePage />} />
         <Route path="/games/tank" element={<TankBattlePage />} />
-        <Route path="/games/high-low" element={<HighLowGamePage />} />
-        <Route path="/games/three-sum" element={<ThreeSumGamePage />} />
+        <Route path="/games/high-low" element={<Navigate to="/games" replace />} />
+        <Route path="/games/three-sum" element={<Navigate to="/games" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

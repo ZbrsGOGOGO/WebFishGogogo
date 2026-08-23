@@ -366,8 +366,8 @@ grep -Eq 'location ~ .*v1/admin/.*moderation' "$ROOT_DIR/deploy/community.nginx.
   fail "implemented moderation API prefix is missing from the Nginx allowlist"
 grep -Eq 'location ~ .*v1/.*news' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "implemented news API prefixes are missing from the Nginx allowlist"
-grep -Eq 'location ~ .*v1/games/office-battle' "$ROOT_DIR/deploy/community.nginx.conf" ||
-  fail "implemented office-battle API prefix is missing from the Nginx allowlist"
+grep -Eq 'location ~ .*v1/games/.*office-battle.*arcade' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "implemented game API prefixes are missing from the Nginx allowlist"
 grep -Eq 'location ~ .*v1/admin/.*account-appeals' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "implemented account appeal API prefix is missing from the Nginx allowlist"
 grep -Fq 'X-WebFish-Site-Mode "community"' "$ROOT_DIR/deploy/community.nginx.conf" ||
@@ -444,7 +444,9 @@ grep -Fq 'GUILD_BOSS_TIMESTAMP=1700000000021' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'HOT_NEWS_TIMESTAMP=1700000000022' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000022' \
+grep -Fq 'ARCADE_TIMESTAMP=1700000000023' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000023' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -461,8 +463,10 @@ grep -Fq 'guild_ledger' \
 grep -Fq 'guild_boss_contributions' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'hot_news_headlines' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'arcade_best_scores' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guilds 0020, guild boss 0021 and daily hot news/invite coin 0022"
+  fail "migration rehearsal must verify chat 0014 through arcade leaderboards 0023"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

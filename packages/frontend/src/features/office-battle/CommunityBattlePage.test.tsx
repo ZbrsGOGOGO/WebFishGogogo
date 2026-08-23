@@ -130,10 +130,40 @@ describe('CommunityBattlePage formal archive', () => {
 
     render(<CommunityBattlePage />);
 
-    expect(await screen.findByText(/正式档案已被封禁/)).toBeInTheDocument();
+    expect(await screen.findByText(/当前角色已被封禁/)).toBeInTheDocument();
     expect(screen.getByText(/当前网页版本过旧/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole('tab', { name: '记录' })).toBeEnabled());
+  });
+
+  it('shows PVE, PVP and profession-specific power leaderboards', async () => {
+    vi.spyOn(communityBattleApi, 'getBootstrap').mockResolvedValue(bootstrap);
+    const ranking = vi.spyOn(communityBattleApi, 'getLeaderboard').mockResolvedValue({
+      mode: 'pve',
+      profession: 'all',
+      formulaVersion: 'office-power-v2',
+      updatedAt: '2026-08-22T10:00:00.000Z',
+      items: [{
+        rank: 1,
+        publicId: 'rank-1',
+        displayName: '键盘侠客',
+        profession: 'developer',
+        battleLevel: 12,
+        power: 888,
+        wins: 30,
+        losses: 4,
+      }],
+    });
+
+    render(<CommunityBattlePage />);
+    fireEvent.click(await screen.findByRole('tab', { name: '排行' }));
+
+    expect(await screen.findByText('键盘侠客')).toBeInTheDocument();
+    expect(ranking).toHaveBeenCalledWith('pve', 'all');
+    fireEvent.change(screen.getByRole('combobox', { name: '职业分榜' }), {
+      target: { value: 'developer' },
+    });
+    await waitFor(() => expect(ranking).toHaveBeenCalledWith('pve', 'developer'));
   });
 });

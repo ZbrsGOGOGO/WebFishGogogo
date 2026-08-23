@@ -14,7 +14,6 @@
 .sessionState, .accountLink, .loginLink, .noticeLink { max-width: 144px; padding: 7px 9px; overflow: hidden; color: #d4dae4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .registerLink { padding: 8px 12px; border-radius: 9px; color: #173122; background: #a7e975; font-size: 12px; font-weight: 800; }
 .registerLink:hover { color: #173122; background: #bbf18f; }
-.bootstrapNotice { width: min(100% - 40px, 1440px); margin: 10px auto 0; padding: 9px 12px; border: 1px solid #e2bd75; border-radius: 10px; color: #765018; background: #fff7e5; font-size: 12px; }
 .workspace { width: min(100%, 1440px); min-height: calc(100dvh - 64px); margin: 0 auto; display: grid; grid-template-columns: 224px minmax(0, 1fr); align-items: start; }
 .workspace[data-home='true'] { grid-template-columns: 224px minmax(0, 1fr) 254px; }
 .publicFrame { min-width: 0; }
@@ -63,7 +62,7 @@
 }
 
 @media (max-width: 840px) {
-  .headerInner, .bootstrapNotice { width: calc(100% - 28px); }
+  .headerInner { width: calc(100% - 28px); }
   .headerInner { min-height: 58px; }
   .topNav, .brand small, .noticeLink, .accountLink, .accountActions button { display: none; }
   .brand { min-width: 0; flex: 1; }

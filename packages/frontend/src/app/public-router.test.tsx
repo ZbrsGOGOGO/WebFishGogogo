@@ -56,29 +56,27 @@ describe('public site mode', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('lists only the four approved local games and makes no API call', async () => {
+  it('lists only the two selected games and makes no API call', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
     renderPublicAt('/games');
 
     expect(
-      await screen.findByRole('heading', { name: '4 款轻量游戏', level: 2 }),
+      await screen.findByRole('heading', { name: '2 款经典游戏', level: 2 }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /贪食蛇/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /方块消除/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /俄罗斯方块/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /坦克大战/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /三数之和/ })).toBeInTheDocument();
+    expect(screen.queryByText('贪食蛇')).not.toBeInTheDocument();
+    expect(screen.queryByText('三数之和')).not.toBeInTheDocument();
     expect(screen.queryByText('午休竞技场')).not.toBeInTheDocument();
     expect(screen.queryByText('比大小')).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['/games/snake', '贪食蛇'],
-    ['/games/tetris', '方块消除'],
+    ['/games/tetris', '俄罗斯方块'],
     ['/games/tank', '坦克大战'],
-    ['/games/three-sum', '三数之和'],
   ])('loads the public game deep link %s', async (path, heading) => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -94,6 +92,14 @@ describe('public site mode', () => {
     );
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it.each(['/games/snake', '/games/three-sum'])(
+    'redirects removed game %s to the game center',
+    async (path) => {
+      renderPublicAt(path);
+      expect(await screen.findByRole('heading', { name: '2 款经典游戏' })).toBeInTheDocument();
+    },
+  );
 
   it.each(['/games/arena', '/games/high-low', '/farm', '/login', '/register'])(
     'redirects the disabled route %s to the public homepage',

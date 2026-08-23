@@ -92,7 +92,7 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     label: '乐斗',
     path: '/ledou',
     enabled: COMMUNITY_FEATURE_FLAGS.ledou,
-    requiresAccount: false,
+    requiresAccount: true,
     description: '办公室职业自动战斗',
   },
   {

@@ -8,24 +8,23 @@ export function PublicGamesPage(): JSX.Element {
   return (
     <div aria-labelledby="public-games-title">
       <section className={publicStyles.hero}>
-        <span className={publicStyles.eyebrow}>浏览器单机游戏</span>
+        <span className={publicStyles.eyebrow}>经典小游戏</span>
         <h1 id="public-games-title">随时开始，也能随时停下</h1>
         <p>
-          无需注册或登录。游戏在当前浏览器内运行，不含充值、提现、
-          概率付费或用户间交易。
+          无需登录就能开始。登录账号后，俄罗斯方块和坦克大战的个人最佳成绩会进入排行榜。
         </p>
         <div className={publicStyles.trustRow} aria-label="游戏特点">
-          <span>单机玩法</span>
+          <span>即开即玩</span>
           <span>无付费</span>
-          <span>无用户互动</span>
+          <span>全站排行</span>
         </div>
       </section>
 
       <div className={publicStyles.catalog}>
         <GamesCatalog
           games={PUBLIC_GAME_CARDS}
-          title="4 款轻量游戏"
-          subtitle="游戏运行与计分在当前浏览器内完成。"
+          title="2 款经典游戏"
+          subtitle="先熟悉操作，再挑战排行榜上的更高分。"
           headingLevel={2}
         />
       </div>

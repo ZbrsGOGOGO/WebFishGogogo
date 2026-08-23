@@ -144,7 +144,7 @@ describe('community fixed chat pages', () => {
         rooms: [{ roomSlug: 'general', latestSequence: 0 }],
       });
     });
-    expect(await screen.findByText('实时连接可用')).toBeInTheDocument();
+    expect(await screen.findByText('在线')).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('textbox', { name: '消息内容' }), {
       target: { value: '这是一条真实服务端消息' },
@@ -166,7 +166,7 @@ describe('community fixed chat pages', () => {
     });
     expect(await screen.findByText('发送失败：请稍后重试')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /使用同一 clientMessageId 重试/ }));
+    fireEvent.click(screen.getByRole('button', { name: '重新发送' }));
     const sendFrames = socket.sent.map((frame) => JSON.parse(frame)).filter((frame) => frame.type === 'chat.send');
     expect(sendFrames).toHaveLength(2);
     expect(sendFrames[1].clientMessageId).toBe(firstSend.clientMessageId);
@@ -178,7 +178,7 @@ describe('community fixed chat pages', () => {
         messageId: 'message-1', sequence: 1, serverTime: '2026-08-22T10:00:01.000Z',
       });
     });
-    expect(await screen.findByText('服务端已确认，等待房间广播')).toBeInTheDocument();
+    expect(await screen.findByText('已发送')).toBeInTheDocument();
     act(() => {
       socket.receive({ type: 'chat.message.created', protocolVersion: 1, message: serverMessage(firstSend.clientMessageId) });
     });

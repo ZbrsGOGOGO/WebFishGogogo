@@ -64,7 +64,7 @@ const ENTRIES: HomeEntry[] = [
     mark: '游',
     eyebrow: '短时放松',
     name: '小游戏',
-    desc: '进入贪食蛇、方块消除、坦克大战等完整玩法。',
+    desc: '进入俄罗斯方块和坦克大战，挑战个人最佳成绩。',
     tone: 'games',
   },
 ];
@@ -236,7 +236,7 @@ export function HomePage(): JSX.Element {
             <div>
               <small>短时放松</small>
               <strong>选一款小游戏完成首局</strong>
-              <p>从贪食蛇或高低牌开始，一局结束就能随时退出。</p>
+              <p>从俄罗斯方块或坦克大战开始，一局结束就能随时退出。</p>
             </div>
             <Link className={styles.routeAction} to="/games">
               去玩一局
