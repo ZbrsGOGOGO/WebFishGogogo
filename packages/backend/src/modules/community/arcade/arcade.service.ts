@@ -169,9 +169,9 @@ export class ArcadeService {
       .innerJoinAndSelect('score.user', 'user')
       .where('score.game_key = :gameKey', { gameKey })
       .andWhere('user.account_status = :status', { status: 'active' })
-      .orderBy('score.best_score', 'DESC')
-      .addOrderBy('score.achieved_at', 'ASC')
-      .addOrderBy('user.public_id', 'ASC')
+      .orderBy('score.bestScore', 'DESC')
+      .addOrderBy('score.achievedAt', 'ASC')
+      .addOrderBy('user.publicId', 'ASC')
       .take(limit)
       .getMany();
     return {

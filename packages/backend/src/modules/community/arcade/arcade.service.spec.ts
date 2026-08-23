@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
+import type { DataSource } from 'typeorm';
 
-import { validateArcadeResult } from './arcade.service';
+import { ArcadeService, validateArcadeResult } from './arcade.service';
 
 describe('arcade score validation', () => {
   it('accepts a plausible tetris result and normalizes its metrics', () => {
@@ -30,5 +31,36 @@ describe('arcade score validation', () => {
       score: 300,
       metrics: { outcome: 'lost', enemiesDefeated: 2 },
     }, 20)).toThrow(BadRequestException);
+  });
+});
+
+describe('arcade leaderboard query', () => {
+  it('orders by entity property paths so TypeORM can resolve selected aliases', async () => {
+    const rows = [{
+      bestScore: 900,
+      achievedAt: new Date('2026-08-23T00:00:00.000Z'),
+      user: { publicId: 'player-1', displayName: '玩家一' },
+    }];
+    const queryBuilder = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(rows),
+    };
+    const dataSource = {
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      }),
+    } as unknown as DataSource;
+
+    const result = await new ArcadeService(dataSource).leaderboard('tetris', 10);
+
+    expect(queryBuilder.orderBy).toHaveBeenCalledWith('score.bestScore', 'DESC');
+    expect(queryBuilder.addOrderBy).toHaveBeenNthCalledWith(1, 'score.achievedAt', 'ASC');
+    expect(queryBuilder.addOrderBy).toHaveBeenNthCalledWith(2, 'user.publicId', 'ASC');
+    expect(result.items[0]).toMatchObject({ rank: 1, publicId: 'player-1', score: 900 });
   });
 });
