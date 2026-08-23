@@ -1,7 +1,9 @@
 # ZBRS 技术工具工坊开发进度
 
-> 更新日期：2026-08-24  
-> 当前开发分支：`agent/simplify-farm-first-play`  
+> 更新日期：2026-08-24
+>
+> 当前开发分支：`agent/simplify-farm-first-play`
+>
 > 线上站点：<https://zbrshyyzxx.top>
 
 ## 1. 当前发布基线
@@ -129,4 +131,3 @@ npm run start:dev --workspace @stealth-reader/backend
 | `docs/LEADERBOARD_AND_CHAT_RULES_V1.md` | 排行榜与聊天保留规则 |
 | `docs/CAPACITY_4000_USERS.md` | 4,000 用户容量规划 |
 | `deploy/README.md` | 服务器部署与运维 |
-
