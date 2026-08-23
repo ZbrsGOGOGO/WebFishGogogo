@@ -55,6 +55,10 @@ export interface EquipmentDefinition {
   level: number;
   rarity: EquipmentRarity;
   stats: Partial<FighterStats>;
+  weaponCategory?: '轻型' | '中型' | '重型';
+  weaponTrait?: 'combo' | 'stun' | 'block' | 'critical' | 'drain';
+  weaponTraitLabel?: string;
+  weaponTraitChance?: number;
 }
 
 export interface OfficeFighter {
@@ -62,12 +66,13 @@ export interface OfficeFighter {
   profession: BattleProfession;
   level: number;
   equipment: EquipmentDefinition[];
+  skillRanks?: Record<string, number>;
 }
 
 export interface OfficeBattleLogEntry {
   round: number;
   actor: 'player' | 'opponent';
-  kind: 'attack' | 'skill' | 'heal' | 'stun' | 'result';
+  kind: 'attack' | 'skill' | 'heal' | 'stun' | 'combo' | 'block' | 'counter' | 'result';
   text: string;
 }
 
@@ -156,6 +161,27 @@ export const PROFESSION_DEFINITIONS: readonly ProfessionDefinition[] = [
     skillDescription: '恢复士气后继续行动，擅长持久战。',
     baseStats: { hp: 126, attack: 13, defense: 12, speed: 10, luck: 9 },
   },
+] as const;
+
+export interface OfficeSkillDefinition {
+  id: string;
+  profession: BattleProfession | 'all';
+  name: string;
+  mark: string;
+  description: string;
+  maxRank: number;
+  unlockLevel: number;
+}
+
+export const OFFICE_SKILLS: readonly OfficeSkillDefinition[] = [
+  { id: 'focus', profession: 'all', name: '专注训练', mark: '专', description: '每级提高 2 点执行，适合稳定输出。', maxRank: 5, unlockLevel: 1 },
+  { id: 'resilience', profession: 'all', name: '抗压训练', mark: '稳', description: '每级提高 10 点活力和 1 点抗压。', maxRank: 5, unlockLevel: 1 },
+  { id: 'agility', profession: 'all', name: '协作步伐', mark: '快', description: '每级提高 2 点反应和 1 点洞察。', maxRank: 5, unlockLevel: 3 },
+  { id: 'developer_mastery', profession: 'developer', name: '紧急热修', mark: 'FIX', description: '提高职业行动概率，连击型武器效果更稳定。', maxRank: 5, unlockLevel: 2 },
+  { id: 'product_mastery', profession: 'product', name: '需求冻结', mark: 'LOCK', description: '提高职业行动概率，更擅长打断对手节奏。', maxRank: 5, unlockLevel: 2 },
+  { id: 'qa_mastery', profession: 'qa', name: '致命复现', mark: 'BUG', description: '提高职业行动概率，同时增加洞察与抗压。', maxRank: 5, unlockLevel: 2 },
+  { id: 'sales_mastery', profession: 'sales', name: '临门签单', mark: 'TOP', description: '提高职业行动概率，擅长暴击收尾。', maxRank: 5, unlockLevel: 2 },
+  { id: 'hr_mastery', profession: 'hr', name: '团队激励', mark: 'UP', description: '提高职业行动概率，恢复效果更强。', maxRank: 5, unlockLevel: 2 },
 ] as const;
 
 const SLOT_BASE_STATS: Record<EquipmentSlot, Partial<FighterStats>> = {
@@ -267,6 +293,18 @@ export function createEquipment(
   const rarityDefinition = RARITY_DEFINITIONS[rarity];
   const slotNames = EQUIPMENT_NAMES[profession][slot];
   const baseName = slotNames[Math.min(tier, slotNames.length - 1)];
+  const weaponTraits: Record<BattleProfession, {
+    category: '轻型' | '中型' | '重型';
+    trait: NonNullable<EquipmentDefinition['weaponTrait']>;
+    label: string;
+  }> = {
+    developer: { category: '轻型', trait: 'combo', label: '连续提交' },
+    product: { category: '中型', trait: 'stun', label: '会议定身' },
+    qa: { category: '中型', trait: 'block', label: '稳定复现' },
+    sales: { category: '重型', trait: 'critical', label: '暴击签单' },
+    hr: { category: '中型', trait: 'drain', label: '团队回复' },
+  };
+  const weapon = slot === 'weapon' ? weaponTraits[profession] : undefined;
   return {
     id: `${profession}-${slot}-${normalizedLevel}-${rarity}-${serial}`,
     profession,
@@ -280,6 +318,12 @@ export function createEquipment(
       rarityDefinition.multiplier,
       rarityIndex(rarity),
     ),
+    ...(weapon ? {
+      weaponCategory: weapon.category,
+      weaponTrait: weapon.trait,
+      weaponTraitLabel: weapon.label,
+      weaponTraitChance: 0.12 + rarityIndex(rarity) * 0.035,
+    } : {}),
   };
 }
 
@@ -306,6 +350,18 @@ export function deriveFighterStats(fighter: OfficeFighter): FighterStats {
       result[key] += item.stats[key] ?? 0;
     }
   }
+  const skills = fighter.skillRanks ?? {};
+  result.attack += Math.max(0, skills.focus ?? 0) * 2;
+  result.hp += Math.max(0, skills.resilience ?? 0) * 10;
+  result.defense += Math.max(0, skills.resilience ?? 0);
+  result.speed += Math.max(0, skills.agility ?? 0) * 2;
+  result.luck += Math.max(0, skills.agility ?? 0);
+  const mastery = Math.max(0, skills[`${fighter.profession}_mastery`] ?? 0);
+  if (fighter.profession === 'developer') result.speed += mastery;
+  if (fighter.profession === 'product') result.defense += mastery * 2;
+  if (fighter.profession === 'qa') { result.defense += mastery; result.luck += mastery * 2; }
+  if (fighter.profession === 'sales') result.attack += mastery * 2;
+  if (fighter.profession === 'hr') result.hp += mastery * 12;
   return result;
 }
 
@@ -324,13 +380,14 @@ export function createOpponent(
   playerProfession: BattleProfession,
   level: number,
   seed: number,
+  difficulty = 0,
 ): OfficeFighter {
   const professions = PROFESSION_DEFINITIONS.map((item) => item.id);
   const profession = professions[Math.abs(seed + professions.indexOf(playerProfession) + 1) % professions.length];
   const names = OPPONENT_NAMES[profession];
   const opponentLevel = Math.min(
     60,
-    Math.max(1, level + ((Math.abs(seed) % 3) - 1)),
+    Math.max(1, level + ((Math.abs(seed) % 3) - 1) + Math.max(0, difficulty)),
   );
   const equipment = createStarterEquipment(profession).map((item, index) =>
     createEquipment(
@@ -346,6 +403,10 @@ export function createOpponent(
     profession,
     level: opponentLevel,
     equipment,
+    skillRanks: opponentLevel >= 3 ? {
+      focus: Math.min(3, Math.floor(opponentLevel / 8)),
+      [`${profession}_mastery`]: Math.min(3, Math.floor(opponentLevel / 10)),
+    } : {},
   };
 }
 
@@ -403,8 +464,11 @@ export function resolveOfficeBattle(
       }
 
       const definition = professionDefinition(fighters[actor].profession);
-      const skillTriggered = random() < 0.22 + stats[actor].luck * 0.002;
-      const critical = random() < 0.1 + stats[actor].luck * 0.004;
+      const masteryRank = fighters[actor].skillRanks?.[`${fighters[actor].profession}_mastery`] ?? 0;
+      const actorWeapon = fighters[actor].equipment.find((item) => item.slot === 'weapon');
+      const targetWeapon = fighters[target].equipment.find((item) => item.slot === 'weapon');
+      const skillTriggered = random() < 0.18 + stats[actor].luck * 0.002 + masteryRank * 0.025;
+      const critical = random() < 0.08 + stats[actor].luck * 0.004 + (actorWeapon?.weaponTrait === 'critical' ? actorWeapon.weaponTraitChance ?? 0 : 0);
       const defenseFactor = fighters[actor].profession === 'qa' && skillTriggered ? 0.35 : 0.7;
       let multiplier = critical ? 1.55 : 1;
       let kind: OfficeBattleLogEntry['kind'] = 'attack';
@@ -433,10 +497,19 @@ export function resolveOfficeBattle(
       }
 
       const deadlineMultiplier = round >= 8 ? 1 + (round - 7) * 0.18 : 1;
-      const damage = clampDamage(
+      let damage = clampDamage(
         stats[actor].attack * (0.95 + random() * 0.1) * multiplier * deadlineMultiplier -
           stats[target].defense * defenseFactor,
       );
+      if (targetWeapon?.weaponTrait === 'block' && random() < (targetWeapon.weaponTraitChance ?? 0)) {
+        damage = Math.max(1, Math.round(damage * 0.55));
+        logs.push({
+          round,
+          actor: target,
+          kind: 'block',
+          text: `${fighters[target].name}通过「${targetWeapon.weaponTraitLabel}」提前发现问题，减免了部分伤害。`,
+        });
+      }
       hp[target] = Math.max(0, hp[target] - damage);
       const actionText = skillTriggered
         ? `发动「${definition.skillName}」`
@@ -449,6 +522,20 @@ export function resolveOfficeBattle(
         kind,
         text: `${fighters[actor].name}${actionText}，让${fighters[target].name}损失 ${damage} 点士气${critical ? '（暴击）' : ''}。`,
       });
+      if (hp[target] > 0 && actorWeapon?.weaponTrait === 'combo' && random() < (actorWeapon.weaponTraitChance ?? 0)) {
+        const comboDamage = Math.max(1, Math.round(damage * 0.45));
+        hp[target] = Math.max(0, hp[target] - comboDamage);
+        logs.push({ round, actor, kind: 'combo', text: `${fighters[actor].name}触发「${actorWeapon.weaponTraitLabel}」，追加 ${comboDamage} 点士气伤害。` });
+      }
+      if (hp[target] > 0 && actorWeapon?.weaponTrait === 'stun' && random() < (actorWeapon.weaponTraitChance ?? 0)) {
+        stunned[target] = true;
+        logs.push({ round, actor, kind: 'stun', text: `${fighters[actor].name}发起「${actorWeapon.weaponTraitLabel}」，${fighters[target].name}下回合无法行动。` });
+      }
+      if (actorWeapon?.weaponTrait === 'drain' && random() < (actorWeapon.weaponTraitChance ?? 0)) {
+        const recovered = Math.max(2, Math.round(damage * 0.3));
+        hp[actor] = Math.min(maxHp[actor], hp[actor] + recovered);
+        logs.push({ round, actor, kind: 'heal', text: `${fighters[actor].name}通过「${actorWeapon.weaponTraitLabel}」恢复 ${recovered} 点士气。` });
+      }
     }
     if (hp.player <= 0 || hp.opponent <= 0) break;
   }

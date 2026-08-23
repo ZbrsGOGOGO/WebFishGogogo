@@ -64,6 +64,41 @@ describe('office battle domain', () => {
     expect(equippedStats.defense).toBeGreaterThan(baseStats.defense);
   });
 
+  it('gives every profession weapon an original combat trait', () => {
+    const traits = ['developer', 'product', 'qa', 'sales', 'hr'].map((profession) =>
+      createEquipment(profession as OfficeFighter['profession'], 'weapon', 10, 'rare'),
+    );
+
+    expect(traits.map((item) => item.weaponTrait)).toEqual([
+      'combo',
+      'stun',
+      'block',
+      'critical',
+      'drain',
+    ]);
+    expect(traits.every((item) => (item.weaponTraitChance ?? 0) > 0)).toBe(true);
+  });
+
+  it('applies universal and profession skill ranks to fighter growth', () => {
+    const fighter: OfficeFighter = {
+      name: '成长角色',
+      profession: 'qa',
+      level: 5,
+      equipment: createStarterEquipment('qa'),
+    };
+    const before = deriveFighterStats(fighter);
+    const after = deriveFighterStats({
+      ...fighter,
+      skillRanks: { focus: 2, resilience: 1, agility: 1, qa_mastery: 2 },
+    });
+
+    expect(after.attack).toBe(before.attack + 4);
+    expect(after.hp).toBe(before.hp + 10);
+    expect(after.defense).toBe(before.defense + 3);
+    expect(after.speed).toBe(before.speed + 2);
+    expect(after.luck).toBe(before.luck + 5);
+  });
+
   it('resolves a deterministic automatic battle with complete logs', () => {
     const player: OfficeFighter = {
       name: '我的角色',
