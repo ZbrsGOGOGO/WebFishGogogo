@@ -26,6 +26,7 @@ describe('ChatService safety and persistence invariants', () => {
     process.env.LOCAL_DEV = 'true';
     process.env.FEATURE_COMMUNITY_CHAT_ENABLED = 'true';
     process.env.FEATURE_CHAT_WRITES_ENABLED = 'true';
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     process.env.CHAT_LOCAL_MEMORY_BUS_ENABLED = 'true';
     process.env.CHAT_LOCAL_MODERATION_ENABLED = 'true';
   });
@@ -34,6 +35,7 @@ describe('ChatService safety and persistence invariants', () => {
     process.env.LOCAL_DEV = 'true';
     process.env.FEATURE_COMMUNITY_CHAT_ENABLED = 'true';
     process.env.FEATURE_CHAT_WRITES_ENABLED = 'true';
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     process.env.CHAT_LOCAL_MEMORY_BUS_ENABLED = 'true';
     process.env.CHAT_LOCAL_MODERATION_ENABLED = 'true';
     dataSource = await createLocalDevDataSource();
@@ -95,6 +97,7 @@ describe('ChatService safety and persistence invariants', () => {
 
     author.socialVerificationStatus = 'unverified';
     await dataSource.getRepository(User).save(author);
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'true';
     await expect(
       service.send(author.id, {
         clientMessageId: randomUUID(),
@@ -102,8 +105,7 @@ describe('ChatService safety and persistence invariants', () => {
         body: 'Unverified send must be rejected.',
       }),
     ).rejects.toMatchObject({ response: { code: 'CHAT_SOCIAL_VERIFICATION_REQUIRED' } });
-    author.socialVerificationStatus = 'verified';
-    await dataSource.getRepository(User).save(author);
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     const message = await service.send(author.id, {
       clientMessageId: randomUUID(),
       roomSlug: 'general',

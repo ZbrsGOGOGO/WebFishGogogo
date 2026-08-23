@@ -26,7 +26,12 @@ import type {
   ChatReportReason,
   ChatRoomSlug,
 } from '../../database/entities/chat.entity';
-import { assertChatWritesEnabled, assertCommunityChatEnabled, isChatWritesEnabled } from './chat-gates';
+import {
+  assertChatWritesEnabled,
+  assertCommunityChatEnabled,
+  isChatSocialVerificationRequired,
+  isChatWritesEnabled,
+} from './chat-gates';
 import { ChatException, chatException } from './chat.errors';
 import { ChatModerationService } from './chat-moderation.service';
 import { ChatRealtimeService } from './chat-realtime.service';
@@ -247,7 +252,10 @@ export class ChatService {
     if (existing) return this.idempotentMessage(userId, existing, hash);
 
     const author = await this.activeUser(this.dataSource.manager, userId);
-    if (author.socialVerificationStatus !== 'verified') {
+    if (
+      isChatSocialVerificationRequired() &&
+      author.socialVerificationStatus !== 'verified'
+    ) {
       throw chatException(
         'CHAT_SOCIAL_VERIFICATION_REQUIRED',
         '完成社交实名核验后才能发送消息。',
@@ -826,7 +834,10 @@ export class ChatService {
 
   private async activeVerifiedUser(manager: EntityManager, userId: string): Promise<User> {
     const user = await this.activeUser(manager, userId);
-    if (user.socialVerificationStatus !== 'verified') {
+    if (
+      isChatSocialVerificationRequired() &&
+      user.socialVerificationStatus !== 'verified'
+    ) {
       throw chatException(
         'CHAT_SOCIAL_VERIFICATION_REQUIRED',
         '完成社交实名核验后才能发送消息。',
