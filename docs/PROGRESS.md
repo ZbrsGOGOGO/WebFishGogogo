@@ -2,7 +2,7 @@
 
 > 更新日期：2026-08-24
 >
-> 当前开发分支：`agent/simplify-farm-first-play`
+> 唯一开发主线：`main`
 >
 > 线上站点：<https://zbrshyyzxx.top>
 
@@ -93,7 +93,6 @@
 ```bash
 git clone https://github.com/ZbrsGOGOGO/WebFishGogogo.git
 cd WebFishGogogo
-git switch agent/simplify-farm-first-play
 npm ci
 npm run verify
 ```
