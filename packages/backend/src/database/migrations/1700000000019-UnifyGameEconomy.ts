@@ -80,10 +80,16 @@ export class UnifyGameEconomy1700000000019 implements MigrationInterface {
         INSERT INTO "wallet_ledger" (
           "user_id", "currency", "delta", "balance_after", "source_type",
           "source_id", "reason", "idempotency_key"
-        ) VALUES ($1, 'office_coin', $2, $3, 'economy_migration', $1,
+        ) VALUES ($1, 'office_coin', $2, $3, 'economy_migration', $5,
           'farm-coins-to-office-coins-4-to-1', $4)
         ON CONFLICT ("idempotency_key") DO NOTHING;
-      `, [row.user_id, delta.toString(), String(balances[0]?.balance ?? delta), `unified-v1-farm-coin:${row.user_id}`]);
+      `, [
+        row.user_id,
+        delta.toString(),
+        String(balances[0]?.balance ?? delta),
+        `unified-v1-farm-coin:${row.user_id}`,
+        row.user_id,
+      ]);
     }
     await queryRunner.query(`UPDATE "desk_plants" SET "farm_coins" = 0;`);
   }
