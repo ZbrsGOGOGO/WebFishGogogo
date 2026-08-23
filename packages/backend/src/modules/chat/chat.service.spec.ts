@@ -368,6 +368,32 @@ describe('ChatService safety and persistence invariants', () => {
     delete process.env.CHAT_MODERATION_API_TOKEN;
   });
 
+  it('supports the production built-in moderation fallback without enabling LOCAL_DEV', async () => {
+    process.env.LOCAL_DEV = 'false';
+    process.env.CHAT_BUILTIN_MODERATION_ENABLED = 'true';
+    delete process.env.CHAT_MODERATION_ENDPOINT;
+    delete process.env.CHAT_MODERATION_API_TOKEN;
+    const moderation = new ChatModerationService();
+
+    expect(moderation.isAvailable()).toBe(true);
+    await expect(
+      moderation.moderate({
+        messageId: randomUUID(),
+        roomSlug: 'general',
+        authorPublicId: randomUUID(),
+        body: '下班后一起打副本吗？',
+      }),
+    ).resolves.toMatchObject({ decision: 'allow', provider: 'builtin-rules-v1' });
+    await expect(
+      moderation.moderate({
+        messageId: randomUUID(),
+        roomSlug: 'general',
+        authorPublicId: randomUUID(),
+        body: '刷单返利，请私聊。',
+      }),
+    ).resolves.toMatchObject({ decision: 'reject', provider: 'builtin-rules-v1' });
+  });
+
   async function activeUser(email: string, displayName: string): Promise<User> {
     const user = await dataSource.getRepository(User).save(
       dataSource.getRepository(User).create({

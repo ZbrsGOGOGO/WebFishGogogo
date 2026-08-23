@@ -4,13 +4,17 @@ import { ChatException, chatException } from './chat.errors';
 import type { ChatModerationResult } from './chat.types';
 
 const MODERATION_TIMEOUT_MS = 3_000;
+const BUILTIN_REJECT_PATTERNS = [
+  /(?:代开发票|出售银行卡|收购银行卡|跑分洗钱|刷单返利)/iu,
+  /(?:赌博平台|博彩平台|裸聊敲诈|代办假证)/iu,
+];
 
 @Injectable()
 export class ChatModerationService {
   private unavailableUntil = 0;
 
   isAvailable(): boolean {
-    if (this.isLocalAdapter()) return true;
+    if (this.isLocalAdapter() || this.isBuiltinAdapter()) return true;
     return (
       this.endpoint() !== null &&
       this.hasProductionCredential() &&
@@ -29,6 +33,14 @@ export class ChatModerationService {
         decision: 'allow',
         provider: 'local-deterministic-v1',
         reference: input.messageId,
+      };
+    }
+    if (this.isBuiltinAdapter()) {
+      const rejected = BUILTIN_REJECT_PATTERNS.some((pattern) => pattern.test(input.body));
+      return {
+        decision: rejected ? 'reject' : 'allow',
+        provider: 'builtin-rules-v1',
+        reference: rejected ? 'builtin:high-risk-pattern' : input.messageId,
       };
     }
 
@@ -110,6 +122,10 @@ export class ChatModerationService {
       process.env.LOCAL_DEV === 'true' &&
       process.env.CHAT_LOCAL_MODERATION_ENABLED === 'true'
     );
+  }
+
+  private isBuiltinAdapter(): boolean {
+    return process.env.CHAT_BUILTIN_MODERATION_ENABLED === 'true';
   }
 
   private endpoint(): string | null {

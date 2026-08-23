@@ -150,7 +150,8 @@ grep -Fq 'SOCIAL_VERIFICATION_PROVIDER_TOKEN' "$SOCIAL_VERIFICATION_SOURCE" &&
 grep -Fq 'SOCIAL_VERIFICATION_CALLBACK_SECRET' "$SOCIAL_VERIFICATION_SOURCE" ||
   fail "deploy identity-provider variables no longer match the backend adapter"
 grep -Fq 'CHAT_MODERATION_ENDPOINT' "$CHAT_MODERATION_SOURCE" &&
-grep -Fq 'CHAT_MODERATION_API_TOKEN' "$CHAT_MODERATION_SOURCE" ||
+grep -Fq 'CHAT_MODERATION_API_TOKEN' "$CHAT_MODERATION_SOURCE" &&
+grep -Fq 'CHAT_BUILTIN_MODERATION_ENABLED' "$CHAT_MODERATION_SOURCE" ||
   fail "deploy chat moderation variables no longer match the backend adapter"
 grep -Fq 'REDIS_URL' "$CHAT_REALTIME_SOURCE" ||
   fail "deploy Redis URL no longer matches the chat realtime adapter"
@@ -238,6 +239,8 @@ grep -Fq 'SOCIAL_VERIFICATION_CALLBACK_SECRET: ${SOCIAL_VERIFICATION_CALLBACK_SE
 grep -Fq 'CHAT_MODERATION_ENDPOINT: ${CHAT_MODERATION_ENDPOINT:-}' \
   "$ROOT_DIR/$COMPOSE_FILE" &&
 grep -Fq 'CHAT_MODERATION_API_TOKEN: ${CHAT_MODERATION_API_TOKEN:-}' \
+  "$ROOT_DIR/$COMPOSE_FILE" &&
+grep -Fq 'CHAT_BUILTIN_MODERATION_ENABLED: ${CHAT_BUILTIN_MODERATION_ENABLED:-false}' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "community Compose must pass chat moderation settings"
 grep -Fq 'COMMUNITY_MAX_ACTIVE_USERS: ${COMMUNITY_MAX_ACTIVE_USERS:?COMMUNITY_MAX_ACTIVE_USERS must be set}' \
@@ -574,6 +577,7 @@ check_boolean FEATURE_COMMUNITY_CONTENT_WRITES_ENABLED
 check_boolean FEATURE_COMMUNITY_MODERATION_ENABLED
 check_boolean FEATURE_COMMUNITY_CHAT_ENABLED
 check_boolean FEATURE_COMMUNITY_CHAT_WRITES_ENABLED
+check_boolean CHAT_BUILTIN_MODERATION_ENABLED
 check_boolean FEATURE_COMMUNITY_NEWS_ENABLED
 check_boolean FEATURE_NEWS_ADMIN_ENABLED
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
@@ -592,12 +596,14 @@ check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
   fail "FEATURE_NEWS_ADMIN_ENABLED requires FEATURE_COMMUNITY_NEWS_ENABLED=true"
 
 if [ "$(env_value FEATURE_COMMUNITY_CHAT_WRITES_ENABLED)" = true ]; then
-  check_required_text CHAT_MODERATION_ENDPOINT
-  case "$(env_value CHAT_MODERATION_ENDPOINT)" in
-    https://*) ;;
-    *) fail "CHAT_MODERATION_ENDPOINT must use HTTPS" ;;
-  esac
-  check_secret CHAT_MODERATION_API_TOKEN 24 256
+  if [ "$(env_value CHAT_BUILTIN_MODERATION_ENABLED)" != true ]; then
+    check_required_text CHAT_MODERATION_ENDPOINT
+    case "$(env_value CHAT_MODERATION_ENDPOINT)" in
+      https://*) ;;
+      *) fail "CHAT_MODERATION_ENDPOINT must use HTTPS" ;;
+    esac
+    check_secret CHAT_MODERATION_API_TOKEN 24 256
+  fi
 fi
 
 if [ "$(env_value FEATURE_SOCIAL_VERIFICATION_ENABLED)" = true ]; then
