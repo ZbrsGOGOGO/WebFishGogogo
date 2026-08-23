@@ -112,6 +112,56 @@
   gap: 8px;
 }
 
+.bossPanel,
+.bossHealth {
+  display: grid;
+  gap: 10px;
+}
+
+.bossHealth > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bossHealth > div > span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.bossHealth progress {
+  width: 100%;
+  height: 13px;
+  accent-color: var(--color-danger);
+}
+
+.bossLeaderboard {
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.bossLeaderboard li {
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bossLeaderboard li:last-child {
+  border-bottom: 0;
+}
+
+.bossLeaderboard span,
+.bossLeaderboard b {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
 .summaryGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

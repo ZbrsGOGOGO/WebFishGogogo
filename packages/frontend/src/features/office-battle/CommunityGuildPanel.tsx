@@ -9,7 +9,11 @@ import {
 import { Button, Card, EmptyState, Tag } from '../../components/ui';
 import styles from './CommunityBattlePage.module.css';
 
-export function CommunityGuildPanel(): JSX.Element {
+export interface CommunityGuildPanelProps {
+  onAssetsChanged?: () => void | Promise<void>;
+}
+
+export function CommunityGuildPanel({ onAssetsChanged }: CommunityGuildPanelProps = {}): JSX.Element {
   const [overview, setOverview] = useState<CommunityGuildOverview | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<string | null>('load');
@@ -32,8 +36,22 @@ export function CommunityGuildPanel(): JSX.Element {
     setError(null);
     setNotice(null);
     try {
-      setOverview(await operation());
+      const result = await operation();
+      setOverview(result);
+      await onAssetsChanged?.();
       setNotice(success);
+    } catch (requestError) {
+      setError(communityGuildErrorMessage(requestError));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function refreshOverview(): Promise<void> {
+    setBusy('refresh');
+    setError(null);
+    try {
+      setOverview(await communityGuildApi.overview());
     } catch (requestError) {
       setError(communityGuildErrorMessage(requestError));
     } finally {
@@ -123,6 +141,84 @@ export function CommunityGuildPanel(): JSX.Element {
             <div><span>成员</span><strong>{membership.guild.memberCount}/{membership.guild.memberCapacity}</strong><small>{membership.me.role === 'owner' ? '负责人' : '成员'}</small></div>
             <div><span>个人活跃</span><strong>{membership.me.activity}</strong><small>今日已捐 {membership.me.donatedToday}</small></div>
           </section>
+
+          <Card
+            title={`共享首领 · ${membership.boss.bossName}`}
+            headerActions={(
+              <div className={styles.inlineActions}>
+                <Tag color={membership.boss.status === 'defeated' ? 'success' : 'brand'}>
+                  {membership.boss.status === 'defeated' ? '今日已击败' : '全帮共享血量'}
+                </Tag>
+                <Button
+                  variant="secondary"
+                  loading={busy === 'refresh'}
+                  disabled={Boolean(busy)}
+                  onClick={() => void refreshOverview()}
+                >
+                  刷新进度
+                </Button>
+              </div>
+            )}
+          >
+            <div className={styles.bossPanel}>
+              <div className={styles.bossHealth}>
+                <div>
+                  <strong>{membership.boss.remainingHp} / {membership.boss.maxHp} HP</strong>
+                  <span>每日 05:00 重置</span>
+                </div>
+                <progress
+                  aria-label="首领剩余血量"
+                  max={membership.boss.maxHp}
+                  value={membership.boss.remainingHp}
+                />
+              </div>
+              <p className={styles.muted}>
+                每位成员每日 {overview.rules.boss.dailyAttempts} 次有效攻击，消耗 {overview.rules.boss.energyCost} 体力；
+                结算固定获得 {overview.rules.boss.reward.officeCoins} 办公币、{overview.rules.boss.reward.experience} 职场经验和
+                {overview.rules.boss.reward.activity} 帮派活跃。伤害、血量和贡献榜都由服务器统一记录。
+              </p>
+              {membership.boss.myContribution ? (
+                <p className={styles.notice} role="status">
+                  今日贡献 {membership.boss.myContribution.damage} 伤害
+                  {membership.boss.myContribution.criticalHit ? ' · 暴击' : ''}
+                </p>
+              ) : null}
+              <div className={styles.inlineActions}>
+                <Button
+                  loading={busy === 'boss'}
+                  disabled={Boolean(busy) || !membership.boss.canAttack}
+                  onClick={() => void mutate(
+                    'boss',
+                    () => communityGuildApi.attackBoss(createCommunityIdempotencyKey('guild-boss')),
+                    '攻击已结算，伤害、奖励和贡献榜均已写入服务器',
+                  )}
+                >
+                  {membership.boss.status === 'defeated'
+                    ? '今日已击败'
+                    : membership.boss.attempted
+                      ? '今日已挑战'
+                      : overview.player.energy < overview.rules.boss.energyCost
+                        ? '体力不足'
+                        : `投入 ${overview.rules.boss.energyCost} 体力攻击`}
+                </Button>
+                <Tag color="neutral">体力 {overview.player.energy}/{overview.player.energyCapacity}</Tag>
+              </div>
+            </div>
+
+            {membership.boss.leaderboard.length > 0 ? (
+              <ol className={styles.bossLeaderboard} aria-label="今日贡献榜">
+                {membership.boss.leaderboard.map((entry) => (
+                  <li key={entry.publicId ?? `${entry.rank}-${entry.displayName}`}>
+                    <span>#{entry.rank}</span>
+                    <strong>{entry.displayName}</strong>
+                    <b>{entry.damage} 伤害{entry.criticalHit ? ' · 暴击' : ''}</b>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <EmptyState title="今天还没有人出手" message="完成攻击后会立即写入共享进度，其他成员刷新后即可看到。" />
+            )}
+          </Card>
 
           <Card title="捐入帮派金库" headerActions={<Tag color="neutral">每日前 {overview.rules.dailyEffectiveDonation} 计活跃</Tag>}>
             <p className={styles.muted}>超过每日有效上限仍可捐赠，但不会增加个人活跃；捐赠不是系统增发。</p>

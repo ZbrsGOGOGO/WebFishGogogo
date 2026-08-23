@@ -5,6 +5,13 @@ export const GUILD_CREATE_COST = 20_000;
 export const GUILD_DAILY_EFFECTIVE_DONATION = 500;
 export const GUILD_MAX_BUILDING_LEVEL = 5;
 export const GUILD_BUILDING_COSTS = [2_000, 5_000, 10_000, 20_000, 40_000] as const;
+export const GUILD_BOSS_UNLOCK_LEVEL = 15;
+export const GUILD_BOSS_ENERGY_COST = 10;
+export const GUILD_BOSS_DAILY_ATTEMPTS = 1;
+export const GUILD_BOSS_REWARD_COINS = 120;
+export const GUILD_BOSS_REWARD_EXPERIENCE = 25;
+export const GUILD_BOSS_ACTIVITY_REWARD = 25;
+export const GUILD_BOSS_RULE_VERSION = 'guild-boss-v1';
 
 export const GUILD_BUILDING_DEFINITIONS: ReadonlyArray<{
   key: GuildBuildingKey;
@@ -28,4 +35,16 @@ export function normalizeGuildBuildings(value: Partial<GuildBuildings> | null | 
 
 export function guildBuildingCost(currentLevel: number): number {
   return GUILD_BUILDING_COSTS[Math.max(0, Math.trunc(currentLevel))] ?? 0;
+}
+
+export function guildBossMaxHp(memberCount: number, projectRoomLevel: number): number {
+  return 900
+    + Math.max(1, Math.trunc(memberCount)) * 450
+    + Math.max(0, Math.trunc(projectRoomLevel)) * 350;
+}
+
+export function guildBossBaseDamage(playerLevel: number, projectRoomLevel: number): number {
+  return 300
+    + Math.max(1, Math.trunc(playerLevel)) * 30
+    + Math.max(0, Math.trunc(projectRoomLevel)) * 80;
 }

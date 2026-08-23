@@ -73,6 +73,14 @@ export class GuildController {
     return this.guilds.upgradeBuilding(userId, buildingKey, idempotencyKey(rawKey));
   }
 
+  @Post('me/boss/attacks')
+  attackBoss(
+    @CurrentUserId() userId: string,
+    @Headers('idempotency-key') rawKey?: string,
+  ) {
+    return this.guilds.attackBoss(userId, idempotencyKey(rawKey));
+  }
+
   @Delete('me/membership')
   @HttpCode(HttpStatus.NO_CONTENT)
   leave(@CurrentUserId() userId: string): Promise<void> {

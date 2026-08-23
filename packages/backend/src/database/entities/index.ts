@@ -47,6 +47,8 @@ import { InventoryLedger } from './inventory-ledger.entity';
 import { InventoryStack } from './inventory-stack.entity';
 import { ItemDefinition } from './item-definition.entity';
 import { Guild } from './guild.entity';
+import { GuildBossContribution } from './guild-boss-contribution.entity';
+import { GuildBossRun } from './guild-boss-run.entity';
 import { GuildLedger } from './guild-ledger.entity';
 import { GuildMember } from './guild-member.entity';
 import { Memo } from './memo.entity';
@@ -155,6 +157,8 @@ export {
   FriendRequest,
   Friendship,
   Guild,
+  GuildBossContribution,
+  GuildBossRun,
   GuildLedger,
   GuildMember,
   InventoryLedger,
@@ -296,6 +300,8 @@ export const entities = [
   FriendRequest,
   Friendship,
   Guild,
+  GuildBossContribution,
+  GuildBossRun,
   GuildLedger,
   GuildMember,
   ReferralClaimToken,

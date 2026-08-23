@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   BadRequestException,
   ConflictException,
@@ -11,6 +13,8 @@ import { DataSource, EntityManager, In } from 'typeorm';
 import {
   CommunityCommandReceipt,
   Guild,
+  GuildBossContribution,
+  GuildBossRun,
   GuildLedger,
   GuildMember,
   User,
@@ -26,10 +30,19 @@ import { requestHash } from './community-validation';
 import { assertCommunityWritesEnabled } from './community-write-gate';
 import {
   GUILD_BUILDING_DEFINITIONS,
+  GUILD_BOSS_ACTIVITY_REWARD,
+  GUILD_BOSS_DAILY_ATTEMPTS,
+  GUILD_BOSS_ENERGY_COST,
+  GUILD_BOSS_REWARD_COINS,
+  GUILD_BOSS_REWARD_EXPERIENCE,
+  GUILD_BOSS_RULE_VERSION,
+  GUILD_BOSS_UNLOCK_LEVEL,
   GUILD_CREATE_COST,
   GUILD_DAILY_EFFECTIVE_DONATION,
   GUILD_MAX_BUILDING_LEVEL,
   GUILD_UNLOCK_LEVEL,
+  guildBossBaseDamage,
+  guildBossMaxHp,
   guildBuildingCost,
   normalizeGuildBuildings,
 } from './guild.rules';
@@ -95,7 +108,11 @@ export class GuildService {
           donationServiceDate: null,
         }),
       );
-      const result = await this.overviewView(manager, userId, state);
+      const result = await this.overviewView(
+        manager,
+        userId,
+        await this.assets.ensurePlatformState(manager, userId),
+      );
       return this.record(manager, userId, 'guild.create', key, hash, result);
     });
   }
@@ -142,7 +159,7 @@ export class GuildService {
     }
     const hash = requestHash({ amount });
     return this.dataSource.transaction(async (manager) => {
-      const state = await this.assets.ensurePlatformState(manager, userId);
+      await this.assets.ensurePlatformState(manager, userId);
       const replay = await this.replay(manager, userId, 'guild.donate', key, hash);
       if (replay) return replay;
       const member = await this.requireMember(manager, userId);
@@ -179,10 +196,15 @@ export class GuildService {
           metadata: { effectiveActivity: effective, serviceDate },
         }),
       );
-      const result = await this.overviewView(manager, userId, state, {
-        amount,
-        effectiveActivity: effective,
-      });
+      const result = await this.overviewView(
+        manager,
+        userId,
+        await this.assets.ensurePlatformState(manager, userId),
+        {
+          amount,
+          effectiveActivity: effective,
+        },
+      );
       return this.record(manager, userId, 'guild.donate', key, hash, result);
     });
   }
@@ -241,6 +263,87 @@ export class GuildService {
     });
   }
 
+  async attackBoss(userId: string, key: string) {
+    assertCommunityWritesEnabled();
+    const hash = requestHash({ action: 'attack' });
+    return this.dataSource.transaction(async (manager) => {
+      const state = await this.assets.ensurePlatformState(manager, userId);
+      const replay = await this.replay(manager, userId, 'guild.boss.attack', key, hash);
+      if (replay) return replay;
+      if (state.progression.level < GUILD_BOSS_UNLOCK_LEVEL) {
+        throw new ConflictException({
+          code: 'GUILD_BOSS_LEVEL_LOCKED',
+          unlockLevel: GUILD_BOSS_UNLOCK_LEVEL,
+        });
+      }
+
+      const member = await this.requireMember(manager, userId);
+      const guild = await this.requireGuild(manager, member.guildId);
+      const serviceDate = toCommunityServiceDate(this.clock.now());
+      const run = await this.ensureBossRun(manager, guild, serviceDate);
+      if (run.status === 'defeated' || this.safeAmount(run.remainingHp) === 0) {
+        throw new ConflictException({ code: 'GUILD_BOSS_ALREADY_DEFEATED' });
+      }
+      const existing = await manager.getRepository(GuildBossContribution).findOne({
+        where: { runId: run.id, userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (existing) {
+        throw new ConflictException({ code: 'GUILD_BOSS_DAILY_ATTEMPT_USED' });
+      }
+
+      await this.assets.changeEnergy(manager, userId, -GUILD_BOSS_ENERGY_COST);
+      const projectRoomLevel = normalizeGuildBuildings(guild.buildings).project_room;
+      const roll = this.bossDamageRoll(run.id, userId, key);
+      const rawDamage = Math.round(
+        (guildBossBaseDamage(state.progression.level, projectRoomLevel) + roll.bonus)
+          * (roll.criticalHit ? 1.5 : 1),
+      );
+      const remainingBefore = this.safeAmount(run.remainingHp);
+      const damage = Math.min(remainingBefore, rawDamage);
+      const remainingHp = remainingBefore - damage;
+      run.remainingHp = String(remainingHp);
+      if (remainingHp === 0) {
+        run.status = 'defeated';
+        run.defeatedAt = this.clock.now();
+      }
+      await manager.getRepository(GuildBossRun).save(run);
+
+      const reward = await this.assets.grantReward(manager, {
+        userId,
+        sourceType: 'guild_boss_attack',
+        sourceId: run.id,
+        ruleKey: GUILD_BOSS_RULE_VERSION,
+        reward: {
+          experience: GUILD_BOSS_REWARD_EXPERIENCE,
+          currencies: { office_coin: GUILD_BOSS_REWARD_COINS },
+        },
+      });
+      member.activity += GUILD_BOSS_ACTIVITY_REWARD;
+      await manager.getRepository(GuildMember).save(member);
+      await manager.getRepository(GuildBossContribution).save(
+        manager.getRepository(GuildBossContribution).create({
+          runId: run.id,
+          guildId: guild.id,
+          userId,
+          damage: String(damage),
+          criticalHit: roll.criticalHit,
+          rewardSnapshot: reward.snapshot,
+        }),
+      );
+
+      const nextState = await this.assets.ensurePlatformState(manager, userId);
+      const result = await this.overviewView(manager, userId, nextState, {
+        type: 'guildBossAttack',
+        damage,
+        criticalHit: roll.criticalHit,
+        defeated: run.status === 'defeated',
+        reward: reward.snapshot,
+      });
+      return this.record(manager, userId, 'guild.boss.attack', key, hash, result);
+    });
+  }
+
   async leave(userId: string): Promise<void> {
     assertCommunityWritesEnabled();
     await this.dataSource.transaction(async (manager) => {
@@ -269,15 +372,30 @@ export class GuildService {
       serverTime: this.clock.now().toISOString(),
       unlockLevel: GUILD_UNLOCK_LEVEL,
       unlocked: state.progression.level >= GUILD_UNLOCK_LEVEL,
-      player: { level: state.progression.level, officeCoins: balance },
+      player: {
+        level: state.progression.level,
+        officeCoins: balance,
+        energy: state.energy.balance,
+        energyCapacity: state.energy.capacity,
+      },
       rules: {
         createCost: GUILD_CREATE_COST,
         dailyEffectiveDonation: GUILD_DAILY_EFFECTIVE_DONATION,
         maxDonationPerRequest: DONATION_MAX_PER_REQUEST,
+        boss: {
+          unlockLevel: GUILD_BOSS_UNLOCK_LEVEL,
+          energyCost: GUILD_BOSS_ENERGY_COST,
+          dailyAttempts: GUILD_BOSS_DAILY_ATTEMPTS,
+          reward: {
+            officeCoins: GUILD_BOSS_REWARD_COINS,
+            experience: GUILD_BOSS_REWARD_EXPERIENCE,
+            activity: GUILD_BOSS_ACTIVITY_REWARD,
+          },
+        },
         market: { status: 'observation', minimumObservationDays: 14 },
       },
       membership: member && guild
-        ? await this.guildView(manager, guild, member)
+        ? await this.guildView(manager, guild, member, state)
         : null,
       suggestions,
       lastMutation,
@@ -305,7 +423,12 @@ export class GuildService {
     }));
   }
 
-  private async guildView(manager: EntityManager, guild: Guild, current: GuildMember) {
+  private async guildView(
+    manager: EntityManager,
+    guild: Guild,
+    current: GuildMember,
+    state: PlatformAssetState,
+  ) {
     const members = await manager.getRepository(GuildMember).find({
       where: { guildId: guild.id },
       order: { joinedAt: 'ASC' },
@@ -346,7 +469,105 @@ export class GuildService {
         activity: member.activity,
         joinedAt: member.joinedAt.toISOString(),
       })),
+      boss: await this.guildBossView(manager, guild, current, state, members.length),
     };
+  }
+
+  private async guildBossView(
+    manager: EntityManager,
+    guild: Guild,
+    current: GuildMember,
+    state: PlatformAssetState,
+    memberCount: number,
+  ) {
+    const serviceDate = toCommunityServiceDate(this.clock.now());
+    const run = await manager.getRepository(GuildBossRun).findOne({
+      where: { guildId: guild.id, serviceDate },
+    });
+    const buildings = normalizeGuildBuildings(guild.buildings);
+    const expectedMaxHp = guildBossMaxHp(memberCount, buildings.project_room);
+    const contributions = run
+      ? await manager.getRepository(GuildBossContribution).find({
+          where: { runId: run.id },
+          order: { damage: 'DESC', createdAt: 'ASC' },
+          take: 20,
+        })
+      : [];
+    const users = contributions.length > 0
+      ? await manager.getRepository(User).find({
+          where: { id: In(contributions.map((entry) => entry.userId)) },
+        })
+      : [];
+    const userById = new Map(users.map((user) => [user.id, user]));
+    const mine = contributions.find((entry) => entry.userId === current.userId) ?? null;
+    const status = run?.status ?? 'ready';
+    return {
+      serviceDate,
+      bossName: run?.bossName ?? '季度截止线',
+      status,
+      maxHp: run ? this.safeAmount(run.maxHp) : expectedMaxHp,
+      remainingHp: run ? this.safeAmount(run.remainingHp) : expectedMaxHp,
+      endsAt: run?.endsAt.toISOString() ?? this.bossEndsAt(serviceDate).toISOString(),
+      version: run?.version ?? 0,
+      attempted: Boolean(mine),
+      attemptsRemaining: mine ? 0 : GUILD_BOSS_DAILY_ATTEMPTS,
+      canAttack:
+        state.progression.level >= GUILD_BOSS_UNLOCK_LEVEL
+        && state.energy.balance >= GUILD_BOSS_ENERGY_COST
+        && !mine
+        && status !== 'defeated',
+      myContribution: mine
+        ? { damage: this.safeAmount(mine.damage), criticalHit: mine.criticalHit }
+        : null,
+      leaderboard: contributions.map((entry, index) => ({
+        rank: index + 1,
+        publicId: userById.get(entry.userId)?.publicId ?? null,
+        displayName: userById.get(entry.userId)?.displayName ?? '已注销成员',
+        damage: this.safeAmount(entry.damage),
+        criticalHit: entry.criticalHit,
+      })),
+    };
+  }
+
+  private async ensureBossRun(
+    manager: EntityManager,
+    guild: Guild,
+    serviceDate: string,
+  ): Promise<GuildBossRun> {
+    const repository = manager.getRepository(GuildBossRun);
+    const existing = await repository.findOne({
+      where: { guildId: guild.id, serviceDate },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (existing) return existing;
+    const memberCount = await manager.getRepository(GuildMember).count({
+      where: { guildId: guild.id },
+    });
+    const projectRoomLevel = normalizeGuildBuildings(guild.buildings).project_room;
+    const maxHp = guildBossMaxHp(memberCount, projectRoomLevel);
+    return repository.save(repository.create({
+      guildId: guild.id,
+      serviceDate,
+      bossKey: 'quarterly_deadline',
+      bossName: '季度截止线',
+      maxHp: String(maxHp),
+      remainingHp: String(maxHp),
+      status: 'active',
+      defeatedAt: null,
+      endsAt: this.bossEndsAt(serviceDate),
+    }));
+  }
+
+  private bossDamageRoll(runId: string, userId: string, key: string) {
+    const hash = createHash('sha256').update(`${runId}:${userId}:${key}`).digest();
+    return {
+      bonus: hash.readUInt16BE(0) % 161,
+      criticalHit: hash[2] % 100 < 12,
+    };
+  }
+
+  private bossEndsAt(serviceDate: string): Date {
+    return new Date(`${serviceDate}T21:00:00.000Z`);
   }
 
   private assertUnlocked(state: PlatformAssetState): void {

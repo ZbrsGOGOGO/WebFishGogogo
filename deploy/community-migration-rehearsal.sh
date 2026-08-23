@@ -9,7 +9,8 @@ NEWS_TIMESTAMP=1700000000015
 GAME_GROWTH_TIMESTAMP=1700000000018
 UNIFIED_ECONOMY_TIMESTAMP=1700000000019
 GUILD_TIMESTAMP=1700000000020
-LATEST_TIMESTAMP=1700000000020
+GUILD_BOSS_TIMESTAMP=1700000000021
+LATEST_TIMESTAMP=1700000000021
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -114,6 +115,8 @@ assert_target_applied() {
   [ "$economy_count" = 1 ] || fail "$database did not record migration $UNIFIED_ECONOMY_TIMESTAMP"
   guild_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_TIMESTAMP;")
   [ "$guild_count" = 1 ] || fail "$database did not record migration $GUILD_TIMESTAMP"
+  guild_boss_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_BOSS_TIMESTAMP;")
+  [ "$guild_boss_count" = 1 ] || fail "$database did not record migration $GUILD_BOSS_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 1 ] || fail "$database did not record migration $LATEST_TIMESTAMP"
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
@@ -153,6 +156,12 @@ assert_target_applied() {
   done
   guild_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_guild_members_guild_joined', 'idx_guild_ledger_guild_created');")
   [ "$guild_index_count" = 2 ] || fail "$database is missing one or more 0020 guild indexes"
+  for boss_table in guild_boss_runs guild_boss_contributions; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$boss_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $boss_table after migration"
+  done
+  boss_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_guild_boss_runs_guild_created', 'idx_guild_boss_contributions_rank');")
+  [ "$boss_index_count" = 2 ] || fail "$database is missing one or more 0021 guild-boss indexes"
 }
 
 assert_target_absent() {
@@ -171,6 +180,8 @@ assert_target_absent() {
   [ "$economy_count" = 0 ] || fail "$database still records migration $UNIFIED_ECONOMY_TIMESTAMP"
   guild_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_TIMESTAMP;")
   [ "$guild_count" = 0 ] || fail "$database still records migration $GUILD_TIMESTAMP"
+  guild_boss_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $GUILD_BOSS_TIMESTAMP;")
+  [ "$guild_boss_count" = 0 ] || fail "$database still records migration $GUILD_BOSS_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 0 ] || fail "$database still records migration $LATEST_TIMESTAMP"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
@@ -191,6 +202,8 @@ assert_target_absent() {
   [ "$farm_growth_column_count" = 0 ] || fail "$database retained 0018 game-growth columns after rollback/failure"
   guild_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('guilds', 'guild_members', 'guild_ledger');")
   [ "$guild_table_count" = 0 ] || fail "$database retained 0020 guild tables after rollback/failure"
+  guild_boss_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('guild_boss_runs', 'guild_boss_contributions');")
+  [ "$guild_boss_table_count" = 0 ] || fail "$database retained 0021 guild-boss tables after rollback/failure"
 }
 
 restore_snapshot() {
@@ -370,4 +383,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through guild foundation 0020 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018 and unified economy 0019), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through shared guild boss 0021 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019 and guild foundation 0020), normalized-email collision abort, lock-timeout rollback and recovery."

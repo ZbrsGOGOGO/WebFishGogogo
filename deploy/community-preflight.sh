@@ -440,7 +440,9 @@ grep -Fq 'UNIFIED_ECONOMY_TIMESTAMP=1700000000019' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'GUILD_TIMESTAMP=1700000000020' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000020' \
+grep -Fq 'GUILD_BOSS_TIMESTAMP=1700000000021' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000021' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -453,8 +455,10 @@ grep -Fq 'uq_users_username_normalized' \
 grep -Fq 'farm_version' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'guild_ledger' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'guild_boss_contributions' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019 and guilds 0020"
+  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guilds 0020 and guild boss 0021"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

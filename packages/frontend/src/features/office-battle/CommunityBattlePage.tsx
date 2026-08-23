@@ -726,7 +726,7 @@ export function CommunityBattlePage(): JSX.Element {
         </Card>
       ) : null}
 
-      {tab === 'guild' ? <CommunityGuildPanel /> : null}
+      {tab === 'guild' ? <CommunityGuildPanel onAssetsChanged={loadBootstrap} /> : null}
 
       {tab === 'defense' ? (
         <div role="tabpanel" className={styles.stack}>

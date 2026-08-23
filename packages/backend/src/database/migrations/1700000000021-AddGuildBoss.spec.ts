@@ -1,26 +1,25 @@
 import type { DataSource } from 'typeorm';
 
 import { createLocalDevDataSource } from '../local-dev-datasource';
-import { AddGuildFoundation1700000000020 } from './1700000000020-AddGuildFoundation';
 import { AddGuildBoss1700000000021 } from './1700000000021-AddGuildBoss';
 
-describe('AddGuildFoundation1700000000020', () => {
+describe('AddGuildBoss1700000000021', () => {
   let dataSource: DataSource;
 
   beforeEach(async () => { dataSource = await createLocalDevDataSource(); });
   afterEach(async () => { if (dataSource.isInitialized) await dataSource.destroy(); });
 
-  it('round-trips guild treasury, membership and immutable ledger tables', async () => {
+  it('round-trips the daily run and contribution tables', async () => {
     const runner = dataSource.createQueryRunner();
     await runner.connect();
-    const migration = new AddGuildFoundation1700000000020();
+    const migration = new AddGuildBoss1700000000021();
     try {
+      await expect(runner.hasTable('guild_boss_runs')).resolves.toBe(true);
+      await expect(runner.hasTable('guild_boss_contributions')).resolves.toBe(true);
       await expect(migration.up(runner)).rejects.toThrow(/already exists/i);
-      await new AddGuildBoss1700000000021().down(runner);
       await migration.down(runner);
-      await expect(runner.hasTable('guilds')).resolves.toBe(false);
-      await expect(runner.hasTable('guild_members')).resolves.toBe(false);
-      await expect(runner.hasTable('guild_ledger')).resolves.toBe(false);
+      await expect(runner.hasTable('guild_boss_runs')).resolves.toBe(false);
+      await expect(runner.hasTable('guild_boss_contributions')).resolves.toBe(false);
     } finally {
       await runner.release();
     }
