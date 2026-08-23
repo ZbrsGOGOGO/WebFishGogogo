@@ -86,7 +86,7 @@ describe('ChatService safety and persistence invariants', () => {
     ).rejects.toMatchObject({ response: { code: 'CHAT_ROOM_READ_ONLY' } });
   });
 
-  it('separates the total gate, write gate and verified-sender policy while keeping reports available', async () => {
+  it('lets every active registered user send while keeping global gates and reports available', async () => {
     const author = await activeUser('gated-author@example.com', 'Gated Author');
     const reporter = await activeUser('gated-reporter@example.com', 'Gated Reporter');
     process.env.FEATURE_COMMUNITY_CHAT_ENABLED = 'false';
@@ -98,19 +98,12 @@ describe('ChatService safety and persistence invariants', () => {
     author.socialVerificationStatus = 'unverified';
     await dataSource.getRepository(User).save(author);
     process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'true';
-    await expect(
-      service.send(author.id, {
-        clientMessageId: randomUUID(),
-        roomSlug: 'general',
-        body: 'Unverified send must be rejected.',
-      }),
-    ).rejects.toMatchObject({ response: { code: 'CHAT_SOCIAL_VERIFICATION_REQUIRED' } });
-    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     const message = await service.send(author.id, {
       clientMessageId: randomUUID(),
       roomSlug: 'general',
-      body: 'Persisted before the room becomes read-only.',
+      body: 'Registered users can speak without a separate social verification step.',
     });
+    expect(message.author.publicId).toBe(author.publicId);
 
     process.env.FEATURE_CHAT_WRITES_ENABLED = 'false';
     expect((await service.listRooms(author.id)).items.every((room) => room.readOnly)).toBe(true);

@@ -8,6 +8,7 @@ import {
   communityNewsApi,
   createCommunityIdempotencyKey,
   type CommunityNewsFeed,
+  type CommunityDailyHotNews,
   type CommunityNewsPreferences,
   type CommunityNewsProfession,
   type CommunityNewsPublishedItem,
@@ -26,6 +27,8 @@ export function CommunityNewsPage(): JSX.Element {
   const phase = useCommunityAuthStore((state) => state.phase);
   const signedIn = phase === 'active';
   const [items, setItems] = useState<CommunityNewsPublishedItem[]>([]);
+  const [headlines, setHeadlines] = useState<CommunityDailyHotNews | null>(null);
+  const [headlinesLoading, setHeadlinesLoading] = useState(true);
   const [feed, setFeed] = useState<CommunityNewsFeed>('latest');
   const [profession, setProfession] = useState<CommunityNewsProfession | ''>('');
   const [topicInput, setTopicInput] = useState('');
@@ -73,6 +76,16 @@ export function CommunityNewsPage(): JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    setHeadlinesLoading(true);
+    communityNewsApi.getDailyHeadlines()
+      .then((value) => { if (active) setHeadlines(value); })
+      .catch(() => { if (active) setHeadlines(null); })
+      .finally(() => { if (active) setHeadlinesLoading(false); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (!signedIn) {
@@ -149,12 +162,34 @@ export function CommunityNewsPage(): JSX.Element {
     <main className={styles.page}>
       <PageHeader
         title="热点新闻"
-        subtitle="只展示编辑整理的短摘要、可核验来源与 HTTPS 原文入口，不镜像转载整篇文章。"
+        subtitle="每天早上 8 点更新热点标题，点击直接阅读来源网站原文。"
         actions={signedIn ? undefined : <Link to="/login">登录后设置偏好</Link>}
       />
-      <p className={styles.disclosure}>摘要用于帮助判断是否值得阅读；事实细节与完整上下文请以来源网站原文为准。</p>
+      <p className={styles.disclosure}>这里只保存标题、来源和原文链接，不复制新闻正文；事实细节与完整上下文请以来源网站为准。</p>
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
       {error ? <div className={styles.error} role="alert"><p>{error}</p><Button size="sm" variant="secondary" onClick={() => void load()}>重试</Button></div> : null}
+
+      <Card
+        title="今日热点"
+        headerActions={<span className={styles.filterHint}>{headlines?.schedule ?? '每天 08:00（北京时间）'}</span>}
+      >
+        {headlinesLoading ? <p role="status">正在读取今日热点…</p> : headlines?.items.length ? (
+          <ol className={styles.headlineList}>
+            {headlines.items.map((item, index) => (
+              <li key={item.id}>
+                <span>{String(index + 1).padStart(2, '0')}</span>
+                <a href={item.originalUrl} target="_blank" rel="noopener noreferrer nofollow">{item.headline}</a>
+                <small>{item.source}</small>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <EmptyState title="今日热点正在准备" message="系统会在每天北京时间 08:00 从公开官方来源更新；暂时不会用假标题填充。" />
+        )}
+        {headlines?.updatedAt ? <p className={styles.filterHint}>更新时间：{new Date(headlines.updatedAt).toLocaleString('zh-CN')}</p> : null}
+      </Card>
+
+      <h2 className={styles.sectionTitle}>编辑导读</h2>
 
       <Card>
         <form className={styles.filters} onSubmit={applyTopicFilter}>

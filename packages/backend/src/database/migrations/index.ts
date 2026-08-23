@@ -20,6 +20,7 @@ import { AddGameGrowthSystems1700000000018 } from './1700000000018-AddGameGrowth
 import { UnifyGameEconomy1700000000019 } from './1700000000019-UnifyGameEconomy';
 import { AddGuildFoundation1700000000020 } from './1700000000020-AddGuildFoundation';
 import { AddGuildBoss1700000000021 } from './1700000000021-AddGuildBoss';
+import { AddDailyHotNewsAndInviteCoin1700000000022 } from './1700000000022-AddDailyHotNewsAndInviteCoin';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -45,4 +46,5 @@ export const migrations = [
   UnifyGameEconomy1700000000019,
   AddGuildFoundation1700000000020,
   AddGuildBoss1700000000021,
+  AddDailyHotNewsAndInviteCoin1700000000022,
 ];

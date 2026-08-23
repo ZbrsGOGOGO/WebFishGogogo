@@ -51,6 +51,7 @@ import { GuildBossContribution } from './guild-boss-contribution.entity';
 import { GuildBossRun } from './guild-boss-run.entity';
 import { GuildLedger } from './guild-ledger.entity';
 import { GuildMember } from './guild-member.entity';
+import { HotNewsHeadline, HotNewsRefreshRun } from './hot-news.entity';
 import { Memo } from './memo.entity';
 import { ModerationAction } from './moderation-action.entity';
 import { ModerationCase } from './moderation-case.entity';
@@ -161,6 +162,8 @@ export {
   GuildBossRun,
   GuildLedger,
   GuildMember,
+  HotNewsHeadline,
+  HotNewsRefreshRun,
   InventoryLedger,
   InventoryStack,
   ItemDefinition,
@@ -304,6 +307,8 @@ export const entities = [
   GuildBossRun,
   GuildLedger,
   GuildMember,
+  HotNewsHeadline,
+  HotNewsRefreshRun,
   ReferralClaimToken,
   ReferralCode,
   ReferralRedemption,

@@ -47,10 +47,6 @@ import {
 } from './community-chat-connection';
 import { CHAT_PRESENCE_LABELS } from './CommunityChatLobbyPage';
 import { CommunityExperienceNav } from './CommunityExperienceNav';
-import {
-  CommunitySocialVerificationPrompt,
-  useCommunitySocialWriteBlocked,
-} from '../community/SocialVerificationGate';
 import styles from './CommunityChat.module.css';
 
 interface PendingChatMessage {
@@ -100,7 +96,6 @@ function visibleBody(message: CommunityChatMessage): string | null {
 export function CommunityChatRoomPage(): JSX.Element {
   const { roomSlug: rawRoomSlug = '' } = useParams();
   const user = useCommunityAuthStore((state) => state.user);
-  const socialWriteBlocked = useCommunitySocialWriteBlocked();
   const roomSlug = isCommunityChatRoomSlug(rawRoomSlug) ? rawRoomSlug : null;
   const [room, setRoom] = useState<CommunityChatRoom | null>(null);
   const [messages, setMessages] = useState<CommunityChatMessage[]>([]);
@@ -289,7 +284,7 @@ export function CommunityChatRoomPage(): JSX.Element {
   ), [messages, room?.mentionCandidates, roomSlug, socketMentionCandidates, user?.publicId]);
 
   const retrySeconds = Math.max(0, Math.ceil((retryUntil - clock) / 1000));
-  const composerDisabled = socialWriteBlocked || !room || room.closed || room.readOnly ||
+  const composerDisabled = !room || room.closed || room.readOnly ||
     connectionSnapshot.status !== 'ready' || retrySeconds > 0;
 
   function transmitPending(pending: PendingChatMessage): void {
@@ -318,10 +313,6 @@ export function CommunityChatRoomPage(): JSX.Element {
   function sendMessage(event?: FormEvent<HTMLFormElement>): void {
     event?.preventDefault();
     if (!roomSlug) return;
-    if (socialWriteBlocked) {
-      setError('完成身份核验后才能在聊天室发言');
-      return;
-    }
     const validationError = communityChatBodyError(body);
     if (validationError) {
       setError(validationError);
@@ -454,9 +445,6 @@ export function CommunityChatRoomPage(): JSX.Element {
       {room?.closed ? <p className={styles.error} role="alert">房间当前关闭，不能读取实时消息或发言。</p> : null}
       {room?.readOnly && !room.closed ? <p className={styles.warning}>房间当前只读，可以查看消息但不能发言。</p> : null}
       {retrySeconds > 0 ? <p className={styles.warning}>请等待 {retrySeconds} 秒后再发言。</p> : null}
-      {socialWriteBlocked ? (
-        <CommunitySocialVerificationPrompt action="在聊天室发言" className={styles.warning} />
-      ) : null}
 
       <section className={styles.chatLayout} aria-label="聊天室内容">
         <div className={styles.messageColumn}>
@@ -532,7 +520,7 @@ export function CommunityChatRoomPage(): JSX.Element {
                 value={body}
                 maxLength={500}
                 rows={6}
-                disabled={socialWriteBlocked || room?.closed || room?.readOnly}
+                disabled={room?.closed || room?.readOnly}
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={handleComposerKeys}
               />
@@ -555,7 +543,7 @@ export function CommunityChatRoomPage(): JSX.Element {
                 </div>
               ) : null}
               <Button type="submit" fullWidth disabled={composerDisabled || Boolean(communityChatBodyError(body))}>
-                {socialWriteBlocked ? '完成身份核验后发言' : room?.closed ? '房间已关闭' : room?.readOnly ? '房间只读' : retrySeconds > 0 ? `等待 ${retrySeconds} 秒` : connectionSnapshot.status !== 'ready' ? '等待实时连接' : '发送消息'}
+                {room?.closed ? '房间已关闭' : room?.readOnly ? '房间只读' : retrySeconds > 0 ? `等待 ${retrySeconds} 秒` : connectionSnapshot.status !== 'ready' ? '等待实时连接' : '发送消息'}
               </Button>
             </form>
             <p className={styles.safetyNote}>不能输入邮箱或手机号搜索 @ 对象；消息失败会保留在本标签页并明确标记。</p>

@@ -28,12 +28,12 @@ import styles from './CommunityBattlePage.module.css';
 type BattleTab = 'overview' | 'skills' | 'equipment' | 'guild' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
-  { id: 'overview', label: '今日行动' },
-  { id: 'skills', label: '职业技能' },
-  { id: 'equipment', label: '六件装备' },
+  { id: 'overview', label: '战斗' },
+  { id: 'equipment', label: '装备' },
+  { id: 'skills', label: '技能' },
   { id: 'guild', label: '帮派' },
-  { id: 'history', label: '战斗记录' },
-  { id: 'defense', label: '防守与规则' },
+  { id: 'history', label: '记录' },
+  { id: 'defense', label: '设置' },
 ];
 
 const TIER_LABELS: Record<CommunityBattleOffer['tier'], string> = {
@@ -452,13 +452,9 @@ export function CommunityBattlePage(): JSX.Element {
     <main className={styles.page}>
       <PageHeader
         title="办公室乐斗"
-        subtitle={`${professionName(profile.profession)}游戏职业 · 服务端权威档案`}
-        actions={<Tag color="success">正式档案</Tag>}
+        subtitle={`${professionName(profile.profession)} · 选对手、开打、拿奖励`}
+        actions={<Tag color="success">在线档案</Tag>}
       />
-
-      <p className={styles.formalNotice}>
-        这里不会读取游客本机存档。胜负、伤害、掉落、奖励和装备版本均由服务端结算。
-      </p>
       {bootstrap.clientCompatibility.status === 'upgrade_required' ? (
         <p className={styles.error} role="alert">
           {bootstrap.clientCompatibility.message || '当前网页版本过旧，不能发起对战或变更资产；历史记录仍可查看。'}
@@ -474,10 +470,10 @@ export function CommunityBattlePage(): JSX.Element {
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
 
       <section className={styles.summaryGrid} aria-label="正式档案摘要">
-        <div><span>职场等级</span><strong>Lv.{profile.battleLevel}</strong><small>统一经验 {profile.totalBattleExperience}</small></div>
-        <div><span>战斗体力</span><strong>{profile.energy.current} / {profile.energy.max}</strong><small>{profile.energy.nextRecoveryAt ? `${formatDateTime(profile.energy.nextRecoveryAt)} 恢复 1 点` : '体力已满'}</small></div>
-        <div><span>正式战绩</span><strong>{profile.wins} 胜</strong><small>{profile.losses} 负 · 战力 {profile.power}</small></div>
-        <div><span>成长资源</span><strong>PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available} 点</strong><small>零件 {profile.parts} · 办公币 {profile.workspaceCoins}</small></div>
+        <div><span>等级</span><strong>Lv.{profile.battleLevel}</strong><small>{profile.wins} 胜 {profile.losses} 负</small></div>
+        <div><span>体力</span><strong>{profile.energy.current}/{profile.energy.max}</strong><small>{profile.energy.nextRecoveryAt ? `${formatDateTime(profile.energy.nextRecoveryAt)} +1` : '已满'}</small></div>
+        <div><span>战力</span><strong>{profile.power}</strong><small>零件 {profile.parts}</small></div>
+        <div><span>办公币</span><strong>{profile.workspaceCoins}</strong><small>技能点 PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</small></div>
       </section>
       <div className={styles.levelProgress}>
         <div><span>当前等级进度</span><strong>{levelProgress}%</strong></div>
@@ -503,16 +499,8 @@ export function CommunityBattlePage(): JSX.Element {
 
       {tab === 'overview' ? (
         <div role="tabpanel" className={styles.stack}>
-          <Card title="一眼看懂成长路线" headerActions={profile.nextUnlock ? <Tag color="neutral">Lv.{profile.nextUnlock.level} 解锁 {profile.nextUnlock.name}</Tag> : <Tag color="success">全部解锁</Tag>}>
-            <div className={styles.growthRoute}>
-              <div><b>1</b><strong>PVE / PVP 升级</strong><small>两类正式战斗都获得统一职场经验，失败也有成长。</small></div>
-              <div><b>2</b><strong>替换六件装备</strong><small>胜利掉落职业装备，颜色越稀有属性越高。</small></div>
-              <div><b>3</b><strong>分解与强化</strong><small>分解闲置装备拿零件，强化当前主力装备。</small></div>
-              <div><b>4</b><strong>培养双技能树</strong><small>PVE 与 PVP 技能点独立，升级同时消耗办公币。</small></div>
-            </div>
-          </Card>
           <Card
-            title="PVE 项目副本"
+            title="选择对手"
             headerActions={<Button variant="secondary" onClick={() => void loadBootstrap()} loading={loading}>刷新候选</Button>}
           >
             {bootstrap.dailyActions ? (
@@ -546,7 +534,7 @@ export function CommunityBattlePage(): JSX.Element {
                         disabled={!canMutate || profile.energy.current < bootstrap.catalog.energy.costPerBattle}
                         onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'reward')}
                       >
-                        消耗 {bootstrap.catalog.energy.costPerBattle} 体力挑战 PVE
+                        挑战 · {bootstrap.catalog.energy.costPerBattle} 体力
                       </Button>
                       <Button
                         variant="secondary"
@@ -554,7 +542,7 @@ export function CommunityBattlePage(): JSX.Element {
                         disabled={!canMutate}
                         onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'practice')}
                       >
-                        零奖励练习
+                        练习 · 无奖励
                       </Button>
                     </div>
                   </article>
@@ -563,7 +551,7 @@ export function CommunityBattlePage(): JSX.Element {
             )}
           </Card>
 
-          <Card title="PVP 好友竞技">
+          <Card title="好友对战">
             {!bootstrap.catalog.capabilities.friendChallengesEnabled ? (
               <EmptyState title="服务端尚未开放" message="好友挑战能力关闭时不会伪造候选或成功状态。" />
             ) : bootstrap.friendCandidates.length === 0 ? (

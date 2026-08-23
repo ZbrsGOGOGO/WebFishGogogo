@@ -24,11 +24,13 @@ const overview: CommunityFarmOverview = {
     farmCoins: 0, officeCoins: 620, totalHarvests: 1, farmVersion: 2,
     skillPointsEarned: 1, skillPointsAvailable: 1,
     nextUnlock: { level: 3, name: '会议番茄', kind: 'crop' },
+    plotCount: 1, maxPlotCount: 6,
+    nextPlotUnlock: { level: 3, count: 2 }, officeCoinLevelBonusPercent: 0,
     ordersCompleted: 1, ordersTotal: 3,
   },
   crops: [
-    { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, coins: 100, seedCost: 10, description: '成熟最快。', unlocked: true, selected: true, growing: true },
-    { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, coins: 120, seedCost: 25, description: '稳定产出。', unlocked: false, selected: false, growing: false },
+    { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, coins: 100, seedCost: 10, seedCostPerPlot: 10, description: '成熟最快。', unlocked: true, selected: true, growing: true },
+    { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, coins: 120, seedCost: 25, seedCostPerPlot: 25, description: '稳定产出。', unlocked: false, selected: false, growing: false },
   ],
   tools: [
     { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。', level: 0, maxLevel: 5, nextCost: 200 },
@@ -56,6 +58,7 @@ describe('CommunityFarmPage growth system', () => {
     render(<CommunityFarmPage />);
     expect(await screen.findByRole('heading', { name: '我的工位农场' })).toBeInTheDocument();
     expect(screen.getByText('农场等级')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '我的地块' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '选择下一轮作物' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '三件农场工具' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '三条农场技能' })).toBeInTheDocument();

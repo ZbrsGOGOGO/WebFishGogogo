@@ -29,7 +29,6 @@ import type {
 import {
   assertChatWritesEnabled,
   assertCommunityChatEnabled,
-  isChatSocialVerificationRequired,
   isChatWritesEnabled,
 } from './chat-gates';
 import { ChatException, chatException } from './chat.errors';
@@ -252,16 +251,6 @@ export class ChatService {
     if (existing) return this.idempotentMessage(userId, existing, hash);
 
     const author = await this.activeUser(this.dataSource.manager, userId);
-    if (
-      isChatSocialVerificationRequired() &&
-      author.socialVerificationStatus !== 'verified'
-    ) {
-      throw chatException(
-        'CHAT_SOCIAL_VERIFICATION_REQUIRED',
-        '完成社交实名核验后才能发送消息。',
-        403,
-      );
-    }
     const proposedMessageId = randomUUID();
     const moderation = await this.moderation.moderate({
       messageId: proposedMessageId,
@@ -279,7 +268,7 @@ export class ChatService {
     let created: ChatMessage;
     try {
       created = await this.dataSource.transaction(async (manager) => {
-        await this.activeVerifiedUser(manager, userId);
+        await this.activeUser(manager, userId);
         const room = await this.requireRoom(manager, normalized.roomSlug, true);
         const replay = await manager.getRepository(ChatMessage).findOne({
           where: { authorId: userId, clientMessageId: normalized.clientMessageId },
@@ -828,21 +817,6 @@ export class ChatService {
     const user = await manager.getRepository(User).findOne({ where: { id: userId } });
     if (!user || user.accountStatus !== 'active') {
       throw chatException('CHAT_ACCOUNT_RESTRICTED', '账号当前不能使用聊天室。', 403);
-    }
-    return user;
-  }
-
-  private async activeVerifiedUser(manager: EntityManager, userId: string): Promise<User> {
-    const user = await this.activeUser(manager, userId);
-    if (
-      isChatSocialVerificationRequired() &&
-      user.socialVerificationStatus !== 'verified'
-    ) {
-      throw chatException(
-        'CHAT_SOCIAL_VERIFICATION_REQUIRED',
-        '完成社交实名核验后才能发送消息。',
-        403,
-      );
     }
     return user;
   }

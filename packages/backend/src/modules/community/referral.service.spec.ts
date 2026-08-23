@@ -48,6 +48,7 @@ describe('ReferralService attribution and reward caps', () => {
     process.env.JWT_SECRET = JWT_SECRET;
     process.env.AUTH_TOKEN_PEPPER = TOKEN_PEPPER;
     process.env.PUBLIC_SITE_ORIGIN = 'http://127.0.0.1:4173';
+    process.env.FEATURE_REFERRALS_ENABLED = 'true';
     delete process.env.FEATURE_COMMUNITY_WRITES_ENABLED;
     delete process.env.FEATURE_REGISTRATION_ENABLED;
   });
@@ -208,26 +209,27 @@ describe('ReferralService attribution and reward caps', () => {
       expect(result.status).toBe(index < 5 ? 'qualified' : 'qualified_unrewarded');
     }
 
-    expect(await dataSource.getRepository(RewardGrant).count()).toBe(10);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(5);
     const inviterWallet = await dataSource.getRepository(WalletBalance).findOneByOrFail({
       userId: inviter.id,
-      currency: 'office_coin',
+      currency: 'invite_coin',
     });
-    expect(Number(inviterWallet.balance)).toBe(650);
+    expect(Number(inviterWallet.balance)).toBe(5);
     const sixthWallet = await dataSource.getRepository(WalletBalance).findOne({
       where: {
         userId: redemptions[5].inviteeId,
-        currency: 'office_coin',
+        currency: 'invite_coin',
       },
     });
-    expect(sixthWallet).toBeNull();
+    expect(Number(sixthWallet?.balance ?? 0)).toBe(0);
 
     const overview = await referrals.overview(inviter.id);
     expect(overview.qualifiedCount).toBe(6);
     expect(overview.monthlyQualifiedCount).toBe(6);
     expect(overview.monthlyRewardCount).toBe(5);
     expect(overview.dailyQualifiedCount).toBe(1);
-    expect(overview.rewardDescription).toContain('不可提现或交易');
+    expect(overview.invitationCoins).toBe(5);
+    expect(overview.rewardDescription).toContain('邀请币');
     expect(await dataSource.getRepository(OutboxEvent).count()).toBe(0);
   });
 

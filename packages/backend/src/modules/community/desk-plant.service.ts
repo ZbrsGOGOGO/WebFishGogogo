@@ -33,17 +33,21 @@ import {
   FARM_DAILY_ORDER_LIMIT,
   FARM_CROPS,
   FARM_FIRST_CYCLE_SECONDS,
+  FARM_MAX_PLOTS,
   FARM_SKILLS,
   FARM_SKILL_MAX_LEVEL,
   FARM_TOOLS,
   FARM_TOOL_MAX_LEVEL,
   farmCrop,
   farmLevelSnapshot,
+  farmOfficeCoinLevelBonusPercent,
   farmOrderReward,
+  farmPlotCount,
   farmSkillPointsAvailable,
   farmSkillPointsEarned,
   farmToolUpgradeCost,
   nextFarmUnlock,
+  nextFarmPlotUnlock,
   normalizeFarmSkillLevels,
   normalizeFarmToolLevels,
 } from './farm-growth-rules';
@@ -165,12 +169,13 @@ export class DeskPlantService {
       await cycleRepo.save(cycle);
       const previousLevel = farmLevelSnapshot(plant.plantExperience).level;
       const crop = farmCrop(cycle.cropKey) ?? FARM_CROPS[0];
+      const plotCount = farmPlotCount(previousLevel);
       const harvest = calculateFarmCycle(
         crop,
         normalizeFarmToolLevels(plant.toolLevels),
         normalizeFarmSkillLevels(plant.skillLevels),
       );
-      plant.plantExperience += harvest.experience;
+      plant.plantExperience += harvest.experience * plotCount;
       plant.totalHarvests = Math.max(0, Number(plant.totalHarvests ?? 0)) + 1;
       plant.state = 'idle';
       const serviceDate = toCommunityServiceDate(now);
@@ -199,6 +204,7 @@ export class DeskPlantService {
           completedBefore,
           normalizeFarmToolLevels(plant.toolLevels),
           normalizeFarmSkillLevels(plant.skillLevels),
+          previousLevel,
         );
         await this.assets.grantReward(manager, {
           userId,
@@ -245,7 +251,8 @@ export class DeskPlantService {
         true,
       );
 
-      const farmExperience = harvest.experience + (onboardingRewardGranted ? ONBOARDING_PLANT_EXPERIENCE : 0);
+      const farmExperience = harvest.experience * plotCount +
+        (onboardingRewardGranted ? ONBOARDING_PLANT_EXPERIENCE : 0);
       const reward: FarmRewardView = {
         standardRewardGranted: orderRewardGranted,
         onboardingRewardGranted,
@@ -259,7 +266,7 @@ export class DeskPlantService {
         officeCoins,
         levelUp: plant.level > previousLevel,
         summary: [
-          `${crop.name}收获：农场经验 +${farmExperience}`,
+          `${plotCount} 块地的${crop.name}收获：农场经验 +${farmExperience}`,
           orderRewardGranted
             ? `今日订单 ${completedBefore + 1}/${FARM_DAILY_ORDER_LIMIT}：职场经验 +8、办公币 +${officeCoins}`
             : '今日三份办公币订单已完成，作物继续进入仓库进度',
@@ -412,13 +419,15 @@ export class DeskPlantService {
       ? FARM_FIRST_CYCLE_SECONDS
       : Math.max(30, Math.ceil(calculated.durationSeconds * (100 - guildReduction) / 100));
     if (!firstCycle) {
+      const plotCount = farmPlotCount(farmLevelSnapshot(plant.plantExperience).level);
+      const totalSeedCost = crop.seedCost * plotCount;
       const state = await this.assets.ensurePlatformState(manager, user.id);
       const current = Number(state.balances.get('office_coin')?.balance ?? 0);
-      if (current < crop.seedCost) {
+      if (current < totalSeedCost) {
         if (!allowInsufficientBalance) {
           throw new ConflictException({
             code: 'OFFICE_COIN_INSUFFICIENT',
-            required: crop.seedCost,
+            required: totalSeedCost,
             current,
           });
         }
@@ -430,7 +439,7 @@ export class DeskPlantService {
         manager,
         user.id,
         'office_coin',
-        crop.seedCost,
+        totalSeedCost,
         {
           sourceType: 'farm_seed',
           sourceId: `${user.id}:${sequence}`,
@@ -542,6 +551,7 @@ export class DeskPlantService {
     const selectedCrop = farmCrop(plant?.selectedCropKey ?? '') ?? FARM_CROPS[0];
     const currentCrop = farmCrop(cycle?.cropKey ?? selectedCrop.key) ?? selectedCrop;
     const selectedCycle = calculateFarmCycle(selectedCrop, toolLevels, skillLevels);
+    const plotCount = farmPlotCount(level.level);
     const assets = await this.assets.ensurePlatformState(manager, userId);
     const officeCoins = Number(
       assets.balances.get('office_coin')?.balance ?? 0,
@@ -570,6 +580,10 @@ export class DeskPlantService {
         skillPointsEarned: farmSkillPointsEarned(level.level),
         skillPointsAvailable: farmSkillPointsAvailable(level.level, skillLevels),
         nextUnlock: nextFarmUnlock(level.level),
+        plotCount,
+        maxPlotCount: FARM_MAX_PLOTS,
+        nextPlotUnlock: nextFarmPlotUnlock(level.level),
+        officeCoinLevelBonusPercent: farmOfficeCoinLevelBonusPercent(level.level),
         ordersCompleted,
         ordersTotal: FARM_DAILY_ORDER_LIMIT,
       },
@@ -578,9 +592,10 @@ export class DeskPlantService {
         return {
           ...crop,
           durationSeconds: reward.durationSeconds,
-          experience: reward.experience,
+          experience: reward.experience * plotCount,
           coins: reward.coins,
-          seedCost: crop.seedCost,
+          seedCostPerPlot: crop.seedCost,
+          seedCost: crop.seedCost * plotCount,
           unlocked: level.level >= crop.unlockLevel,
           selected: selectedCrop.key === crop.key,
           growing: currentCrop.key === crop.key && state !== 'idle',

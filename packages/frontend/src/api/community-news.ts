@@ -51,6 +51,22 @@ export interface CommunityNewsPage {
   nextCursor: string | null;
 }
 
+export interface CommunityHotNewsHeadline {
+  id: string;
+  headline: string;
+  source: string;
+  originalUrl: string;
+  originalPublishedAt: string | null;
+}
+
+export interface CommunityDailyHotNews {
+  serviceDate: string | null;
+  updatedAt: string | null;
+  nextUpdateAt: string;
+  schedule: string;
+  items: CommunityHotNewsHeadline[];
+}
+
 export interface CommunityNewsListFilters {
   feed?: CommunityNewsFeed;
   profession?: CommunityNewsProfession;
@@ -168,6 +184,10 @@ export function getCommunityNews(
       cursor: filters.cursor,
     },
   });
+}
+
+export function getCommunityDailyHotNews(): Promise<CommunityDailyHotNews> {
+  return communityHttp.get('/v1/news/headlines/today');
 }
 
 export function getCommunityNewsDetail(id: string): Promise<CommunityNewsDetail> {
@@ -362,6 +382,7 @@ export function withdrawCommunityNewsAdminArticle(
 
 export const communityNewsApi = {
   list: getCommunityNews,
+  getDailyHeadlines: getCommunityDailyHotNews,
   get: getCommunityNewsDetail,
   giveNegativeFeedback: putCommunityNewsNegativeFeedback,
   getPreferences: getCommunityNewsPreferences,

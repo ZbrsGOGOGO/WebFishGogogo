@@ -18,6 +18,7 @@ export interface CommunityReferralEntry {
 
 export interface CommunityReferralOverview {
   enabled: boolean;
+  invitationCoins: number;
   code: string | null;
   shareUrl: string | null;
   openedCount: number;

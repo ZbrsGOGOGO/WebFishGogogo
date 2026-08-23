@@ -43,12 +43,20 @@ describe('community news public pages', () => {
       items: [publishedItem],
       nextCursor: null,
     });
+    vi.spyOn(communityNewsApi, 'getDailyHeadlines').mockResolvedValue({
+      serviceDate: '2026-08-23',
+      updatedAt: '2026-08-23T00:00:00.000Z',
+      nextUpdateAt: '2026-08-24T00:00:00.000Z',
+      schedule: '每天 08:00（北京时间）',
+      items: [{ id: 'headline-1', headline: '今日官方热点标题', source: '新华网', originalUrl: 'https://www.xinhuanet.com/example', originalPublishedAt: null }],
+    });
   });
 
   it('shows only the source, dates, short summary and an HTTPS original link to guests', async () => {
     render(<MemoryRouter><CommunityNewsPage /></MemoryRouter>);
 
     expect(await screen.findByText(summary)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '今日官方热点标题' })).toHaveAttribute('href', 'https://www.xinhuanet.com/example');
     expect(screen.getByText('示例官方来源')).toBeInTheDocument();
     const original = screen.getByRole('link', { name: '前往来源网站阅读原文' });
     expect(original).toHaveAttribute('href', 'https://news.example.com/articles/1');

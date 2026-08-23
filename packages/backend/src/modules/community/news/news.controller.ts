@@ -24,6 +24,7 @@ import {
   NewsAdminFeatureGuard,
 } from './news-gates';
 import { NewsService } from './news.service';
+import { HotNewsService } from './hot-news.service';
 import {
   NEWS_PROFESSION_TAGS,
   boundedReason,
@@ -38,7 +39,15 @@ import {
 @Controller('v1/news')
 @UseGuards(CommunityNewsFeatureGuard, JwtAuthGuard)
 export class NewsPublicController {
-  constructor(private readonly news: NewsService) {}
+  constructor(
+    private readonly news: NewsService,
+    private readonly hotNews: HotNewsService,
+  ) {}
+
+  @Get('headlines/today')
+  headlines() {
+    return this.hotNews.listDaily();
+  }
 
   @Get()
   list(

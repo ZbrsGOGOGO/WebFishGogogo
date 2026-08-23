@@ -3,6 +3,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import {
   CommunityCommandReceipt,
+  HotNewsHeadline,
+  HotNewsRefreshRun,
   NewsArticle,
   NewsArticleRevision,
   NewsNegativeFeedback,
@@ -25,15 +27,19 @@ import {
   NewsAdminFeatureGuard,
 } from './news-gates';
 import { NewsService } from './news.service';
+import { HotNewsService } from './hot-news.service';
 
 /**
- * Editorial news is intentionally isolated from legacy feeds and the outbox pump.
- * It stores only reviewed summaries and source links; it never crawls or mirrors articles.
+ * Editorial news is intentionally isolated from the daily official-RSS headline
+ * index and the legacy outbox pump. The headline index stores no article body;
+ * editorial articles still require independent review before publication.
  */
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       CommunityCommandReceipt,
+      HotNewsHeadline,
+      HotNewsRefreshRun,
       NewsArticle,
       NewsArticleRevision,
       NewsNegativeFeedback,
@@ -52,11 +58,12 @@ import { NewsService } from './news.service';
   ],
   providers: [
     NewsService,
+    HotNewsService,
     CommunityNewsFeatureGuard,
     NewsAdminFeatureGuard,
     CommunityRbacGuard,
     { provide: COMMUNITY_CLOCK, useValue: systemCommunityClock },
   ],
-  exports: [NewsService],
+  exports: [NewsService, HotNewsService],
 })
 export class NewsModule {}

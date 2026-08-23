@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
+  readonly VITE_AFDIAN_PAGE_URL?: string;
   readonly VITE_SITE_MODE?: string;
   readonly VITE_COMMUNITY_REGISTRATION_ENABLED?: string;
   readonly VITE_COMMUNITY_PASSWORD_RESET_ENABLED?: string;

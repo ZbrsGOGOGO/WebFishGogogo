@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
 } from '@nestjs/common';
 import { DataSource, EntityManager, In } from 'typeorm';
 
@@ -13,6 +14,7 @@ import { ReferralClaimToken } from '../../database/entities/referral-claim-token
 import { ReferralCode } from '../../database/entities/referral-code.entity';
 import { ReferralRedemption } from '../../database/entities/referral-redemption.entity';
 import { User } from '../../database/entities/user.entity';
+import { WalletBalance } from '../../database/entities/wallet-balance.entity';
 import { PlatformAssetsService } from '../platform';
 import { COMMUNITY_CLOCK, CommunityClock } from './community-clock';
 import {
@@ -35,6 +37,7 @@ const CLAIM_TOKEN_TTL_MS = 15 * 60 * 1_000;
 const QUALIFIED_DAILY_LIMIT = 5;
 const QUALIFIED_MONTHLY_LIMIT = 20;
 const MONTHLY_REWARD_LIMIT = 5;
+const INVITER_INVITE_COIN_REWARD = 1;
 const QUALIFYING_ACTIVITY_COMMAND_PREFIXES = [
   'friend.',
   'content.',
@@ -53,6 +56,7 @@ export class ReferralService {
   ) {}
 
   async createOrRotate(userId: string, idempotencyKey: string) {
+    assertReferralActionsEnabled();
     assertCommunityWritesEnabled();
     const hash = requestHash({ action: 'rotate' });
     return this.dataSource.transaction(async (manager) => {
@@ -110,6 +114,7 @@ export class ReferralService {
   }
 
   async preview(rawCode: string) {
+    assertReferralActionsEnabled();
     assertCommunityWritesEnabled();
     if (
       typeof rawCode !== 'string' ||
@@ -164,6 +169,7 @@ export class ReferralService {
 
   /** 供可信 Worker/后台调用；不暴露给普通用户。 */
   async qualify(redemptionId: string): Promise<ReferralRedemption> {
+    assertReferralActionsEnabled();
     assertCommunityWritesEnabled();
     return this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(ReferralRedemption);
@@ -236,15 +242,8 @@ export class ReferralService {
           userId: redemption.inviterId,
           sourceType: 'referral',
           sourceId: redemption.id,
-          ruleKey: 'inviter-v1',
-          reward: { currencies: { office_coin: 30 } },
-        });
-        await this.assets.grantReward(manager, {
-          userId: redemption.inviteeId,
-          sourceType: 'referral',
-          sourceId: redemption.id,
-          ruleKey: 'invitee-v1',
-          reward: { currencies: { office_coin: 30 } },
+          ruleKey: 'inviter-invite-coin-v1',
+          reward: { currencies: { invite_coin: INVITER_INVITE_COIN_REWARD } },
         });
         redemption.status = 'qualified';
         redemption.rewardGrantedAt = now;
@@ -305,9 +304,14 @@ export class ReferralService {
         entry.status === 'qualified' || entry.status === 'qualified_unrewarded',
     );
     const active = codes.find((code) => code.status === 'active');
+    const invitationBalance = await manager.getRepository(WalletBalance).findOne({
+      where: { userId: user.id, currency: 'invite_coin' },
+    });
+    const invitationCoins = Number(invitationBalance?.balance ?? 0);
     const siteOrigin = process.env.PUBLIC_SITE_ORIGIN?.replace(/\/$/, '') ?? null;
     return {
-      enabled: communityWritesEnabled(),
+      enabled: communityWritesEnabled() && referralActionsEnabled(),
+      invitationCoins,
       code: rawCode,
       shareUrl:
         rawCode && siteOrigin
@@ -338,8 +342,8 @@ export class ReferralService {
       ).length,
       monthlyRewardLimit: MONTHLY_REWARD_LIMIT,
       rewardDescription: active
-        ? '达标后双方各得 30 办公币；每月最多奖励 5 次，不可提现或交易。'
-        : null,
+        ? '达标后邀请人获得 1 枚邀请币；邀请币暂不可消费、交易或兑换。'
+        : '邀请功能开发中；邀请币余额可查看，暂不可消费、交易或兑换。',
       entries,
     };
   }
@@ -360,7 +364,7 @@ export class ReferralService {
         eventType: 'referral.qualified',
         title: '邀请已达标',
         summary: rewarded
-          ? '固定邀请奖励已发放：30 办公币'
+          ? '邀请奖励已发放给邀请人：1 枚邀请币'
           : '邀请已达标；本月奖励次数已达上限',
         resourceType: 'referral',
         resourceId: redemption.id,
@@ -407,5 +411,15 @@ export class ReferralService {
       }),
     );
     return result;
+  }
+}
+
+export function referralActionsEnabled(): boolean {
+  return process.env.FEATURE_REFERRALS_ENABLED === 'true';
+}
+
+function assertReferralActionsEnabled(): void {
+  if (!referralActionsEnabled()) {
+    throw new NotFoundException({ code: 'REFERRALS_NOT_OPEN' });
   }
 }

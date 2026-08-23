@@ -93,9 +93,10 @@ describe('CommunityBattlePage formal archive', () => {
     render(<CommunityBattlePage />);
 
     expect(await screen.findByRole('heading', { name: '办公室乐斗' })).toBeInTheDocument();
-    expect(screen.getByText(/服务端权威档案/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '消耗 10 体力挑战 PVE' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '零奖励练习' })).toBeEnabled();
+    expect(screen.getByText(/选对手、开打、拿奖励/)).toBeInTheDocument();
+    expect(screen.queryByText('一眼看懂成长路线')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeEnabled();
     expect(storageWrite).not.toHaveBeenCalled();
   });
 
@@ -113,7 +114,7 @@ describe('CommunityBattlePage formal archive', () => {
       inventoryVersion: 1,
     });
     render(<CommunityBattlePage />);
-    fireEvent.click(await screen.findByRole('tab', { name: '职业技能' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '技能' }));
     expect(screen.getByText('批量脚本')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '1 点 + 300 办公币' }));
     expect(upgrade).toHaveBeenCalledWith('pve_batch_script', 1, expect.any(String));
@@ -131,8 +132,8 @@ describe('CommunityBattlePage formal archive', () => {
 
     expect(await screen.findByText(/正式档案已被封禁/)).toBeInTheDocument();
     expect(screen.getByText(/当前网页版本过旧/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '消耗 10 体力挑战 PVE' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '零奖励练习' })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole('tab', { name: '战斗记录' })).toBeEnabled());
+    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('tab', { name: '记录' })).toBeEnabled());
   });
 });

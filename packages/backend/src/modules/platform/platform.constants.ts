@@ -14,11 +14,12 @@ export const systemPlatformClock: PlatformClock = {
 /**
  * 历史钱包币种。
  *
- * 统一经济 v2 之后只有 office_coin 会继续作为玩家可见、可消费的货币。
- * 其余键暂留用于读取旧资产和执行无损迁移，禁止新玩法继续投放。
+ * 统一经济 v2 之后 office_coin 是通用可消费货币；invite_coin 是独立、
+ * 暂不可消费的邀请凭证。其余键只用于读取旧资产和执行无损迁移。
  */
 export const WALLET_CURRENCIES = [
   'office_coin',
+  'invite_coin',
   'decor_coin',
   'inspiration',
   'water',

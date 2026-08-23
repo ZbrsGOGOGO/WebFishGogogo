@@ -144,6 +144,12 @@ a.systemCard:hover {
   gap: 14px;
 }
 
+.currencyValue {
+  color: var(--color-brand-strong);
+  font-size: clamp(38px, 7vw, 64px);
+  line-height: 1;
+}
+
 .profileSummary {
   display: flex;
   align-items: center;

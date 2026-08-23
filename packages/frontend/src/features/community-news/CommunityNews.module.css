@@ -101,6 +101,39 @@
   gap: 16px;
 }
 
+.sectionTitle {
+  margin: 4px 0 -8px;
+  font-size: 21px;
+}
+
+.headlineList {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.headlineList li {
+  min-width: 0;
+  padding: 13px 2px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.headlineList li:last-child { border-bottom: 0; }
+.headlineList span { color: var(--color-brand); font-size: 11px; font-weight: 850; }
+.headlineList a { min-width: 0; color: var(--color-text); font-weight: 720; overflow-wrap: anywhere; }
+.headlineList a:hover { color: var(--color-brand); }
+.headlineList small { color: var(--color-text-muted); white-space: nowrap; }
+
+@media (max-width: 600px) {
+  .headlineList li { grid-template-columns: 26px minmax(0,1fr); }
+  .headlineList small { grid-column: 2; }
+}
+
 .newsCard,
 .detailCard {
   padding: 22px;

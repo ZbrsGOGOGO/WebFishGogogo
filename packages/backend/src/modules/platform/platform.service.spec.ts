@@ -318,7 +318,10 @@ describe('PlatformService', () => {
     expect(store.all(PlayerProfile)).toHaveLength(1);
     expect(store.all(PlayerProgression)).toHaveLength(1);
     expect(store.all(EnergyState)).toHaveLength(1);
-    expect(store.all(WalletBalance)).toHaveLength(6);
+    expect(store.all(WalletBalance)).toHaveLength(7);
+    expect(store.all(WalletBalance)).toContainEqual(
+      expect.objectContaining({ userId, currency: 'invite_coin', balance: '0' }),
+    );
   });
 
   it('recovers one shared energy every ten minutes without a background timer', async () => {

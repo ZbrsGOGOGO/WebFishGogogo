@@ -442,7 +442,9 @@ grep -Fq 'GUILD_TIMESTAMP=1700000000020' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'GUILD_BOSS_TIMESTAMP=1700000000021' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000021' \
+grep -Fq 'HOT_NEWS_TIMESTAMP=1700000000022' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000022' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -457,8 +459,10 @@ grep -Fq 'farm_version' \
 grep -Fq 'guild_ledger' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'guild_boss_contributions' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'hot_news_headlines' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guilds 0020 and guild boss 0021"
+  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guilds 0020, guild boss 0021 and daily hot news/invite coin 0022"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

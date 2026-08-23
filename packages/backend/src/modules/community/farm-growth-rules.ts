@@ -12,6 +12,15 @@ export const FARM_FIRST_CYCLE_SECONDS = 30;
 export const FARM_DAILY_ORDER_LIMIT = 3;
 export const FARM_ORDER_BASE_REWARDS = [100, 120, 140] as const;
 export const FARM_TOOL_UPGRADE_COSTS = [200, 500, 1000, 2000, 4000] as const;
+export const FARM_PLOT_UNLOCKS = [
+  { level: 1, count: 1 },
+  { level: 3, count: 2 },
+  { level: 6, count: 3 },
+  { level: 10, count: 4 },
+  { level: 15, count: 5 },
+  { level: 22, count: 6 },
+] as const;
+export const FARM_MAX_PLOTS = FARM_PLOT_UNLOCKS.at(-1)!.count;
 
 export interface FarmCropDefinition {
   key: string;
@@ -142,14 +151,31 @@ export function farmOrderReward(
   completedBefore: number,
   tools: DeskPlantToolLevels,
   skills: DeskPlantSkillLevels,
+  farmLevel = 1,
 ): number {
   const index = Math.max(
     0,
     Math.min(FARM_DAILY_ORDER_LIMIT - 1, Math.trunc(completedBefore)),
   );
-  const percent =
-    100 + tools.harvest_basket * 10 + skills.abundant_harvest * 6;
+  const percent = 100 + tools.harvest_basket * 10 +
+    skills.abundant_harvest * 6 + farmOfficeCoinLevelBonusPercent(farmLevel);
   return Math.round(FARM_ORDER_BASE_REWARDS[index] * percent / 100);
+}
+
+export function farmPlotCount(level: number): number {
+  const normalized = Math.max(1, Math.trunc(level));
+  return [...FARM_PLOT_UNLOCKS]
+    .reverse()
+    .find((unlock) => normalized >= unlock.level)?.count ?? 1;
+}
+
+export function nextFarmPlotUnlock(level: number): { level: number; count: number } | null {
+  return FARM_PLOT_UNLOCKS.find((unlock) => unlock.level > level) ?? null;
+}
+
+/** Keeps the office-coin faucet predictable: +5% per five farm levels, capped at +30%. */
+export function farmOfficeCoinLevelBonusPercent(level: number): number {
+  return Math.min(30, Math.floor(Math.max(1, Math.trunc(level)) / 5) * 5);
 }
 
 export function nextFarmUnlock(level: number): { level: number; name: string; kind: 'crop' | 'skill' } | null {

@@ -15,10 +15,6 @@ export function isChatWritesEnabled(): boolean {
   return enabled('FEATURE_CHAT_WRITES_ENABLED');
 }
 
-export function isChatSocialVerificationRequired(): boolean {
-  return process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED === 'true';
-}
-
 export function assertCommunityChatEnabled(): void {
   if (!isCommunityChatEnabled()) {
     throw chatException('CHAT_DISABLED', '聊天室暂未开放。', 404);

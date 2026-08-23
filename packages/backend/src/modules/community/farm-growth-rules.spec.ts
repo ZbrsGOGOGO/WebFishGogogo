@@ -4,6 +4,10 @@ import {
   FARM_SKILL_MAX_LEVEL,
   FARM_TOOL_MAX_LEVEL,
   farmLevelSnapshot,
+  farmOfficeCoinLevelBonusPercent,
+  farmOrderReward,
+  farmPlotCount,
+  nextFarmPlotUnlock,
   farmSkillPointsAvailable,
   farmToolUpgradeCost,
   normalizeFarmSkillLevels,
@@ -43,5 +47,14 @@ describe('farm growth rules', () => {
     expect(improved.coins).toBeGreaterThan(base.coins);
     expect(farmToolUpgradeCost(0)).toBe(200);
     expect(farmToolUpgradeCost(FARM_TOOL_MAX_LEVEL)).toBe(0);
+  });
+
+  it('unlocks simple batch plots and applies a capped farm-level coin bonus', () => {
+    expect([1, 3, 6, 10, 15, 22].map(farmPlotCount)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(nextFarmPlotUnlock(6)).toEqual({ level: 10, count: 4 });
+    expect(farmOfficeCoinLevelBonusPercent(1)).toBe(0);
+    expect(farmOfficeCoinLevelBonusPercent(10)).toBe(10);
+    expect(farmOfficeCoinLevelBonusPercent(999)).toBe(30);
+    expect(farmOrderReward(0, normalizeFarmToolLevels(null), normalizeFarmSkillLevels(null), 10)).toBe(110);
   });
 });

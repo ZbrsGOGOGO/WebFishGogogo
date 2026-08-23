@@ -57,6 +57,8 @@ x-api-environment: &api-environment
   FEATURE_CHAT_WRITES_ENABLED: ${FEATURE_COMMUNITY_CHAT_WRITES_ENABLED:-false}
   FEATURE_COMMUNITY_NEWS_ENABLED: ${FEATURE_COMMUNITY_NEWS_ENABLED:-false}
   FEATURE_NEWS_ADMIN_ENABLED: ${FEATURE_NEWS_ADMIN_ENABLED:-false}
+  FEATURE_NEWS_AUTO_REFRESH_ENABLED: ${FEATURE_NEWS_AUTO_REFRESH_ENABLED:-true}
+  FEATURE_REFERRALS_ENABLED: ${FEATURE_REFERRALS_ENABLED:-false}
   FEATURE_COMMUNITY_BATTLE_ENABLED: ${FEATURE_COMMUNITY_BATTLE_ENABLED:-false}
   PRIVACY_PROCESSOR_NAME: ${PRIVACY_PROCESSOR_NAME:?PRIVACY_PROCESSOR_NAME must be set}
   PRIVACY_CONTACT: ${PRIVACY_CONTACT:?PRIVACY_CONTACT must be set}
@@ -131,6 +133,7 @@ services:
       target: community-api
       args: &community-build-args
         VITE_API_BASE_URL: /api
+        VITE_AFDIAN_PAGE_URL: ${AFDIAN_PAGE_URL:-}
         VITE_SITE_MODE: community
         VITE_SITE_NAME: ${SITE_NAME:-ZBRS 技术工具工坊}
         # 社区公开包不嵌入主办者姓名或个人联系地址；以下信息只保留在服务端合规配置中。
@@ -210,6 +213,7 @@ services:
     networks:
       - application
       - backend
+      - egress
 
   web:
     build:
@@ -274,6 +278,7 @@ volumes:
 
 networks:
   frontend:
+  egress:
   application:
     internal: true
   backend:

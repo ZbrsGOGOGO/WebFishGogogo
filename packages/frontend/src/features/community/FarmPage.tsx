@@ -18,12 +18,12 @@ const GUEST_FIRST_CYCLE_SECONDS = 30;
 const GUEST_STANDARD_CYCLE_SECONDS = 5 * 60;
 
 const GUEST_CROPS: CommunityFarmOverview['crops'] = [
-  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, seedCost: 10, coins: 100, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
-  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, seedCost: 25, coins: 100, description: '稳定产出，适合短时回来收获。', unlocked: false, selected: false, growing: false },
-  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 3600, experience: 70, seedCost: 60, coins: 100, description: '经验与订单效率均衡。', unlocked: false, selected: false, growing: false },
-  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 7200, experience: 125, seedCost: 110, coins: 100, description: '适合离线两小时后回来收获。', unlocked: false, selected: false, growing: false },
-  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 14400, experience: 230, seedCost: 180, coins: 100, description: '中后期主力作物。', unlocked: false, selected: false, growing: false },
-  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 28800, experience: 420, seedCost: 300, coins: 100, description: '适合完整工作日的长周期作物。', unlocked: false, selected: false, growing: false },
+  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, seedCost: 10, seedCostPerPlot: 10, coins: 100, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
+  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 1200, experience: 32, seedCost: 25, seedCostPerPlot: 25, coins: 100, description: '稳定产出，适合短时回来收获。', unlocked: false, selected: false, growing: false },
+  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 3600, experience: 70, seedCost: 60, seedCostPerPlot: 60, coins: 100, description: '经验与订单效率均衡。', unlocked: false, selected: false, growing: false },
+  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 7200, experience: 125, seedCost: 110, seedCostPerPlot: 110, coins: 100, description: '适合离线两小时后回来收获。', unlocked: false, selected: false, growing: false },
+  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 14400, experience: 230, seedCost: 180, seedCostPerPlot: 180, coins: 100, description: '中后期主力作物。', unlocked: false, selected: false, growing: false },
+  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 28800, experience: 420, seedCost: 300, seedCostPerPlot: 300, coins: 100, description: '适合完整工作日的长周期作物。', unlocked: false, selected: false, growing: false },
 ];
 
 const GUEST_TOOLS: CommunityFarmTool[] = [
@@ -63,6 +63,10 @@ function createGuestFarm(): CommunityFarmOverview {
       skillPointsEarned: 0,
       skillPointsAvailable: 0,
       nextUnlock: { level: 2, name: '快速照料', kind: 'skill' },
+      plotCount: 1,
+      maxPlotCount: 6,
+      nextPlotUnlock: { level: 3, count: 2 },
+      officeCoinLevelBonusPercent: 0,
       ordersCompleted: 0,
       ordersTotal: 3,
     },
@@ -366,6 +370,31 @@ export function CommunityFarmPage(): JSX.Element {
         </div>
       </section>
 
+      <section className={styles.plotSection} aria-labelledby="farm-plots-title">
+        <div className={styles.sectionHeading}>
+          <div><span>PLOTS</span><h2 id="farm-plots-title">我的地块</h2></div>
+          <small>{overview.growth.plotCount}/{overview.growth.maxPlotCount} 块 · 一键统一照料</small>
+        </div>
+        <div className={styles.plotGrid}>
+          {Array.from({ length: overview.growth.maxPlotCount }, (_, index) => {
+            const unlocked = index < overview.growth.plotCount;
+            return (
+              <article key={index} data-unlocked={unlocked}>
+                <span>{unlocked ? overview.crops.find((crop) => crop.selected)?.mark ?? '苗' : '锁'}</span>
+                <strong>{unlocked ? `地块 ${index + 1}` : '未解锁'}</strong>
+              </article>
+            );
+          })}
+        </div>
+        <p className={styles.plotHint}>
+          已解锁地块会同时种植、同时收获，不需要逐块点击；每块消耗一份种子并产出一份农场经验。
+          {overview.growth.nextPlotUnlock
+            ? ` Lv.${overview.growth.nextPlotUnlock.level} 解锁第 ${overview.growth.nextPlotUnlock.count} 块。`
+            : ' 所有地块已经解锁。'}
+        </p>
+        <p className={styles.plotHint}>当前农场等级提供订单办公币 +{overview.growth.officeCoinLevelBonusPercent}% 加成。</p>
+      </section>
+
       <section className={styles.growthSection} aria-labelledby="farm-crops-title">
         <div className={styles.sectionHeading}><div><span>CROPS</span><h2 id="farm-crops-title">选择下一轮作物</h2></div><small>切换不会中断当前成长</small></div>
         <div className={styles.cropGrid}>
@@ -373,7 +402,7 @@ export function CommunityFarmPage(): JSX.Element {
             <article key={crop.key} data-selected={crop.selected} data-locked={!crop.unlocked}>
               <b>{crop.mark}</b>
               <div><strong>{crop.name}</strong><small>{crop.description}</small></div>
-              <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>成本</dt><dd>{crop.seedCost} 办公币</dd></div><div><dt>收获</dt><dd>熟练经验 {crop.experience}</dd></div></dl>
+              <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>总成本</dt><dd>{crop.seedCost} 办公币</dd></div><div><dt>总经验</dt><dd>{crop.experience}</dd></div></dl>
               <Button
                 variant={crop.selected ? 'secondary' : 'primary'}
                 loading={growthBusy === `crop:${crop.key}`}

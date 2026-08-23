@@ -27,6 +27,7 @@ export interface CommunityFarmCrop {
   experience: number;
   coins: number;
   seedCost: number;
+  seedCostPerPlot: number;
   description: string;
   unlocked: boolean;
   selected: boolean;
@@ -77,6 +78,10 @@ export interface CommunityFarmOverview {
     skillPointsEarned: number;
     skillPointsAvailable: number;
     nextUnlock: { level: number; name: string; kind: 'crop' | 'skill' } | null;
+    plotCount: number;
+    maxPlotCount: number;
+    nextPlotUnlock: { level: number; count: number } | null;
+    officeCoinLevelBonusPercent: number;
     ordersCompleted: number;
     ordersTotal: number;
   };
