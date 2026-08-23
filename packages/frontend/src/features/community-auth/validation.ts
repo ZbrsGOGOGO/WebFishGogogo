@@ -16,6 +16,19 @@ export function validateCommunityEmail(value: string): string | undefined {
   return undefined;
 }
 
+export function normalizeCommunityUsername(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function validateCommunityUsername(value: string): string | undefined {
+  const username = value.trim();
+  if (!username) return '请输入账号';
+  if (!/^[A-Za-z][A-Za-z0-9_]{3,19}$/.test(username)) {
+    return '账号需为 4～20 位，以字母开头，只能使用字母、数字和下划线';
+  }
+  return undefined;
+}
+
 export function communityPasswordByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
@@ -39,4 +52,3 @@ export function validateCommunityDisplayName(value: string): string | undefined 
 export function validateVerificationCode(value: string): string | undefined {
   return /^\d{6}$/.test(value.trim()) ? undefined : '请输入 6 位数字验证码';
 }
-

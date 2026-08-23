@@ -393,6 +393,8 @@ grep -Eq 'limit_conn_zone .*zone=community_ws_connections:' "$ROOT_DIR/deploy/co
 grep -Eq 'limit_conn community_ws_connections 10;' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "community Nginx must cap unauthenticated WebSocket connections per client IP"
 for auth_path in \
+  /api/v1/auth/account/register \
+  /api/v1/auth/account/login \
   /api/v1/auth/register \
   /api/v1/auth/email/verification-requests \
   /api/v1/auth/login \
@@ -429,15 +431,17 @@ grep -Fq 'CHAT_TIMESTAMP=1700000000014' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'NEWS_TIMESTAMP=1700000000015' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000016' \
+grep -Fq 'LATEST_TIMESTAMP=1700000000017' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'news_review_decisions' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'idx_chat_messages_author_room_created' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'uq_users_username_normalized' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014, editorial-news 0015 and operational-indexes 0016 up/down state"
+  fail "migration rehearsal must verify chat 0014, news 0015, indexes 0016 and username accounts 0017"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

@@ -221,7 +221,9 @@ describe('OfficeBattleService transactions', () => {
       'choose-many-friends-0001',
     );
 
-    const invalidIndexes = new Set([3, 17, 45, 55]);
+    // Social verification is disabled for this release, so an unverified but
+    // otherwise active friend remains a legal candidate.
+    const invalidIndexes = new Set([3, 17, 45]);
     const userRepo = dataSource.getRepository(User);
     const friends = await userRepo.save(
       Array.from({ length: 64 }, (_, index) => {
@@ -363,7 +365,7 @@ describe('OfficeBattleService transactions', () => {
       now,
     );
 
-    expect(friendCandidates).toHaveLength(60);
+    expect(friendCandidates).toHaveLength(61);
     expect(friendCandidates.map((candidate) => candidate.publicId)).toEqual(
       friends
         .filter((_friend, index) => !invalidIndexes.has(index))

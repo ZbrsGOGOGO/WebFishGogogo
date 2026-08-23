@@ -33,17 +33,21 @@ describe('OfficeBattleGatewayPage default gate', () => {
 
   it('enters the server archive only behind the gate for an onboarded account', () => {
     const verified = { onboardingCompleted: true, socialVerificationStatus: 'verified' };
-    expect(shouldUseCommunityBattleServer(false, 'active', verified)).toBe(false);
-    expect(shouldUseCommunityBattleServer(true, 'guest', null)).toBe(false);
-    expect(shouldUseCommunityBattleServer(true, 'active', {
+    expect(shouldUseCommunityBattleServer(false, false, 'active', verified)).toBe(false);
+    expect(shouldUseCommunityBattleServer(true, false, 'guest', null)).toBe(false);
+    expect(shouldUseCommunityBattleServer(true, false, 'active', {
       ...verified,
       onboardingCompleted: false,
     })).toBe(false);
-    expect(shouldUseCommunityBattleServer(true, 'active', {
+    expect(shouldUseCommunityBattleServer(true, true, 'active', {
       ...verified,
       socialVerificationStatus: 'unverified',
     })).toBe(false);
-    expect(shouldUseCommunityBattleServer(true, 'active', verified)).toBe(true);
-    expect(shouldUseCommunityBattleServer(true, 'banned', verified)).toBe(false);
+    expect(shouldUseCommunityBattleServer(true, false, 'active', {
+      ...verified,
+      socialVerificationStatus: 'unverified',
+    })).toBe(true);
+    expect(shouldUseCommunityBattleServer(true, true, 'active', verified)).toBe(true);
+    expect(shouldUseCommunityBattleServer(true, false, 'banned', verified)).toBe(false);
   });
 });

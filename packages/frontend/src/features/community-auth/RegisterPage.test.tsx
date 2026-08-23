@@ -16,39 +16,33 @@ describe('CommunityRegisterPage', () => {
     resetCommunityAuthStoreForTests();
   });
 
-  it('submits beta access, versioned consents and adult declaration before verification', async () => {
+  it('creates a username account with versioned consent records and enters onboarding', async () => {
     const user = userEvent.setup();
     const register = vi.spyOn(communityAuthApi, 'register').mockResolvedValue({
-      registrationId: 'reg-1',
-      emailMasked: 'u***@example.com',
-      verificationExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-      resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
-      accountStatus: 'pending_email',
+      accessToken: 'short-lived',
+      user: {
+        id: 'public-1', publicId: 'public-1', email: '', username: 'office_user',
+        displayName: 'office_user', accountStatus: 'active', onboardingCompleted: false,
+        socialVerificationStatus: 'unverified',
+      },
     });
     render(
       <MemoryRouter initialEntries={['/register']}>
         <Routes>
           <Route path="/register" element={<CommunityRegisterPage />} />
-          <Route path="/register/verify" element={<h1>验证下一步</h1>} />
+          <Route path="/onboarding" element={<h1>设置职业</h1>} />
         </Routes>
       </MemoryRouter>,
     );
 
-    await user.type(screen.getByLabelText(/Beta 准入码/), 'BETA-ONE');
-    await user.type(screen.getByLabelText(/邮箱/), ' User@Example.COM ');
-    await user.type(screen.getByLabelText(/昵称/), '办公室小张');
+    await user.type(screen.getByRole('textbox', { name: '账号' }), ' Office_User ');
     await user.type(screen.getByLabelText(/^密码/), 'secure-office-123');
     await user.type(screen.getByLabelText(/确认密码/), 'secure-office-123');
-    await user.click(screen.getByRole('checkbox', { name: /服务条款/ }));
-    await user.click(screen.getByRole('checkbox', { name: /隐私政策/ }));
-    await user.click(screen.getByRole('checkbox', { name: /社区规范/ }));
     await user.click(screen.getByRole('checkbox', { name: /已满 18 周岁/ }));
-    await user.click(screen.getByRole('button', { name: '提交并验证邮箱' }));
+    await user.click(screen.getByRole('button', { name: '注册并进入' }));
 
     expect(register).toHaveBeenCalledWith({
-      betaAccessCode: 'BETA-ONE',
-      email: 'user@example.com',
-      displayName: '办公室小张',
+      username: 'office_user',
       password: 'secure-office-123',
       consents: {
         termsVersion: COMMUNITY_LEGAL_VERSIONS.terms,
@@ -57,10 +51,10 @@ describe('CommunityRegisterPage', () => {
         adultDeclarationVersion: COMMUNITY_LEGAL_VERSIONS.adultDeclaration,
       },
     });
-    expect(await screen.findByRole('heading', { name: '验证下一步' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '设置职业' })).toBeInTheDocument();
   });
 
-  it('submits and clears a short-lived referral binding without replacing the beta code', async () => {
+  it('submits and clears a short-lived referral binding', async () => {
     const user = userEvent.setup();
     saveCommunityReferralBinding({
       bindingToken: 'rct_one-time-binding',
@@ -68,32 +62,30 @@ describe('CommunityRegisterPage', () => {
       inviter: { publicId: 'public-inviter', displayName: '邀请同事', avatarKey: 'violet' },
     });
     const register = vi.spyOn(communityAuthApi, 'register').mockResolvedValue({
-      registrationId: 'reg-referral',
-      emailMasked: 'i***@example.com',
-      verificationExpiresAt: new Date(Date.now() + 600_000).toISOString(),
-      resendAvailableAt: new Date(Date.now() + 60_000).toISOString(),
-      accountStatus: 'pending_email',
+      accessToken: 'short-lived',
+      user: {
+        id: 'public-2', publicId: 'public-2', email: '', username: 'invitee_user',
+        displayName: 'invitee_user', accountStatus: 'active', onboardingCompleted: false,
+        socialVerificationStatus: 'unverified',
+      },
     });
     render(
       <MemoryRouter initialEntries={['/register']}>
         <Routes>
           <Route path="/register" element={<CommunityRegisterPage />} />
-          <Route path="/register/verify" element={<h1>验证下一步</h1>} />
+          <Route path="/onboarding" element={<h1>设置职业</h1>} />
         </Routes>
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/已接受 邀请同事 的推荐/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/Beta 准入码/), 'BETA-TWO');
-    await user.type(screen.getByLabelText(/邮箱/), 'invitee@example.com');
-    await user.type(screen.getByLabelText(/昵称/), '被邀请同事');
+    expect(screen.getByText(/已接受 邀请同事 的邀请/)).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: '账号' }), 'invitee_user');
     await user.type(screen.getByLabelText(/^密码/), 'secure-office-456');
     await user.type(screen.getByLabelText(/确认密码/), 'secure-office-456');
-    for (const checkbox of screen.getAllByRole('checkbox')) await user.click(checkbox);
-    await user.click(screen.getByRole('button', { name: '提交并验证邮箱' }));
+    await user.click(screen.getByRole('checkbox', { name: /已满 18 周岁/ }));
+    await user.click(screen.getByRole('button', { name: '注册并进入' }));
 
     expect(register).toHaveBeenCalledWith(expect.objectContaining({
-      betaAccessCode: 'BETA-TWO',
       referralToken: 'rct_one-time-binding',
     }));
     expect(window.sessionStorage.getItem('zbrs.community.referral-binding.v1')).toBeNull();

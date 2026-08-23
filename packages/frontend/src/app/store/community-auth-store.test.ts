@@ -10,6 +10,7 @@ const activeUser: CommunityAuthUser = {
   id: 'public-1',
   publicId: 'public-1',
   email: 'user@example.com',
+  username: 'office_user',
   displayName: '小张',
   accountStatus: 'active',
   onboardingCompleted: false,
@@ -24,26 +25,16 @@ describe('community auth store', () => {
     resetCommunityAuthStoreForTests();
   });
 
-  it('keeps registration pending until email verification and never auto-logins', async () => {
-    const registration = {
-      registrationId: 'reg-1',
-      emailMasked: 'u***@example.com',
-      verificationExpiresAt: '2026-08-22T12:10:00.000Z',
-      resendAvailableAt: '2026-08-22T12:01:00.000Z',
-      accountStatus: 'pending_email' as const,
-    };
-    const register = vi.spyOn(communityAuthApi, 'register').mockResolvedValue(registration);
-    const login = vi.spyOn(communityAuthApi, 'login');
-    vi.spyOn(communityAuthApi, 'verifyEmail').mockResolvedValue({
+  it('activates a username account immediately without persisting credentials in browser storage', async () => {
+    const register = vi.spyOn(communityAuthApi, 'register').mockResolvedValue({
       accessToken: 'short-lived',
       user: activeUser,
     });
+    const login = vi.spyOn(communityAuthApi, 'login');
 
     await useCommunityAuthStore.getState().register({
-      email: 'user@example.com',
+      username: 'office_user',
       password: 'a-secure-password',
-      displayName: '小张',
-      betaAccessCode: 'BETA',
       consents: {
         termsVersion: 'v1',
         privacyVersion: 'v1',
@@ -54,11 +45,6 @@ describe('community auth store', () => {
 
     expect(register).toHaveBeenCalledOnce();
     expect(login).not.toHaveBeenCalled();
-    expect(useCommunityAuthStore.getState().phase).toBe('pending_email');
-    expect(window.sessionStorage.getItem('zbrs.community.pending-registration.v1')).toContain('reg-1');
-    expect(window.localStorage).toHaveLength(0);
-
-    await useCommunityAuthStore.getState().verifyEmail('123456');
     expect(useCommunityAuthStore.getState()).toMatchObject({
       phase: 'active',
       user: activeUser,
@@ -92,4 +78,3 @@ describe('community auth store', () => {
     });
   });
 });
-

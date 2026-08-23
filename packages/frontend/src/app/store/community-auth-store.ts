@@ -28,7 +28,7 @@ export interface CommunityAuthState {
   error: string | null;
   bootstrapError: string | null;
   restoreSession: () => Promise<void>;
-  register: (payload: CommunityRegisterPayload) => Promise<PendingCommunityRegistration>;
+  register: (payload: CommunityRegisterPayload) => Promise<CommunityAuthUser>;
   verifyEmail: (code: string) => Promise<CommunityAuthUser>;
   resendVerification: () => Promise<void>;
   login: (payload: CommunityLoginPayload) => Promise<CommunitySessionPhase>;
@@ -72,7 +72,8 @@ function messageFrom(error: unknown): string {
       error.body && typeof error.body === 'object' && 'code' in error.body
         ? (error.body as { code?: unknown }).code
         : undefined;
-    if (code === 'INVALID_CREDENTIALS') return '邮箱或密码不正确';
+    if (code === 'INVALID_CREDENTIALS') return '账号或密码不正确';
+    if (code === 'USERNAME_ALREADY_EXISTS') return '这个账号已被注册，请换一个';
     if (code === 'EMAIL_NOT_VERIFIED') return '邮箱尚未验证，请继续完成验证码流程';
     if (code === 'ACCOUNT_UNAVAILABLE') return '账号当前不可用，请查看账号状态或申诉说明';
     if (code === 'INVALID_BETA_ACCESS_CODE') return 'Beta 准入码无效或已失效';
@@ -142,15 +143,16 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
   register: async (payload) => {
     set({ loading: true, error: null });
     try {
-      const registration = await communityAuthApi.register(payload);
-      savePendingRegistration(registration);
+      const session = await communityAuthApi.register(payload);
+      savePendingRegistration(null);
       set({
-        phase: 'pending_email',
-        pendingRegistration: registration,
+        phase: phaseOf(session.user),
+        user: session.user,
+        pendingRegistration: null,
         loading: false,
         sessionReady: true,
       });
-      return registration;
+      return session.user;
     } catch (error) {
       set({ loading: false, error: messageFrom(error) });
       throw error;

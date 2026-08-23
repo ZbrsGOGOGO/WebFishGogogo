@@ -6,7 +6,7 @@ HARDENING_TIMESTAMP=1700000000008
 ACCOUNT_SECURITY_TIMESTAMP=1700000000013
 CHAT_TIMESTAMP=1700000000014
 NEWS_TIMESTAMP=1700000000015
-LATEST_TIMESTAMP=1700000000016
+LATEST_TIMESTAMP=1700000000017
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -128,6 +128,10 @@ assert_target_applied() {
   done
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 8 ] || fail "$database is missing one or more 0016 operational indexes"
+  username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")
+  [ "$username_column_count" = 2 ] || fail "$database is missing the 0017 username columns"
+  username_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_users_username_normalized';")
+  [ "$username_index_count" = 1 ] || fail "$database is missing the 0017 username uniqueness index"
 }
 
 assert_target_absent() {
@@ -152,6 +156,10 @@ assert_target_absent() {
   [ "$news_table_count" = 0 ] || fail "$database retained news tables after rollback/failure"
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 0 ] || fail "$database retained 0016 operational indexes after rollback/failure"
+  username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")
+  [ "$username_column_count" = 0 ] || fail "$database retained 0017 username columns after rollback/failure"
+  username_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'uq_users_username_normalized';")
+  [ "$username_index_count" = 0 ] || fail "$database retained the 0017 username uniqueness index after rollback/failure"
 }
 
 restore_snapshot() {
@@ -331,4 +339,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through operational-indexes 0016 (including account-security 0013, chat 0014 and editorial-news 0015), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through username-accounts 0017 (including account-security 0013, chat 0014, news 0015 and indexes 0016), normalized-email collision abort, lock-timeout rollback and recovery."

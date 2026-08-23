@@ -3,6 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 const EMAIL_PATTERN = /^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$/i;
 const VERSION_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const USERNAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{3,19}$/;
 
 const COMMON_WEAK_PASSWORDS = new Set([
   '1234567890',
@@ -43,7 +44,32 @@ export function normalizeEmail(value: unknown): string {
   return email;
 }
 
+export function normalizeUsername(value: unknown): string {
+  const username = requiredString(value, 'username', 20).normalize('NFC');
+  if (!USERNAME_PATTERN.test(username)) {
+    throw new BadRequestException(
+      'username 必须为 4～20 位，并以字母开头，只能包含字母、数字和下划线',
+    );
+  }
+  return username.toLowerCase();
+}
+
 export function validateNewPassword(value: unknown, email: string): string {
+  return validateNewPasswordForIdentifier(value, email, email.split('@', 1)[0]);
+}
+
+export function validateUsernamePassword(
+  value: unknown,
+  username: string,
+): string {
+  return validateNewPasswordForIdentifier(value, username, username);
+}
+
+function validateNewPasswordForIdentifier(
+  value: unknown,
+  identifier: string,
+  comparable: string,
+): string {
   if (typeof value !== 'string') {
     throw new BadRequestException('password 必须为字符串');
   }
@@ -55,13 +81,12 @@ export function validateNewPassword(value: unknown, email: string): string {
     );
   }
   const lowered = value.toLowerCase();
-  const localPart = email.split('@', 1)[0];
   if (
     COMMON_WEAK_PASSWORDS.has(lowered) ||
-    lowered === email ||
-    (localPart.length >= 6 && lowered === localPart)
+    lowered === identifier.toLowerCase() ||
+    (comparable.length >= 6 && lowered === comparable.toLowerCase())
   ) {
-    throw new BadRequestException('password 过于常见或与邮箱过于相似');
+    throw new BadRequestException('password 过于常见或与登录账号过于相似');
   }
   return value;
 }

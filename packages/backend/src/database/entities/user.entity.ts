@@ -34,6 +34,20 @@ export class User {
   @Column({ name: 'email_normalized', type: 'varchar', length: 255, unique: true })
   emailNormalized!: string;
 
+  /**
+   * 用户名密码账号的公开登录名。旧邮箱账号保持 null，二者可以并存。
+   */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  username!: string | null;
+
+  @Column({
+    name: 'username_normalized',
+    type: 'varchar',
+    length: 20,
+    nullable: true,
+  })
+  usernameNormalized!: string | null;
+
   @Column({ name: 'password_hash', type: 'varchar', length: 255 })
   passwordHash!: string;
 
@@ -115,6 +129,13 @@ export class User {
   initializeSecurityFields(): void {
     this.email = this.email.trim();
     this.emailNormalized ??= this.email.normalize('NFC').toLowerCase();
+    if (this.username) {
+      this.username = this.username.trim().normalize('NFC');
+      this.usernameNormalized ??= this.username.toLowerCase();
+    } else {
+      this.username = null;
+      this.usernameNormalized = null;
+    }
     this.publicId ??= randomUUID();
     this.passwordChangedAt ??= new Date();
   }

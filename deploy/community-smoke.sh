@@ -197,6 +197,8 @@ require_header "$SMOKE_TMP/api-health.headers" '^cache-control:[[:space:]]*no-st
 # Cookie-creating endpoints must reject the request before parsing credentials. Empty bodies
 # ensure this contract check cannot log in, consume a Beta code or send verification mail.
 for auth_path_and_label in \
+  '/api/v1/auth/account/register|account-register' \
+  '/api/v1/auth/account/login|account-login' \
   '/api/v1/auth/login|login' \
   '/api/v1/auth/verify-email|verify-email'; do
   auth_path=${auth_path_and_label%%|*}

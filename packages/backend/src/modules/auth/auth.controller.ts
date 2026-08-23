@@ -35,6 +35,12 @@ import { CurrentSessionId, CurrentUserId } from './current-user.decorator';
 import { LoginDto, toLoginInput } from './dto/login.dto';
 import { RegisterDto, toRegisterInput } from './dto/register.dto';
 import {
+  AccountLoginDto,
+  AccountRegisterDto,
+  toAccountLoginInput,
+  toAccountRegisterInput,
+} from './dto/account-credentials.dto';
+import {
   ResendVerificationDto,
   toResendVerificationInput,
 } from './dto/resend-verification.dto';
@@ -63,6 +69,24 @@ export class AuthController {
       toRegisterInput(body),
       this.metadata(ipAddress, userAgent),
     );
+  }
+
+  @Post('account/register')
+  @HttpCode(HttpStatus.CREATED)
+  async registerAccount(
+    @Body() body: AccountRegisterDto,
+    @Res({ passthrough: true }) response: AuthCookieResponse,
+    @Headers('origin') origin: string | undefined,
+    @Ip() ipAddress?: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<LoginResult> {
+    assertTrustedCookieOrigin(origin);
+    const result = await this.authService.registerAccount(
+      toAccountRegisterInput(body),
+      this.metadata(ipAddress, userAgent),
+    );
+    this.setRefreshCookie(response, result);
+    return this.publicLoginResult(result);
   }
 
   @Post(['verify-email', 'email/verify'])
@@ -108,6 +132,24 @@ export class AuthController {
     assertTrustedCookieOrigin(origin);
     const result = await this.authService.login(
       toLoginInput(body),
+      this.metadata(ipAddress, userAgent),
+    );
+    this.setRefreshCookie(response, result);
+    return this.publicLoginResult(result);
+  }
+
+  @Post('account/login')
+  @HttpCode(HttpStatus.OK)
+  async loginAccount(
+    @Body() body: AccountLoginDto,
+    @Res({ passthrough: true }) response: AuthCookieResponse,
+    @Headers('origin') origin: string | undefined,
+    @Ip() ipAddress?: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<LoginResult> {
+    assertTrustedCookieOrigin(origin);
+    const result = await this.authService.loginAccount(
+      toAccountLoginInput(body),
       this.metadata(ipAddress, userAgent),
     );
     this.setRefreshCookie(response, result);

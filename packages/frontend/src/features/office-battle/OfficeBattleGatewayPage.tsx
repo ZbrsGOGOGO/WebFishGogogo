@@ -9,6 +9,7 @@ import styles from './OfficeBattleGatewayPage.module.css';
 
 export function shouldUseCommunityBattleServer(
   serverEnabled: boolean,
+  verificationRequired: boolean,
   phase: string,
   user: {
     onboardingCompleted: boolean;
@@ -19,7 +20,7 @@ export function shouldUseCommunityBattleServer(
     user !== null &&
     phase === 'active' &&
     user.onboardingCompleted &&
-    user.socialVerificationStatus === 'verified';
+    (!verificationRequired || user.socialVerificationStatus === 'verified');
 }
 
 /**
@@ -31,6 +32,7 @@ export function OfficeBattleGatewayPage(): JSX.Element {
   const user = useCommunityAuthStore((state) => state.user);
   const formalReady = shouldUseCommunityBattleServer(
     COMMUNITY_FEATURE_FLAGS.battleServer,
+    COMMUNITY_FEATURE_FLAGS.socialVerification,
     phase,
     user,
   );
@@ -54,7 +56,9 @@ export function OfficeBattleGatewayPage(): JSX.Element {
           <Link to="/login">登录账号</Link>
         ) : phase === 'active' && !user?.onboardingCompleted ? (
           <Link to="/onboarding">完善我的工位</Link>
-        ) : phase === 'active' && user?.socialVerificationStatus !== 'verified' ? (
+        ) : COMMUNITY_FEATURE_FLAGS.socialVerification &&
+          phase === 'active' &&
+          user?.socialVerificationStatus !== 'verified' ? (
           <Link to="/settings/verification">完善账号状态</Link>
         ) : (
           <Link to="/account/status">查看账号状态</Link>

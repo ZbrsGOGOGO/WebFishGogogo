@@ -25,6 +25,7 @@ export interface CommunityAuthUser {
   id: string;
   publicId: string;
   email: string;
+  username?: string | null;
   displayName: string | null;
   accountStatus: CommunityAccountStatus;
   onboardingCompleted: boolean;
@@ -38,10 +39,8 @@ export interface CommunityAuthUser {
 export type CommunityLoginResult = CommunitySessionEnvelope<CommunityAuthUser>;
 
 export interface CommunityRegisterPayload {
-  email: string;
+  username: string;
   password: string;
-  displayName: string;
-  betaAccessCode: string;
   referralToken?: string;
   consents: {
     termsVersion: string;
@@ -61,7 +60,7 @@ export interface PendingCommunityRegistration {
 }
 
 export interface CommunityLoginPayload {
-  email: string;
+  username: string;
   password: string;
 }
 
@@ -81,12 +80,13 @@ function acceptSession(result: CommunityLoginResult): CommunityLoginResult {
 
 export async function registerCommunityAccount(
   payload: CommunityRegisterPayload,
-): Promise<PendingCommunityRegistration> {
-  return communityHttp.post<PendingCommunityRegistration>(
-    '/v1/auth/register',
+): Promise<CommunityLoginResult> {
+  const result = await communityHttp.post<CommunityLoginResult>(
+    '/v1/auth/account/register',
     payload,
     { auth: false, retryAfterRefresh: false },
   );
+  return acceptSession(result);
 }
 
 export async function verifyCommunityEmail(payload: {
@@ -117,7 +117,7 @@ export async function loginCommunityAccount(
   payload: CommunityLoginPayload,
 ): Promise<CommunityLoginResult> {
   const result = await communityHttp.post<CommunityLoginResult>(
-    '/v1/auth/login',
+    '/v1/auth/account/login',
     payload,
     { auth: false, retryAfterRefresh: false },
   );

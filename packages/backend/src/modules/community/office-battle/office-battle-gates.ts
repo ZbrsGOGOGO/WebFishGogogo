@@ -16,6 +16,10 @@ export function officeBattleEnabled(): boolean {
   return configured === 'true' || (configured === undefined && process.env.LOCAL_DEV === 'true');
 }
 
+export function officeBattleSocialVerificationRequired(): boolean {
+  return process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED === 'true';
+}
+
 @Injectable()
 export class OfficeBattleFeatureGuard implements CanActivate {
   canActivate(): boolean {
@@ -24,7 +28,7 @@ export class OfficeBattleFeatureGuard implements CanActivate {
   }
 }
 
-/** Every Office Battle endpoint requires a currently socially verified account. */
+/** Active accounts may play; social verification is enforced only when enabled. */
 @Injectable()
 export class OfficeBattleVerifiedGuard implements CanActivate {
   constructor(private readonly dataSource: DataSource) {}
@@ -39,7 +43,10 @@ export class OfficeBattleVerifiedGuard implements CanActivate {
     if (!user || user.accountStatus !== 'active') {
       throw new UnauthorizedException({ code: 'INVALID_SESSION' });
     }
-    if (user.socialVerificationStatus !== 'verified') {
+    if (
+      officeBattleSocialVerificationRequired() &&
+      user.socialVerificationStatus !== 'verified'
+    ) {
       throw new ForbiddenException({ code: 'SOCIAL_VERIFICATION_REQUIRED' });
     }
     return true;

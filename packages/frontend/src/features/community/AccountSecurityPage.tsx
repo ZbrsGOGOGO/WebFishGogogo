@@ -161,7 +161,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
     <main className={styles.page}>
       <PageHeader
         title="账号安全"
-        subtitle={`当前账号：${user?.email ?? '—'}`}
+        subtitle={`当前账号：${user?.username || user?.email || '—'}`}
         actions={securityActions}
       />
       {error ? <p className={styles.error} role="alert">{error}</p> : null}

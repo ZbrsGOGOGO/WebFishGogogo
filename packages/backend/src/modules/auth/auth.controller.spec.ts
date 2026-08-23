@@ -16,6 +16,7 @@ const USER: AuthUserView = {
   id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   publicId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   email: 'person@example.com',
+  username: null,
   displayName: '测试同事',
   accountStatus: 'active',
   onboardingCompleted: false,
@@ -79,8 +80,10 @@ describe('AuthController community contract', () => {
   const originalEnv = { ...process.env };
   let service: {
     register: jest.Mock;
+    registerAccount: jest.Mock;
     verifyEmail: jest.Mock;
     login: jest.Mock;
+    loginAccount: jest.Mock;
     refresh: jest.Mock;
     logout: jest.Mock;
     logoutAll: jest.Mock;
@@ -98,8 +101,10 @@ describe('AuthController community contract', () => {
     process.env.NODE_ENV = 'test';
     service = {
       register: jest.fn().mockResolvedValue(REGISTRATION),
+      registerAccount: jest.fn().mockResolvedValue(SESSION),
       verifyEmail: jest.fn().mockResolvedValue(SESSION),
       login: jest.fn().mockResolvedValue(SESSION),
+      loginAccount: jest.fn().mockResolvedValue(SESSION),
       refresh: jest.fn().mockResolvedValue(SESSION),
       logout: jest.fn().mockResolvedValue(undefined),
       logoutAll: jest.fn().mockResolvedValue(undefined),
@@ -159,6 +164,31 @@ describe('AuthController community contract', () => {
         sameSite: 'strict',
         path: '/',
       }),
+    );
+  });
+
+  it('registers a normalized username and immediately sets a refresh cookie', async () => {
+    const response = cookieResponse();
+    const result = await controller.registerAccount(
+      {
+        username: ' Office_User ',
+        password: 'Strong-Office#2026',
+        consents: registrationBody().consents,
+      },
+      response,
+      'http://127.0.0.1:5173',
+      '127.0.0.1',
+      'jest',
+    );
+    expect(service.registerAccount).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'office_user' }),
+      { ipAddress: '127.0.0.1', userAgent: 'jest' },
+    );
+    expect(result).toEqual({ accessToken: 'access.jwt', user: USER });
+    expect(response.cookie).toHaveBeenCalledWith(
+      'zbrs_refresh',
+      SESSION.refreshToken,
+      expect.objectContaining({ httpOnly: true, sameSite: 'strict' }),
     );
   });
 

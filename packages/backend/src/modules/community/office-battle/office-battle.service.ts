@@ -42,6 +42,7 @@ import { requestHash } from '../community-validation';
 import { NotificationService } from '../notification.service';
 import { RelationshipPolicyService } from '../relationship-policy.service';
 import { resolveOfficeBattle } from './office-battle-engine';
+import { officeBattleSocialVerificationRequired } from './office-battle-gates';
 import {
   BASE_STATS,
   battleLevelSnapshot,
@@ -902,7 +903,11 @@ export class OfficeBattleService {
     const target = await manager.getRepository(User).findOne({
       where: { publicId: targetPublicId, accountStatus: 'active' },
     });
-    if (!target || target.socialVerificationStatus !== 'verified') {
+    if (
+      !target ||
+      (officeBattleSocialVerificationRequired() &&
+        target.socialVerificationStatus !== 'verified')
+    ) {
       throw new NotFoundException({ code: 'BATTLE_RECORD_NOT_FOUND' });
     }
     if (viewerId !== target.id && (await this.relationships.isBlocked(manager, viewerId, target.id))) {
@@ -1023,7 +1028,10 @@ export class OfficeBattleService {
     if (!user || user.accountStatus !== 'active') {
       throw new NotFoundException({ code: 'USER_NOT_FOUND' });
     }
-    if (user.socialVerificationStatus !== 'verified') {
+    if (
+      officeBattleSocialVerificationRequired() &&
+      user.socialVerificationStatus !== 'verified'
+    ) {
       throw new ForbiddenException({ code: 'SOCIAL_VERIFICATION_REQUIRED' });
     }
     return user;
@@ -1280,7 +1288,14 @@ export class OfficeBattleService {
       const target = userById.get(targetId);
       const targetProfile = battleProfileByUser.get(targetId);
       const defense = defenseByUser.get(targetId);
-      if (!target || target.socialVerificationStatus !== 'verified' || !targetProfile || !defense || defense.challengeVisibility === 'none') continue;
+      if (
+        !target ||
+        (officeBattleSocialVerificationRequired() &&
+          target.socialVerificationStatus !== 'verified') ||
+        !targetProfile ||
+        !defense ||
+        defense.challengeVisibility === 'none'
+      ) continue;
       const oldEnough = now.getTime() - friendship.currentStartedAt.getTime() >= FRIEND_REWARD_AGE_MS;
       const claimed = claimedUsers.has(targetId);
       const eligible = oldEnough && !claimed && profile.rewardedFriendBattlesUsed < OFFICE_BATTLE_DAILY_FRIEND_LIMIT && profile.energy > 0;

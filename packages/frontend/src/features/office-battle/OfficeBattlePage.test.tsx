@@ -53,7 +53,7 @@ describe('OfficeBattlePage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /开始 快速切磋/ }));
 
-    expect(screen.getByText(/挑战成功|暂时落败/)).toBeInTheDocument();
+    expect(screen.getAllByText(/挑战成功|暂时落败/).length).toBeGreaterThan(0);
     expect(screen.getByRole('list', { name: '逐回合战报' })).toBeInTheDocument();
     expect(screen.getAllByRole('listitem').length).toBeGreaterThan(2);
 

@@ -5,7 +5,10 @@ import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Input } from '../../components/ui';
 import { CommunityAuthShell } from './CommunityAuthShell';
-import { normalizeCommunityEmail, validateCommunityEmail } from './validation';
+import {
+  normalizeCommunityUsername,
+  validateCommunityUsername,
+} from './validation';
 
 interface LoginLocationState {
   from?: { pathname?: string };
@@ -18,10 +21,10 @@ export function CommunityLoginPage(): JSX.Element {
   const loading = useCommunityAuthStore((state) => state.loading);
   const error = useCommunityAuthStore((state) => state.error);
   const clearError = useCommunityAuthStore((state) => state.clearError);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ username?: string; password?: string }>({});
 
   useEffect(() => {
     clearError();
@@ -31,19 +34,17 @@ export function CommunityLoginPage(): JSX.Element {
   async function submit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const next = {
-      email: validateCommunityEmail(email),
+      username: validateCommunityUsername(username),
       password: password ? undefined : '请输入密码',
     };
     setFieldErrors(next);
-    if (next.email || next.password) return;
+    if (next.username || next.password) return;
     try {
       const phase = await login({
-        email: normalizeCommunityEmail(email),
+        username: normalizeCommunityUsername(username),
         password,
       });
-      if (phase === 'pending_email') {
-        navigate('/register/verify', { replace: true });
-      } else if (phase === 'active') {
+      if (phase === 'active') {
         const from = (location.state as LoginLocationState | null)?.from?.pathname;
         const currentUser = useCommunityAuthStore.getState().user;
         navigate(currentUser?.onboardingCompleted ? (from ?? '/') : '/onboarding', {
@@ -61,18 +62,18 @@ export function CommunityLoginPage(): JSX.Element {
     <CommunityAuthShell
       title="欢迎回来"
       intro="登录后继续你的职业档案与社区进度。"
-      footer={<>还没有账号？<Link to="/register">使用邀请码注册</Link></>}
+      footer={<>还没有账号？<Link to="/register">立即注册</Link></>}
     >
       <form className="auth-form" noValidate onSubmit={submit}>
         <Input
-          label="邮箱"
-          type="email"
-          name="email"
-          autoComplete="email"
-          value={email}
+          label="账号"
+          name="username"
+          autoComplete="username"
+          value={username}
           required
-          error={fieldErrors.email}
-          onChange={(event) => setEmail(event.target.value)}
+          error={fieldErrors.username}
+          spellCheck={false}
+          onChange={(event) => setUsername(event.target.value)}
         />
         <Input
           label="密码"

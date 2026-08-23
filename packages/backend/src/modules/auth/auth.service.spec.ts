@@ -21,7 +21,11 @@ import { User } from '../../database/entities/user.entity';
 import { hashBetaAccessCode, hashRefreshToken } from './auth-crypto';
 import { AuthEmailOutboxService } from './auth-email-outbox.service';
 import { AuthRateLimitService } from './auth-rate-limit.service';
-import { AuthService, RegisterInput } from './auth.service';
+import {
+  AccountRegisterInput,
+  AuthService,
+  RegisterInput,
+} from './auth.service';
 import {
   BetaAccessService,
   LOCAL_DEV_BETA_ACCESS_CODE,
@@ -40,6 +44,19 @@ function registration(email = 'person@example.com'): RegisterInput {
     password: PASSWORD,
     displayName: '测试同事',
     betaAccessCode: LOCAL_DEV_BETA_ACCESS_CODE,
+    consents: {
+      termsVersion: '2026-08-22',
+      privacyVersion: '2026-08-22',
+      communityGuidelinesVersion: '2026-08-22',
+      adultDeclarationVersion: '2026-08-22',
+    },
+  };
+}
+
+function accountRegistration(username = 'office_user'): AccountRegisterInput {
+  return {
+    username,
+    password: PASSWORD,
     consents: {
       termsVersion: '2026-08-22',
       privacyVersion: '2026-08-22',
@@ -128,6 +145,42 @@ describe('AuthService community account flow', () => {
     expect(email.status).toBe('delivered');
     expect(JSON.stringify(email)).not.toContain('person@example.com');
     expect(JSON.stringify(email)).not.toContain(result.devVerificationCode);
+  });
+
+  it('creates an active username account, records consents and persists a device session', async () => {
+    const result = await service.registerAccount(
+      accountRegistration('Office_User'),
+      { ipAddress: '203.0.113.8', userAgent: 'Mozilla/5.0 Chrome/120.0' },
+    );
+
+    expect(result.user).toMatchObject({
+      username: 'Office_User',
+      email: '',
+      displayName: 'Office_User',
+      accountStatus: 'active',
+      onboardingCompleted: false,
+    });
+    const user = await dataSource.getRepository(User).findOneByOrFail({
+      usernameNormalized: 'office_user',
+    });
+    expect(user.email).toMatch(/^account-[0-9a-f-]+@users\.invalid$/);
+    expect(user.passwordHash).not.toBe(PASSWORD);
+    expect(await dataSource.getRepository(ConsentRecord).countBy({ userId: user.id })).toBe(4);
+    expect(await dataSource.getRepository(AuthSession).countBy({ userId: user.id })).toBe(1);
+    await expect(
+      service.loginAccount({ username: 'office_user', password: PASSWORD }),
+    ).resolves.toMatchObject({ user: { publicId: user.publicId } });
+  });
+
+  it('enforces normalized username uniqueness and global account capacity', async () => {
+    await service.registerAccount(accountRegistration('Office_User'));
+    await expect(
+      service.registerAccount(accountRegistration('office_user')),
+    ).rejects.toMatchObject({ response: { code: 'USERNAME_ALREADY_EXISTS' } });
+    process.env.COMMUNITY_MAX_ACTIVE_USERS = '1';
+    await expect(
+      service.registerAccount(accountRegistration('second_user')),
+    ).rejects.toMatchObject({ response: { code: 'CAPACITY_REACHED', limit: 1 } });
   });
 
   it('does not allow login until email verification, then issues a 15-minute sid token', async () => {

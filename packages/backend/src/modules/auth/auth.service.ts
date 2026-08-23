@@ -77,6 +77,18 @@ export interface LoginInput {
   password: string;
 }
 
+export interface AccountRegisterInput {
+  username: string;
+  password: string;
+  referralToken?: string;
+  consents: RegistrationConsents;
+}
+
+export interface AccountLoginInput {
+  username: string;
+  password: string;
+}
+
 export interface VerifyEmailInput {
   registrationId: string;
   code: string;
@@ -120,6 +132,7 @@ export interface AuthUserView {
   id: string;
   publicId: string;
   email: string;
+  username: string | null;
   displayName: string | null;
   accountStatus: User['accountStatus'];
   onboardingCompleted: boolean;
@@ -313,6 +326,87 @@ export class AuthService {
         ? { devVerificationCode: verificationCode }
         : {}),
     };
+  }
+
+  /**
+   * 用户名密码注册：账号在同一事务内直接激活并签发会话，不依赖邮箱或 Beta 码。
+   * 旧邮箱注册路径继续保留，避免影响既有账号和管理工具。
+   */
+  async registerAccount(
+    input: AccountRegisterInput,
+    metadata: AuthRequestMetadata = {},
+  ): Promise<AuthSessionResult> {
+    this.assertRegistrationEnabled();
+    this.capacity.maxActiveUsers();
+    const username = input.username.trim().normalize('NFC');
+    const usernameNormalized = username.toLowerCase();
+    const now = new Date();
+    await this.rateLimits.assertRegisterAllowed(
+      `username:${usernameNormalized}`,
+      metadata.ipAddress,
+      now,
+    );
+    const passwordHash = await hashPassword(input.password);
+    const ipHash = hashIpAddress(metadata.ipAddress);
+    const publicId = randomUUID();
+    const internalEmail = `account-${publicId}@users.invalid`;
+
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        // The singleton capacity row stays locked until the active account and
+        // its session have committed, preventing concurrent replicas overselling.
+        await this.capacity.assertReservationAvailable(manager, now);
+        const users = manager.getRepository(User);
+        if (await users.exist({ where: { usernameNormalized } })) {
+          throw new ConflictException({ code: 'USERNAME_ALREADY_EXISTS' });
+        }
+
+        const user = await users.save(
+          users.create({
+            email: internalEmail,
+            emailNormalized: internalEmail,
+            username,
+            usernameNormalized,
+            passwordHash,
+            displayName: username,
+            publicId,
+            accountStatus: 'active',
+            socialVerificationStatus: 'unverified',
+            emailVerifiedAt: null,
+            passwordChangedAt: now,
+            onboardingCompleted: false,
+          }),
+        );
+
+        if (input.referralToken) {
+          await this.bindReferral(
+            manager,
+            user,
+            input.referralToken,
+            now,
+          );
+        }
+        await this.saveConsents(manager, user.id, input.consents, ipHash, now);
+        await manager.getRepository(PlayerProfile).save(
+          manager.getRepository(PlayerProfile).create({
+            userId: user.id,
+            nickname: username,
+            avatarKey: null,
+            bio: null,
+            battleProfession: null,
+            privacySettings: { ...DEFAULT_COMMUNITY_PRIVACY },
+            title: '初入工位',
+          }),
+        );
+        return this.createSession(manager, user, metadata, now);
+      });
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+      if (this.isUniqueViolation(error)) {
+        throw new ConflictException({ code: 'USERNAME_ALREADY_EXISTS' });
+      }
+      throw error;
+    }
   }
 
   /** 对同一随机 registrationId 轮换验证码；旧验证码立即失效。 */
@@ -535,6 +629,35 @@ export class AuthService {
     if (!candidate || !passwordMatches) {
       throw this.invalidCredentials();
     }
+
+    return this.dataSource.transaction(async (manager) => {
+      const user = await manager.getRepository(User).findOne({
+        where: { id: candidate.id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!user) throw this.invalidCredentials();
+      this.assertLoginAllowed(user);
+      return this.createSession(manager, user, metadata, new Date());
+    });
+  }
+
+  async loginAccount(
+    input: AccountLoginInput,
+    metadata: AuthRequestMetadata = {},
+  ): Promise<AuthSessionResult> {
+    const usernameNormalized = input.username.trim().normalize('NFC').toLowerCase();
+    await this.rateLimits.assertLoginAllowed(
+      `username:${usernameNormalized}`,
+      metadata.ipAddress,
+    );
+    const candidate = await this.dataSource.getRepository(User).findOne({
+      where: { usernameNormalized },
+    });
+    const passwordMatches = await verifyPassword(
+      input.password,
+      candidate?.passwordHash ?? DUMMY_PASSWORD_HASH,
+    );
+    if (!candidate || !passwordMatches) throw this.invalidCredentials();
 
     return this.dataSource.transaction(async (manager) => {
       const user = await manager.getRepository(User).findOne({
@@ -1085,7 +1208,8 @@ export class AuthService {
     return {
       id: user.publicId,
       publicId: user.publicId,
-      email: user.email,
+      email: user.username ? '' : user.email,
+      username: user.username,
       displayName: user.displayName,
       accountStatus: user.accountStatus,
       onboardingCompleted: user.onboardingCompleted,
