@@ -39,6 +39,30 @@ const bootstrap: CommunityBattleBootstrap = {
     balanceVersion: 'balance-1',
     minClientVersion: '1.0.0',
     energy: { max: 120, costPerBattle: 10, recoveryMinutes: 10 },
+    leveling: {
+      maxLevel: 60,
+      experienceRule: '升到下一级所需经验 = 80 + 20 × 当前等级。',
+      pveSkillPointRule: 'Lv.1 获得 1 点，之后每 4 级增加 1 点。',
+      pvpSkillPointRule: 'Lv.5 获得 1 点，之后每 4 级增加 1 点。',
+      rarityUnlocks: [
+        { level: 1, rarity: 'common', label: '标准' },
+        { level: 10, rarity: 'uncommon', label: '精工' },
+      ],
+    },
+    modes: {
+      pve: {
+        label: 'PVE 项目挑战', opponentLabel: 'NPC 项目组', skillTrack: 'pve', equipmentEnhancementPercent: 100, dailyRewardLimit: 14,
+        winReward: { battleExperience: 30, workspaceCoins: 80, equipmentDrop: true },
+        lossReward: { battleExperience: 15, workspaceCoins: 40, equipmentDrop: false },
+        rules: ['三档项目难度', '完整计算装备强化'],
+      },
+      pvp: {
+        label: 'PVP 好友对战', opponentLabel: '已满足条件的好友', skillTrack: 'pvp', equipmentEnhancementPercent: 60, dailyRewardLimit: 5, friendAgeHours: 24,
+        winReward: { battleExperience: 25, workspaceCoins: 120, equipmentDrop: true },
+        lossReward: { battleExperience: 12, workspaceCoins: 60, equipmentDrop: false },
+        rules: ['双方使用防守阵容', '强化增量只计 60%'],
+      },
+    },
     inventoryLimit: 120,
     rarityRates: [
       { rarity: 'common', label: '标准', rate: 45 },
@@ -62,8 +86,12 @@ const bootstrap: CommunityBattleBootstrap = {
   profile: {
     publicId: 'ZBRS-1', displayName: '正式账号', profession: 'developer', battleLevel: 3,
     totalBattleExperience: 40, experienceInLevel: 10, experienceToNextLevel: 50,
-    wins: 2, losses: 1, power: 180,
+    wins: 2, losses: 1, power: 190, pvePower: 190, pvpPower: 165,
     stats: { hp: 100, attack: 20, defense: 12, speed: 10, luck: 8 },
+    modeSnapshots: {
+      pve: { power: 190, stats: { hp: 100, attack: 20, defense: 12, speed: 10, luck: 8 }, equipmentEnhancementPercent: 100 },
+      pvp: { power: 165, stats: { hp: 96, attack: 17, defense: 11, speed: 10, luck: 8 }, equipmentEnhancementPercent: 60 },
+    },
     energy: { current: 0, max: 120, serviceDate: '2026-08-22', resetsAt: '2026-08-22T10:10:00.000Z', nextRecoveryAt: '2026-08-22T10:10:00.000Z', recoveryMinutes: 10 },
     workspaceCoins: 800, parts: 2, skillLevels: { pve_batch_script: 1 },
     skillPointsEarned: 2, skillPointsAvailable: 1, skillPoints: { pve: { earned: 2, available: 1 }, pvp: { earned: 0, available: 0 } }, nextUnlock: { level: 5, name: '逻辑超频', kind: 'skill' },
@@ -95,8 +123,8 @@ describe('CommunityBattlePage formal archive', () => {
     expect(await screen.findByRole('heading', { name: '办公室乐斗' })).toBeInTheDocument();
     expect(screen.getByText(/选对手、开打、拿奖励/)).toBeInTheDocument();
     expect(screen.queryByText('一眼看懂成长路线')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'PVE 挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PVE 练习 · 无奖励' })).toBeEnabled();
     expect(storageWrite).not.toHaveBeenCalled();
   });
 
@@ -114,7 +142,7 @@ describe('CommunityBattlePage formal archive', () => {
       inventoryVersion: 1,
     });
     render(<CommunityBattlePage />);
-    fireEvent.click(await screen.findByRole('tab', { name: '技能' }));
+    fireEvent.click(await screen.findByRole('tab', { name: '技能图鉴' }));
     expect(screen.getByText('批量脚本')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '1 点 + 300 办公币' }));
     expect(upgrade).toHaveBeenCalledWith('pve_batch_script', 1, expect.any(String));
@@ -132,8 +160,8 @@ describe('CommunityBattlePage formal archive', () => {
 
     expect(await screen.findByText(/当前角色已被封禁/)).toBeInTheDocument();
     expect(screen.getByText(/当前网页版本过旧/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PVE 挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PVE 练习 · 无奖励' })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole('tab', { name: '记录' })).toBeEnabled());
   });
 
@@ -165,5 +193,28 @@ describe('CommunityBattlePage formal archive', () => {
       target: { value: 'developer' },
     });
     await waitFor(() => expect(ranking).toHaveBeenCalledWith('pve', 'developer'));
+  });
+
+  it('separates shared level growth from the PVE and PVP skill codexes', async () => {
+    vi.spyOn(communityBattleApi, 'getBootstrap').mockResolvedValue(bootstrap);
+    render(<CommunityBattlePage />);
+
+    expect(await screen.findByText('PVE 与 PVP 的区别')).toBeInTheDocument();
+    expect(screen.getByText('全强化 · PVE 技能')).toBeInTheDocument();
+    expect(screen.getByText('强化增量 60% · PVP 技能')).toBeInTheDocument();
+    expect(screen.getByText('强化增量计入 100%')).toBeInTheDocument();
+    expect(screen.getByText('强化增量计入 60%')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '成长' }));
+    expect(screen.getByText('等级与技能点规则')).toBeInTheDocument();
+    expect(screen.getByText('等级解锁图鉴')).toBeInTheDocument();
+    expect(screen.getByText('共享等级')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('tab', { name: '技能图鉴' }));
+    expect(screen.getByText('批量脚本')).toBeInTheDocument();
+    expect(screen.queryByText('逻辑超频')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'PVP 技能' }));
+    expect(screen.getByText('逻辑超频')).toBeInTheDocument();
+    expect(screen.queryByText('批量脚本')).not.toBeInTheDocument();
   });
 });

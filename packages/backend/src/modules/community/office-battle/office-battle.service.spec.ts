@@ -161,6 +161,20 @@ describe('OfficeBattleService transactions', () => {
       null,
       'choose-growth-0001',
     ) as any;
+    expect(initial.catalog.leveling).toMatchObject({ maxLevel: 60 });
+    expect(initial.catalog.modes.pve).toMatchObject({
+      skillTrack: 'pve',
+      equipmentEnhancementPercent: 100,
+      dailyRewardLimit: 14,
+    });
+    expect(initial.catalog.modes.pvp).toMatchObject({
+      skillTrack: 'pvp',
+      equipmentEnhancementPercent: 60,
+      dailyRewardLimit: 5,
+      friendAgeHours: 24,
+    });
+    expect(initial.profile.modeSnapshots.pve.power).toBe(initial.profile.pvePower);
+    expect(initial.profile.modeSnapshots.pvp.power).toBe(initial.profile.pvpPower);
     const skill = await service.upgradeSkill(
       user.id,
       'pve_batch_script',
@@ -177,6 +191,7 @@ describe('OfficeBattleService transactions', () => {
     expect(skill.profile.skillLevels.pve_batch_script).toBe(1);
     expect(skill.profile.skillPointsAvailable).toBe(0);
     expect(skill.profile.power).toBeGreaterThan(initial.profile.power);
+    expect(skill.profile.modeSnapshots.pve.power).toBeGreaterThan(skill.profile.modeSnapshots.pvp.power);
 
     const profile = await dataSource.getRepository(OfficeBattleProfile).findOneByOrFail({ userId: user.id });
     profile.parts = 20;
@@ -193,6 +208,11 @@ describe('OfficeBattleService transactions', () => {
     expect(enhanced.profile.parts).toBe(18);
     expect(enhanced.changedEquipment.enhancementLevel).toBe(1);
     expect(enhanced.changedEquipment.score).toBeGreaterThan(item.score);
+    expect(enhanced.profile.modeSnapshots.pve.equipmentEnhancementPercent).toBe(100);
+    expect(enhanced.profile.modeSnapshots.pvp.equipmentEnhancementPercent).toBe(60);
+    expect(enhanced.profile.modeSnapshots.pve.power).toBeGreaterThan(
+      enhanced.profile.modeSnapshots.pvp.power,
+    );
   });
 
   it('enforces friend challenge privacy and block filtering', async () => {

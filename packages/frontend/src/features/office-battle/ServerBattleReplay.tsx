@@ -51,7 +51,7 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
     <section className={styles.replay} aria-labelledby="server-replay-title">
       <div className={styles.sectionHeading}>
         <div>
-          <span>战斗回放</span>
+          <span>{settlement.opponentKind === 'npc' ? 'PVE 项目挑战' : 'PVP 好友对战'} · 战斗回放</span>
           <h2 id="server-replay-title">
             {settlement.winner === 'player' ? '本次胜出' : '本次惜败'}
           </h2>

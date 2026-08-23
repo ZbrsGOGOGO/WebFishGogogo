@@ -10,6 +10,7 @@ import {
   type CommunityBattleFriendCandidate,
   type CommunityBattleInventoryPage,
   type CommunityBattleLeaderboard,
+  type CommunityBattleMode,
   type CommunityBattleOffer,
   type CommunityBattleProfession,
   type CommunityBattleRequest,
@@ -24,14 +25,20 @@ import {
 import { submitBattleWithRecovery } from './battle-request-recovery';
 import { ServerBattleReplay } from './ServerBattleReplay';
 import { CommunityGuildPanel } from './CommunityGuildPanel';
+import {
+  CommunityBattleGrowthPanel,
+  CommunityBattleModeGuide,
+  CommunityBattleSkillCodex,
+} from './CommunityBattleProgression';
 import styles from './CommunityBattlePage.module.css';
 
-type BattleTab = 'overview' | 'skills' | 'equipment' | 'ranking' | 'guild' | 'history' | 'defense';
+type BattleTab = 'overview' | 'growth' | 'skills' | 'equipment' | 'ranking' | 'guild' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'overview', label: '战斗' },
+  { id: 'growth', label: '成长' },
   { id: 'equipment', label: '装备' },
-  { id: 'skills', label: '技能' },
+  { id: 'skills', label: '技能图鉴' },
   { id: 'ranking', label: '排行' },
   { id: 'guild', label: '帮派' },
   { id: 'history', label: '记录' },
@@ -79,6 +86,7 @@ export function CommunityBattlePage(): JSX.Element {
   const [history, setHistory] = useState<Awaited<ReturnType<typeof communityBattleApi.getHistory>> | null>(null);
   const [ranking, setRanking] = useState<CommunityBattleLeaderboard | null>(null);
   const [rankingMode, setRankingMode] = useState<'pve' | 'pvp'>('pve');
+  const [skillMode, setSkillMode] = useState<CommunityBattleMode>('pve');
   const [rankingProfession, setRankingProfession] = useState<CommunityBattleProfession | 'all'>('all');
   const [settlement, setSettlement] = useState<CommunityBattleSettlement | null>(null);
   const [tab, setTab] = useState<BattleTab>('overview');
@@ -484,7 +492,8 @@ export function CommunityBattlePage(): JSX.Element {
       <section className={styles.summaryGrid} aria-label="角色摘要">
         <div><span>等级</span><strong>Lv.{profile.battleLevel}</strong><small>{profile.wins} 胜 {profile.losses} 负</small></div>
         <div><span>体力</span><strong>{profile.energy.current}/{profile.energy.max}</strong><small>{profile.energy.nextRecoveryAt ? `${formatDateTime(profile.energy.nextRecoveryAt)} +1` : '已满'}</small></div>
-        <div><span>PVE / PVP 战力</span><strong>{profile.pvePower ?? profile.power} / {profile.pvpPower ?? profile.power}</strong><small>零件 {profile.parts}</small></div>
+        <div data-mode="pve"><span>PVE 项目战力</span><strong>{profile.modeSnapshots?.pve.power ?? profile.pvePower ?? profile.power}</strong><small>全强化 · PVE 技能</small></div>
+        <div data-mode="pvp"><span>PVP 好友战力</span><strong>{profile.modeSnapshots?.pvp.power ?? profile.pvpPower ?? profile.power}</strong><small>强化增量 60% · PVP 技能</small></div>
         <div><span>办公币</span><strong>{profile.workspaceCoins}</strong><small>技能点 PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</small></div>
       </section>
       <div className={styles.levelProgress}>
@@ -511,8 +520,9 @@ export function CommunityBattlePage(): JSX.Element {
 
       {tab === 'overview' ? (
         <div role="tabpanel" className={styles.stack}>
+          <CommunityBattleModeGuide bootstrap={bootstrap} profile={profile} />
           <Card
-            title="选择对手"
+            title="PVE · 项目挑战"
             headerActions={<Button variant="secondary" onClick={() => void loadBootstrap()} loading={loading}>刷新候选</Button>}
           >
             {bootstrap.dailyActions ? (
@@ -546,7 +556,7 @@ export function CommunityBattlePage(): JSX.Element {
                         disabled={!canMutate || profile.energy.current < bootstrap.catalog.energy.costPerBattle}
                         onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'reward')}
                       >
-                        挑战 · {bootstrap.catalog.energy.costPerBattle} 体力
+                        PVE 挑战 · {bootstrap.catalog.energy.costPerBattle} 体力
                       </Button>
                       <Button
                         variant="secondary"
@@ -554,7 +564,7 @@ export function CommunityBattlePage(): JSX.Element {
                         disabled={!canMutate}
                         onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'practice')}
                       >
-                        练习 · 无奖励
+                        PVE 练习 · 无奖励
                       </Button>
                     </div>
                   </article>
@@ -563,7 +573,7 @@ export function CommunityBattlePage(): JSX.Element {
             )}
           </Card>
 
-          <Card title="好友对战">
+          <Card title="PVP · 好友对战">
             {!bootstrap.catalog.capabilities.friendChallengesEnabled ? (
               <EmptyState title="好友挑战暂不可用" message="稍后再来看看。" />
             ) : bootstrap.friendCandidates.length === 0 ? (
@@ -585,7 +595,7 @@ export function CommunityBattlePage(): JSX.Element {
                     >
                       {confirmKey === `practice-confirm:${friend.publicId}`
                         ? '确认练习赛'
-                        : friend.eligibleForReward ? '发起好友挑战' : '练习挑战'}
+                        : friend.eligibleForReward ? 'PVP 好友挑战' : 'PVP 练习挑战'}
                     </Button>
                   </li>
                 ))}
@@ -612,39 +622,24 @@ export function CommunityBattlePage(): JSX.Element {
         </div>
       ) : null}
 
+      {tab === 'growth' ? (
+        <CommunityBattleGrowthPanel
+          bootstrap={bootstrap}
+          profile={profile}
+          levelProgress={levelProgress}
+        />
+      ) : null}
+
       {tab === 'skills' ? (
-        <div role="tabpanel" className={styles.stack}>
-          <Card
-            title={`${professionName(profile.profession)}职业技能`}
-            headerActions={<Tag color={profile.skillPointsAvailable > 0 ? 'success' : 'neutral'}>PVE {profile.skillPoints.pve.available} · PVP {profile.skillPoints.pvp.available}</Tag>}
-          >
-            <p className={styles.muted}>{bootstrap.catalog.skills.pointRule} 升级技能会立即影响对应模式的战力。</p>
-            <div className={styles.skillGrid}>
-              {bootstrap.catalog.skills.definitions
-                .filter((skill) => skill.profession === profile.profession)
-                .map((skill) => {
-                  const level = profile.skillLevels[skill.id] ?? 0;
-                  const locked = profile.battleLevel < skill.unlockLevel;
-                  const maxed = level >= bootstrap.catalog.skills.maxLevel;
-                  const points = profile.skillPoints[skill.mode];
-                  const coinCost = bootstrap.catalog.skills.coinCosts[level] ?? 0;
-                  return (
-                    <article key={skill.id} data-locked={locked}>
-                      <div><span>{skill.mode.toUpperCase()} · {locked ? `Lv.${skill.unlockLevel} 解锁` : '已解锁'}</span><strong>{skill.name}</strong><small>{skill.description}</small></div>
-                      <div className={styles.skillLevel}><b>Lv.{level}</b><span>/ {bootstrap.catalog.skills.maxLevel}</span></div>
-                      <Button
-                        loading={busyKey === `skill:${skill.id}`}
-                        disabled={!canMutate || locked || maxed || points.available < 1 || profile.workspaceCoins < coinCost}
-                        onClick={() => void upgradeSkill(skill.id, skill.name)}
-                      >
-                        {locked ? `Lv.${skill.unlockLevel} 解锁` : maxed ? '已满级' : `1 点 + ${coinCost} 办公币`}
-                      </Button>
-                    </article>
-                  );
-                })}
-            </div>
-          </Card>
-        </div>
+        <CommunityBattleSkillCodex
+          bootstrap={bootstrap}
+          profile={profile}
+          mode={skillMode}
+          onModeChange={setSkillMode}
+          busyKey={busyKey}
+          canMutate={canMutate}
+          onUpgrade={(skill) => void upgradeSkill(skill.id, skill.name)}
+        />
       ) : null}
 
       {tab === 'ranking' ? (
@@ -762,8 +757,8 @@ export function CommunityBattlePage(): JSX.Element {
               {history.items.map((item) => (
                 <li key={item.battleId}>
                   <div>
-                    <strong>{item.winner === 'player' ? '胜出' : '惜败'} · {item.opponent.displayName}</strong>
-                    <small>{formatDateTime(item.completedAt)} · {item.mode === 'practice' ? '练习赛' : '正式行动'} · {item.rewardSummary}</small>
+                    <strong>{item.opponentKind === 'npc' ? 'PVE' : 'PVP'} · {item.winner === 'player' ? '胜出' : '惜败'} · {item.opponent.displayName}</strong>
+                    <small>{formatDateTime(item.completedAt)} · {item.mode === 'practice' ? '练习赛' : '奖励战'} · {item.rewardSummary}</small>
                   </div>
                   <Button variant="secondary" loading={busyKey === `history:${item.battleId}`} onClick={() => void openHistoryBattle(item.battleId)}>查看完整回放</Button>
                 </li>

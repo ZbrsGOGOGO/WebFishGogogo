@@ -25,6 +25,8 @@ export type CommunityBattleRarity =
   | 'epic'
   | 'legendary';
 
+export type CommunityBattleMode = 'pve' | 'pvp';
+
 export interface CommunityBattleStats {
   hp: number;
   attack: number;
@@ -42,6 +44,18 @@ export interface CommunityBattleCatalog {
     costPerBattle: number;
     recoveryMinutes: number;
   };
+  leveling?: {
+    maxLevel: number;
+    experienceRule: string;
+    pveSkillPointRule: string;
+    pvpSkillPointRule: string;
+    rarityUnlocks: Array<{
+      level: number;
+      rarity: CommunityBattleRarity;
+      label: string;
+    }>;
+  };
+  modes?: Record<CommunityBattleMode, CommunityBattleModeDefinition>;
   inventoryLimit: number;
   rarityRates: Array<{
     rarity: CommunityBattleRarity;
@@ -69,11 +83,31 @@ export interface CommunityBattleCatalog {
 export interface CommunityBattleSkillDefinition {
   id: string;
   profession: CommunityBattleProfession;
-  mode: 'pve' | 'pvp';
+  mode: CommunityBattleMode;
   name: string;
   unlockLevel: number;
   description: string;
   bonusPerLevel: Partial<CommunityBattleStats>;
+}
+
+export interface CommunityBattleModeDefinition {
+  label: string;
+  opponentLabel: string;
+  skillTrack: CommunityBattleMode;
+  equipmentEnhancementPercent: number;
+  dailyRewardLimit: number;
+  friendAgeHours?: number;
+  winReward: {
+    battleExperience: number;
+    workspaceCoins: number;
+    equipmentDrop: boolean;
+  };
+  lossReward: {
+    battleExperience: number;
+    workspaceCoins: number;
+    equipmentDrop: boolean;
+  };
+  rules: string[];
 }
 
 export interface CommunityBattleEnergy {
@@ -99,6 +133,11 @@ export interface CommunityBattleProfile {
   pvePower?: number;
   pvpPower?: number;
   stats: CommunityBattleStats;
+  modeSnapshots?: Record<CommunityBattleMode, {
+    power: number;
+    stats: CommunityBattleStats;
+    equipmentEnhancementPercent: number;
+  }>;
   energy: CommunityBattleEnergy;
   workspaceCoins: number;
   parts: number;
