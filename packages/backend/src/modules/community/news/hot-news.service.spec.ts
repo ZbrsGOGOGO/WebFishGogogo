@@ -21,6 +21,7 @@ describe('daily hot-news rules', () => {
     const xml = `<?xml version="1.0"?><rss><channel>
       <item><title><![CDATA[ 官方热点 &amp; 更新 ]]></title><link>http://www.xinhuanet.com/a/1?utm_source=test</link><pubDate>Sun, 23 Aug 2026 00:00:00 GMT</pubDate><description>正文不应进入结果</description></item>
       <item><title>伪造来源</title><link>https://evil.example/a/2</link></item>
+      <item><title>无日期旧闻</title><link>https://www.xinhuanet.com/a/3</link></item>
     </channel></rss>`;
     expect(parseHotNewsRss(xml, ['xinhuanet.com'])).toEqual([{
       headline: '官方热点 & 更新',

@@ -29,7 +29,7 @@ interface HotNewsFeed {
 interface ParsedHeadline {
   headline: string;
   originalUrl: string;
-  originalPublishedAt: Date | null;
+  originalPublishedAt: Date;
 }
 
 const DEFAULT_FEEDS: readonly HotNewsFeed[] = [
@@ -86,11 +86,11 @@ export function parseHotNewsRss(
     if (!originalUrl) return [];
     const published = cleanXmlText(xmlTag(block, 'pubDate'));
     const parsedDate = published ? new Date(published) : null;
+    if (!parsedDate || Number.isNaN(parsedDate.getTime())) return [];
     return [{
       headline: title,
       originalUrl,
-      originalPublishedAt:
-        parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null,
+      originalPublishedAt: parsedDate,
     }];
   });
 }
@@ -177,15 +177,11 @@ export class HotNewsService
       const freshnessCutoff = now.getTime() - 72 * 60 * 60 * 1_000;
       const deduplicated = [...new Map(
         collected
-          .filter((item) =>
-            !item.originalPublishedAt ||
-            item.originalPublishedAt.getTime() >= freshnessCutoff,
-          )
+          .filter((item) => item.originalPublishedAt.getTime() >= freshnessCutoff)
           .map((item) => [normalizeHeadline(item.headline), item]),
       ).values()]
         .sort((left, right) =>
-          (right.originalPublishedAt?.getTime() ?? 0) -
-          (left.originalPublishedAt?.getTime() ?? 0),
+          right.originalPublishedAt.getTime() - left.originalPublishedAt.getTime(),
         )
         .slice(0, MAX_DAILY_HEADLINES);
       if (deduplicated.length === 0) throw new Error('all official headline feeds returned no usable items');
