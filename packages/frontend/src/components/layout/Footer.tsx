@@ -64,7 +64,7 @@ export function Footer({
             {publicMode
               ? '办公室轻社区'
               : communityMode
-                ? '办公室轻社区 · 社区版'
+                ? '办公室轻社区'
               : reviewMode
                 ? '个人效率工作台 · 简单、清晰、可控'
                 : '本机版 · 数据由您的本地服务保存'}

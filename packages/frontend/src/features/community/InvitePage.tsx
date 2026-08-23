@@ -37,7 +37,7 @@ export function CommunityInvitePage(): JSX.Element {
           {loading ? <p role="status">正在读取邀请币…</p> : (
             <div className={styles.stack}>
               <strong className={styles.currencyValue}>{overview?.invitationCoins ?? 0}</strong>
-              <p>邀请币与办公币分开记录，可用于后续开放的主题与装扮兑换。</p>
+              <p>邀请币与办公币分开记录，可兑换项目会在本页统一展示。</p>
               {error ? <Button variant="secondary" onClick={() => void load()}>重新加载</Button> : null}
             </div>
           )}

@@ -44,7 +44,7 @@ export function CommunityFeedPage(): JSX.Element {
             ) : (
               <div className={styles.heroAside}>
                 <strong>常来看看，就是最好的支持</strong>
-                <p>你可以继续免费使用现有功能，支持入口准备好后会自然出现在这里。</p>
+                <p>你可以继续免费使用全部现有功能。</p>
               </div>
             )}
           </div>

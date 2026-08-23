@@ -84,7 +84,7 @@ function NotFoundPage(): JSX.Element {
     <main className="not-found" aria-labelledby="community-not-found">
       <span className="not-found__code">404</span>
       <h1 id="community-not-found">没有找到这个页面</h1>
-      <p>地址可能已经变化，或该功能尚未进入当前社区版本。</p>
+      <p>地址可能已经变化，或该页面暂时无法访问。</p>
       <a href="/">返回首页</a>
     </main>
   );

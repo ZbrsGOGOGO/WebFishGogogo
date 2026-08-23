@@ -50,7 +50,8 @@ describe('community mode routes', () => {
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: '注册工位' })).toHaveAttribute('href', '/register');
     const footer = screen.getByRole('contentinfo', { name: '站点信息' });
-    expect(footer).toHaveTextContent('办公室轻社区 · 社区版');
+    expect(footer).toHaveTextContent('办公室轻社区');
+    expect(footer).not.toHaveTextContent('社区版');
     expect(within(footer).getByLabelText('备案信息')).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: '隐私政策' })).toHaveAttribute('href', '/privacy-policy');
     expect(within(footer).getByRole('link', { name: '服务条款' })).toHaveAttribute('href', '/terms-of-service');

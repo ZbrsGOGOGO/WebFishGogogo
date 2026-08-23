@@ -65,7 +65,8 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
     const footer = screen.getByRole('contentinfo', { name: '站点信息' });
-    expect(footer).toHaveTextContent('办公室轻社区 · 社区版');
+    expect(footer).toHaveTextContent('办公室轻社区');
+    expect(footer).not.toHaveTextContent('社区版');
     expect(within(footer).getByRole('link', { name: '社区规范' })).toHaveAttribute(
       'href',
       '/community-guidelines',

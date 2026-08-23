@@ -20,7 +20,7 @@ export function CommunityUnavailablePage({
       <EmptyState
         icon="⏳"
         title={title ?? `${item?.label ?? '该系统'}尚未开放`}
-        message={message ?? '这个入口已有正式路由，但会在相应的安全、治理和容量验收通过后才启用。'}
+        message={message ?? '这个功能暂时无法使用，请先体验其他已开放内容。'}
         actions={<Link className={styles.primaryLink} to="/">返回首页</Link>}
       />
     </main>
