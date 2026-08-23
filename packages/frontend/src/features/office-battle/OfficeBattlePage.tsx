@@ -6,6 +6,7 @@ import {
   OFFICE_SKILLS,
   PROFESSION_DEFINITIONS,
   RARITY_DEFINITIONS,
+  createEquipment,
   createOpponent,
   createSeededRandom,
   createStarterEquipment,
@@ -136,7 +137,17 @@ function normalizeEquipment(value: unknown, profession: BattleProfession, requir
     const slots = value.map((item) => item.slot);
     if (new Set(slots).size !== EQUIPMENT_SLOTS.length || EQUIPMENT_SLOTS.some((slot) => !slots.includes(slot.id))) return null;
   }
-  return value;
+  return value.map((item) => {
+    if (item.slot !== 'weapon' || item.weaponTrait) return item;
+    const defaults = createEquipment(profession, 'weapon', item.level, item.rarity);
+    return {
+      ...item,
+      weaponCategory: defaults.weaponCategory,
+      weaponTrait: defaults.weaponTrait,
+      weaponTraitLabel: defaults.weaponTraitLabel,
+      weaponTraitChance: defaults.weaponTraitChance,
+    };
+  });
 }
 
 function refillProfile(profile: LocalBattleProfile, now = Date.now()): LocalBattleProfile {

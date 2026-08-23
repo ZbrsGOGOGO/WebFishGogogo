@@ -124,6 +124,7 @@ describe('OfficeBattlePage', () => {
 
     expect(screen.getByText('120/120')).toBeInTheDocument();
     expect(screen.getByText('100')).toBeInTheDocument();
+    expect(screen.getByText('轻型 · 连续提交')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /能力成长/ }));
     expect(screen.getByRole('heading', { name: '能力成长' })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: '升级' })[0]);
