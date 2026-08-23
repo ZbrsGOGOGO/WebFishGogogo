@@ -131,18 +131,24 @@ export class HotNewsService
         })
       : [];
     const now = new Date();
+    const freshnessCutoff = now.getTime() - 72 * 60 * 60 * 1_000;
     return {
       serviceDate: run?.serviceDate ?? null,
       updatedAt: run?.completedAt?.toISOString() ?? null,
       nextUpdateAt: nextDailyHotNewsRefresh(now).toISOString(),
       schedule: '每天 08:00（北京时间）',
-      items: items.map((item) => ({
-        id: item.id,
-        headline: item.headline,
-        source: item.sourceName,
-        originalUrl: item.originalUrl,
-        originalPublishedAt: item.originalPublishedAt?.toISOString() ?? null,
-      })),
+      items: items
+        .filter((item): item is HotNewsHeadline & { originalPublishedAt: Date } =>
+          item.originalPublishedAt !== null &&
+          item.originalPublishedAt.getTime() >= freshnessCutoff,
+        )
+        .map((item) => ({
+          id: item.id,
+          headline: item.headline,
+          source: item.sourceName,
+          originalUrl: item.originalUrl,
+          originalPublishedAt: item.originalPublishedAt.toISOString(),
+        })),
     };
   }
 
