@@ -45,13 +45,19 @@ import { resolveOfficeBattle } from './office-battle-engine';
 import { officeBattleSocialVerificationRequired } from './office-battle-gates';
 import {
   BASE_STATS,
+  battleSkillPointsAvailable,
+  battleSkillPointsEarned,
+  battleSkillsForProfession,
   battleLevelSnapshot,
   communityServiceDate,
   createEquipmentDefinition,
   deriveBattleStats,
+  equipmentScore,
   fighterPower,
   maxRarityForLevel,
+  nextBattleUnlock,
   nextCommunityReset,
+  normalizeBattleSkillLevels,
   OFFICE_BATTLE_BALANCE_VERSION,
   OFFICE_BATTLE_DAILY_ENERGY,
   OFFICE_BATTLE_DAILY_FRIEND_LIMIT,
@@ -62,6 +68,8 @@ import {
   OFFICE_BATTLE_MIN_CLIENT_VERSION,
   OFFICE_BATTLE_PROFESSIONS,
   OFFICE_BATTLE_RARITIES,
+  OFFICE_BATTLE_SKILL_MAX_LEVEL,
+  OFFICE_BATTLE_SKILLS,
   OFFICE_BATTLE_SLOTS,
   PROFESSION_LABELS,
   RARITY_RULES,
@@ -157,7 +165,12 @@ export class OfficeBattleService {
         label: RARITY_RULES[rarity].label,
         rate: RARITY_RULES[rarity].rate,
       })),
-      capabilities: { enhancementEnabled: false, friendChallengesEnabled: true },
+      skills: {
+        maxLevel: OFFICE_BATTLE_SKILL_MAX_LEVEL,
+        pointRule: 'Lv.1 获得 1 点，此后每 2 级再获得 1 点，每个职业独立加点。',
+        definitions: OFFICE_BATTLE_SKILLS,
+      },
+      capabilities: { enhancementEnabled: true, friendChallengesEnabled: true },
     };
   }
 
@@ -201,6 +214,7 @@ export class OfficeBattleService {
           energy: OFFICE_BATTLE_DAILY_ENERGY,
           serviceDate: communityServiceDate(now),
           parts: 0,
+          skillLevels: {},
           rewardedBattlesUsed: 0,
           rewardedFriendBattlesUsed: 0,
           upgradeProtectionUsed: false,
@@ -460,12 +474,96 @@ export class OfficeBattleService {
   }
 
   async enhanceEquipment(
-    _userId: string,
-    _equipmentId: string,
-    _expectedInventoryVersion: number,
-    _key: string,
-  ): Promise<never> {
-    throw new ConflictException({ code: 'ENHANCEMENT_DISABLED' });
+    userId: string,
+    equipmentId: string,
+    expectedInventoryVersion: number,
+    key: string,
+  ) {
+    return this.commandMutation(
+      userId,
+      'battle.equipment.enhance',
+      key,
+      { equipmentId, expectedInventoryVersion },
+      async (manager, _user, profile) => {
+        if (profile.inventoryVersion !== expectedInventoryVersion) {
+          throw this.versionConflict(profile.inventoryVersion);
+        }
+        const context = await this.equipmentContext(manager, profile);
+        const item = context.items.find((candidate) => candidate.id === equipmentId);
+        if (!item) throw new NotFoundException({ code: 'EQUIPMENT_NOT_FOUND' });
+        if (item.enhancementLevel >= 6) {
+          throw new ConflictException({ code: 'EQUIPMENT_MAX_ENHANCEMENT' });
+        }
+        const partsSpent = (item.enhancementLevel + 1) * 2;
+        if (profile.parts < partsSpent) {
+          throw new ConflictException({ code: 'PARTS_INSUFFICIENT', required: partsSpent });
+        }
+        const previousLevel = item.enhancementLevel;
+        const stats = { ...item.stats };
+        for (const [stat, value] of Object.entries(stats) as Array<[keyof OfficeBattleStats, number]>) {
+          stats[stat] = value + Math.max(1, Math.round(value * 0.08));
+        }
+        item.stats = stats;
+        item.score = equipmentScore(stats);
+        item.enhancementLevel += 1;
+        await manager.getRepository(OfficeBattleEquipment).save(item);
+        profile.parts -= partsSpent;
+        profile.inventoryVersion += 1;
+        profile.profileVersion += 1;
+        await manager.getRepository(OfficeBattleProfile).save(profile);
+        await this.assetLedger(manager, profile, null, 'parts', -partsSpent, 'equipment_enhance', `${key}:parts`);
+        await this.inventoryLedger(
+          manager,
+          userId,
+          item.id,
+          null,
+          'enhance',
+          { previousLevel, enhancementLevel: item.enhancementLevel, partsSpent },
+          `${key}:equipment`,
+        );
+        return { ...(await this.mutationView(manager, profile, item.id)), partsSpent };
+      },
+    );
+  }
+
+  async upgradeSkill(
+    userId: string,
+    skillId: string,
+    expectedProfileVersion: number,
+    key: string,
+  ) {
+    return this.commandMutation(
+      userId,
+      'battle.skill.upgrade',
+      key,
+      { skillId, expectedProfileVersion },
+      async (manager, _user, profile) => {
+        if (profile.profileVersion !== expectedProfileVersion) {
+          throw this.versionConflict(profile.profileVersion);
+        }
+        const definition = battleSkillsForProfession(profile.profession)
+          .find((skill) => skill.id === skillId);
+        if (!definition) throw new NotFoundException({ code: 'BATTLE_SKILL_NOT_FOUND' });
+        const level = battleLevelSnapshot(profile.totalBattleExperience).level;
+        if (definition.unlockLevel > level) {
+          throw new ConflictException({ code: 'BATTLE_SKILL_LOCKED', unlockLevel: definition.unlockLevel });
+        }
+        const current = normalizeBattleSkillLevels(profile.profession, profile.skillLevels);
+        if ((current[skillId] ?? 0) >= OFFICE_BATTLE_SKILL_MAX_LEVEL) {
+          throw new ConflictException({ code: 'BATTLE_SKILL_MAX_LEVEL' });
+        }
+        if (battleSkillPointsAvailable(level, profile.profession, current) < 1) {
+          throw new ConflictException({ code: 'BATTLE_SKILL_POINTS_INSUFFICIENT' });
+        }
+        profile.skillLevels = {
+          ...(profile.skillLevels ?? {}),
+          [skillId]: (current[skillId] ?? 0) + 1,
+        };
+        profile.profileVersion += 1;
+        await manager.getRepository(OfficeBattleProfile).save(profile);
+        return this.mutationView(manager, profile);
+      },
+    );
   }
 
   async pendingRewards(userId: string) {
@@ -609,7 +707,14 @@ export class OfficeBattleService {
       }
 
       const playerLevel = battleLevelSnapshot(profile.totalBattleExperience).level;
-      const playerSnapshot = this.fighterSnapshot(user, profile.profession, playerLevel, context.loadout, true);
+      const playerSnapshot = this.fighterSnapshot(
+        user,
+        profile.profession,
+        playerLevel,
+        context.loadout,
+        true,
+        profile.skillLevels,
+      );
       let opponentSnapshot: FighterSnapshot;
       let opponentEquipmentVisible = true;
       let playerEquipmentVisibleToDefender = true;
@@ -671,6 +776,7 @@ export class OfficeBattleService {
           defenderLevel,
           this.slotOrder(defenderEquipment),
           true,
+          defenderProfile.skillLevels,
         );
         opponentEquipmentVisible = defense.equipmentVisibility !== 'private';
         playerEquipmentVisibleToDefender =
@@ -1104,7 +1210,12 @@ export class OfficeBattleService {
       }),
     );
     const level = battleLevelSnapshot(profile.totalBattleExperience).level;
-    const playerStats = deriveBattleStats({ profession: profile.profession, level, equipment: context.loadout });
+    const playerStats = deriveBattleStats({
+      profession: profile.profession,
+      level,
+      equipment: context.loadout,
+      skillLevels: profile.skillLevels,
+    });
     const playerPower = fighterPower(playerStats);
     const tiers = [
       { tier: 'simple' as const, multiplier: 80 as const, midpoint: 94 },
@@ -1204,7 +1315,12 @@ export class OfficeBattleService {
     const opponent = offer.opponentSnapshot as unknown as FighterSnapshot;
     const level = battleLevelSnapshot(profile.totalBattleExperience).level;
     const playerPower = fighterPower(
-      deriveBattleStats({ profession: profile.profession, level, equipment: playerEquipment }),
+      deriveBattleStats({
+        profession: profile.profession,
+        level,
+        equipment: playerEquipment,
+        skillLevels: profile.skillLevels,
+      }),
     );
     const difference = playerPower === 0 ? 0 : ((opponent.power - playerPower) * 100) / playerPower;
     return {
@@ -1440,7 +1556,13 @@ export class OfficeBattleService {
     equipment: OfficeBattleEquipment[],
   ) {
     const level = battleLevelSnapshot(profile.totalBattleExperience);
-    const stats = deriveBattleStats({ profession: profile.profession, level: level.level, equipment });
+    const skillLevels = normalizeBattleSkillLevels(profile.profession, profile.skillLevels);
+    const stats = deriveBattleStats({
+      profession: profile.profession,
+      level: level.level,
+      equipment,
+      skillLevels,
+    });
     const balance = await manager.getRepository(WalletBalance).findOne({
       where: { userId: user.id, currency: 'office_coin' },
     });
@@ -1459,6 +1581,10 @@ export class OfficeBattleService {
       energy: this.energyView(profile, this.clock.now()),
       workspaceCoins: Number(balance?.balance ?? 0),
       parts: profile.parts,
+      skillLevels,
+      skillPointsEarned: battleSkillPointsEarned(level.level),
+      skillPointsAvailable: battleSkillPointsAvailable(level.level, profile.profession, skillLevels),
+      nextUnlock: nextBattleUnlock(level.level, profile.profession),
       profileVersion: profile.profileVersion,
       loadoutVersion: profile.loadoutVersion,
       inventoryVersion: profile.inventoryVersion,
@@ -1483,8 +1609,9 @@ export class OfficeBattleService {
     level: number,
     equipment: OfficeBattleEquipment[],
     includeEquipment: boolean,
+    skillLevels?: Readonly<Record<string, number>>,
   ): FighterSnapshot {
-    const stats = deriveBattleStats({ profession, level, equipment });
+    const stats = deriveBattleStats({ profession, level, equipment, skillLevels });
     return {
       publicId: user.publicId,
       displayName: this.displayName(user),

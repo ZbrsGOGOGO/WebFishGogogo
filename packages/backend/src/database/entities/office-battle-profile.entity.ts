@@ -12,6 +12,7 @@ import {
 import { User } from './user.entity';
 
 export type OfficeBattleProfession = 'developer' | 'product' | 'qa' | 'sales' | 'hr';
+export type OfficeBattleSkillLevels = Record<string, number>;
 
 @Entity({ name: 'office_battle_profiles' })
 @Check('chk_office_battle_profiles_profession', `"profession" IN ('developer', 'product', 'qa', 'sales', 'hr')`)
@@ -47,6 +48,9 @@ export class OfficeBattleProfile {
 
   @Column({ type: 'int', default: 0 })
   parts!: number;
+
+  @Column({ name: 'skill_levels', type: 'jsonb', default: () => `'{}'` })
+  skillLevels!: OfficeBattleSkillLevels;
 
   @Column({ name: 'rewarded_battles_used', type: 'smallint', default: 0 })
   rewardedBattlesUsed!: number;

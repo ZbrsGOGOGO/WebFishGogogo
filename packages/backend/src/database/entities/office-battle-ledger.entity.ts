@@ -58,7 +58,7 @@ export class OfficeBattleInventoryLedger {
   battleId!: string | null;
 
   @Column({ type: 'varchar', length: 32 })
-  action!: 'create' | 'lock' | 'equip' | 'defense_equip' | 'salvage' | 'pending' | 'claim';
+  action!: 'create' | 'lock' | 'equip' | 'defense_equip' | 'salvage' | 'pending' | 'claim' | 'enhance';
 
   @Column({ type: 'jsonb' })
   payload!: Record<string, unknown>;

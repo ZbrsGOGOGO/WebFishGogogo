@@ -24,10 +24,11 @@ import { submitBattleWithRecovery } from './battle-request-recovery';
 import { ServerBattleReplay } from './ServerBattleReplay';
 import styles from './CommunityBattlePage.module.css';
 
-type BattleTab = 'overview' | 'equipment' | 'history' | 'defense';
+type BattleTab = 'overview' | 'skills' | 'equipment' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'overview', label: '今日行动' },
+  { id: 'skills', label: '职业技能' },
   { id: 'equipment', label: '六件装备' },
   { id: 'history', label: '战斗记录' },
   { id: 'defense', label: '防守与规则' },
@@ -287,7 +288,26 @@ export function CommunityBattlePage(): JSX.Element {
         createCommunityIdempotencyKey('battle-enhance'),
       );
       await refreshAssets();
-      setNotice(`服务端已确认熟练强化，消耗 ${result.partsSpent} 个零件；前端未计算成功率或结果`);
+      setNotice(`强化成功：${result.changedEquipment?.name ?? item.name} +${result.changedEquipment?.enhancementLevel ?? item.enhancementLevel + 1}，消耗 ${result.partsSpent} 个零件`);
+    } catch (requestError) {
+      setError(communityBattleErrorMessage(requestError));
+    } finally {
+      setBusyKey(null);
+    }
+  }
+
+  async function upgradeSkill(skillId: string, skillName: string): Promise<void> {
+    if (!bootstrap?.profile || !canMutate) return;
+    setBusyKey(`skill:${skillId}`);
+    setError(null);
+    try {
+      const result = await communityBattleApi.upgradeSkill(
+        skillId,
+        bootstrap.profile.profileVersion,
+        createCommunityIdempotencyKey('battle-skill'),
+      );
+      setBootstrap({ ...bootstrap, profile: result.profile });
+      setNotice(`${skillName}已升到 Lv.${result.profile.skillLevels[skillId] ?? 0}，战力已由服务端重新计算`);
     } catch (requestError) {
       setError(communityBattleErrorMessage(requestError));
     } finally {
@@ -455,7 +475,7 @@ export function CommunityBattlePage(): JSX.Element {
         <div><span>乐斗等级</span><strong>Lv.{profile.battleLevel}</strong><small>总经验 {profile.totalBattleExperience}</small></div>
         <div><span>今日体力</span><strong>{profile.energy.current} / {profile.energy.max}</strong><small>{formatDateTime(profile.energy.resetsAt)} 重置</small></div>
         <div><span>正式战绩</span><strong>{profile.wins} 胜</strong><small>{profile.losses} 负 · 战力 {profile.power}</small></div>
-        <div><span>工位资产</span><strong>{profile.workspaceCoins}</strong><small>零件 {profile.parts}</small></div>
+        <div><span>成长资源</span><strong>{profile.skillPointsAvailable} 技能点</strong><small>零件 {profile.parts} · 工位币 {profile.workspaceCoins}</small></div>
       </section>
       <div className={styles.levelProgress}>
         <div><span>当前等级进度</span><strong>{levelProgress}%</strong></div>
@@ -481,6 +501,14 @@ export function CommunityBattlePage(): JSX.Element {
 
       {tab === 'overview' ? (
         <div role="tabpanel" className={styles.stack}>
+          <Card title="一眼看懂成长路线" headerActions={profile.nextUnlock ? <Tag color="neutral">Lv.{profile.nextUnlock.level} 解锁 {profile.nextUnlock.name}</Tag> : <Tag color="success">全部解锁</Tag>}>
+            <div className={styles.growthRoute}>
+              <div><b>1</b><strong>行动升级</strong><small>正式行动获得乐斗经验，失败也有经验。</small></div>
+              <div><b>2</b><strong>替换六件装备</strong><small>胜利掉落职业装备，颜色越稀有属性越高。</small></div>
+              <div><b>3</b><strong>分解与强化</strong><small>分解闲置装备拿零件，强化当前主力装备。</small></div>
+              <div><b>4</b><strong>升级职业技能</strong><small>技能点随等级获得，直接提升服务端战斗属性。</small></div>
+            </div>
+          </Card>
           <Card
             title="今日行动"
             headerActions={<Button variant="secondary" onClick={() => void loadBootstrap()} loading={loading}>刷新候选</Button>}
@@ -582,6 +610,39 @@ export function CommunityBattlePage(): JSX.Element {
         </div>
       ) : null}
 
+      {tab === 'skills' ? (
+        <div role="tabpanel" className={styles.stack}>
+          <Card
+            title={`${professionName(profile.profession)}职业技能`}
+            headerActions={<Tag color={profile.skillPointsAvailable > 0 ? 'success' : 'neutral'}>可用 {profile.skillPointsAvailable} / 已获 {profile.skillPointsEarned}</Tag>}
+          >
+            <p className={styles.muted}>{bootstrap.catalog.skills.pointRule} 技能效果会进入服务端战斗快照。</p>
+            <div className={styles.skillGrid}>
+              {bootstrap.catalog.skills.definitions
+                .filter((skill) => skill.profession === profile.profession)
+                .map((skill) => {
+                  const level = profile.skillLevels[skill.id] ?? 0;
+                  const locked = profile.battleLevel < skill.unlockLevel;
+                  const maxed = level >= bootstrap.catalog.skills.maxLevel;
+                  return (
+                    <article key={skill.id} data-locked={locked}>
+                      <div><span>{locked ? `Lv.${skill.unlockLevel} 解锁` : '已解锁'}</span><strong>{skill.name}</strong><small>{skill.description}</small></div>
+                      <div className={styles.skillLevel}><b>Lv.{level}</b><span>/ {bootstrap.catalog.skills.maxLevel}</span></div>
+                      <Button
+                        loading={busyKey === `skill:${skill.id}`}
+                        disabled={!canMutate || locked || maxed || profile.skillPointsAvailable < 1}
+                        onClick={() => void upgradeSkill(skill.id, skill.name)}
+                      >
+                        {locked ? `Lv.${skill.unlockLevel} 解锁` : maxed ? '已满级' : '消耗 1 点升级'}
+                      </Button>
+                    </article>
+                  );
+                })}
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
       {tab === 'equipment' ? (
         <div role="tabpanel" className={styles.stack}>
           <Card title="当前六件装备" headerActions={<Tag color="neutral">版本 {inventory?.loadout.version ?? profile.loadoutVersion}</Tag>}>
@@ -603,7 +664,10 @@ export function CommunityBattlePage(): JSX.Element {
             {inventory && inventory.items.length === 0 ? <EmptyState title="仓库为空" message="正式行动的服务端掉落会显示在这里。" /> : null}
             {inventory ? (
               <ul className={styles.inventoryList}>
-                {inventory.items.map((item) => (
+                {inventory.items.map((item) => {
+                  const enhancementCost = (item.enhancementLevel + 1) * 2;
+                  const maxEnhanced = item.enhancementLevel >= 6;
+                  return (
                   <li key={item.id} data-equipped={item.equipped}>
                     <div>
                       <span>{slotName(item.slot)} · {rarityName(item.rarity)}</span>
@@ -619,16 +683,17 @@ export function CommunityBattlePage(): JSX.Element {
                       <Button
                         variant="secondary"
                         loading={busyKey === `enhance:${item.id}`}
-                        disabled={!canMutate || !bootstrap.catalog.capabilities.enhancementEnabled}
-                        title={bootstrap.catalog.capabilities.enhancementEnabled ? '成本与结果由服务端返回' : '当前服务端版本未开放'}
+                        disabled={!canMutate || !bootstrap.catalog.capabilities.enhancementEnabled || maxEnhanced || profile.parts < enhancementCost}
+                        title={maxEnhanced ? '已达到 +6' : profile.parts < enhancementCost ? `需要 ${enhancementCost} 个零件` : '强化必定成功，属性由服务端增加'}
                         onClick={() => void enhanceEquipment(item)}
                       >
-                        {bootstrap.catalog.capabilities.enhancementEnabled ? '熟练强化' : '强化未开放'}
+                        {!bootstrap.catalog.capabilities.enhancementEnabled ? '强化未开放' : maxEnhanced ? '强化已满' : `${enhancementCost} 零件强化`}
                       </Button>
                       <Button variant="danger" loading={busyKey === `salvage:${item.id}`} disabled={!canMutate || item.equipped || item.locked || !item.canSalvage} onClick={() => void salvageEquipment(item)}>{confirmKey === `salvage:${item.id}` ? '确认分解' : '分解'}</Button>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             ) : null}
           </Card>

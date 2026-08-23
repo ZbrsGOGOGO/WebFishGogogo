@@ -48,10 +48,24 @@ export interface CommunityBattleCatalog {
     label: string;
     rate: number;
   }>;
+  skills: {
+    maxLevel: number;
+    pointRule: string;
+    definitions: CommunityBattleSkillDefinition[];
+  };
   capabilities: {
     enhancementEnabled: boolean;
     friendChallengesEnabled: boolean;
   };
+}
+
+export interface CommunityBattleSkillDefinition {
+  id: string;
+  profession: CommunityBattleProfession;
+  name: string;
+  unlockLevel: number;
+  description: string;
+  bonusPerLevel: Partial<CommunityBattleStats>;
 }
 
 export interface CommunityBattleEnergy {
@@ -76,6 +90,10 @@ export interface CommunityBattleProfile {
   energy: CommunityBattleEnergy;
   workspaceCoins: number;
   parts: number;
+  skillLevels: Record<string, number>;
+  skillPointsEarned: number;
+  skillPointsAvailable: number;
+  nextUnlock: { level: number; name: string; kind: 'skill' | 'rarity' } | null;
   profileVersion: number;
   loadoutVersion: number;
   inventoryVersion: number;
@@ -403,6 +421,18 @@ export function enhanceCommunityBattleEquipment(
   );
 }
 
+export function upgradeCommunityBattleSkill(
+  skillId: string,
+  expectedProfileVersion: number,
+  idempotencyKey: string,
+): Promise<CommunityBattleMutationResult> {
+  return communityHttp.post(
+    `${BATTLE_ROOT}/skills/${encodeURIComponent(skillId)}/upgrade`,
+    { expectedProfileVersion },
+    idempotentWriteOptions(idempotencyKey),
+  );
+}
+
 export function claimCommunityBattleReward(
   rewardId: string,
   expectedInventoryVersion: number,
@@ -523,6 +553,14 @@ export function communityBattleErrorMessage(error: unknown): string {
       return '当前关系状态不允许发起好友挑战';
     case 'ENHANCEMENT_DISABLED':
       return '熟练强化尚未在当前服务端版本开放';
+    case 'PARTS_INSUFFICIENT':
+      return '零件不足，先分解不用的装备再强化';
+    case 'EQUIPMENT_MAX_ENHANCEMENT':
+      return '这件装备已经达到当前最高强化等级';
+    case 'BATTLE_SKILL_POINTS_INSUFFICIENT':
+      return '当前没有可用技能点，继续乐斗升级后再来';
+    case 'BATTLE_SKILL_LOCKED':
+      return '该技能尚未达到解锁等级';
     default:
       if (error.status === 0) return '网络中断，正在按对战请求编号核验是否已经结算';
       if (error.status === 401) return '登录状态已失效，请重新登录后继续';
@@ -544,6 +582,7 @@ export const communityBattleApi = {
   setEquipmentLock: setCommunityBattleEquipmentLock,
   salvageEquipment: salvageCommunityBattleEquipment,
   enhanceEquipment: enhanceCommunityBattleEquipment,
+  upgradeSkill: upgradeCommunityBattleSkill,
   claimReward: claimCommunityBattleReward,
   salvageReward: salvageCommunityBattleReward,
   createBattle: createCommunityBattle,

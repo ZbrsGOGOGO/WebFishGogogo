@@ -151,6 +151,48 @@ describe('OfficeBattleService transactions', () => {
     ).toBe(31);
   });
 
+  it('persists profession skills and deterministic equipment enhancement', async () => {
+    const user = await createUser('battle-growth@example.com');
+    const initial = await service.chooseProfession(
+      user.id,
+      'developer',
+      null,
+      'choose-growth-0001',
+    ) as any;
+    const skill = await service.upgradeSkill(
+      user.id,
+      'logic_overclock',
+      initial.profile.profileVersion,
+      'upgrade-skill-0001',
+    ) as any;
+    const skillReplay = await service.upgradeSkill(
+      user.id,
+      'logic_overclock',
+      initial.profile.profileVersion,
+      'upgrade-skill-0001',
+    );
+    expect(skillReplay).toEqual(skill);
+    expect(skill.profile.skillLevels.logic_overclock).toBe(1);
+    expect(skill.profile.skillPointsAvailable).toBe(0);
+    expect(skill.profile.power).toBeGreaterThan(initial.profile.power);
+
+    const profile = await dataSource.getRepository(OfficeBattleProfile).findOneByOrFail({ userId: user.id });
+    profile.parts = 20;
+    await dataSource.getRepository(OfficeBattleProfile).save(profile);
+    const inventory = await service.inventory(user.id) as any;
+    const item = inventory.items[0];
+    const enhanced = await service.enhanceEquipment(
+      user.id,
+      item.id,
+      inventory.inventoryVersion,
+      'enhance-equipment-0001',
+    ) as any;
+    expect(enhanced.partsSpent).toBe(2);
+    expect(enhanced.profile.parts).toBe(18);
+    expect(enhanced.changedEquipment.enhancementLevel).toBe(1);
+    expect(enhanced.changedEquipment.score).toBeGreaterThan(item.score);
+  });
+
   it('enforces friend challenge privacy and block filtering', async () => {
     const attacker = await createUser('battle-attacker@example.com');
     const defender = await createUser('battle-defender@example.com');

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -47,7 +47,16 @@ const bootstrap: CommunityBattleBootstrap = {
       { rarity: 'epic', label: '卓越', rate: 5 },
       { rarity: 'legendary', label: '代表作', rate: 1 },
     ],
-    capabilities: { enhancementEnabled: false, friendChallengesEnabled: true },
+    skills: {
+      maxLevel: 5,
+      pointRule: 'Lv.1 获得 1 点，此后每 2 级再获得 1 点。',
+      definitions: [
+        { id: 'logic_overclock', profession: 'developer', name: '逻辑超频', unlockLevel: 1, description: '每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+        { id: 'exception_shield', profession: 'developer', name: '异常兜底', unlockLevel: 5, description: '每级防御 +2。', bonusPerLevel: { defense: 2 } },
+        { id: 'rapid_deploy', profession: 'developer', name: '快速发布', unlockLevel: 10, description: '每级速度 +1。', bonusPerLevel: { speed: 1 } },
+      ],
+    },
+    capabilities: { enhancementEnabled: true, friendChallengesEnabled: true },
   },
   profile: {
     publicId: 'ZBRS-1', displayName: '正式账号', profession: 'developer', battleLevel: 3,
@@ -55,7 +64,9 @@ const bootstrap: CommunityBattleBootstrap = {
     wins: 2, losses: 1, power: 180,
     stats: { hp: 100, attack: 20, defense: 12, speed: 10, luck: 8 },
     energy: { current: 0, max: 12, serviceDate: '2026-08-22', resetsAt: '2026-08-22T21:00:00.000Z' },
-    workspaceCoins: 8, parts: 2, profileVersion: 1, loadoutVersion: 1,
+    workspaceCoins: 8, parts: 2, skillLevels: { logic_overclock: 1 },
+    skillPointsEarned: 2, skillPointsAvailable: 1, nextUnlock: { level: 5, name: '异常兜底', kind: 'skill' },
+    profileVersion: 1, loadoutVersion: 1,
     inventoryVersion: 1, defenseVersion: 1, accountState: 'active',
   },
   loadout: { equipment, version: 1 },
@@ -85,6 +96,26 @@ describe('CommunityBattlePage formal archive', () => {
     expect(screen.getByRole('button', { name: '消耗 1 体力行动' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '零奖励练习' })).toBeEnabled();
     expect(storageWrite).not.toHaveBeenCalled();
+  });
+
+  it('shows the profession skill tree and persists a versioned upgrade', async () => {
+    vi.spyOn(communityBattleApi, 'getBootstrap').mockResolvedValue(bootstrap);
+    const upgrade = vi.spyOn(communityBattleApi, 'upgradeSkill').mockResolvedValue({
+      profile: {
+        ...bootstrap.profile!,
+        profileVersion: 2,
+        power: 190,
+        skillLevels: { logic_overclock: 2 },
+        skillPointsAvailable: 0,
+      },
+      inventoryVersion: 1,
+    });
+    render(<CommunityBattlePage />);
+    fireEvent.click(await screen.findByRole('tab', { name: '职业技能' }));
+    expect(screen.getByText('逻辑超频')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '消耗 1 点升级' }));
+    expect(upgrade).toHaveBeenCalledWith('logic_overclock', 1, expect.any(String));
+    expect(await screen.findByText(/逻辑超频已升到 Lv\.2/)).toBeInTheDocument();
   });
 
   it('keeps history navigation available while an outdated banned profile cannot act', async () => {

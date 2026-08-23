@@ -6,13 +6,14 @@ import type {
 import type { OfficeBattleProfession } from '../../../database/entities/office-battle-profile.entity';
 
 export const OFFICE_BATTLE_ENGINE_VERSION = 'office-battle-engine-1';
-export const OFFICE_BATTLE_BALANCE_VERSION = 'office-battle-balance-1';
+export const OFFICE_BATTLE_BALANCE_VERSION = 'office-battle-balance-2';
 export const OFFICE_BATTLE_MIN_CLIENT_VERSION = '1.0.0';
 export const OFFICE_BATTLE_INVENTORY_LIMIT = 120;
 export const OFFICE_BATTLE_DAILY_ENERGY = 12;
 export const OFFICE_BATTLE_DAILY_REWARDED_LIMIT = 12;
 export const OFFICE_BATTLE_DAILY_FRIEND_LIMIT = 3;
 export const OFFICE_BATTLE_MAX_EXPERIENCE = 40120;
+export const OFFICE_BATTLE_SKILL_MAX_LEVEL = 5;
 
 export const OFFICE_BATTLE_PROFESSIONS: readonly OfficeBattleProfession[] = [
   'developer',
@@ -52,6 +53,33 @@ export const BASE_STATS: Record<OfficeBattleProfession, OfficeBattleStats> = {
   sales: { hp: 108, attack: 18, defense: 8, speed: 14, luck: 11 },
   hr: { hp: 126, attack: 13, defense: 12, speed: 10, luck: 9 },
 };
+
+export interface OfficeBattleSkillDefinition {
+  id: string;
+  profession: OfficeBattleProfession;
+  name: string;
+  unlockLevel: number;
+  description: string;
+  bonusPerLevel: Partial<OfficeBattleStats>;
+}
+
+export const OFFICE_BATTLE_SKILLS: readonly OfficeBattleSkillDefinition[] = [
+  { id: 'logic_overclock', profession: 'developer', name: '逻辑超频', unlockLevel: 1, description: '每级攻击 +3，强化代码输出。', bonusPerLevel: { attack: 3 } },
+  { id: 'exception_shield', profession: 'developer', name: '异常兜底', unlockLevel: 5, description: '每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'rapid_deploy', profession: 'developer', name: '快速发布', unlockLevel: 10, description: '每级速度 +1、幸运 +1。', bonusPerLevel: { speed: 1, luck: 1 } },
+  { id: 'priority_cut', profession: 'product', name: '优先级裁决', unlockLevel: 1, description: '每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'scope_control', profession: 'product', name: '范围管理', unlockLevel: 5, description: '每级生命 +6、防御 +2。', bonusPerLevel: { hp: 6, defense: 2 } },
+  { id: 'user_insight', profession: 'product', name: '用户洞察', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+  { id: 'boundary_strike', profession: 'qa', name: '边界突击', unlockLevel: 1, description: '每级攻击 +2、幸运 +1。', bonusPerLevel: { attack: 2, luck: 1 } },
+  { id: 'regression_armor', profession: 'qa', name: '回归护甲', unlockLevel: 5, description: '每级生命 +4、防御 +2。', bonusPerLevel: { hp: 4, defense: 2 } },
+  { id: 'bug_trace', profession: 'qa', name: '缺陷追踪', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+  { id: 'opening_pitch', profession: 'sales', name: '开场提案', unlockLevel: 1, description: '每级攻击 +3。', bonusPerLevel: { attack: 3 } },
+  { id: 'deal_rhythm', profession: 'sales', name: '成交节奏', unlockLevel: 5, description: '每级速度 +2。', bonusPerLevel: { speed: 2 } },
+  { id: 'client_insight', profession: 'sales', name: '客户洞察', unlockLevel: 10, description: '每级生命 +2、幸运 +2。', bonusPerLevel: { hp: 2, luck: 2 } },
+  { id: 'talent_link', profession: 'hr', name: '人才连接', unlockLevel: 1, description: '每级生命 +3、攻击 +2。', bonusPerLevel: { hp: 3, attack: 2 } },
+  { id: 'culture_shield', profession: 'hr', name: '文化护盾', unlockLevel: 5, description: '每级生命 +5、防御 +2。', bonusPerLevel: { hp: 5, defense: 2 } },
+  { id: 'empathy_field', profession: 'hr', name: '共情力场', unlockLevel: 10, description: '每级速度 +1、幸运 +2。', bonusPerLevel: { speed: 1, luck: 2 } },
+] as const;
 
 export const SLOT_BASE_STATS: Record<OfficeBattleEquipmentSlot, Partial<OfficeBattleStats>> = {
   weapon: { attack: 7 },
@@ -135,6 +163,7 @@ export interface FighterDefinition {
   profession: OfficeBattleProfession;
   level: number;
   equipment: ReadonlyArray<{ stats: Partial<OfficeBattleStats> }>;
+  skillLevels?: Readonly<Record<string, number>>;
 }
 
 export interface BattleLevelSnapshot {
@@ -227,7 +256,63 @@ export function deriveBattleStats(fighter: FighterDefinition): OfficeBattleStats
       result[key] += item.stats[key] ?? 0;
     }
   }
+  const skillLevels = normalizeBattleSkillLevels(fighter.profession, fighter.skillLevels);
+  for (const skill of battleSkillsForProfession(fighter.profession)) {
+    const skillLevel = skillLevels[skill.id] ?? 0;
+    for (const [key, amount] of Object.entries(skill.bonusPerLevel) as Array<
+      [keyof OfficeBattleStats, number]
+    >) {
+      result[key] += amount * skillLevel;
+    }
+  }
   return result;
+}
+
+export function battleSkillsForProfession(profession: OfficeBattleProfession): OfficeBattleSkillDefinition[] {
+  return OFFICE_BATTLE_SKILLS.filter((skill) => skill.profession === profession);
+}
+
+export function normalizeBattleSkillLevels(
+  profession: OfficeBattleProfession,
+  value: Readonly<Record<string, number>> | null | undefined,
+): Record<string, number> {
+  return Object.fromEntries(
+    battleSkillsForProfession(profession).map((skill) => [
+      skill.id,
+      Math.max(0, Math.min(OFFICE_BATTLE_SKILL_MAX_LEVEL, Math.trunc(Number(value?.[skill.id] ?? 0)))),
+    ]),
+  );
+}
+
+export function battleSkillPointsEarned(level: number): number {
+  return Math.min(15, 1 + Math.floor((Math.max(1, level) - 1) / 2));
+}
+
+export function battleSkillPointsAvailable(
+  level: number,
+  profession: OfficeBattleProfession,
+  skillLevels: Readonly<Record<string, number>> | null | undefined,
+): number {
+  const normalized = normalizeBattleSkillLevels(profession, skillLevels);
+  return Math.max(0, battleSkillPointsEarned(level) - Object.values(normalized).reduce((sum, value) => sum + value, 0));
+}
+
+export function nextBattleUnlock(
+  level: number,
+  profession: OfficeBattleProfession,
+): { level: number; name: string; kind: 'skill' | 'rarity' } | null {
+  const rarityUnlocks = [
+    { level: 10, name: RARITY_RULES.uncommon.label, kind: 'rarity' as const },
+    { level: 20, name: RARITY_RULES.rare.label, kind: 'rarity' as const },
+    { level: 30, name: RARITY_RULES.epic.label, kind: 'rarity' as const },
+    { level: 40, name: RARITY_RULES.legendary.label, kind: 'rarity' as const },
+  ];
+  const skillUnlocks = battleSkillsForProfession(profession)
+    .filter((skill) => skill.unlockLevel > level)
+    .map((skill) => ({ level: skill.unlockLevel, name: skill.name, kind: 'skill' as const }));
+  return [...rarityUnlocks, ...skillUnlocks]
+    .filter((item) => item.level > level)
+    .sort((left, right) => left.level - right.level)[0] ?? null;
 }
 
 export function fighterPower(stats: OfficeBattleStats): number {

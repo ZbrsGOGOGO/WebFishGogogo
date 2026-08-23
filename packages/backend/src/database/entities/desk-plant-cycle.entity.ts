@@ -38,6 +38,9 @@ export class DeskPlantCycle {
   @Column({ name: 'duration_seconds', type: 'int' })
   durationSeconds!: number;
 
+  @Column({ name: 'crop_key', type: 'varchar', length: 32, default: 'desk_mint' })
+  cropKey!: string;
+
   @Column({ name: 'started_at', type: 'timestamptz' })
   startedAt!: Date;
 

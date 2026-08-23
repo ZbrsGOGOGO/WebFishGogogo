@@ -12,6 +12,11 @@ import {
 import { User } from './user.entity';
 
 export type DeskPlantState = 'idle' | 'growing';
+export type DeskPlantToolId = 'watering_can' | 'planter_box' | 'harvest_basket';
+export type DeskPlantSkillId = 'quick_care' | 'green_thumb' | 'abundant_harvest';
+
+export type DeskPlantToolLevels = Record<DeskPlantToolId, number>;
+export type DeskPlantSkillLevels = Record<DeskPlantSkillId, number>;
 
 @Entity({ name: 'desk_plants' })
 @Check('chk_desk_plants_state', `"state" IN ('idle', 'growing')`)
@@ -37,6 +42,24 @@ export class DeskPlant {
 
   @Column({ type: 'smallint', default: 1 })
   level!: number;
+
+  @Column({ name: 'farm_coins', type: 'int', default: 0 })
+  farmCoins!: number;
+
+  @Column({ name: 'total_harvests', type: 'int', default: 0 })
+  totalHarvests!: number;
+
+  @Column({ name: 'selected_crop_key', type: 'varchar', length: 32, default: 'desk_mint' })
+  selectedCropKey!: string;
+
+  @Column({ name: 'tool_levels', type: 'jsonb', default: () => `'{}'` })
+  toolLevels!: DeskPlantToolLevels;
+
+  @Column({ name: 'skill_levels', type: 'jsonb', default: () => `'{}'` })
+  skillLevels!: DeskPlantSkillLevels;
+
+  @Column({ name: 'farm_version', type: 'int', default: 1 })
+  farmVersion!: number;
 
   @Column({ name: 'streak_days', type: 'int', default: 0 })
   streakDays!: number;

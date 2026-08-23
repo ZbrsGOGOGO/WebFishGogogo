@@ -11,6 +11,71 @@
   gap: 16px;
 }
 
+.growthRoute,
+.skillGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.growthRoute > div,
+.skillGrid > article {
+  min-width: 0;
+  padding: 15px;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface-2);
+}
+
+.growthRoute b {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+}
+
+.growthRoute small,
+.skillGrid small,
+.skillGrid span {
+  color: var(--color-text-secondary);
+}
+
+.skillGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.skillGrid > article[data-locked='true'] {
+  opacity: .66;
+}
+
+.skillGrid > article > div:first-child > span,
+.skillGrid > article > div:first-child > strong,
+.skillGrid > article > div:first-child > small {
+  display: block;
+}
+
+.skillGrid > article > div:first-child > span {
+  color: var(--color-brand);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.skillLevel {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.skillLevel b {
+  font-size: 22px;
+}
+
 .formalNotice,
 .notice,
 .error,
@@ -474,7 +539,9 @@
   }
 
   .offerGrid,
-  .loadoutGrid {
+  .loadoutGrid,
+  .growthRoute,
+  .skillGrid {
     grid-template-columns: 1fr;
   }
 }

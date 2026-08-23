@@ -157,6 +157,25 @@ export class OfficeBattleController {
     );
   }
 
+  @Post('skills/:skillId/upgrade')
+  upgradeSkill(
+    @CurrentUserId() userId: string,
+    @Param('skillId') skillId: string,
+    @Body() body: unknown,
+    @Headers('idempotency-key') rawKey?: string,
+  ) {
+    if (!/^[a-z][a-z0-9_]{2,39}$/.test(skillId)) {
+      throw this.battles.invalid('BATTLE_SKILL_ID_INVALID');
+    }
+    const value = strictBattleObject(body, ['expectedProfileVersion']);
+    return this.battles.upgradeSkill(
+      userId,
+      skillId,
+      positiveBattleVersion(value.expectedProfileVersion)!,
+      idempotencyKey(rawKey),
+    );
+  }
+
   @Get('rewards/pending')
   pendingRewards(@CurrentUserId() userId: string) {
     return this.battles.pendingRewards(userId);

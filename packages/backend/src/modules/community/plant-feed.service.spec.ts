@@ -89,14 +89,23 @@ describe('DeskPlantService and FeedService integration', () => {
         onboardingRewardGranted: true,
       }),
     );
-    expect((harvested as any).farm.plant.cycleSeconds).toBe(20 * 60 * 60);
+    expect((harvested as any).farm.plant.cycleSeconds).toBe(5 * 60);
+    expect((harvested as any).farm.plant.level).toBe(2);
+    expect((harvested as any).farm.growth).toMatchObject({
+      farmCoins: 42,
+      totalHarvests: 1,
+      skillPointsAvailable: 1,
+    });
+    expect((harvested as any).farm.crops).toHaveLength(6);
+    expect((harvested as any).farm.tools).toHaveLength(3);
+    expect((harvested as any).farm.skills).toHaveLength(3);
     expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(2);
     expect(await dataSource.getRepository(RewardGrant).count()).toBe(1);
     expect(await dataSource.getRepository(DeskPlantRewardClaim).count()).toBe(2);
     expect(
       (await dataSource.getRepository(DeskPlant).findOneByOrFail({ userId: user.id }))
         .plantExperience,
-    ).toBe(50);
+    ).toBe(52);
     expect(
       (await dataSource.getRepository(PlayerProgression).findOneByOrFail({
         userId: user.id,
@@ -156,8 +165,42 @@ describe('DeskPlantService and FeedService integration', () => {
     expect(farm.pendingEncouragements).toBe(1);
   });
 
+  it('persists farm tool and skill upgrades behind version checks', async () => {
+    const user = await activeUser('growth@example.com', 'Growth');
+    await plants.care(user.id, 'growth-care');
+    now = new Date(now.getTime() + 31_000);
+    const harvested = await plants.harvestAndCare(user.id, 'growth-harvest') as any;
+
+    const tool = await plants.upgradeTool(
+      user.id,
+      'watering_can',
+      harvested.farm.growth.farmVersion,
+      'growth-tool',
+    ) as any;
+    expect(tool.cost).toBe(20);
+    expect(tool.farm.growth.farmCoins).toBe(22);
+    expect(tool.farm.tools.find((item: any) => item.id === 'watering_can').level).toBe(1);
+    await expect(plants.upgradeTool(user.id, 'planter_box', 2, 'growth-stale-tool'))
+      .rejects.toMatchObject({ response: { code: 'FARM_VERSION_CONFLICT' } });
+
+    const skill = await plants.upgradeSkill(
+      user.id,
+      'quick_care',
+      tool.farm.growth.farmVersion,
+      'growth-skill',
+    ) as any;
+    expect(skill.farm.growth.skillPointsAvailable).toBe(0);
+    expect(skill.farm.skills.find((item: any) => item.id === 'quick_care').level).toBe(1);
+    await expect(plants.selectCrop(
+      user.id,
+      'meeting_tomato',
+      skill.farm.growth.farmVersion,
+      'growth-locked-crop',
+    )).rejects.toMatchObject({ response: { code: 'FARM_CROP_LOCKED' } });
+  });
+
   it('uses the 05:00 service-day boundary and grants the standard reward once per day', async () => {
-    // 21:01Z = 次日北京时间 05:01，首轮与随后 20 小时轮次仍属于同一业务日。
+    // 21:01Z = 次日北京时间 05:01；跨多轮后仍按 05:00 划分业务日。
     now = new Date('2026-08-21T21:01:00.000Z');
     const user = await activeUser('boundary@example.com', 'Boundary');
     await plants.care(user.id, 'boundary-care-key');
