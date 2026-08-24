@@ -5,6 +5,7 @@ import type { DataSource } from 'typeorm';
 import {
   Friendship,
   OfficeBattleDefenseConfig,
+  OfficeBattleEquipment,
   OfficeBattleFriendRewardClaim,
   OfficeBattleProfile,
   OfficeBattleRecord,
@@ -91,7 +92,7 @@ describe('OfficeBattleService transactions', () => {
       user.id,
       {
         battleRequestId: rewardId,
-        opponent: { kind: 'npc', offerId: refreshed.offers[1].offerId },
+        opponent: { kind: 'npc', offerId: refreshed.offers[0].offerId },
         mode: 'reward',
         loadoutVersion: refreshed.profile.loadoutVersion,
       },
@@ -173,6 +174,22 @@ describe('OfficeBattleService transactions', () => {
       dailyRewardLimit: 5,
       friendAgeHours: 24,
     });
+    expect(initial.catalog.pveCampaign).toMatchObject({ version: 'pve-campaign-1' });
+    expect(initial.pveCampaign).toMatchObject({
+      activeChapterId: 'probation',
+      clearedStages: 0,
+      totalStages: 15,
+    });
+    expect(initial.offers.map((offer: any) => offer.stage.id)).toEqual([
+      'probation-1',
+      'probation-2',
+      'probation-3',
+    ]);
+    expect(initial.offers.map((offer: any) => offer.stage.unlocked)).toEqual([
+      true,
+      false,
+      false,
+    ]);
     expect(initial.profile.modeSnapshots.pve.power).toBe(initial.profile.pvePower);
     expect(initial.profile.modeSnapshots.pvp.power).toBe(initial.profile.pvpPower);
     const skill = await service.upgradeSkill(
@@ -213,6 +230,68 @@ describe('OfficeBattleService transactions', () => {
     expect(enhanced.profile.modeSnapshots.pve.power).toBeGreaterThan(
       enhanced.profile.modeSnapshots.pvp.power,
     );
+  });
+
+  it('enforces the PVE route and grants a stage first-clear reward only once', async () => {
+    const user = await createUser('battle-campaign@example.com');
+    let view = await service.chooseProfession(
+      user.id,
+      'developer',
+      null,
+      'choose-campaign-0001',
+    ) as any;
+
+    const lockedStage = view.offers.find((offer: any) => offer.stage.id === 'probation-2');
+    const lockedRequestId = randomUUID();
+    await expect(service.createBattle(
+      user.id,
+      {
+        battleRequestId: lockedRequestId,
+        opponent: { kind: 'npc', offerId: lockedStage.offerId },
+        mode: 'practice',
+        loadoutVersion: view.profile.loadoutVersion,
+      },
+      lockedRequestId,
+    )).rejects.toMatchObject({ response: { code: 'PVE_STAGE_LOCKED' } });
+
+    const winStageOne = async () => {
+      view = await service.bootstrap(user.id) as any;
+      const offer = view.offers.find((item: any) => item.stage.id === 'probation-1');
+      const equipment = await dataSource.getRepository(OfficeBattleEquipment).find({
+        where: { userId: user.id },
+      });
+      for (const item of equipment) {
+        item.stats = { ...item.stats, attack: Number(item.stats.attack ?? 0) + 500 };
+      }
+      await dataSource.getRepository(OfficeBattleEquipment).save(equipment);
+      const battleRequestId = randomUUID();
+      const settlement = await service.createBattle(
+        user.id,
+        {
+          battleRequestId,
+          opponent: { kind: 'npc', offerId: offer.offerId },
+          mode: 'reward',
+          loadoutVersion: view.profile.loadoutVersion,
+        },
+        battleRequestId,
+      ) as any;
+      expect(settlement.winner).toBe('player');
+      return settlement;
+    };
+
+    const firstClear = await winStageOne();
+    expect(firstClear.reward.firstClear).toMatchObject({
+      stageId: 'probation-1',
+      battleExperience: 20,
+      workspaceCoins: 100,
+      parts: 2,
+    });
+    view = await service.bootstrap(user.id) as any;
+    expect(view.pveCampaign).toMatchObject({ clearedStages: 1 });
+    expect(view.offers.find((offer: any) => offer.stage.id === 'probation-2').stage.unlocked).toBe(true);
+
+    const replayWin = await winStageOne();
+    expect(replayWin.reward.firstClear).toBeNull();
   });
 
   it('enforces friend challenge privacy and block filtering', async () => {

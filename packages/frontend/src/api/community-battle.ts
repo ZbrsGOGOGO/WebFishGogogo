@@ -56,6 +56,7 @@ export interface CommunityBattleCatalog {
     }>;
   };
   modes?: Record<CommunityBattleMode, CommunityBattleModeDefinition>;
+  pveCampaign?: CommunityBattleCampaignCatalog;
   inventoryLimit: number;
   rarityRates: Array<{
     rarity: CommunityBattleRarity;
@@ -78,6 +79,58 @@ export interface CommunityBattleCatalog {
     enhancementEnabled: boolean;
     friendChallengesEnabled: boolean;
   };
+}
+
+export interface CommunityBattleFirstClearReward {
+  battleExperience: number;
+  workspaceCoins: number;
+  parts: number;
+}
+
+export interface CommunityBattleCampaignStageDefinition {
+  id: string;
+  chapterId: string;
+  index: number;
+  tier: CommunityBattleOfferTier;
+  name: string;
+  summary: string;
+  opponentName: string;
+  opponentProfession: CommunityBattleProfession;
+  powerPercent: number;
+  boss: boolean;
+  firstClearReward: CommunityBattleFirstClearReward;
+}
+
+export interface CommunityBattleCampaignCatalog {
+  version: string;
+  chapters: Array<{
+    id: string;
+    index: number;
+    name: string;
+    summary: string;
+    unlockLevel: number;
+    stages: CommunityBattleCampaignStageDefinition[];
+  }>;
+}
+
+export interface CommunityBattleCampaignProgress {
+  version: string;
+  activeChapterId: string;
+  clearedStages: number;
+  totalStages: number;
+  chapters: Array<{
+    id: string;
+    unlocked: boolean;
+    completed: boolean;
+    active: boolean;
+    lockReason: string | null;
+    stages: Array<{
+      id: string;
+      cleared: boolean;
+      unlocked: boolean;
+      lockReason: string | null;
+    }>;
+  }>;
 }
 
 export interface CommunityBattleSkillDefinition {
@@ -184,6 +237,7 @@ export interface CommunityBattleRewardPreview {
   workspaceCoins: number;
   dropEligible: boolean;
   note?: string | null;
+  firstClearBonus?: CommunityBattleFirstClearReward | null;
 }
 
 export type CommunityBattleOfferTier = 'simple' | 'balanced' | 'challenge';
@@ -201,6 +255,19 @@ export interface CommunityBattleOffer {
   tier: CommunityBattleOfferTier;
   expiresAt: string;
   opponent: CommunityBattleOpponentSummary;
+  stage?: {
+    id: string;
+    chapterId: string;
+    chapterName: string;
+    index: number;
+    name: string;
+    summary: string;
+    boss: boolean;
+    firstClearReward: CommunityBattleFirstClearReward;
+    cleared: boolean;
+    unlocked: boolean;
+    lockReason: string | null;
+  } | null;
   powerDifferencePercent: number;
   rewardPreview: CommunityBattleRewardPreview;
 }
@@ -243,6 +310,7 @@ export interface CommunityBattleBootstrap {
   offers: CommunityBattleOffer[];
   offersExpireAt?: string | null;
   dailyActions: CommunityBattleDailyActions | null;
+  pveCampaign?: CommunityBattleCampaignProgress | null;
   pendingRewards: CommunityBattlePendingReward[];
   friendCandidates: CommunityBattleFriendCandidate[];
 }
@@ -265,6 +333,16 @@ export interface CommunityBattleFighterSnapshot {
   power: number;
   stats: CommunityBattleStats;
   equipment: CommunityBattleEquipment[] | null;
+  pveStage?: {
+    id: string;
+    chapterId: string;
+    chapterName: string;
+    index: number;
+    name: string;
+    summary: string;
+    boss: boolean;
+    firstClearReward: CommunityBattleFirstClearReward;
+  };
 }
 
 export type CommunityBattleEventKind =
@@ -299,6 +377,7 @@ export interface CommunityBattleSettlementReward {
   parts: number;
   droppedEquipment: CommunityBattleEquipment | null;
   pendingRewardId?: string | null;
+  firstClear?: ({ stageId: string; stageName: string } & CommunityBattleFirstClearReward) | null;
 }
 
 export interface CommunityBattleSettlement {
@@ -328,6 +407,7 @@ export interface CommunityBattleHistoryItem {
   mode: 'reward' | 'practice';
   opponentKind: 'npc' | 'friend';
   opponent: CommunityBattleOpponentSummary;
+  pveStage?: { id: string; chapterName: string; name: string; boss: boolean } | null;
   winner: 'player' | 'opponent';
   completedAt: string;
   rewardSummary: string;
@@ -642,6 +722,8 @@ export function communityBattleErrorMessage(error: unknown): string {
       return '当前没有可用技能点，继续乐斗升级后再来';
     case 'BATTLE_SKILL_LOCKED':
       return '该技能尚未达到解锁等级';
+    case 'PVE_STAGE_LOCKED':
+      return '该关卡尚未解锁，请先完成前置关卡';
     default:
       if (error.status === 0) return '网络中断，正在按对战请求编号核验是否已经结算';
       if (error.status === 401) return '登录状态已失效，请重新登录后继续';

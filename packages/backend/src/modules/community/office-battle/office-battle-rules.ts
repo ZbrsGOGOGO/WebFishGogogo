@@ -6,7 +6,7 @@ import type {
 import type { OfficeBattleProfession } from '../../../database/entities/office-battle-profile.entity';
 
 export const OFFICE_BATTLE_ENGINE_VERSION = 'office-battle-engine-1';
-export const OFFICE_BATTLE_BALANCE_VERSION = 'office-battle-balance-2';
+export const OFFICE_BATTLE_BALANCE_VERSION = 'office-battle-balance-3';
 export const OFFICE_BATTLE_MIN_CLIENT_VERSION = '1.0.0';
 export const OFFICE_BATTLE_INVENTORY_LIMIT = 120;
 export const OFFICE_BATTLE_DAILY_ENERGY = 120;

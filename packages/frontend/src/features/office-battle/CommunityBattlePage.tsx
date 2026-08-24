@@ -11,7 +11,6 @@ import {
   type CommunityBattleInventoryPage,
   type CommunityBattleLeaderboard,
   type CommunityBattleMode,
-  type CommunityBattleOffer,
   type CommunityBattleProfession,
   type CommunityBattleRequest,
   type CommunityBattleSettlement,
@@ -25,6 +24,7 @@ import {
 import { submitBattleWithRecovery } from './battle-request-recovery';
 import { ServerBattleReplay } from './ServerBattleReplay';
 import { CommunityGuildPanel } from './CommunityGuildPanel';
+import { CommunityBattleCampaignPanel } from './CommunityBattleCampaign';
 import {
   CommunityBattleGrowthPanel,
   CommunityBattleModeGuide,
@@ -32,10 +32,11 @@ import {
 } from './CommunityBattleProgression';
 import styles from './CommunityBattlePage.module.css';
 
-type BattleTab = 'overview' | 'growth' | 'skills' | 'equipment' | 'ranking' | 'guild' | 'history' | 'defense';
+type BattleTab = 'overview' | 'campaign' | 'growth' | 'skills' | 'equipment' | 'ranking' | 'guild' | 'history' | 'defense';
 
 const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'overview', label: '战斗' },
+  { id: 'campaign', label: 'PVE 副本' },
   { id: 'growth', label: '成长' },
   { id: 'equipment', label: '装备' },
   { id: 'skills', label: '技能图鉴' },
@@ -44,12 +45,6 @@ const TABS: ReadonlyArray<{ id: BattleTab; label: string }> = [
   { id: 'history', label: '记录' },
   { id: 'defense', label: '设置' },
 ];
-
-const TIER_LABELS: Record<CommunityBattleOffer['tier'], string> = {
-  simple: '轻松协作',
-  balanced: '势均力敌',
-  challenge: '关键攻坚',
-};
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return '待更新';
@@ -521,56 +516,14 @@ export function CommunityBattlePage(): JSX.Element {
       {tab === 'overview' ? (
         <div role="tabpanel" className={styles.stack}>
           <CommunityBattleModeGuide bootstrap={bootstrap} profile={profile} />
-          <Card
-            title="PVE · 项目挑战"
-            headerActions={<Button variant="secondary" onClick={() => void loadBootstrap()} loading={loading}>刷新候选</Button>}
-          >
-            {bootstrap.dailyActions ? (
-              <p className={styles.muted}>
-                今日奖励战斗 {bootstrap.dailyActions.rewardedBattlesUsed}/{bootstrap.dailyActions.rewardedBattlesLimit}
-                {' · '}PVP 奖励 {bootstrap.dailyActions.rewardedFriendBattlesUsed}/{bootstrap.dailyActions.rewardedFriendBattlesLimit}
-                {' · '}体力每 {bootstrap.catalog.energy.recoveryMinutes} 分钟自然恢复 1 点
-              </p>
-            ) : null}
-            {bootstrap.offers.length === 0 ? (
-              <EmptyState title="暂无对手" message="点击刷新候选，寻找新的对手。" />
-            ) : (
-              <div className={styles.offerGrid}>
-                {bootstrap.offers.map((offer) => (
-                  <article key={offer.offerId} className={styles.offerCard}>
-                    <Tag>{TIER_LABELS[offer.tier]}</Tag>
-                    <h3>{offer.opponent.displayName}</h3>
-                    <p>{professionName(offer.opponent.profession)} · Lv.{offer.opponent.battleLevel}</p>
-                    <dl>
-                      <div><dt>对手战力</dt><dd>{offer.opponent.power}</dd></div>
-                      <div><dt>差值</dt><dd>{offer.powerDifferencePercent > 0 ? '+' : ''}{offer.powerDifferencePercent}%</dd></div>
-                      <div><dt>有效至</dt><dd>{formatDateTime(offer.expiresAt)}</dd></div>
-                    </dl>
-                    <p className={styles.preview}>
-                      预览：职场经验 +{offer.rewardPreview.battleExperience} · 办公币 +{offer.rewardPreview.workspaceCoins}
-                      {offer.rewardPreview.dropEligible ? ' · 可掉落装备' : ''}
-                    </p>
-                    <div className={styles.inlineActions}>
-                      <Button
-                        loading={busyKey === `battle:${offer.offerId}`}
-                        disabled={!canMutate || profile.energy.current < bootstrap.catalog.energy.costPerBattle}
-                        onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'reward')}
-                      >
-                        PVE 挑战 · {bootstrap.catalog.energy.costPerBattle} 体力
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        loading={busyKey === `battle:${offer.offerId}`}
-                        disabled={!canMutate}
-                        onClick={() => void startBattle({ kind: 'npc', offerId: offer.offerId }, 'practice')}
-                      >
-                        PVE 练习 · 无奖励
-                      </Button>
-                    </div>
-                  </article>
-                ))}
+          <Card title="PVE · 项目主线">
+            <div className={styles.pveEntry}>
+              <div>
+                <strong>{bootstrap.catalog.pveCampaign?.chapters.find((chapter) => chapter.id === bootstrap.pveCampaign?.activeChapterId)?.name ?? '项目挑战'}</strong>
+                <small>{bootstrap.pveCampaign ? `已通关 ${bootstrap.pveCampaign.clearedStages}/${bootstrap.pveCampaign.totalStages} 关` : '普通关、精英关与 Boss 关'}</small>
               </div>
-            )}
+              <Button onClick={() => setTab('campaign')}>进入 PVE 副本</Button>
+            </div>
           </Card>
 
           <Card title="PVP · 好友对战">
@@ -620,6 +573,16 @@ export function CommunityBattlePage(): JSX.Element {
             </Card>
           ) : null}
         </div>
+      ) : null}
+
+      {tab === 'campaign' ? (
+        <CommunityBattleCampaignPanel
+          bootstrap={bootstrap}
+          profile={profile}
+          busyKey={busyKey}
+          canMutate={canMutate}
+          onBattle={(offerId, mode) => void startBattle({ kind: 'npc', offerId }, mode)}
+        />
       ) : null}
 
       {tab === 'growth' ? (
@@ -757,7 +720,7 @@ export function CommunityBattlePage(): JSX.Element {
               {history.items.map((item) => (
                 <li key={item.battleId}>
                   <div>
-                    <strong>{item.opponentKind === 'npc' ? 'PVE' : 'PVP'} · {item.winner === 'player' ? '胜出' : '惜败'} · {item.opponent.displayName}</strong>
+                    <strong>{item.opponentKind === 'npc' ? 'PVE' : 'PVP'} · {item.winner === 'player' ? '胜出' : '惜败'} · {item.pveStage?.name ?? item.opponent.displayName}</strong>
                     <small>{formatDateTime(item.completedAt)} · {item.mode === 'practice' ? '练习赛' : '奖励战'} · {item.rewardSummary}</small>
                   </div>
                   <Button variant="secondary" loading={busyKey === `history:${item.battleId}`} onClick={() => void openHistoryBattle(item.battleId)}>查看完整回放</Button>

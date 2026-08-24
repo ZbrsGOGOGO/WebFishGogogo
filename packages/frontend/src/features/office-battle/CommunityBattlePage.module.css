@@ -686,6 +686,146 @@
   color: var(--color-text-secondary);
 }
 
+.pveEntry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.pveEntry > div {
+  display: grid;
+  gap: 5px;
+}
+
+.pveEntry strong {
+  font-size: 17px;
+}
+
+.pveEntry small,
+.chapterSummary {
+  color: var(--color-text-secondary);
+}
+
+.chapterRoute {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.chapterRoute article {
+  min-height: 112px;
+  padding: 14px;
+  display: grid;
+  align-content: space-between;
+  gap: 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface-2);
+}
+
+.chapterRoute article[data-state='active'] {
+  border-color: color-mix(in srgb, var(--color-brand) 64%, var(--color-border));
+  background: color-mix(in srgb, var(--color-brand) 8%, var(--color-surface));
+  box-shadow: inset 0 3px 0 var(--color-brand);
+}
+
+.chapterRoute article[data-state='done'] {
+  border-color: color-mix(in srgb, var(--color-success) 48%, var(--color-border));
+}
+
+.chapterRoute article[data-state='locked'] {
+  opacity: 0.58;
+}
+
+.chapterRoute span,
+.chapterRoute small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.campaignStageGrid {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.campaignStageGrid > article {
+  min-width: 0;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface-2);
+}
+
+.campaignStageGrid > article[data-state='done'] {
+  border-color: color-mix(in srgb, var(--color-success) 48%, var(--color-border));
+}
+
+.campaignStageGrid > article[data-state='locked'] {
+  opacity: 0.65;
+}
+
+.campaignStageGrid header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.campaignStageGrid h3,
+.campaignStageGrid p {
+  margin: 0;
+}
+
+.campaignStageGrid > article > p {
+  min-height: 42px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.firstClearReward {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+  border-radius: 11px;
+  color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-surface));
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.firstClearReward[data-claimed='true'] {
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.stageLockReason {
+  color: var(--color-danger) !important;
+  font-weight: 700;
+}
+
+.offerActions {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.firstClearSettlement {
+  color: var(--color-warning);
+  font-weight: 700;
+}
+
 .replay {
   padding: clamp(18px, 4vw, 30px);
   border: 1px solid color-mix(in srgb, var(--color-brand) 24%, var(--color-border));
@@ -826,8 +966,13 @@
   .loadoutGrid,
   .growthRoute,
   .skillGrid,
-  .modeGuideGrid {
+  .modeGuideGrid,
+  .campaignStageGrid {
     grid-template-columns: 1fr;
+  }
+
+  .chapterRoute {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -845,6 +990,16 @@
   .levelOverviewGrid,
   .milestoneGrid {
     grid-template-columns: 1fr;
+  }
+
+  .chapterRoute,
+  .offerActions {
+    grid-template-columns: 1fr;
+  }
+
+  .pveEntry {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .professionChoice {

@@ -16,7 +16,7 @@
 | 数据真源 | PostgreSQL；Redis 用于运行时能力，不作为玩家资产真源 |
 | 当前数据库迁移 | `0023 AddArcadeLeaderboardsAndChatRetention` |
 | 最近线上版本 | 乐斗共享等级、PVE/PVP 分层和技能图鉴版本 |
-| 自动化验证 | 后端 82 个套件 / 393 项；前端 91 个文件 / 394 项，全部通过 |
+| 自动化验证 | 后端 83 个套件 / 397 项；前端 91 个文件 / 395 项，全部通过 |
 | 线上验收 | 健康检查、41 项 HTTP 冒烟检查和实际登录浏览器验收通过 |
 
 生产服务器与当前开发提交的代码树一致。仓库不保存服务器密码、JWT 密钥、数据库密码或生产 `.env`。
@@ -59,6 +59,7 @@
 - 六装备位、装备品质、强化、背包、掉落和职业命名。
 - 共享 Lv.1～60 等级和经验曲线。
 - PVE 项目挑战：NPC 对手、三档难度、PVE 技能树、完整强化增量、每日奖励上限。
+- PVE 五章 15 关主线：普通关、精英关、Boss、顺序解锁和一次性首通奖励。
 - PVP 好友对战：好友条件、PVP 技能树、强化增量折算 60%、每日奖励和同好友限制。
 - 五职业共 30 项 PVE/PVP 技能；独立技能点、解锁等级、升级费用和技能图鉴。
 - 服务端分别返回 PVE/PVP 属性与战力快照。
@@ -111,7 +112,7 @@ npm run start:dev --workspace @stealth-reader/backend
 
 ## 5. 下一阶段建议
 
-1. 丰富 PVE：项目章节、关卡 Boss、首次通关奖励和扫荡规则。
+1. 为已完成的 PVE 项目章节增加三星目标、Boss 特性和通关后的扫荡规则。
 2. 丰富 PVP：可挑战好友池、匹配记录、防守阵容编辑和赛季统计。
 3. 做装备图鉴、套装路线、掉落预览和强化材料循环。
 4. 增加主动技能、战斗状态、技能触发日志和更清晰的战报表现。
@@ -127,6 +128,7 @@ npm run start:dev --workspace @stealth-reader/backend
 | `docs/OFFICE_COMMUNITY_BLUEPRINT.md` | 社区整体蓝图 |
 | `docs/UNIFIED_GAME_ECONOMY_AND_COMBAT_RULES_V1.md` | 统一货币、体力和战斗经济 |
 | `docs/LEDOU_GROWTH_AND_SKILL_SYSTEM_V1.md` | 乐斗等级、PVE/PVP 和技能图鉴 |
+| `docs/LEDOU_PVE_CAMPAIGN_V1.md` | PVE 五章 15 关、Boss 和首通奖励 |
 | `docs/LEADERBOARD_AND_CHAT_RULES_V1.md` | 排行榜与聊天保留规则 |
 | `docs/CAPACITY_4000_USERS.md` | 4,000 用户容量规划 |
 | `deploy/README.md` | 服务器部署与运维 |

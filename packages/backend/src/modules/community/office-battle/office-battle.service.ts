@@ -52,6 +52,15 @@ import { RelationshipPolicyService } from '../relationship-policy.service';
 import { resolveOfficeBattle } from './office-battle-engine';
 import { officeBattleSocialVerificationRequired } from './office-battle-gates';
 import {
+  activeCampaignChapter,
+  campaignCatalog,
+  campaignChapter,
+  campaignStage,
+  campaignStageUnlocked,
+  OFFICE_BATTLE_CAMPAIGN,
+  type OfficeBattleCampaignStage,
+} from './office-battle-campaign';
+import {
   BASE_STATS,
   battleSkillPointsAvailable,
   battleSkillPointsEarned,
@@ -133,6 +142,20 @@ export interface FighterSnapshot {
   power: number;
   stats: OfficeBattleStats;
   equipment: EquipmentView[] | null;
+  pveStage?: {
+    id: string;
+    chapterId: string;
+    chapterName: string;
+    index: number;
+    name: string;
+    summary: string;
+    boss: boolean;
+    firstClearReward: {
+      battleExperience: number;
+      workspaceCoins: number;
+      parts: number;
+    };
+  };
 }
 
 interface EquipmentContext {
@@ -149,6 +172,13 @@ interface RewardPlan {
   parts: number;
   equipment: OfficeBattleEquipment | null;
   pendingRewardId: string | null;
+  firstClear: {
+    stageId: string;
+    stageName: string;
+    battleExperience: number;
+    workspaceCoins: number;
+    parts: number;
+  } | null;
 }
 
 @Injectable()
@@ -211,6 +241,7 @@ export class OfficeBattleService {
           rules: ['双方使用防守阵容', '强化增量只计 60%', '同一好友每日仅可领取一次奖励'],
         },
       },
+      pveCampaign: campaignCatalog(),
       inventoryLimit: OFFICE_BATTLE_INVENTORY_LIMIT,
       rarityRates: OFFICE_BATTLE_RARITIES.map((rarity) => ({
         rarity,
@@ -895,6 +926,8 @@ export class OfficeBattleService {
       let defenderProfile: OfficeBattleProfile | null = null;
       let friendship: Friendship | null = null;
       let rewardMultiplier = 100;
+      let pveStageDefinition: OfficeBattleCampaignStage | null = null;
+      let pveFirstClearEligible = false;
 
       if (command.opponent.kind === 'npc') {
         offer = await manager.getRepository(OfficeBattleOffer).findOne({
@@ -913,6 +946,23 @@ export class OfficeBattleService {
         }
         opponentSnapshot = offer.opponentSnapshot as unknown as FighterSnapshot;
         rewardMultiplier = offer.rewardMultiplierPercent;
+        if (opponentSnapshot.pveStage) {
+          pveStageDefinition = campaignStage(opponentSnapshot.pveStage.id);
+          if (!pveStageDefinition) throw new ConflictException({ code: 'PVE_STAGE_INVALID' });
+          const clearedStageIds = await this.clearedPveStageIds(manager, userId);
+          const stageState = campaignStageUnlocked(
+            playerLevel,
+            clearedStageIds,
+            pveStageDefinition.id,
+          );
+          if (!stageState.unlocked) {
+            throw new ConflictException({
+              code: 'PVE_STAGE_LOCKED',
+              reason: stageState.reason,
+            });
+          }
+          pveFirstClearEligible = !clearedStageIds.has(pveStageDefinition.id);
+        }
       } else {
         defender = users.get(preResolvedDefender!.id)!;
         if (defender.id === userId) throw this.invalid('SELF_BATTLE_NOT_ALLOWED');
@@ -999,6 +1049,23 @@ export class OfficeBattleService {
           100 + guildBonus,
         );
       }
+      if (
+        command.mode === 'reward' &&
+        command.opponent.kind === 'npc' &&
+        engineResult.winner === 'player' &&
+        pveFirstClearEligible &&
+        pveStageDefinition
+      ) {
+        const bonus = pveStageDefinition.firstClearReward;
+        reward.battleExperience += bonus.battleExperience;
+        reward.workspaceCoins += bonus.workspaceCoins;
+        reward.parts += bonus.parts;
+        reward.firstClear = {
+          stageId: pveStageDefinition.id,
+          stageName: pveStageDefinition.name,
+          ...bonus,
+        };
+      }
 
       if (command.mode === 'reward') {
         await this.assets.changeEnergy(
@@ -1041,6 +1108,7 @@ export class OfficeBattleService {
           ? this.uncontextualizedEquipmentView(reward.equipment)
           : null,
         pendingRewardId: reward.pendingRewardId,
+        firstClear: reward.firstClear,
       };
       const record = manager.getRepository(OfficeBattleRecord).create({
         id: battleId,
@@ -1072,7 +1140,15 @@ export class OfficeBattleService {
 
       if (command.mode === 'reward') {
         if (reward.parts > 0) {
-          await this.assetLedger(manager, profile, battleId, 'parts', reward.parts, 'upgrade_protection_fallback', `${battleId}:parts`);
+          await this.assetLedger(
+            manager,
+            profile,
+            battleId,
+            'parts',
+            reward.parts,
+            reward.firstClear ? 'pve_first_clear' : 'upgrade_protection_fallback',
+            `${battleId}:parts`,
+          );
         }
       }
 
@@ -1177,6 +1253,14 @@ export class OfficeBattleService {
           mode: record.mode,
           opponentKind: record.opponentKind,
           opponent: this.opponentSummary(opponent),
+          pveStage: opponent.pveStage
+            ? {
+                id: opponent.pveStage.id,
+                chapterName: opponent.pveStage.chapterName,
+                name: opponent.pveStage.name,
+                boss: opponent.pveStage.boss,
+              }
+            : null,
           winner: record.winner,
           completedAt: record.completedAt.toISOString(),
           rewardSummary,
@@ -1270,6 +1354,7 @@ export class OfficeBattleService {
       offers: [],
       offersExpireAt: null,
       dailyActions: null,
+      pveCampaign: null,
       pendingRewards: [],
       friendCandidates: [],
     };
@@ -1284,7 +1369,16 @@ export class OfficeBattleService {
     const assets = unified ?? (await this.assets.ensurePlatformState(manager, user.id));
     await this.syncUnifiedProgression(manager, profile, assets);
     const context = await this.equipmentContext(manager, profile);
-    const offerRows = await this.ensureOffers(manager, user, profile, context);
+    const level = assets.progression.level;
+    const clearedStageIds = await this.clearedPveStageIds(manager, user.id);
+    const campaign = this.pveCampaignView(level, clearedStageIds);
+    const offerRows = await this.ensureOffers(
+      manager,
+      user,
+      profile,
+      context,
+      campaign.activeChapterId,
+    );
     const pending = await manager.getRepository(OfficeBattlePendingReward).find({
       where: { userId: user.id, status: 'pending' },
       order: { createdAt: 'ASC' },
@@ -1301,7 +1395,12 @@ export class OfficeBattleService {
       profile: await this.profileView(manager, user, profile, context.loadout, assets),
       loadout: this.loadoutView(context, profile.loadoutVersion),
       defense: this.defenseView(context.defense),
-      offers: offerRows.map((offer) => this.offerView(offer, context.loadout, profile)),
+      offers: offerRows.map((offer) => this.offerView(
+        offer,
+        context.loadout,
+        profile,
+        clearedStageIds,
+      )),
       offersExpireAt: offerRows[0]?.expiresAt.toISOString() ?? null,
       dailyActions: {
         rewardedBattlesUsed: profile.rewardedBattlesUsed,
@@ -1309,6 +1408,7 @@ export class OfficeBattleService {
         rewardedFriendBattlesUsed: profile.rewardedFriendBattlesUsed,
         rewardedFriendBattlesLimit: OFFICE_BATTLE_DAILY_FRIEND_LIMIT,
       },
+      pveCampaign: campaign,
       pendingRewards: pending.map((reward) => this.pendingRewardView(reward)),
       friendCandidates: await this.friendCandidates(
         manager,
@@ -1373,11 +1473,73 @@ export class OfficeBattleService {
     await manager.getRepository(OfficeBattleProfile).save(profile);
   }
 
+  private async clearedPveStageIds(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<Set<string>> {
+    const records = await manager.getRepository(OfficeBattleRecord).find({
+      where: {
+        userId,
+        opponentKind: 'npc',
+        mode: 'reward',
+        winner: 'player',
+      },
+      select: { opponentSnapshot: true },
+    });
+    return new Set(
+      records
+        .map((record) => (
+          record.opponentSnapshot as unknown as FighterSnapshot
+        ).pveStage?.id)
+        .filter((stageId): stageId is string => Boolean(campaignStage(stageId ?? ''))),
+    );
+  }
+
+  private pveCampaignView(level: number, clearedStageIds: ReadonlySet<string>) {
+    const activeChapter = activeCampaignChapter(level, clearedStageIds);
+    return {
+      version: 'pve-campaign-1',
+      activeChapterId: activeChapter.id,
+      clearedStages: clearedStageIds.size,
+      totalStages: OFFICE_BATTLE_CAMPAIGN.reduce(
+        (total, chapter) => total + chapter.stages.length,
+        0,
+      ),
+      chapters: OFFICE_BATTLE_CAMPAIGN.map((chapter) => {
+        const firstState = campaignStageUnlocked(
+          level,
+          clearedStageIds,
+          chapter.stages[0].id,
+        );
+        const completed = chapter.stages.every((stageDefinition) => (
+          clearedStageIds.has(stageDefinition.id)
+        ));
+        return {
+          id: chapter.id,
+          unlocked: firstState.unlocked,
+          completed,
+          active: chapter.id === activeChapter.id,
+          lockReason: firstState.reason,
+          stages: chapter.stages.map((stageDefinition) => {
+            const state = campaignStageUnlocked(level, clearedStageIds, stageDefinition.id);
+            return {
+              id: stageDefinition.id,
+              cleared: clearedStageIds.has(stageDefinition.id),
+              unlocked: state.unlocked,
+              lockReason: state.reason,
+            };
+          }),
+        };
+      }),
+    };
+  }
+
   private async ensureOffers(
     manager: EntityManager,
     user: User,
     profile: OfficeBattleProfile,
     context: EquipmentContext,
+    chapterId: string,
   ): Promise<OfficeBattleOffer[]> {
     const now = this.clock.now();
     const active = await manager.getRepository(OfficeBattleOfferSet).findOne({
@@ -1392,7 +1554,12 @@ export class OfficeBattleService {
       const existing = await manager.getRepository(OfficeBattleOffer).find({
         where: { offerSetId: active.id, userId: user.id },
       });
-      if (existing.length === 3) return this.tierOrder(existing);
+      const activeChapterMatches = existing.every((offer) => (
+        (offer.opponentSnapshot as unknown as FighterSnapshot).pveStage?.chapterId === chapterId
+      ));
+      if (existing.length === 3 && activeChapterMatches) return this.tierOrder(existing);
+      active.consumedAt = now;
+      await manager.getRepository(OfficeBattleOfferSet).save(active);
     }
 
     const seedHex = randomBytes(32).toString('hex');
@@ -1414,22 +1581,19 @@ export class OfficeBattleService {
       skillLevels: profile.skillLevels,
     });
     const playerPower = fighterPower(playerStats);
-    const tiers = [
-      { tier: 'simple' as const, multiplier: 80 as const, midpoint: 94 },
-      { tier: 'balanced' as const, multiplier: 100 as const, midpoint: 100 },
-      { tier: 'challenge' as const, multiplier: 120 as const, midpoint: 107.5 },
-    ];
+    const chapter = campaignChapter(chapterId) ?? OFFICE_BATTLE_CAMPAIGN[0];
+    const rewardMultipliers = { simple: 80 as const, balanced: 100 as const, challenge: 120 as const };
     const offers: OfficeBattleOffer[] = [];
-    for (const tier of tiers) {
-      const snapshot = this.generateNpcSnapshot(seedHex, tier.tier, level, playerPower);
+    for (const stageDefinition of chapter.stages) {
+      const snapshot = this.generateNpcSnapshot(seedHex, stageDefinition, level, playerPower);
       offers.push(
         await manager.getRepository(OfficeBattleOffer).save(
           manager.getRepository(OfficeBattleOffer).create({
             offerSetId: set.id,
             userId: user.id,
-            tier: tier.tier,
+            tier: stageDefinition.tier,
             opponentSnapshot: snapshot as unknown as Record<string, unknown>,
-            rewardMultiplierPercent: tier.multiplier,
+            rewardMultiplierPercent: rewardMultipliers[stageDefinition.tier],
             expiresAt,
           }),
         ),
@@ -1440,13 +1604,13 @@ export class OfficeBattleService {
 
   private generateNpcSnapshot(
     seedHex: string,
-    tier: OfficeBattleOffer['tier'],
+    stageDefinition: OfficeBattleCampaignStage,
     level: number,
     playerPower: number,
   ): FighterSnapshot {
-    const digest = createHash('sha256').update(`${seedHex}:npc:${tier}`).digest();
-    const profession = OFFICE_BATTLE_PROFESSIONS[digest[0] % OFFICE_BATTLE_PROFESSIONS.length];
-    const targetPercent = tier === 'simple' ? 94 : tier === 'balanced' ? 100 : 107.5;
+    const tier = stageDefinition.tier;
+    const profession = stageDefinition.opponentProfession;
+    const targetPercent = stageDefinition.powerPercent;
     const target = Number(roundHalfUpFraction(BigInt(playerPower * targetPercent * 10), 1000n));
     const maxRarity = maxRarityForLevel(level);
     const rarityCount = OFFICE_BATTLE_RARITIES.indexOf(maxRarity) + 1;
@@ -1481,7 +1645,7 @@ export class OfficeBattleService {
       }
       const stats = deriveBattleStats({ profession, level, equipment });
       const power = fighterPower(stats);
-      const tie = createHash('sha256').update(`${seedHex}:${tier}:${serial.join(',')}`).digest('hex');
+      const tie = createHash('sha256').update(`${seedHex}:${stageDefinition.id}:${serial.join(',')}`).digest('hex');
       if (
         !best ||
         Math.abs(power - target) < Math.abs(best.power - target) ||
@@ -1492,15 +1656,25 @@ export class OfficeBattleService {
     }
     const chosen = best!;
     const stats = deriveBattleStats({ profession, level, equipment: chosen.equipment });
-    const names = ['项目协作专员', '跨组交付同事', '流程优化伙伴'];
+    const chapter = campaignChapter(stageDefinition.chapterId)!;
     return {
-      publicId: this.uuidFromHash(`${seedHex}:${tier}:public`),
-      displayName: names[digest[1] % names.length],
+      publicId: this.uuidFromHash(`${seedHex}:${stageDefinition.id}:public`),
+      displayName: stageDefinition.opponentName,
       profession,
       battleLevel: level,
       power: fighterPower(stats),
       stats,
       equipment: this.slotOrder(chosen.equipment).map((item) => this.uncontextualizedEquipmentView(item)),
+      pveStage: {
+        id: stageDefinition.id,
+        chapterId: stageDefinition.chapterId,
+        chapterName: chapter.name,
+        index: stageDefinition.index,
+        name: stageDefinition.name,
+        summary: stageDefinition.summary,
+        boss: stageDefinition.boss,
+        firstClearReward: stageDefinition.firstClearReward,
+      },
     };
   }
 
@@ -1508,6 +1682,7 @@ export class OfficeBattleService {
     offer: OfficeBattleOffer,
     playerEquipment: OfficeBattleEquipment[],
     profile: OfficeBattleProfile,
+    clearedStageIds: ReadonlySet<string>,
   ) {
     const opponent = offer.opponentSnapshot as unknown as FighterSnapshot;
     const level = battleLevelSnapshot(profile.totalBattleExperience).level;
@@ -1520,11 +1695,23 @@ export class OfficeBattleService {
       }),
     );
     const difference = playerPower === 0 ? 0 : ((opponent.power - playerPower) * 100) / playerPower;
+    const stageDefinition = opponent.pveStage ? campaignStage(opponent.pveStage.id) : null;
+    const stageState = stageDefinition
+      ? campaignStageUnlocked(level, clearedStageIds, stageDefinition.id)
+      : { unlocked: true, reason: null };
     return {
       offerId: offer.id,
       tier: offer.tier,
       expiresAt: offer.expiresAt.toISOString(),
       opponent: this.opponentSummary(opponent),
+      stage: opponent.pveStage
+        ? {
+            ...opponent.pveStage,
+            cleared: clearedStageIds.has(opponent.pveStage.id),
+            unlocked: stageState.unlocked,
+            lockReason: stageState.reason,
+          }
+        : null,
       powerDifferencePercent: Math.round(difference * 10) / 10,
       rewardPreview: {
         battleExperience: 30,
@@ -1532,6 +1719,10 @@ export class OfficeBattleService {
         workspaceCoins: this.multiplyReward(80, offer.rewardMultiplierPercent),
         dropEligible: true,
         note: '基础稀有度概率不受对手档位影响',
+        firstClearBonus:
+          opponent.pveStage && !clearedStageIds.has(opponent.pveStage.id)
+            ? opponent.pveStage.firstClearReward
+            : null,
       },
     };
   }
@@ -2029,6 +2220,7 @@ export class OfficeBattleService {
         parts: 0,
         equipment: null,
         pendingRewardId: null,
+        firstClear: null,
       };
     }
     const won = winner === 'player';
@@ -2043,6 +2235,7 @@ export class OfficeBattleService {
       parts: 0,
       equipment: null,
       pendingRewardId: null,
+      firstClear: null,
     };
     if (!won) return plan;
 

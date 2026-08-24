@@ -63,6 +63,17 @@ const bootstrap: CommunityBattleBootstrap = {
         rules: ['双方使用防守阵容', '强化增量只计 60%'],
       },
     },
+    pveCampaign: {
+      version: 'pve-campaign-1',
+      chapters: [{
+        id: 'probation', index: 1, name: '第一章 · 试用期求生', summary: '熟悉项目挑战。', unlockLevel: 1,
+        stages: [
+          { id: 'probation-1', chapterId: 'probation', index: 1, tier: 'simple', name: '清空待办箱', summary: '完成第一场项目挑战。', opponentName: '待办整理员', opponentProfession: 'product', powerPercent: 92, boss: false, firstClearReward: { battleExperience: 20, workspaceCoins: 100, parts: 2 } },
+          { id: 'probation-2', chapterId: 'probation', index: 2, tier: 'balanced', name: '守住截止线', summary: '守住关键交付。', opponentName: '进度催办专员', opponentProfession: 'sales', powerPercent: 100, boss: false, firstClearReward: { battleExperience: 30, workspaceCoins: 160, parts: 3 } },
+          { id: 'probation-3', chapterId: 'probation', index: 3, tier: 'challenge', name: '试用期复盘会', summary: '击败本章 Boss。', opponentName: '复盘会议主持人', opponentProfession: 'hr', powerPercent: 112, boss: true, firstClearReward: { battleExperience: 60, workspaceCoins: 300, parts: 8 } },
+        ],
+      }],
+    },
     inventoryLimit: 120,
     rarityRates: [
       { rarity: 'common', label: '标准', rate: 45 },
@@ -101,12 +112,21 @@ const bootstrap: CommunityBattleBootstrap = {
   loadout: { equipment, version: 1 },
   defense: { equipmentIds: equipment.map((item) => item.id), challengeVisibility: 'friends', equipmentVisibility: 'friends', version: 1 },
   offers: [{
-    offerId: 'offer-1', tier: 'balanced', expiresAt: '2026-08-22T10:15:00.000Z',
+    offerId: 'offer-1', tier: 'simple', expiresAt: '2026-08-22T10:15:00.000Z',
     opponent: { publicId: 'NPC-1', displayName: '跨部门需求组', profession: 'product', battleLevel: 3, power: 178 },
+    stage: { id: 'probation-1', chapterId: 'probation', chapterName: '第一章 · 试用期求生', index: 1, name: '清空待办箱', summary: '完成第一场项目挑战。', boss: false, firstClearReward: { battleExperience: 20, workspaceCoins: 100, parts: 2 }, cleared: false, unlocked: true, lockReason: null },
     powerDifferencePercent: -1,
-    rewardPreview: { battleExperience: 10, workspaceExperience: 3, workspaceCoins: 4, dropEligible: true },
+    rewardPreview: { battleExperience: 30, workspaceExperience: 0, workspaceCoins: 64, dropEligible: true, firstClearBonus: { battleExperience: 20, workspaceCoins: 100, parts: 2 } },
   }],
   dailyActions: { rewardedBattlesUsed: 12, rewardedBattlesLimit: 12, rewardedFriendBattlesUsed: 0, rewardedFriendBattlesLimit: 3 },
+  pveCampaign: {
+    version: 'pve-campaign-1', activeChapterId: 'probation', clearedStages: 0, totalStages: 3,
+    chapters: [{ id: 'probation', unlocked: true, completed: false, active: true, lockReason: null, stages: [
+      { id: 'probation-1', cleared: false, unlocked: true, lockReason: null },
+      { id: 'probation-2', cleared: false, unlocked: false, lockReason: '先通关 清空待办箱' },
+      { id: 'probation-3', cleared: false, unlocked: false, lockReason: '先通关 守住截止线' },
+    ] }],
+  },
   pendingRewards: [],
   friendCandidates: [],
 };
@@ -123,8 +143,9 @@ describe('CommunityBattlePage formal archive', () => {
     expect(await screen.findByRole('heading', { name: '办公室乐斗' })).toBeInTheDocument();
     expect(screen.getByText(/选对手、开打、拿奖励/)).toBeInTheDocument();
     expect(screen.queryByText('一眼看懂成长路线')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'PVE 挑战 · 10 体力' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'PVE 练习 · 无奖励' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'PVE 副本' }));
+    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeEnabled();
     expect(storageWrite).not.toHaveBeenCalled();
   });
 
@@ -160,8 +181,9 @@ describe('CommunityBattlePage formal archive', () => {
 
     expect(await screen.findByText(/当前角色已被封禁/)).toBeInTheDocument();
     expect(screen.getByText(/当前网页版本过旧/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'PVE 挑战 · 10 体力' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'PVE 练习 · 无奖励' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('tab', { name: 'PVE 副本' }));
+    expect(screen.getByRole('button', { name: '挑战 · 10 体力' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '练习 · 无奖励' })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole('tab', { name: '记录' })).toBeEnabled());
   });
 
@@ -216,5 +238,17 @@ describe('CommunityBattlePage formal archive', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'PVP 技能' }));
     expect(screen.getByText('逻辑超频')).toBeInTheDocument();
     expect(screen.queryByText('批量脚本')).not.toBeInTheDocument();
+  });
+
+  it('shows a sequential PVE chapter route with first-clear rewards', async () => {
+    vi.spyOn(communityBattleApi, 'getBootstrap').mockResolvedValue(bootstrap);
+    render(<CommunityBattlePage />);
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'PVE 副本' }));
+    expect(screen.getByText('PVE 项目主线')).toBeInTheDocument();
+    expect(screen.getAllByText('试用期求生').length).toBeGreaterThan(0);
+    expect(screen.getByText('清空待办箱')).toBeInTheDocument();
+    expect(screen.getByText('首通：经验 +20 · 办公币 +100 · 零件 +2')).toBeInTheDocument();
+    expect(screen.getByText('已通关 0/3')).toBeInTheDocument();
   });
 });

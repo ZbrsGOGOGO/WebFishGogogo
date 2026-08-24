@@ -55,6 +55,9 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
           <h2 id="server-replay-title">
             {settlement.winner === 'player' ? '本次胜出' : '本次惜败'}
           </h2>
+          {settlement.opponent.pveStage ? (
+            <small>{settlement.opponent.pveStage.chapterName} · {settlement.opponent.pveStage.name}</small>
+          ) : null}
         </div>
         <div className={styles.inlineActions}>
           <Button
@@ -124,6 +127,13 @@ export function ServerBattleReplay({ settlement }: ServerBattleReplayProps): JSX
           ) : null}
           {settlement.reward.droppedEquipment ? (
             <p>装备掉落：{settlement.reward.droppedEquipment.name}</p>
+          ) : null}
+          {settlement.reward.firstClear ? (
+            <p className={styles.firstClearSettlement}>
+              首次通关 {settlement.reward.firstClear.stageName}：额外经验 +{settlement.reward.firstClear.battleExperience}
+              {' · '}办公币 +{settlement.reward.firstClear.workspaceCoins}
+              {' · '}零件 +{settlement.reward.firstClear.parts}
+            </p>
           ) : null}
           {settlement.reward.pendingRewardId ? <p>仓库已满，装备进入待领取区。</p> : null}
         </div>
