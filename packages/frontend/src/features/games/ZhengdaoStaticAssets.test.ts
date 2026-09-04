@@ -55,7 +55,7 @@ describe('遮司静态游戏资源', () => {
     expect(app).toContain("event.data.type==='momo.zhesi.ready.request'");
     expect(app).not.toContain("postMessage({type:'momo.zhesi.ready'}, '*')");
     expect(app).toContain("new URLSearchParams(window.location.search).get('embedded')==='1'");
-    expect(app).toContain('sitebar.hidden=true');
+    expect(app).toContain("sitebar.style.display='none'");
   });
 
   it('保持为无外链、无动态网络或代码执行能力的纯静态游戏', () => {

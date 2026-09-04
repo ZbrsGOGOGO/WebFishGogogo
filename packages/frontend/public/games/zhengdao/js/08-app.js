@@ -30,7 +30,7 @@
   function applyEmbeddedMode(){
     const embedded = window.parent!==window && new URLSearchParams(window.location.search).get('embedded')==='1';
     const sitebar = document.querySelector('.sitebar');
-    if(embedded && sitebar) sitebar.hidden=true;
+    if(embedded && sitebar) sitebar.style.display='none';
   }
 
   // —— 顶部菜单：命格录 / 成就 / 排行榜 抽屉 ——
