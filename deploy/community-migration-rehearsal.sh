@@ -405,4 +405,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through daily hot news and invite coin 0022 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019 and guild foundation/boss 0020-0021), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through arcade leaderboards and chat retention 0023 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, and daily hot news/invite coin 0022), normalized-email collision abort, lock-timeout rollback and recovery."
