@@ -311,12 +311,22 @@ docker run --detach \
   "$POSTGRES_IMAGE" >/dev/null
 
 ready=0
+consecutive_ready=0
 attempt=1
 while [ "$attempt" -le 30 ]; do
+  # The official image briefly accepts connections from its temporary init
+  # server before restarting PostgreSQL. Require two real queries one second
+  # apart so the rehearsal cannot continue inside that restart window.
   if docker exec -e PGPASSWORD="$PG_PASSWORD" "$PG_CONTAINER" \
-    pg_isready -U postgres -d postgres >/dev/null 2>&1; then
-    ready=1
-    break
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -Atq \
+      -c 'SELECT 1;' 2>/dev/null | grep -qx 1; then
+    consecutive_ready=$((consecutive_ready + 1))
+    if [ "$consecutive_ready" -ge 2 ]; then
+      ready=1
+      break
+    fi
+  else
+    consecutive_ready=0
   fi
   attempt=$((attempt + 1))
   sleep 1
