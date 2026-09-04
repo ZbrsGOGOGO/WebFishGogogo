@@ -110,6 +110,15 @@ require_header() {
   pass "$label header"
 }
 
+require_single_header() {
+  file=$1
+  header_name=$2
+  label=$3
+  count=$(grep -Eic "^${header_name}:" "$file" || true)
+  [ "$count" -eq 1 ] || fail "$label must appear exactly once, found $count"
+  pass "$label appears exactly once"
+}
+
 require_literal() {
   literal_file=$1
   literal_value=$2
@@ -255,6 +264,8 @@ require_literal "$SMOKE_TMP/zhesi-page.js" \
 # returned by the catch-all route when a file is missing.
 request GET /games/zhengdao/ 200 \
   "$SMOKE_TMP/game-zhengdao.html" "$SMOKE_TMP/game-zhengdao.headers"
+request GET '/games/zhengdao/index.html?embedded=1' 200 \
+  "$SMOKE_TMP/game-zhengdao-embedded.html" "$SMOKE_TMP/game-zhengdao-embedded.headers"
 request GET /games/zhengdao/js/01-data.js 200 \
   "$SMOKE_TMP/game-zhengdao-data.js" "$SMOKE_TMP/game-zhengdao-data.headers"
 
@@ -264,6 +275,22 @@ require_header "$SMOKE_TMP/game-zhengdao.headers" \
 require_header "$SMOKE_TMP/game-zhengdao-data.headers" \
   '^content-type:[[:space:]]*(application|text)/javascript' \
   'zhengdao JavaScript content type'
+require_single_header "$SMOKE_TMP/game-zhengdao-embedded.headers" \
+  'x-frame-options' 'zhesi iframe X-Frame-Options'
+require_single_header "$SMOKE_TMP/game-zhengdao-embedded.headers" \
+  'content-security-policy' 'zhesi iframe CSP'
+require_header "$SMOKE_TMP/game-zhengdao-embedded.headers" \
+  '^x-frame-options:[[:space:]]*sameorigin[[:space:]]*$' \
+  'zhesi same-origin framing'
+require_header "$SMOKE_TMP/game-zhengdao-embedded.headers" \
+  "^content-security-policy:.*frame-ancestors[[:space:]]+'self'([;[:space:]]|$)" \
+  'zhesi same-origin frame ancestor'
+if grep -Eiq \
+  "^x-frame-options:.*deny|^content-security-policy:.*frame-ancestors[[:space:]]+'none'" \
+  "$SMOKE_TMP/game-zhengdao-embedded.headers"; then
+  fail "zhesi iframe response still contains a conflicting frame denial"
+fi
+pass "zhesi iframe response contains no conflicting frame denial"
 require_literal "$SMOKE_TMP/game-zhengdao.html" \
   '<title>遮司 · 命格模拟｜摸摸公司</title>' \
   'zhesi iframe document title'
@@ -286,6 +313,9 @@ pass "community homepage exposes the 摸摸公司 brand"
 
 require_header "$SMOKE_TMP/spa-.headers" '^x-content-type-options:[[:space:]]*nosniff' 'nosniff'
 require_header "$SMOKE_TMP/spa-.headers" '^x-frame-options:[[:space:]]*deny' 'frame denial'
+require_header "$SMOKE_TMP/spa-.headers" \
+  "^content-security-policy:.*frame-ancestors[[:space:]]+'none'([;[:space:]]|$)" \
+  'default frame-ancestor denial'
 require_header "$SMOKE_TMP/spa-.headers" '^referrer-policy:[[:space:]]*strict-origin-when-cross-origin' 'referrer policy'
 require_header "$SMOKE_TMP/spa-.headers" '^content-security-policy:.*connect-src.*wss:' 'community CSP'
 require_header "$SMOKE_TMP/spa-.headers" '^x-webfish-site-mode:[[:space:]]*community' 'community mode marker'

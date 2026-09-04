@@ -48,6 +48,16 @@ describe('遮司静态游戏资源', () => {
     expect(html).toContain('仅保存在当前浏览器，不会上传');
   });
 
+  it('完成启动后只向同源父页发送就绪信号', () => {
+    const app = readAsset('js/08-app.js');
+
+    expect(app).toContain("window.parent.postMessage({type:'momo.zhesi.ready'}, window.location.origin)");
+    expect(app).toContain("event.data.type==='momo.zhesi.ready.request'");
+    expect(app).not.toContain("postMessage({type:'momo.zhesi.ready'}, '*')");
+    expect(app).toContain("new URLSearchParams(window.location.search).get('embedded')==='1'");
+    expect(app).toContain('sitebar.hidden=true');
+  });
+
   it('保持为无外链、无动态网络或代码执行能力的纯静态游戏', () => {
     const assets = [
       { path: 'index.html', content: readFileSync(INDEX_PATH, 'utf8') },

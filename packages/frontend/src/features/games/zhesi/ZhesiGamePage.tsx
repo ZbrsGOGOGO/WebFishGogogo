@@ -8,6 +8,8 @@ import styles from './ZhesiGamePage.module.css';
 
 const EMBED_URL = '/games/zhengdao/index.html?embedded=1';
 const FINISHED_EVENT = 'momo.zhesi.run.finished';
+const READY_EVENT = 'momo.zhesi.ready';
+const READY_REQUEST_EVENT = 'momo.zhesi.ready.request';
 const STARTED_EVENT = 'momo.zhesi.run.started';
 
 interface ZhesiFinishedMessage {
@@ -48,6 +50,10 @@ export function ZhesiGamePage(): JSX.Element {
       ) {
         return;
       }
+      if (event.data.type === READY_EVENT) {
+        setFrameReady(true);
+        return;
+      }
       if (event.data.type === STARTED_EVENT) {
         setRunState('running');
         arcade.begin();
@@ -83,7 +89,13 @@ export function ZhesiGamePage(): JSX.Element {
             title="遮司命格模拟游戏"
             sandbox="allow-scripts allow-same-origin"
             referrerPolicy="same-origin"
-            onLoad={() => setFrameReady(true)}
+            onLoad={() => {
+              setFrameReady(false);
+              frameRef.current?.contentWindow?.postMessage(
+                { type: READY_REQUEST_EVENT },
+                window.location.origin,
+              );
+            }}
           />
         </div>
 

@@ -177,7 +177,7 @@ REQUIRE_AUTH_SMOKE=1 \
 sh deploy/community-smoke.sh https://zbrshyyzxx.top
 ```
 
-脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档及办公室乐斗 API 为 404、`/tower-defense` 与历史地址 `/ledou`、`/battle` 均可达、`/games/zhesi` 确实加载含“遮司”文案的 React chunk 并引用 `/games/zhengdao/` 静态 iframe、无登录信息的 `GET /api/v1/games/arcade/leaderboards/zhesi` 返回排行榜合约、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
+脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档及办公室乐斗 API 为 404、`/tower-defense` 与历史地址 `/ledou`、`/battle` 均可达、`/games/zhesi` 确实加载含“遮司”文案的 React chunk 并引用 `/games/zhengdao/` 静态 iframe、iframe 文档只返回一组 `SAMEORIGIN` / `frame-ancestors 'self'` 许可头且普通页仍保持 `DENY` / `frame-ancestors 'none'`、无登录信息的 `GET /api/v1/games/arcade/leaderboards/zhesi` 返回排行榜合约、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
 
 带专用测试账号运行时，脚本还会验证合法 `Origin` 登录、生产 `__Host-` 刷新 Cookie 的 `Secure`、`HttpOnly`、`SameSite=Strict`、`Path=/` 和无 `Domain` 属性，以及缺少 `Origin` 的刷新被拒绝、合法同源刷新成功并在结束时注销测试会话。不要使用真实用户账号，也不要把测试凭据写进仓库或命令历史。
 

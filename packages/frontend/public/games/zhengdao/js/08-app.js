@@ -16,6 +16,23 @@
   const Replay = ZT.replay, Record = ZT.record, Ach = ZT.achievements, Engine = ZT.engine;
   const $ = id => document.getElementById(id);
 
+  function announceReady(){
+    if(window.parent!==window){
+      window.parent.postMessage({type:'momo.zhesi.ready'}, window.location.origin);
+    }
+  }
+
+  window.addEventListener('message', event=>{
+    if(event.origin!==window.location.origin || event.source!==window.parent) return;
+    if(event.data && event.data.type==='momo.zhesi.ready.request') announceReady();
+  });
+
+  function applyEmbeddedMode(){
+    const embedded = window.parent!==window && new URLSearchParams(window.location.search).get('embedded')==='1';
+    const sitebar = document.querySelector('.sitebar');
+    if(embedded && sitebar) sitebar.hidden=true;
+  }
+
   // —— 顶部菜单：命格录 / 成就 / 排行榜 抽屉 ——
   function openSheet(which){
     const ach=$('achPanel'), rec=$('recordPanel');
@@ -94,7 +111,9 @@
     Replay.showInit(Engine.rollLife());
   }
 
+  applyEmbeddedMode();
   bindEvents();
   boot();
+  announceReady();
 
 })(window.ZT = window.ZT || {});

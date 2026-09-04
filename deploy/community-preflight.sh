@@ -371,6 +371,19 @@ grep -Fq 'location /api/' "$ROOT_DIR/deploy/community.nginx.conf" ||
 grep -Fq 'location = /games {' "$ROOT_DIR/deploy/community.nginx.conf" &&
 grep -Fq 'location = /games/ {' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "community Nginx must keep both game-catalog URLs in the SPA"
+ZHESI_FRAME_LOCATION=$(awk '
+  /^[[:space:]]*location = \/games\/zhengdao\/index\.html \{/ { capture = 1 }
+  capture { print }
+  capture && /^    }$/ { exit }
+' "$ROOT_DIR/deploy/community.nginx.conf")
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'add_header_inherit off;' &&
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'X-Frame-Options "SAMEORIGIN"' &&
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq "frame-ancestors 'self'" ||
+  fail "community Nginx must allow only the Zhesi document to be framed by the same origin"
+grep -Fq 'add_header X-Frame-Options "DENY" always;' \
+  "$ROOT_DIR/deploy/community.nginx.conf" &&
+grep -Fq "frame-ancestors 'none'" "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "community Nginx must keep default frame denial outside the Zhesi document"
 if grep -E '^    location ~ .*\b(documents|reading|memo|preferences|tools|skins)\b' \
   "$ROOT_DIR/deploy/community.nginx.conf" >/dev/null; then
   fail "legacy private APIs must not appear in the community allowlist"
@@ -470,6 +483,11 @@ grep -Fq 'request GET /api/v1/games/arcade/leaderboards/zhesi 200' \
 grep -Fq 'request GET /games/zhengdao/ 200' \
   "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover the zhengdao static HTML page"
+grep -Fq "request GET '/games/zhengdao/index.html?embedded=1' 200" \
+  "$ROOT_DIR/deploy/community-smoke.sh" &&
+grep -Fq 'zhesi iframe response contains no conflicting frame denial' \
+  "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must prove that only same-origin Zhesi framing is allowed"
 grep -Fq 'request GET /games/zhengdao/js/01-data.js 200' \
   "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover a zhengdao JavaScript module"

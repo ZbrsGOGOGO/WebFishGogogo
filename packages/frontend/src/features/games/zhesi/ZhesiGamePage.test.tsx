@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -47,14 +47,30 @@ describe('ZhesiGamePage', () => {
     const frame = screen.getByTitle('遮司命格模拟游戏') as HTMLIFrameElement;
     expect(frame).toHaveAttribute('src', '/games/zhengdao/index.html?embedded=1');
     expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin');
+    expect(screen.getByText('正在载入')).toBeInTheDocument();
+    const framePostMessage = vi.spyOn(frame.contentWindow!, 'postMessage');
     fireEvent.load(frame);
+    expect(framePostMessage).toHaveBeenCalledWith(
+      { type: 'momo.zhesi.ready.request' },
+      window.location.origin,
+    );
+    expect(screen.getByText('正在载入')).toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: frame.contentWindow,
+        data: { type: 'momo.zhesi.ready' },
+      }));
+    });
     expect(screen.getByText('游戏已就绪')).toBeInTheDocument();
 
-    window.dispatchEvent(new MessageEvent('message', {
-      origin: window.location.origin,
-      source: frame.contentWindow,
-      data: { type: 'momo.zhesi.run.started' },
-    }));
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: frame.contentWindow,
+        data: { type: 'momo.zhesi.run.started' },
+      }));
+    });
     expect(community.startRun).toHaveBeenCalledWith('zhesi');
 
     const metrics = {
@@ -74,11 +90,13 @@ describe('ZhesiGamePage', () => {
       grade: '黄',
       mode: 'hard',
     };
-    window.dispatchEvent(new MessageEvent('message', {
-      origin: window.location.origin,
-      source: frame.contentWindow,
-      data: { type: 'momo.zhesi.run.finished', score: 12_385, metrics },
-    }));
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        source: frame.contentWindow,
+        data: { type: 'momo.zhesi.run.finished', score: 12_385, metrics },
+      }));
+    });
 
     await waitFor(() => expect(community.finishRun).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111',

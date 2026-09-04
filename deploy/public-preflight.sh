@@ -84,6 +84,19 @@ printf '%s\n' "$PUBLIC_BUILD_SECTION" |
 grep -Fq 'location = /games {' "$ROOT_DIR/deploy/public.nginx.conf" &&
 grep -Fq 'location = /games/ {' "$ROOT_DIR/deploy/public.nginx.conf" ||
   fail "public Nginx must keep both game-catalog URLs in the SPA"
+ZHESI_FRAME_LOCATION=$(awk '
+  /^[[:space:]]*location = \/games\/zhengdao\/index\.html \{/ { capture = 1 }
+  capture { print }
+  capture && /^    }$/ { exit }
+' "$ROOT_DIR/deploy/public.nginx.conf")
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'add_header_inherit off;' &&
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'X-Frame-Options "SAMEORIGIN"' &&
+printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq "frame-ancestors 'self'" ||
+  fail "public Nginx must allow only the Zhesi document to be framed by the same origin"
+grep -Fq 'add_header X-Frame-Options "DENY" always;' \
+  "$ROOT_DIR/deploy/public.nginx.conf" &&
+grep -Fq "frame-ancestors 'none'" "$ROOT_DIR/deploy/public.nginx.conf" ||
+  fail "public Nginx must keep default frame denial outside the Zhesi document"
 
 for public_route in \
   /tower-defense \
@@ -99,6 +112,11 @@ done
 grep -Fq 'ZhesiGamePage' "$ROOT_DIR/deploy/public-smoke.sh" &&
 grep -Fq '遮司 · 命格模拟｜摸摸公司' "$ROOT_DIR/deploy/public-smoke.sh" ||
   fail "public smoke must verify the zhesi React chunk and iframe document"
+grep -Fq "fetch_exact '/games/zhengdao/index.html?embedded=1' 200" \
+  "$ROOT_DIR/deploy/public-smoke.sh" &&
+grep -Fq 'zhesi iframe response contains no conflicting frame denial' \
+  "$ROOT_DIR/deploy/public-smoke.sh" ||
+  fail "public smoke must prove that only same-origin Zhesi framing is allowed"
 grep -Fq '本机最高分' "$ROOT_DIR/deploy/public-smoke.sh" &&
 grep -Fq '不上传' "$ROOT_DIR/deploy/public-smoke.sh" &&
 grep -Fq '不提供正式奖励' "$ROOT_DIR/deploy/public-smoke.sh" ||

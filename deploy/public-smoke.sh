@@ -69,6 +69,7 @@ fetch_exact() {
     --connect-timeout 5 \
     --max-time 20 \
     --user-agent 'WebFish-public-smoke/1.0' \
+    --dump-header "$fetch_output.headers" \
     --output "$fetch_output" \
     --write-out '%{http_code}' \
     "$SMOKE_BASE_URL$fetch_path"); then
@@ -78,6 +79,25 @@ fetch_exact() {
   [ "$fetch_status" = "$fetch_expected" ] ||
     fail "$fetch_path returned HTTP $fetch_status, expected $fetch_expected"
   pass "$fetch_path -> HTTP $fetch_status"
+}
+
+require_header() {
+  header_file=$1
+  header_regex=$2
+  header_label=$3
+  grep -Eiq "$header_regex" "$header_file" ||
+    fail "$header_label header is missing or unsafe"
+  pass "$header_label header"
+}
+
+require_single_header() {
+  header_file=$1
+  header_name=$2
+  header_label=$3
+  header_count=$(grep -Eic "^${header_name}:" "$header_file" || true)
+  [ "$header_count" -eq 1 ] ||
+    fail "$header_label must appear exactly once, found $header_count"
+  pass "$header_label appears exactly once"
 }
 
 check_hidden_redirect() {
@@ -166,6 +186,8 @@ fetch_exact '/games/tetris' 200 "$SMOKE_TMP/game-tetris.html"
 fetch_exact '/games/tank' 200 "$SMOKE_TMP/game-tank.html"
 fetch_exact '/games/zhesi' 200 "$SMOKE_TMP/game-zhesi.html"
 fetch_exact '/games/zhengdao/' 200 "$SMOKE_TMP/game-zhengdao.html"
+fetch_exact '/games/zhengdao/index.html?embedded=1' 200 \
+  "$SMOKE_TMP/game-zhengdao-embedded.html"
 fetch_exact '/games/zhengdao/js/01-data.js' 200 "$SMOKE_TMP/game-zhengdao-data.js"
 fetch_exact '/privacy-policy' 200 "$SMOKE_TMP/privacy.html"
 fetch_exact '/terms-of-service' 200 "$SMOKE_TMP/terms.html"
@@ -278,6 +300,28 @@ require_literal "$SMOKE_TMP/game-zhengdao-data.js" \
 forbid_regex "$SMOKE_TMP/game-zhengdao-data.js" \
   '<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<[Hh][Tt][Mm][Ll]' \
   'HTML fallback in zhengdao JavaScript module'
+require_single_header "$SMOKE_TMP/game-zhengdao-embedded.html.headers" \
+  'x-frame-options' 'zhesi iframe X-Frame-Options'
+require_single_header "$SMOKE_TMP/game-zhengdao-embedded.html.headers" \
+  'content-security-policy' 'zhesi iframe CSP'
+require_header "$SMOKE_TMP/game-zhengdao-embedded.html.headers" \
+  '^x-frame-options:[[:space:]]*sameorigin[[:space:]]*$' \
+  'zhesi same-origin framing'
+require_header "$SMOKE_TMP/game-zhengdao-embedded.html.headers" \
+  "^content-security-policy:.*frame-ancestors[[:space:]]+'self'([;[:space:]]|$)" \
+  'zhesi same-origin frame ancestor'
+if grep -Eiq \
+  "^x-frame-options:.*deny|^content-security-policy:.*frame-ancestors[[:space:]]+'none'" \
+  "$SMOKE_TMP/game-zhengdao-embedded.html.headers"; then
+  fail "zhesi iframe response still contains a conflicting frame denial"
+fi
+pass "zhesi iframe response contains no conflicting frame denial"
+require_header "$SMOKE_TMP/home.html.headers" \
+  '^x-frame-options:[[:space:]]*deny' \
+  'default frame denial'
+require_header "$SMOKE_TMP/home.html.headers" \
+  "^content-security-policy:.*frame-ancestors[[:space:]]+'none'([;[:space:]]|$)" \
+  'default frame-ancestor denial'
 
 # Public artifacts must not contain review/PII text or hidden full-site features.
 forbid_regex "$SMOKE_TMP/public-artifacts.txt" \
