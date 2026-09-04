@@ -9,6 +9,7 @@ import {
   SnakeGamePage,
   TankBattlePage,
   TetrisGamePage,
+  ZhesiGamePage,
 } from '../features/games';
 import { HomePage } from '../features/home/HomePage';
 import { LibraryPage } from '../features/library';
@@ -47,6 +48,7 @@ export function RuntimeRouter(): JSX.Element {
         <Route path="/games/snake" element={<SnakeGamePage />} />
         <Route path="/games/tetris" element={<TetrisGamePage />} />
         <Route path="/games/tank" element={<TankBattlePage />} />
+        <Route path="/games/zhesi" element={<ZhesiGamePage />} />
         <Route path="/games/high-low" element={<Navigate to="/games" replace />} />
         <Route path="/games/three-sum" element={<Navigate to="/games" replace />} />
         <Route path="*" element={<NotFoundPage />} />

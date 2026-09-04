@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 
-export type ArcadeGameKey = 'tetris' | 'tank';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi';
 
 export interface ArcadeRun {
   runId: string;

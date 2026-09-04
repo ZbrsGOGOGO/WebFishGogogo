@@ -13,7 +13,8 @@ GUILD_BOSS_TIMESTAMP=1700000000021
 HOT_NEWS_TIMESTAMP=1700000000022
 ARCADE_TIMESTAMP=1700000000023
 DIRECT_MESSAGES_TIMESTAMP=1700000000024
-LATEST_TIMESTAMP=1700000000024
+ZHESI_ARCADE_TIMESTAMP=1700000000025
+LATEST_TIMESTAMP=1700000000025
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -126,6 +127,8 @@ assert_target_applied() {
   [ "$arcade_count" = 1 ] || fail "$database did not record migration $ARCADE_TIMESTAMP"
   direct_messages_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $DIRECT_MESSAGES_TIMESTAMP;")
   [ "$direct_messages_count" = 1 ] || fail "$database did not record migration $DIRECT_MESSAGES_TIMESTAMP"
+  zhesi_arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ZHESI_ARCADE_TIMESTAMP;")
+  [ "$zhesi_arcade_count" = 1 ] || fail "$database did not record migration $ZHESI_ARCADE_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 1 ] || fail "$database did not record migration $LATEST_TIMESTAMP"
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
@@ -151,6 +154,8 @@ assert_target_applied() {
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$arcade_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $arcade_table after migration"
   done
+  zhesi_arcade_constraint_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_constraint WHERE conname IN ('chk_arcade_game_runs_game', 'chk_arcade_best_scores_game') AND pg_get_constraintdef(oid) LIKE '%zhesi%';")
+  [ "$zhesi_arcade_constraint_count" = 2 ] || fail "$database is missing one or more 0025 zhesi arcade constraints"
   for direct_message_table in chat_direct_conversations chat_direct_conversation_members chat_direct_messages chat_direct_message_reports; do
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$direct_message_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $direct_message_table after migration"
@@ -211,6 +216,8 @@ assert_target_absent() {
   [ "$arcade_count" = 0 ] || fail "$database still records migration $ARCADE_TIMESTAMP"
   direct_messages_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $DIRECT_MESSAGES_TIMESTAMP;")
   [ "$direct_messages_count" = 0 ] || fail "$database still records migration $DIRECT_MESSAGES_TIMESTAMP"
+  zhesi_arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ZHESI_ARCADE_TIMESTAMP;")
+  [ "$zhesi_arcade_count" = 0 ] || fail "$database still records migration $ZHESI_ARCADE_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 0 ] || fail "$database still records migration $LATEST_TIMESTAMP"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
@@ -239,6 +246,18 @@ assert_target_absent() {
   [ "$guild_boss_table_count" = 0 ] || fail "$database retained 0021 guild-boss tables after rollback/failure"
   hot_news_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('hot_news_headlines', 'hot_news_refresh_runs');")
   [ "$hot_news_table_count" = 0 ] || fail "$database retained 0022 daily-hot-news tables after rollback/failure"
+}
+
+assert_zhesi_arcade_reverted() {
+  database=$1
+  latest=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
+  [ "$latest" = "$DIRECT_MESSAGES_TIMESTAMP" ] ||
+    fail "$database latest migration is $latest after reverting 0025, expected $DIRECT_MESSAGES_TIMESTAMP"
+  zhesi_arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ZHESI_ARCADE_TIMESTAMP;")
+  [ "$zhesi_arcade_count" = 0 ] || fail "$database still records migration $ZHESI_ARCADE_TIMESTAMP after its revert"
+  legacy_arcade_constraint_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_constraint WHERE conname IN ('chk_arcade_game_runs_game', 'chk_arcade_best_scores_game') AND pg_get_constraintdef(oid) LIKE '%tetris%' AND pg_get_constraintdef(oid) LIKE '%tank%' AND pg_get_constraintdef(oid) NOT LIKE '%zhesi%';")
+  [ "$legacy_arcade_constraint_count" = 2 ] ||
+    fail "$database did not restore both pre-0025 arcade constraints"
 }
 
 restore_snapshot() {
@@ -317,6 +336,21 @@ run_migration_cli rehearsal_clean 5000 migration:run \
   fail "clean migration up failed"
 assert_target_applied rehearsal_clean
 pass "clean snapshot migrated up through $LATEST_TIMESTAMP"
+
+# Exercise 0025's own down path while the 0023 arcade tables still exist. A
+# final all-the-way rollback alone could hide a broken constraint restoration
+# because 0023 subsequently drops both tables.
+run_migration_cli rehearsal_clean 5000 migration:revert \
+  >"$REHEARSAL_TMP/zhesi-revert.log" 2>&1 ||
+  fail "migration 0025 revert failed"
+assert_zhesi_arcade_reverted rehearsal_clean
+pass "zhesi arcade migration reverted to $DIRECT_MESSAGES_TIMESTAMP"
+
+run_migration_cli rehearsal_clean 5000 migration:run \
+  >"$REHEARSAL_TMP/zhesi-reapply.log" 2>&1 ||
+  fail "migration 0025 did not reapply after its targeted revert"
+assert_target_applied rehearsal_clean
+pass "zhesi arcade migration reapplied through $LATEST_TIMESTAMP"
 
 higher_count=$(pg_scalar rehearsal_clean "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" > $BASELINE_TIMESTAMP;")
 while [ "$higher_count" -gt 0 ]; do
@@ -418,4 +452,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through friend direct messages 0024 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, and arcade leaderboards/chat retention 0023), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through zhesi arcade 0025 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, arcade leaderboards/chat retention 0023, and friend direct messages 0024), targeted 0025 constraint revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."

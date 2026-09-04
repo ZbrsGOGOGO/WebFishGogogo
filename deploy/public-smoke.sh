@@ -164,6 +164,7 @@ fetch_exact '/games' 200 "$SMOKE_TMP/games.html"
 fetch_exact '/games/snake' 200 "$SMOKE_TMP/game-snake.html"
 fetch_exact '/games/tetris' 200 "$SMOKE_TMP/game-tetris.html"
 fetch_exact '/games/tank' 200 "$SMOKE_TMP/game-tank.html"
+fetch_exact '/games/zhesi' 200 "$SMOKE_TMP/game-zhesi.html"
 fetch_exact '/games/zhengdao/' 200 "$SMOKE_TMP/game-zhengdao.html"
 fetch_exact '/games/zhengdao/js/01-data.js' 200 "$SMOKE_TMP/game-zhengdao-data.js"
 fetch_exact '/privacy-policy' 200 "$SMOKE_TMP/privacy.html"
@@ -205,13 +206,13 @@ while IFS= read -r entry_path; do
   cat "$entry_file" >> "$SMOKE_TMP/public-artifacts.txt"
 done < "$SMOKE_TMP/entry-assets.txt"
 
-grep -a -E -o 'assets/(workstation-tower-defense|PublicGamesPage|SnakeGamePage|TetrisGamePage|TankBattlePage)-[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
+grep -a -E -o 'assets/(workstation-tower-defense|PublicGamesPage|SnakeGamePage|TetrisGamePage|TankBattlePage|ZhesiGamePage)-[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
   sed 's#^#/#' |
   sort -u > "$SMOKE_TMP/game-assets.txt"
 
 game_asset_count=$(wc -l < "$SMOKE_TMP/game-assets.txt" | tr -d ' ')
-[ "$game_asset_count" -eq 5 ] ||
-  fail "found $game_asset_count of the 5 expected public interactive chunks"
+[ "$game_asset_count" -eq 6 ] ||
+  fail "found $game_asset_count of the 6 expected public interactive chunks"
 
 game_asset_index=0
 while IFS= read -r game_asset_path; do
@@ -240,6 +241,10 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" \
 require_literal "$SMOKE_TMP/public-artifacts.txt" '贪食蛇' 'snake game title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '俄罗斯方块' 'tetris title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '坦克大战' 'tank game title'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '遮司' 'zhesi game title'
+require_literal "$SMOKE_TMP/public-artifacts.txt" \
+  '/games/zhengdao/index.html?embedded=1' \
+  'zhesi iframe resource'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '浙ICP备2026060298号' \
   'ICP record'
@@ -259,8 +264,8 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" \
 # Static game checks use content unique to the imported files. This prevents
 # Nginx's SPA fallback from turning a missing HTML page or JavaScript file into a false 200.
 require_literal "$SMOKE_TMP/game-zhengdao.html" \
-  '<title>证道 · 命格模拟｜摸摸公司</title>' \
-  'zhengdao static page title'
+  '<title>遮司 · 命格模拟｜摸摸公司</title>' \
+  'zhesi iframe document title'
 require_literal "$SMOKE_TMP/game-zhengdao.html" \
   '<script src="js/01-data.js"></script>' \
   'zhengdao JavaScript module reference'

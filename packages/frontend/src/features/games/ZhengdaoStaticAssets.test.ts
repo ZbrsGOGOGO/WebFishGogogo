@@ -20,7 +20,7 @@ function readAsset(relativePath: string): string {
   return readFileSync(resolve(GAME_ROOT, relativePath), 'utf8');
 }
 
-describe('证道静态游戏资源', () => {
+describe('遮司静态游戏资源', () => {
   it('按固定顺序加载八个本地脚本，且每个入口文件都随站点发布', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
     const scriptSources = [...html.matchAll(
@@ -40,9 +40,11 @@ describe('证道静态游戏资源', () => {
   it('保留摸摸公司品牌、游戏中心返回入口和仅本机保存说明', () => {
     const html = readFileSync(INDEX_PATH, 'utf8');
 
-    expect(html).toMatch(/<title>[^<]*摸摸公司<\/title>/u);
+    expect(html).toContain('<title>遮司 · 命格模拟｜摸摸公司</title>');
+    expect(html).toMatch(/<h1>\s*遮\s+司\s*<\/h1>/u);
+    expect(html).toMatch(/<div class="sub">\s*命\s+格\s+模\s+拟/u);
     expect(html).toMatch(/<a\s+href=["']\/games["'][^>]*>\s*←\s*返回小游戏中心\s*<\/a>/u);
-    expect(html).toContain('摸摸公司 · 本机存档');
+    expect(html).toContain('摸摸公司 · 遮司 · 本机存档');
     expect(html).toContain('仅保存在当前浏览器，不会上传');
   });
 
@@ -74,7 +76,7 @@ describe('证道静态游戏资源', () => {
     }
   });
 
-  it('所有 localStorage 数据键都使用 momo.zhengdao 版本化命名空间', () => {
+  it('所有 localStorage 数据键都使用 momo.zhesi 版本化命名空间', () => {
     const config = readAsset('js/02-config.js');
     const scripts = EXPECTED_SCRIPTS.map(readAsset).join('\n');
     const configuredKeys = new Map(
@@ -83,11 +85,11 @@ describe('证道静态游戏资源', () => {
     );
 
     expect(Object.fromEntries(configuredKeys)).toEqual({
-      ACH_KEY: 'momo.zhengdao.achievements.v1',
-      LS_KEY: 'momo.zhengdao.life-history.v1',
+      ACH_KEY: 'momo.zhesi.achievements.v1',
+      LS_KEY: 'momo.zhesi.life-history.v1',
     });
     for (const key of configuredKeys.values()) {
-      expect(key).toMatch(/^momo\.zhengdao\.[a-z0-9.-]+\.v\d+$/u);
+      expect(key).toMatch(/^momo\.zhesi\.[a-z0-9.-]+\.v\d+$/u);
     }
 
     const storageArguments = [...scripts.matchAll(

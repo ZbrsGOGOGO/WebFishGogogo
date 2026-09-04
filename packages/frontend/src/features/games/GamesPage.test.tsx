@@ -28,13 +28,11 @@ describe('GamesPage', () => {
       'href',
       '/games/tank',
     );
-    expect(screen.getByRole('link', { name: /证道 · 命格模拟/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /遮司/ })).toHaveAttribute(
       'href',
-      '/games/zhengdao/',
+      '/games/zhesi',
     );
-    expect(
-      PUBLIC_GAME_CARDS.find((game) => game.path === '/games/zhengdao/'),
-    ).toMatchObject({ reloadDocument: true });
+    expect(PUBLIC_GAME_CARDS.find((game) => game.path === '/games/zhesi')).toBeDefined();
     expect(screen.queryByRole('link', { name: /三数之和|午休竞技场|比大小/ })).not.toBeInTheDocument();
     expect(screen.getByText('4')).toBeInTheDocument();
     expect(screen.getByText(/模拟游戏的进度与记录仅保存在当前浏览器/)).toBeInTheDocument();

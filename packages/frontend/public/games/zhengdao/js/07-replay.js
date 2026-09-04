@@ -417,6 +417,29 @@
       gender:f.gender||'—', identityName:f.identity||'散修 / 凡俗',
       events:sim.events // 完整一生：全部事件日志（供命格录「回看」铺陈）
     });
+    if(window.parent!==window){
+      window.parent.postMessage({
+        type:'momo.zhesi.run.finished',
+        score:combatPower(f),
+        metrics:{
+          realm:f.realm,
+          aptitude:f.apt.val,
+          physiqueTier:f.phy.tier,
+          hasWeapon:!!f.hasWeapon,
+          selfBodyWeapon:!!f.selfBodyWeapon,
+          zizhan:!!f.zizhan,
+          renyuKilled:!!f.renyuKilled,
+          renyuBoai:!!f.renyuBoai,
+          renyuTongzheng:!!f.renyuTongzheng,
+          tianDi:!!f.tianDi,
+          secondLife:!!f.secondLife,
+          immortalGate:!!f.immortalGate,
+          age:f.age,
+          grade:gd.g,
+          mode:ZT.mode
+        }
+      }, window.location.origin);
+    }
     renderRecord();
     const newly = evaluateAchievements(f, sim.events, loadHistory().length);
     renderAch();

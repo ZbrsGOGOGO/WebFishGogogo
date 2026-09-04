@@ -29,7 +29,12 @@
 
   // —— 绑定所有按钮（唯一的 addEventListener 集中地）——
   function bindEvents(){
-    $('startBtn').addEventListener('click', Replay.start);
+    $('startBtn').addEventListener('click', ()=>{
+      if(window.parent!==window){
+        window.parent.postMessage({type:'momo.zhesi.run.started'}, window.location.origin);
+      }
+      Replay.start();
+    });
     // 命运难易：如履薄冰（默认）/ 爽玩（成帝≈20% · 成仙≈5%）/ 养成（慢节奏·修行侧重亲手养成）
     $('modeHard').addEventListener('click', ()=>{ window.ZT.mode='hard'; $('modeHard').classList.add('on'); $('modeShuang').classList.remove('on'); $('modeYang').classList.remove('on'); });
     $('modeShuang').addEventListener('click', ()=>{ window.ZT.mode='shuang'; $('modeShuang').classList.add('on'); $('modeHard').classList.remove('on'); $('modeYang').classList.remove('on'); });

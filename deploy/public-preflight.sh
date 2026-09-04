@@ -86,11 +86,15 @@ for public_route in \
   /ledou \
   /battle \
   /games/snake \
+  /games/zhesi \
   /games/zhengdao/ \
   /games/zhengdao/js/01-data.js; do
   grep -Fq "fetch_exact '$public_route'" "$ROOT_DIR/deploy/public-smoke.sh" ||
     fail "public smoke must cover $public_route"
 done
+grep -Fq 'ZhesiGamePage' "$ROOT_DIR/deploy/public-smoke.sh" &&
+grep -Fq '遮司 · 命格模拟｜摸摸公司' "$ROOT_DIR/deploy/public-smoke.sh" ||
+  fail "public smoke must verify the zhesi React chunk and iframe document"
 grep -Fq '本机最高分' "$ROOT_DIR/deploy/public-smoke.sh" &&
 grep -Fq '不上传' "$ROOT_DIR/deploy/public-smoke.sh" &&
 grep -Fq '不提供正式奖励' "$ROOT_DIR/deploy/public-smoke.sh" ||

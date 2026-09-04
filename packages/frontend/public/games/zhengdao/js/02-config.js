@@ -61,8 +61,8 @@
   const REDHAIR_DEATH_PROB = 0.02; // 源天师至准帝九重天、周身生诡异红毛，逐年「红毛噬主」身死概率；仅此死法触发 java 彩蛋
 
   /* ============ 九、本地存档 Key ============ */
-  const ACH_KEY  = 'momo.zhengdao.achievements.v1';  // 成就
-  const LS_KEY   = 'momo.zhengdao.life-history.v1';  // 命格录
+  const ACH_KEY  = 'momo.zhesi.achievements.v1';  // 成就
+  const LS_KEY   = 'momo.zhesi.life-history.v1';  // 命格录
 
   /* ============ 十、爽玩模式覆盖（ZT.mode==='shuang' 时启用）============
    * 目标：成帝概率≈20%、成仙概率≈5%（原「如履薄冰」成帝≈0.15%）。

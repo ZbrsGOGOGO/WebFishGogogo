@@ -1,6 +1,6 @@
 import { communityHttp } from './community-http';
 
-export type ArcadeGameKey = 'tetris' | 'tank';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi';
 
 export interface ArcadeRun {
   runId: string;

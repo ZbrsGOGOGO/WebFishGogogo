@@ -80,6 +80,9 @@ const TankBattlePage = lazy(() =>
 const SnakeGamePage = lazy(() =>
   import('../features/games/snake/SnakeGamePage').then((module) => ({ default: module.SnakeGamePage })),
 );
+const ZhesiGamePage = lazy(() =>
+  import('../features/games/zhesi/ZhesiGamePage').then((module) => ({ default: module.ZhesiGamePage })),
+);
 
 function loading(element: JSX.Element): JSX.Element {
   return <Suspense fallback={<p role="status">页面加载中…</p>}>{element}</Suspense>;
@@ -289,6 +292,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="snake" element={loading(<SnakeGamePage />)} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />
         <Route path="tank" element={loading(<TankBattlePage />)} />
+        <Route path="zhesi" element={loading(<ZhesiGamePage />)} />
         <Route path="three-sum" element={<Navigate to="/games" replace />} />
       </Route>
     </Routes>

@@ -73,9 +73,9 @@ describe('public site mode', () => {
     expect(screen.getByRole('link', { name: /贪食蛇/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /俄罗斯方块/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /坦克大战/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /证道 · 命格模拟/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /遮司/ })).toHaveAttribute(
       'href',
-      '/games/zhengdao/',
+      '/games/zhesi',
     );
     expect(screen.queryByText('三数之和')).not.toBeInTheDocument();
     expect(screen.queryByText('午休竞技场')).not.toBeInTheDocument();
@@ -87,6 +87,7 @@ describe('public site mode', () => {
     ['/games/snake', '贪食蛇'],
     ['/games/tetris', '俄罗斯方块'],
     ['/games/tank', '坦克大战'],
+    ['/games/zhesi', '遮司'],
   ])('loads the public game deep link %s', async (path, heading) => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);

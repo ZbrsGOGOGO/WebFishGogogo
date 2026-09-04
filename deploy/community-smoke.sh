@@ -37,7 +37,7 @@ case "$authority" in
   ''|*/*|*@*|*'?'*|*'#'*) fail "BASE_URL must not contain credentials, path, query or fragment" ;;
 esac
 
-for tool in curl grep sed mktemp; do
+for tool in curl grep sed sort mktemp; do
   command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"
 done
 
@@ -202,11 +202,54 @@ for path in \
   /tools \
   /games \
   /games/snake \
+  /games/zhesi \
   /privacy-policy \
   /terms-of-service; do
   safe_name=$(printf '%s' "$path" | sed 's#[^A-Za-z0-9]#-#g')
   request GET "$path" 200 "$SMOKE_TMP/spa${safe_name}.html" "$SMOKE_TMP/spa${safe_name}.headers"
 done
+
+# A deep-link 200 only proves that Nginx returned the SPA shell. Follow the
+# production entry manifest to the lazy React chunk and verify the actual page copy.
+: > "$SMOKE_TMP/community-entry-bundles.js"
+grep -a -E -o '/assets/[A-Za-z0-9._/-]+\.js' \
+  "$SMOKE_TMP/spa-games-zhesi.html" |
+  sort -u > "$SMOKE_TMP/community-entry-assets.txt"
+[ -s "$SMOKE_TMP/community-entry-assets.txt" ] ||
+  fail "community SPA does not reference a built JavaScript entry"
+
+community_entry_index=0
+while IFS= read -r community_entry_path; do
+  [ -n "$community_entry_path" ] || continue
+  community_entry_index=$((community_entry_index + 1))
+  [ "$community_entry_index" -le 3 ] ||
+    fail "community SPA references more than 3 entry scripts"
+  community_entry_file="$SMOKE_TMP/community-entry-$community_entry_index.js"
+  community_entry_headers="$SMOKE_TMP/community-entry-$community_entry_index.headers"
+  request GET "$community_entry_path" 200 "$community_entry_file" "$community_entry_headers"
+  require_header "$community_entry_headers" \
+    '^content-type:[[:space:]]*(application|text)/javascript' \
+    "community entry $community_entry_index JavaScript content type"
+  cat "$community_entry_file" >> "$SMOKE_TMP/community-entry-bundles.js"
+done < "$SMOKE_TMP/community-entry-assets.txt"
+
+grep -a -E -o 'assets/ZhesiGamePage-[A-Za-z0-9._/-]+\.js' \
+  "$SMOKE_TMP/community-entry-bundles.js" |
+  sed 's#^#/#' |
+  sort -u > "$SMOKE_TMP/zhesi-assets.txt"
+zhesi_asset_count=$(wc -l < "$SMOKE_TMP/zhesi-assets.txt" | tr -d ' ')
+[ "$zhesi_asset_count" -eq 1 ] ||
+  fail "found $zhesi_asset_count ZhesiGamePage chunks, expected exactly 1"
+zhesi_asset_path=$(sed -n '1p' "$SMOKE_TMP/zhesi-assets.txt")
+request GET "$zhesi_asset_path" 200 \
+  "$SMOKE_TMP/zhesi-page.js" "$SMOKE_TMP/zhesi-page.headers"
+require_header "$SMOKE_TMP/zhesi-page.headers" \
+  '^content-type:[[:space:]]*(application|text)/javascript' \
+  'zhesi React chunk content type'
+require_literal "$SMOKE_TMP/zhesi-page.js" '遮司' 'zhesi React page copy'
+require_literal "$SMOKE_TMP/zhesi-page.js" \
+  '/games/zhengdao/index.html?embedded=1' \
+  'zhesi iframe resource'
 
 # These files must be served as the imported static game, not as the SPA shell
 # returned by the catch-all route when a file is missing.
@@ -222,8 +265,8 @@ require_header "$SMOKE_TMP/game-zhengdao-data.headers" \
   '^content-type:[[:space:]]*(application|text)/javascript' \
   'zhengdao JavaScript content type'
 require_literal "$SMOKE_TMP/game-zhengdao.html" \
-  '<title>证道 · 命格模拟｜摸摸公司</title>' \
-  'zhengdao static page title'
+  '<title>遮司 · 命格模拟｜摸摸公司</title>' \
+  'zhesi iframe document title'
 require_literal "$SMOKE_TMP/game-zhengdao.html" \
   '<script src="js/01-data.js"></script>' \
   'zhengdao JavaScript module reference'
@@ -250,6 +293,21 @@ case "$SMOKE_BASE_URL" in
   https://*) require_header "$SMOKE_TMP/spa-.headers" '^strict-transport-security:[[:space:]]*max-age=' 'HSTS' ;;
 esac
 require_header "$SMOKE_TMP/api-health.headers" '^cache-control:[[:space:]]*no-store' 'API no-store'
+
+# Leaderboards are intentionally public reads. This request has no cookie or
+# Authorization header and proves zhesi is accepted by both Nginx and the API.
+request GET /api/v1/games/arcade/leaderboards/zhesi 200 \
+  "$SMOKE_TMP/zhesi-leaderboard.json" "$SMOKE_TMP/zhesi-leaderboard.headers"
+grep -Eq '"gameKey"[[:space:]]*:[[:space:]]*"zhesi"' \
+  "$SMOKE_TMP/zhesi-leaderboard.json" ||
+  fail "guest zhesi leaderboard response has the wrong gameKey"
+grep -Eq '"formulaVersion"[[:space:]]*:[[:space:]]*"[^"]+"' \
+  "$SMOKE_TMP/zhesi-leaderboard.json" ||
+  fail "guest zhesi leaderboard response is missing formulaVersion"
+grep -Eq '"items"[[:space:]]*:[[:space:]]*\[' \
+  "$SMOKE_TMP/zhesi-leaderboard.json" ||
+  fail "guest zhesi leaderboard response is missing items"
+pass "guest zhesi leaderboard contract"
 
 # Cookie-creating endpoints must reject the request before parsing credentials. Empty bodies
 # ensure this contract check cannot log in, consume a Beta code or send verification mail.

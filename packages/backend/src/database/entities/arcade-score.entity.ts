@@ -13,13 +13,14 @@ import {
 
 import { User } from './user.entity';
 
-export type ArcadeGameKey = 'tetris' | 'tank';
+export const ARCADE_GAME_KEYS = ['tetris', 'tank', 'zhesi'] as const;
+export type ArcadeGameKey = (typeof ARCADE_GAME_KEYS)[number];
 export type ArcadeRunStatus = 'active' | 'completed' | 'expired';
 
 @Entity({ name: 'arcade_game_runs' })
 @Index('idx_arcade_game_runs_user_game_status', ['userId', 'gameKey', 'status'])
 @Index('idx_arcade_game_runs_expiry', ['status', 'expiresAt'])
-@Check('chk_arcade_game_runs_game', `"game_key" IN ('tetris', 'tank')`)
+@Check('chk_arcade_game_runs_game', `"game_key" IN ('tetris', 'tank', 'zhesi')`)
 @Check('chk_arcade_game_runs_status', `"status" IN ('active', 'completed', 'expired')`)
 @Check('chk_arcade_game_runs_score', '"score" IS NULL OR "score" >= 0')
 export class ArcadeGameRun {
@@ -63,7 +64,7 @@ export class ArcadeGameRun {
 
 @Entity({ name: 'arcade_best_scores' })
 @Index('idx_arcade_best_scores_ranking', ['gameKey', 'bestScore', 'achievedAt'])
-@Check('chk_arcade_best_scores_game', `"game_key" IN ('tetris', 'tank')`)
+@Check('chk_arcade_best_scores_game', `"game_key" IN ('tetris', 'tank', 'zhesi')`)
 @Check('chk_arcade_best_scores_score', '"best_score" >= 0')
 export class ArcadeBestScore {
   @PrimaryColumn({ name: 'game_key', type: 'varchar', length: 16 })

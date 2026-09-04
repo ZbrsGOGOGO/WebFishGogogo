@@ -11,7 +11,10 @@ import {
 
 import { CurrentUserId } from '../../auth/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import type { ArcadeGameKey } from '../../../database/entities/arcade-score.entity';
+import {
+  ARCADE_GAME_KEYS,
+  type ArcadeGameKey,
+} from '../../../database/entities/arcade-score.entity';
 import { ArcadeService } from './arcade.service';
 
 @Controller('v1/games/arcade')
@@ -53,10 +56,10 @@ export class ArcadeController {
   }
 
   private gameKey(value: string): ArcadeGameKey {
-    if (value !== 'tetris' && value !== 'tank') {
+    if (!ARCADE_GAME_KEYS.includes(value as ArcadeGameKey)) {
       throw new BadRequestException({ code: 'ARCADE_GAME_INVALID' });
     }
-    return value;
+    return value as ArcadeGameKey;
   }
 
   private object(value: unknown): Record<string, unknown> {

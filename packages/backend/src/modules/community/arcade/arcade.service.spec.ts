@@ -32,6 +32,152 @@ describe('arcade score validation', () => {
       metrics: { outcome: 'lost', enemiesDefeated: 2 },
     }, 20)).toThrow(BadRequestException);
   });
+
+  it('recomputes zhesi combat power and saves only normalized metrics', () => {
+    expect(validateArcadeResult('zhesi', {
+      score: 42_860,
+      metrics: {
+        realm: 38,
+        aptitude: 100,
+        physiqueTier: 'T0',
+        hasWeapon: true,
+        selfBodyWeapon: true,
+        zizhan: false,
+        renyuKilled: false,
+        renyuBoai: false,
+        renyuTongzheng: true,
+        tianDi: true,
+        secondLife: true,
+        immortalGate: true,
+        age: 45_000,
+        grade: '帝',
+        mode: 'yang',
+        ignoredLifeStory: 'must not be persisted',
+      },
+    }, 0)).toEqual({
+      realm: 38,
+      aptitude: 100,
+      physiqueTier: 'T0',
+      hasWeapon: true,
+      selfBodyWeapon: true,
+      zizhan: false,
+      renyuKilled: false,
+      renyuBoai: false,
+      renyuTongzheng: true,
+      tianDi: true,
+      secondLife: true,
+      immortalGate: true,
+      age: 45_000,
+      grade: '帝',
+      mode: 'yang',
+      elapsedSeconds: 0,
+    });
+  });
+
+  it('accepts a self-cut emperor at realm 37 without counting emperor-only bonuses', () => {
+    expect(validateArcadeResult('zhesi', {
+      score: 38_080,
+      metrics: {
+        realm: 37,
+        aptitude: 60,
+        physiqueTier: 'T3',
+        hasWeapon: false,
+        selfBodyWeapon: false,
+        zizhan: true,
+        renyuKilled: true,
+        renyuBoai: false,
+        renyuTongzheng: false,
+        tianDi: false,
+        secondLife: true,
+        immortalGate: false,
+        age: 120_000,
+        grade: '地',
+        mode: 'hard',
+      },
+    }, 7_200)).toMatchObject({ realm: 37, zizhan: true, age: 120_000, grade: '地' });
+  });
+
+  it.each([
+    ['client score differs from combatPower', { score: 141 }],
+    ['grade disagrees with realm', { grade: '神' }],
+    ['age exceeds the simulation ceiling', { age: 120_001 }],
+    ['boolean metrics are coerced strings', { hasWeapon: 'false' }],
+    ['multiple human-desire outcomes are set', { renyuKilled: true, renyuBoai: true }],
+    ['self-body weapon has no completed weapon', { selfBodyWeapon: true }],
+    ['heavenly emperor is below emperor realm', { tianDi: true, grade: '凡' }],
+    ['self-cut and immortal-gate outcomes conflict', {
+      realm: 37,
+      zizhan: true,
+      immortalGate: true,
+      grade: '地',
+      score: 37_520,
+    }],
+  ])('rejects zhesi result when %s', (_label, override) => {
+    const base = {
+      score: 140,
+      metrics: {
+        realm: 0,
+        aptitude: 28,
+        physiqueTier: 'T3',
+        hasWeapon: false,
+        selfBodyWeapon: false,
+        zizhan: false,
+        renyuKilled: false,
+        renyuBoai: false,
+        renyuTongzheng: false,
+        tianDi: false,
+        secondLife: false,
+        immortalGate: false,
+        age: 18,
+        grade: '凡',
+        mode: 'shuang',
+      },
+    };
+    const { score = base.score, ...metricOverride } = override as Record<string, unknown>;
+    expect(() => validateArcadeResult('zhesi', {
+      score: Number(score),
+      metrics: { ...base.metrics, ...metricOverride },
+    }, 30)).toThrow(BadRequestException);
+  });
+});
+
+describe('arcade run lifetime', () => {
+  it('gives zhesi runs a two-hour expiry', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-04T08:00:00.000Z'));
+    const execute = jest.fn().mockResolvedValue(undefined);
+    const queryBuilder = {
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute,
+    };
+    const runRepository = {
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => ({ ...value, id: 'run-zhesi' })),
+    };
+    const manager = {
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      getRepository: jest.fn().mockReturnValue(runRepository),
+    };
+    const dataSource = {
+      getRepository: jest.fn().mockReturnValue({
+        findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }),
+      }),
+      transaction: jest.fn(async (work) => work(manager)),
+    } as unknown as DataSource;
+
+    try {
+      const result = await new ArcadeService(dataSource).startRun('user-1', 'zhesi');
+      expect(result).toMatchObject({
+        runId: 'run-zhesi',
+        gameKey: 'zhesi',
+        startedAt: '2026-09-04T08:00:00.000Z',
+        expiresAt: '2026-09-04T10:00:00.000Z',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('arcade leaderboard query', () => {

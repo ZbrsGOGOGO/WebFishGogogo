@@ -108,6 +108,14 @@ done
   fail "packages/backend/src/main.community.ts is missing"
 grep -Fq "community" "$ROOT_DIR/packages/frontend/vite.config.ts" ||
   fail "frontend build configuration does not expose community mode"
+[ -f "$ROOT_DIR/packages/backend/src/database/migrations/1700000000025-AddZhesiArcadeGame.ts" ] ||
+  fail "zhesi arcade migration 0025 is missing"
+grep -Fq 'AddZhesiArcadeGame1700000000025' \
+  "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+  fail "zhesi arcade migration 0025 is not registered"
+grep -Fq "CHECK (\"game_key\" IN ('tetris', 'tank', 'zhesi'))" \
+  "$ROOT_DIR/packages/backend/src/database/migrations/1700000000025-AddZhesiArcadeGame.ts" ||
+  fail "migration 0025 does not allow zhesi in the arcade constraints"
 
 AUTH_COOKIE_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth-cookie.ts"
 AUTH_EMAIL_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/email-delivery.service.ts"
@@ -200,13 +208,17 @@ grep -Fq 'test "$VITE_COMMUNITY_BATTLE_SERVER_ENABLED" = false' \
   fail "community-build must reject the retired battle-server client"
 grep -Fq 'name: webfish-community' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must keep the isolated webfish-community project name"
-if grep -Fq 'webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md"; then
+if grep -Fq -- '-p webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md"; then
   fail "community deployment commands must not reuse the legacy webfish-review project"
 fi
+grep -Fq 'cd /opt/webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "community deployment guide must use the actual /opt/webfish-review checkout"
 grep -Fq -- '-p webfish-community' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment commands must explicitly use webfish-community"
 grep -Fq -- '-p webfish-public' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community rollback must explicitly restore the independent webfish-public project"
+grep -Fq '1700000000025' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "community deployment guide must identify migration 0025 as the release target"
 
 grep -Eq 'target:[[:space:]]*community-api' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must build community-api"
@@ -445,6 +457,13 @@ grep -Fq '/battle' "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover tower defense and both legacy browser routes"
 grep -Fq '/games/snake' "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover the restored snake route"
+grep -Fq '/games/zhesi' "$ROOT_DIR/deploy/community-smoke.sh" &&
+grep -Fq 'ZhesiGamePage' "$ROOT_DIR/deploy/community-smoke.sh" &&
+grep -Fq '遮司' "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must verify the zhesi route and React chunk"
+grep -Fq 'request GET /api/v1/games/arcade/leaderboards/zhesi 200' \
+  "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must verify the guest zhesi leaderboard"
 grep -Fq 'request GET /games/zhengdao/ 200' \
   "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover the zhengdao static HTML page"
@@ -479,7 +498,9 @@ grep -Fq 'ARCADE_TIMESTAMP=1700000000023' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'DIRECT_MESSAGES_TIMESTAMP=1700000000024' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000024' \
+grep -Fq 'ZHESI_ARCADE_TIMESTAMP=1700000000025' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000025' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -500,8 +521,12 @@ grep -Fq 'hot_news_headlines' \
 grep -Fq 'arcade_best_scores' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_direct_messages' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'zhesi_arcade_constraint_count' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'assert_zhesi_arcade_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014 through direct messages 0024"
+  fail "migration rehearsal must verify chat 0014 through zhesi arcade 0025"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
