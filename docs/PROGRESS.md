@@ -115,7 +115,7 @@
 6. 生产保持 `FEATURE_COMMUNITY_BATTLE_ENABLED=false`，社区应用未装配旧 Office Battle 模块。
 7. 已完成迁移前数据库备份；旧 `office_battle_*` 11 张表行数和钱包汇总在部署前后完全一致，待领奖励为 0。
 8. 公网已验证 `/games/snake`、`/games/tetris`、`/games/tank`、`/games/zhesi`、iframe 资源及游客排行榜合约；完整一局和登录成绩提交仍需真实浏览器账号验收。
-9. 生产环境已有游戏发布依据引用且站点所有者明确指示本次部署；压缩包未附许可证的第三方内容风险仍按 `docs/ZHENGDAO_GAME_IMPORT.md` 持续处理。
+9. 生产 `PUBLIC_GAME_CLEARANCE_REFERENCE` 已填写非占位值且站点所有者明确指示本次部署；这只表示工程预检通过，压缩包未附许可证的第三方内容风险仍按 `docs/ZHENGDAO_GAME_IMPORT.md` 持续处理。
 10. 无凭据生产烟测共 51 项通过；因服务器未配置专用测试账号，登录 Cookie 的生产烟测明确跳过，不冒用真实用户账号。
 
 ## 5. 下一阶段建议
