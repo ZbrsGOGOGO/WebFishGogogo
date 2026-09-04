@@ -30,7 +30,7 @@ function makeArticle(
   };
 }
 
-describe('CsdnSkin / ZBRS 阅读工作台', () => {
+describe('CsdnSkin / 摸摸公司阅读工作台', () => {
   it('renders the document title, breadcrumb and real reading status', () => {
     render(<CsdnSkin article={makeArticle()} />);
 
@@ -81,13 +81,13 @@ describe('CsdnSkin / ZBRS 阅读工作台', () => {
 });
 
 describe('buildBlogTabTitle (Req 5.3)', () => {
-  it('builds a ZBRS article tab title from the article title', () => {
+  it('builds a 摸摸公司 article tab title from the article title', () => {
     expect(buildBlogTabTitle('Hello World')).toBe(
-      'Hello World - ZBRS 阅读工作台',
+      'Hello World - 摸摸公司阅读工作台',
     );
   });
 
   it('falls back to a generic tech-blog title when empty', () => {
-    expect(buildBlogTabTitle('   ')).toBe('ZBRS 阅读工作台');
+    expect(buildBlogTabTitle('   ')).toBe('摸摸公司阅读工作台');
   });
 });

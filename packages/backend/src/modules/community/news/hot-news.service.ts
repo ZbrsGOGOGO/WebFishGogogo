@@ -119,7 +119,7 @@ export class HotNewsService
     if (this.timer) clearInterval(this.timer);
   }
 
-  async listDaily() {
+  async listDaily(now = new Date()) {
     const run = await this.dataSource.getRepository(HotNewsRefreshRun).findOne({
       where: { status: 'completed' },
       order: { serviceDate: 'DESC' },
@@ -130,7 +130,6 @@ export class HotNewsService
           order: { rank: 'ASC' },
         })
       : [];
-    const now = new Date();
     const freshnessCutoff = now.getTime() - 72 * 60 * 60 * 1_000;
     return {
       serviceDate: run?.serviceDate ?? null,
@@ -165,7 +164,7 @@ export class HotNewsService
       for (const feed of DEFAULT_FEEDS) {
         try {
           const response = await fetch(feed.url, {
-            headers: { 'User-Agent': 'ZBRS-HotNews/1.0 (+https://zbrshyyzxx.top)' },
+            headers: { 'User-Agent': 'MomoCompany-HotNews/1.0 (+https://zbrshyyzxx.top)' },
             signal: AbortSignal.timeout(8_000),
           });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);

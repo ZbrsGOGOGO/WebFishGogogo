@@ -7,7 +7,7 @@ import { useCommunityAuthStore } from './store/community-auth-store';
 function SessionLoading(): JSX.Element {
   return (
     <div className="route-loading" role="status" aria-live="polite">
-      <span className="route-loading__mark" aria-hidden="true">Z</span>
+      <span className="route-loading__mark" aria-hidden="true">摸</span>
       <span>正在安全恢复会话…</span>
     </div>
   );

@@ -48,9 +48,9 @@ export function Footer({
   const currentYear = new Date().getFullYear();
   const beianPending = isBeianPlaceholder(ICP_BEIAN_NUMBER);
   const statement = publicMode
-      ? '轻量工具、经典小游戏和办公室主题玩法，随时开始，轻松使用。'
+      ? '工位塔防、轻量工具和经典小游戏，随时开始，轻松放下。'
     : communityMode
-      ? '热点、交流、农场、乐斗和小游戏，组成你的在线办公室社区。'
+      ? '热点、交流、农场、工位塔防和小游戏，组成你的在线办公室社区。'
     : reviewMode
       ? '专注轻量、实用的个人效率体验，产品内容与服务能力将持续完善。'
       : '个人资料与使用记录由您的本地服务保存，请仅处理本人合法拥有的内容。';
@@ -62,9 +62,9 @@ export function Footer({
           <strong>{SITE_NAME}</strong>
           <span>
             {publicMode
-              ? '办公室轻社区'
+              ? '摸鱼成长社区'
               : communityMode
-                ? '办公室轻社区'
+                ? '摸鱼成长社区'
               : reviewMode
                 ? '个人效率工作台 · 简单、清晰、可控'
                 : '本机版 · 数据由您的本地服务保存'}
@@ -75,7 +75,7 @@ export function Footer({
           <Link to="/privacy-policy">隐私政策</Link>
           <Link to="/terms-of-service">服务条款</Link>
           {communityMode ? <Link to="/community-guidelines">社区规范</Link> : null}
-          <span>© {currentYear} ZBRS</span>
+          <span>© {currentYear} {SITE_NAME}</span>
         </nav>
         <div className="site-footer__records" aria-label="备案信息">
           {!beianPending ? (

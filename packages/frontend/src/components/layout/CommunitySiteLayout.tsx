@@ -17,7 +17,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   news: '热',
   community: '聊',
   farm: '种',
-  ledou: '斗',
+  towerDefense: '守',
   feed: '喂',
   invite: '邀',
   profile: '我',
@@ -56,7 +56,7 @@ export function CommunitySiteLayout(): JSX.Element {
   const signedIn = phase !== 'guest' && phase !== 'bootstrapping';
   const workspaceRoute = isWorkspaceRoute(location.pathname);
   const primaryNav = COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).slice(0, 5);
-  const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'farm', 'ledou', 'profile'];
+  const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'farm', 'towerDefense', 'profile'];
   const mobileNav = mobileNavIds
     .map((id) => COMMUNITY_SYSTEM_NAV.find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item?.enabled));
@@ -71,10 +71,10 @@ export function CommunitySiteLayout(): JSX.Element {
       <header className={styles.header}>
         <div className={styles.headerInner}>
           <Link className={styles.brand} to="/" aria-label={`${SITE_NAME}首页`}>
-            <span className={styles.brandMark} aria-hidden="true">Z</span>
+            <span className={styles.brandMark} aria-hidden="true">摸</span>
             <span>
               <strong>{SITE_NAME}</strong>
-              <small>办公室成长社区</small>
+              <small>摸鱼成长社区</small>
             </span>
           </Link>
 
@@ -162,9 +162,9 @@ export function CommunitySiteLayout(): JSX.Element {
           <aside className={styles.rightRail} aria-label="快捷行动">
             <section className={styles.actionWidget}>
               <span>现在就玩</span>
-              <strong>办公室乐斗</strong>
-              <p>选一个职业，自动打一局，赢装备、升等级。</p>
-              <Link to="/ledou">开始一局 <b>→</b></Link>
+              <strong>摸鱼升职记</strong>
+              <p>移动你的角色，布置办公用品，守住三波稽查。</p>
+              <Link to="/tower-defense">开始守工位 <b>→</b></Link>
             </section>
             {COMMUNITY_FEATURE_FLAGS.farm ? (
               <section className={styles.miniWidget}>
@@ -180,7 +180,7 @@ export function CommunitySiteLayout(): JSX.Element {
             </section>
             <section className={styles.tipWidget}>
               <small>工位提示</small>
-              <p>{signedIn ? '通知、好友请求和成长进度都集中在左侧工作台。' : '登录后可以进入农场、乐斗和社区；工具与小游戏无需登录。'}</p>
+              <p>{signedIn ? '通知、好友请求和成长进度都集中在左侧工作台。' : '登录后可以进入农场、工位塔防和社区；工具与小游戏无需登录。'}</p>
             </section>
           </aside>
         ) : null}

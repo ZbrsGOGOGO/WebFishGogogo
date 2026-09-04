@@ -2,7 +2,7 @@
   "name": "stealth-reader",
   "version": "0.1.0",
   "private": true,
-  "description": "ZBRS 技术工具工坊 monorepo",
+  "description": "摸摸公司 monorepo",
   "workspaces": [
     "packages/shared",
     "packages/backend",

@@ -13,7 +13,7 @@ export interface CsdnSkinProps {
 }
 
 /**
- * ZBRS 阅读工作台。
+ * 摸摸公司阅读工作台。
  *
  * 组件名仍保留 CsdnSkin 以兼容历史 skinId 和后端协议；用户界面不再呈现
  * 第三方站点仿制元素，只展示私有文档、阅读控制与本机进度。
@@ -47,10 +47,10 @@ export function CsdnSkin({
           </a>
           <div className={styles.readerIdentity}>
             <span className={styles.logo} aria-hidden="true">
-              Z
+              摸
             </span>
             <span>
-              <strong>ZBRS 阅读工作台</strong>
+              <strong>摸摸公司阅读工作台</strong>
               <small>沉浸阅读 · 自动保存进度</small>
             </span>
           </div>

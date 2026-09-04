@@ -81,6 +81,15 @@ printf '%s\n' "$PUBLIC_BUILD_SECTION" |
   grep -Fq 'test "$VITE_SITE_MODE" = public' ||
   fail "public-build must reject non-public VITE_SITE_MODE values"
 
+for public_route in /tower-defense /ledou /battle; do
+  grep -Fq "fetch_exact '$public_route'" "$ROOT_DIR/deploy/public-smoke.sh" ||
+    fail "public smoke must cover $public_route"
+done
+grep -Fq '本机最高分' "$ROOT_DIR/deploy/public-smoke.sh" &&
+grep -Fq '不上传' "$ROOT_DIR/deploy/public-smoke.sh" &&
+grep -Fq '不提供正式奖励' "$ROOT_DIR/deploy/public-smoke.sh" ||
+  fail "public smoke must assert the tower-defense local-only boundary"
+
 logging_none_count=$(grep -Ec \
   '^[[:space:]]+driver:[[:space:]]+none([[:space:]]*#.*)?$' \
   "$ROOT_DIR/$COMPOSE_FILE" || true)
@@ -116,6 +125,8 @@ case "$HTTP_PORT" in
 esac
 
 check_required_text SITE_NAME
+[ "$(env_value SITE_NAME)" = "摸摸公司" ] ||
+  fail "SITE_NAME must be 摸摸公司 for this release"
 check_required_text SITE_DOMAIN
 check_required_text ACME_EMAIL
 check_required_text PRIVACY_PROCESSOR_NAME

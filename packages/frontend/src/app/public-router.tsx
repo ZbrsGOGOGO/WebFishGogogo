@@ -23,9 +23,9 @@ const TankBattlePage = lazy(() =>
     default: module.TankBattlePage,
   })),
 );
-const OfficeBattlePage = lazy(() =>
-  import('../features/office-battle/OfficeBattlePage').then((module) => ({
-    default: module.OfficeBattlePage,
+const WorkstationTowerDefensePage = lazy(() =>
+  import('../features/workstation-tower-defense').then((module) => ({
+    default: module.WorkstationTowerDefensePage,
   })),
 );
 
@@ -42,8 +42,9 @@ export function PublicModeRouter(): JSX.Element {
     <Routes>
       <Route element={<PublicSiteLayout />}>
         <Route path="/" element={<PublicLandingPage />} />
-        <Route path="/ledou" element={loading(<OfficeBattlePage />)} />
-        <Route path="/battle" element={<Navigate to="/ledou" replace />} />
+        <Route path="/tower-defense" element={loading(<WorkstationTowerDefensePage />)} />
+        <Route path="/ledou" element={<Navigate to="/tower-defense" replace />} />
+        <Route path="/battle" element={<Navigate to="/tower-defense" replace />} />
       </Route>
       <Route path="/tools" element={<PublicToolsPage />} />
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />

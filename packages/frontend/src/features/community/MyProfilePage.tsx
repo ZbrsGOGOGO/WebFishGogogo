@@ -10,7 +10,7 @@ import {
   type CommunityProfile,
 } from '../../api/community';
 import { Button, Card, Input, PageHeader, Tag, Textarea } from '../../components/ui';
-import { PROFESSION_DEFINITIONS } from '../office-battle/office-battle-domain';
+import { COMMUNITY_PROFESSIONS } from './community-professions';
 import { validateCommunityDisplayName } from '../community-auth/validation';
 import styles from './CommunityPages.module.css';
 import { COMMUNITY_AVATARS, communityAvatarMark } from './profile-options';
@@ -26,7 +26,7 @@ export function CommunityMyProfilePage(): JSX.Element {
   const [bio, setBio] = useState('');
   const [avatarKey, setAvatarKey] = useState(authUser?.avatarKey ?? COMMUNITY_AVATARS[0].id);
   const [battleProfession, setBattleProfession] = useState(
-    authUser?.battleProfession ?? PROFESSION_DEFINITIONS[0].id,
+    authUser?.battleProfession ?? COMMUNITY_PROFESSIONS[0].id,
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -51,7 +51,7 @@ export function CommunityMyProfilePage(): JSX.Element {
         setDisplayName(next.displayName ?? '');
         setBio(next.bio ?? '');
         setAvatarKey(next.avatarKey ?? COMMUNITY_AVATARS[0].id);
-        setBattleProfession(next.battleProfession ?? PROFESSION_DEFINITIONS[0].id);
+        setBattleProfession(next.battleProfession ?? COMMUNITY_PROFESSIONS[0].id);
       })
       .catch((requestError) => {
         if (active) setError(communityRequestErrorMessage(requestError, '主页加载失败'));
@@ -65,7 +65,7 @@ export function CommunityMyProfilePage(): JSX.Element {
   }, []);
 
   const profession = useMemo(
-    () => PROFESSION_DEFINITIONS.find((item) => item.id === profile?.battleProfession),
+    () => COMMUNITY_PROFESSIONS.find((item) => item.id === profile?.battleProfession),
     [profile?.battleProfession],
   );
 
@@ -132,7 +132,7 @@ export function CommunityMyProfilePage(): JSX.Element {
             <div>
               <h2>{profile?.displayName ?? '未设置昵称'}</h2>
               <p>公开编号：{profile?.publicId ?? '—'}</p>
-              <Tag>{profession ? `乐斗职业 · ${profession.name}` : '尚未选择乐斗职业'}</Tag>
+              <Tag>{profession ? `社区职业 · ${profession.name}` : '尚未选择社区职业'}</Tag>
               {COMMUNITY_FEATURE_FLAGS.publicProfile && profile?.publicId ? <p><Link to={`/users/${encodeURIComponent(profile.publicId)}`}>预览公开主页</Link></p> : null}
             </div>
           </div>
@@ -153,9 +153,9 @@ export function CommunityMyProfilePage(): JSX.Element {
               </div>
             </fieldset>
             <label className={styles.fieldLabel}>
-              乐斗职业
+              社区职业
               <select className={styles.select} value={battleProfession} onChange={(event) => setBattleProfession(event.target.value)}>
-                {PROFESSION_DEFINITIONS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                {COMMUNITY_PROFESSIONS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
             <small className={styles.muted}>昵称默认每 7 天可以修改一次。</small>
@@ -165,13 +165,11 @@ export function CommunityMyProfilePage(): JSX.Element {
       </div>
 
       <div className={styles.grid}>
-        <Card title="办公室乐斗">
+        <Card title="摸鱼升职记 · 工位塔防">
           <p>
-            等级 {profile?.battleLevel ?? 1} · 六件装备、仓库、技能和战绩会跟随账号保存。
+            你的系统头像会成为场上唯一的工位守卫；当前塔防最高分只保存在这台设备。
           </p>
-          <Link to="/ledou">
-            {COMMUNITY_FEATURE_FLAGS.battleServer ? '进入办公室乐斗' : '进入乐斗'}
-          </Link>
+          <Link to="/tower-defense">带角色守工位</Link>
         </Card>
         <Card title="工位绿植"><p>{plantSummary}</p></Card>
         <Card title="荣誉"><p>{profile?.honors?.length ? profile.honors.join('、') : '还没有获得荣誉'}</p></Card>

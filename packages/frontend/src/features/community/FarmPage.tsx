@@ -326,7 +326,7 @@ export function CommunityFarmPage(): JSX.Element {
 
       <section className={styles.growthSummary} aria-label="农场成长摘要">
         <article><span>农场等级</span><strong>Lv.{overview.plant.level}</strong><small>{overview.plant.experience} 总经验</small></article>
-        <article><span>办公币</span><strong>{overview.growth.officeCoins}</strong><small>农场、乐斗共用</small></article>
+        <article><span>办公币</span><strong>{overview.growth.officeCoins}</strong><small>社区历史成长资产</small></article>
         <article><span>技能点</span><strong>{overview.growth.skillPointsAvailable}</strong><small>累计获得 {overview.growth.skillPointsEarned}</small></article>
         <article><span>下一解锁</span><strong>{overview.growth.nextUnlock ? `Lv.${overview.growth.nextUnlock.level}` : '已完成'}</strong><small>{overview.growth.nextUnlock?.name ?? '全部内容已开放'}</small></article>
         <div className={styles.farmLevelProgress}><span style={{ width: `${levelProgress}%` }} /></div>

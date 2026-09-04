@@ -21,7 +21,7 @@ if (targetMode !== 'public') {
 
 const PUBLIC_ROUTES = [
   { path: '/', weight: 22 },
-  { path: '/ledou', weight: 18 },
+  { path: '/tower-defense', weight: 18 },
   { path: '/tools', weight: 18 },
   { path: '/games', weight: 12 },
   { path: '/games/tetris', weight: 13 },

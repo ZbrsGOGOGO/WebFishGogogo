@@ -59,18 +59,18 @@ describe('CommunityAppModule route allowlist', () => {
         NotificationController,
         ContentController,
         ModerationController,
-        OfficeBattleController,
         ArcadeController,
         NewsPublicController,
         NewsPreferenceController,
         NewsAdminController,
       ]),
     );
+    expect(controllers).not.toContain(OfficeBattleController);
     expect(controllers).not.toContain(PlatformController);
     expect(controllers).not.toContain(CheckinsController);
 
     const modules = collectModules(CommunityAppModule);
-    expect(modules).toContain(OfficeBattleModule);
+    expect(modules).not.toContain(OfficeBattleModule);
     expect(modules).toContain(ArcadeModule);
     expect(modules).toContain(NewsModule);
     expect(modules).not.toContain(OutboxModule);

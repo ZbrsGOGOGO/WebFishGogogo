@@ -1,10 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { finishArcadeRun, startArcadeRun, type ArcadeGameKey, type ArcadeRun } from '../../api/community-arcade';
-import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import {
+  useArcadeAdapter,
+  type ArcadeGameKey,
+  type ArcadeRun,
+} from './ArcadeAdapter';
 
 export function useArcadeRun(gameKey: ArcadeGameKey) {
-  const signedIn = useCommunityAuthStore((state) => state.phase === 'active');
+  const adapter = useArcadeAdapter();
+  const signedIn = adapter?.signedIn ?? false;
   const runPromise = useRef<Promise<ArcadeRun | null> | null>(null);
   const finished = useRef(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -13,21 +17,21 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
   const begin = useCallback(() => {
     finished.current = false;
     setNotice(null);
-    runPromise.current = signedIn
-      ? startArcadeRun(gameKey).catch(() => {
+    runPromise.current = adapter && signedIn
+      ? adapter.startRun(gameKey).catch(() => {
           setNotice('本局可以继续游玩，成绩暂未接入排行榜。');
           return null;
         })
       : Promise.resolve(null);
-  }, [gameKey, signedIn]);
+  }, [adapter, gameKey, signedIn]);
 
   const finish = useCallback(async (score: number, metrics: Record<string, unknown>) => {
     if (finished.current) return;
     finished.current = true;
     const run = await runPromise.current;
-    if (!run) return;
+    if (!adapter || !run) return;
     try {
-      const result = await finishArcadeRun(run.runId, score, metrics);
+      const result = await adapter.finishRun(run.runId, score, metrics);
       setNotice(
         result.isPersonalBest
           ? `新纪录！当前排名第 ${result.rank} 名。`
@@ -37,7 +41,7 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
     } catch {
       setNotice('本局成绩未能进入排行榜，请再挑战一次。');
     }
-  }, []);
+  }, [adapter]);
 
   return { begin, finish, notice, revision, signedIn };
 }

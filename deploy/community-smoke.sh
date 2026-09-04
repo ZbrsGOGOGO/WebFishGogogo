@@ -170,7 +170,9 @@ for path in \
   /news \
   /community \
   /farm \
+  /tower-defense \
   /ledou \
+  /battle \
   /feed \
   /invite \
   /me \
@@ -183,6 +185,10 @@ for path in \
   safe_name=$(printf '%s' "$path" | sed 's#[^A-Za-z0-9]#-#g')
   request GET "$path" 200 "$SMOKE_TMP/spa${safe_name}.html" "$SMOKE_TMP/spa${safe_name}.headers"
 done
+
+grep -Fq '<title>摸摸公司</title>' "$SMOKE_TMP/spa-.html" ||
+  fail "community homepage does not expose the 摸摸公司 brand"
+pass "community homepage exposes the 摸摸公司 brand"
 
 require_header "$SMOKE_TMP/spa-.headers" '^x-content-type-options:[[:space:]]*nosniff' 'nosniff'
 require_header "$SMOKE_TMP/spa-.headers" '^x-frame-options:[[:space:]]*deny' 'frame denial'
@@ -211,7 +217,8 @@ done
 request_status GET /api/v1/me "$SMOKE_TMP/me.json" "$SMOKE_TMP/me.headers" 401 403
 request_status GET /api/v1/guilds/me "$SMOKE_TMP/guild-me.json" "$SMOKE_TMP/guild-me.headers" 401 403
 
-# 旧 full 站的上传、阅读、便签、偏好、工具目录和旧鉴权入口必须在代理层返回 404。
+# 旧 full 站的上传、阅读、便签、偏好、工具目录、鉴权入口和已停服乐斗 API
+# 必须在代理层返回 404；历史表仍保留供回滚，不代表网络入口仍开放。
 for path in \
   /api \
   /api/documents \
@@ -221,7 +228,8 @@ for path in \
   /api/tools \
   /api/skins \
   /api/auth/me \
-  /api/v1/documents; do
+  /api/v1/documents \
+  /api/v1/games/office-battle/catalog; do
   safe_name=$(printf '%s' "$path" | sed 's#[^A-Za-z0-9]#-#g')
   request GET "$path" 404 "$SMOKE_TMP/blocked${safe_name}.json" "$SMOKE_TMP/blocked${safe_name}.headers"
 done

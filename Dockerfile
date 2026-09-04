@@ -22,7 +22,7 @@ COPY packages ./packages
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 ARG VITE_SITE_MODE=full
-ARG VITE_SITE_NAME="ZBRS 技术工具工坊"
+ARG VITE_SITE_NAME="摸摸公司"
 ARG VITE_SITE_OPERATOR=
 ARG VITE_SITE_CONTACT=
 ARG VITE_SITE_DOMAIN=
@@ -83,7 +83,7 @@ COPY packages/shared ./packages/shared
 COPY packages/frontend ./packages/frontend
 
 ARG VITE_API_BASE_URL=/api
-ARG VITE_SITE_NAME="ZBRS 技术工具工坊"
+ARG VITE_SITE_NAME="摸摸公司"
 ARG VITE_SITE_DOMAIN=
 ARG VITE_ICP_BEIAN_NUMBER=
 ARG VITE_PUBLIC_SECURITY_BEIAN_NUMBER=
@@ -127,11 +127,14 @@ RUN test "$VITE_SITE_MODE" = public \
     && ! printf '%s\n' "$PUBLIC_GAME_CLEARANCE_REFERENCE" | grep -Eiq 'ICP' \
     && npm run build --workspace @stealth-reader/frontend \
     && ! grep -R -E '审核|上线准备|暂未开放|网站主办者|联系渠道' packages/frontend/dist \
-    && ! grep -R -E '创建本机账户|/api/auth|/api/v1|午休竞技场|比大小|用户自行上传|成长农场' packages/frontend/dist \
-    && grep -R -q '方块消除' packages/frontend/dist \
-    && grep -R -q '贪食蛇' packages/frontend/dist \
-    && grep -R -q '办公室乐斗' packages/frontend/dist \
-    && grep -R -q '人力资源管理' packages/frontend/dist \
+    && ! grep -R -E '办公室乐斗|创建本机账户|/api/auth|/api/v1|/v1/auth|/v1/games/arcade|午休竞技场|比大小|用户自行上传|成长农场' packages/frontend/dist \
+    && grep -R -q '俄罗斯方块' packages/frontend/dist \
+    && grep -R -q '坦克大战' packages/frontend/dist \
+    && grep -R -q '摸鱼升职记' packages/frontend/dist \
+    && grep -R -q '工位塔防' packages/frontend/dist \
+    && grep -R -q '本机最高分' packages/frontend/dist \
+    && grep -R -q '不上传' packages/frontend/dist \
+    && grep -R -q '不提供正式奖励' packages/frontend/dist \
     && grep -R -q '常规访问日志保存期限为 0 天' packages/frontend/dist
 
 
@@ -161,7 +164,7 @@ COPY packages ./packages
 ARG VITE_API_BASE_URL=/api
 ARG VITE_AFDIAN_PAGE_URL=
 ARG VITE_SITE_MODE=community
-ARG VITE_SITE_NAME="ZBRS 技术工具工坊"
+ARG VITE_SITE_NAME="摸摸公司"
 ARG VITE_SITE_OPERATOR=
 ARG VITE_SITE_CONTACT=
 ARG VITE_SITE_DOMAIN=
@@ -184,7 +187,8 @@ ARG VITE_COMMUNITY_MODERATION_ENABLED=false
 ARG VITE_COMMUNITY_CHAT_ENABLED=false
 ARG VITE_COMMUNITY_NEWS_ENABLED=false
 ARG VITE_COMMUNITY_NEWS_ADMIN_ENABLED=false
-ARG VITE_COMMUNITY_LEDOU_ENABLED=true
+ARG VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=true
+ARG VITE_COMMUNITY_LEDOU_ENABLED=false
 ARG VITE_COMMUNITY_BATTLE_SERVER_ENABLED=false
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
     VITE_AFDIAN_PAGE_URL=${VITE_AFDIAN_PAGE_URL} \
@@ -211,10 +215,14 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
     VITE_COMMUNITY_CHAT_ENABLED=${VITE_COMMUNITY_CHAT_ENABLED} \
     VITE_COMMUNITY_NEWS_ENABLED=${VITE_COMMUNITY_NEWS_ENABLED} \
     VITE_COMMUNITY_NEWS_ADMIN_ENABLED=${VITE_COMMUNITY_NEWS_ADMIN_ENABLED} \
+    VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=${VITE_COMMUNITY_TOWER_DEFENSE_ENABLED} \
     VITE_COMMUNITY_LEDOU_ENABLED=${VITE_COMMUNITY_LEDOU_ENABLED} \
     VITE_COMMUNITY_BATTLE_SERVER_ENABLED=${VITE_COMMUNITY_BATTLE_SERVER_ENABLED}
 
 RUN test "$VITE_SITE_MODE" = community \
+    && test "$VITE_COMMUNITY_TOWER_DEFENSE_ENABLED" = true \
+    && test "$VITE_COMMUNITY_LEDOU_ENABLED" = false \
+    && test "$VITE_COMMUNITY_BATTLE_SERVER_ENABLED" = false \
     && printf '%s\n' "$VITE_SITE_DOMAIN" | grep -Eq '[^[:space:]]' \
     && printf '%s\n' "$PUBLIC_GAME_CLEARANCE_REFERENCE" | grep -Eq '[^[:space:]]' \
     && ! printf '%s\n' "$PUBLIC_GAME_CLEARANCE_REFERENCE" | grep -Eiq 'ICP' \

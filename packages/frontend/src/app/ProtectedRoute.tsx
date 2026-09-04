@@ -31,7 +31,7 @@ export function ProtectedRoute({
     return (
       <div className="route-loading" role="status" aria-live="polite">
         <span className="route-loading__mark" aria-hidden="true">
-          Z
+          摸
         </span>
         <span>正在恢复本机会话…</span>
       </div>

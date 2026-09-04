@@ -12,10 +12,10 @@ export function PublicSiteLayout(): JSX.Element {
     <div className={styles.shell}>
       <header className={styles.header}>
         <Link className={styles.brand} to="/" aria-label={`${SITE_NAME}首页`}>
-          <span className={styles.brandMark} aria-hidden="true">Z</span>
+          <span className={styles.brandMark} aria-hidden="true">摸</span>
           <span>
             <strong>{SITE_NAME}</strong>
-            <small>办公室轻社区</small>
+            <small>摸鱼成长社区</small>
           </span>
         </Link>
         <div className={styles.utilityLinks}>

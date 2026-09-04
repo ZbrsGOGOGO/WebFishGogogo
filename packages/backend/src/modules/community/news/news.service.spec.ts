@@ -6,6 +6,7 @@ import {
   NewsArticle,
   NewsArticleRevision,
   NewsSource,
+  PlayerProfile,
   User,
 } from '../../../database/entities';
 import { createLocalDevDataSource } from '../../../database/local-dev-datasource';
@@ -310,6 +311,39 @@ describe('NewsService editorial transactions', () => {
     ).toEqual(acknowledgement);
     expect((await service.listPublic(member.id, { feed: 'for_you' })).items).toHaveLength(0);
     expect((await service.listPublic(member.id, { feed: 'latest' })).items).toHaveLength(1);
+  });
+
+  it('reads the selected profession only from the shared player profile', async () => {
+    await dataSource.getRepository(PlayerProfile).save(
+      dataSource.getRepository(PlayerProfile).create({
+        userId: member.id,
+        nickname: member.displayName,
+        avatarKey: null,
+        bio: null,
+        battleProfession: 'qa',
+        privacySettings: {
+          equipment: 'friends',
+          battleRecord: 'friends',
+          plant: 'friends',
+          honors: 'friends',
+          friendCount: 'self',
+          recentActivity: 'self',
+        },
+        title: '初入工位',
+      }),
+    );
+    const repositoryLookup = jest.spyOn(dataSource.manager, 'getRepository');
+
+    await expect(service.getPreferences(member.id)).resolves.toMatchObject({
+      selectedProfession: 'qa',
+    });
+
+    const repositoryNames = repositoryLookup.mock.calls.map(([target]) =>
+      typeof target === 'function' ? target.name : String(target),
+    );
+    expect(repositoryNames).toContain('PlayerProfile');
+    expect(repositoryNames).not.toContain('OfficeBattleProfile');
+    repositoryLookup.mockRestore();
   });
 
   it('uses database roles for editorial authorization and never lets moderators manage source evidence', async () => {

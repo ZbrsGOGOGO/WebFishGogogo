@@ -12,12 +12,12 @@ const routerFile =
         ? './src/app/community-router.tsx'
       : './src/app/full-router.tsx';
 
-const siteName = process.env.VITE_SITE_NAME?.trim() || 'ZBRS 技术工具工坊';
+const siteName = process.env.VITE_SITE_NAME?.trim() || '摸摸公司';
 const siteDescription =
   siteMode === 'public'
-    ? `${siteName}：办公室主题轻社区，提供本机办公室乐斗、浏览器工具与轻量单机游戏。`
+    ? `${siteName}：办公室主题轻社区，提供可操控角色的工位塔防、浏览器工具与轻量单机游戏。`
     : siteMode === 'community'
-      ? `${siteName}：围绕职业经验、办公室乐斗、工位绿植与好友互动的轻社区。`
+      ? `${siteName}：围绕职业经验、工位塔防、工位绿植与好友互动的轻社区。`
     : siteMode === 'review'
       ? `${siteName}：无需注册即可使用的浏览器本地效率工具。`
       : `${siteName}：集私人文档阅读、实用工具、成长农场与单机小游戏于一体的个人工作台。`;

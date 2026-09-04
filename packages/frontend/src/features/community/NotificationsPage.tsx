@@ -18,7 +18,7 @@ const CATEGORY_LABELS: Record<CommunityNotification['category'], string> = {
   feed: '投喂',
   invite: '邀请',
   farm: '绿植',
-  battle: '乐斗',
+  battle: '历史对战',
 };
 
 type NotificationFilter = 'all' | 'security' | 'friend' | 'feed' | 'farm';

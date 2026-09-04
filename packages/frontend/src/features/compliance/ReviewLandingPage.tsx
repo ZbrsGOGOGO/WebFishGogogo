@@ -27,7 +27,7 @@ export function ReviewLandingPage(): JSX.Element {
     <main className={styles.page}>
       <header className={styles.header}>
         <Link className={styles.brand} to="/" aria-label={`${SITE_NAME}首页`}>
-          <span className={styles.brandMark} aria-hidden="true">Z</span>
+          <span className={styles.brandMark} aria-hidden="true">摸</span>
           <span>
             <strong>{SITE_NAME}</strong>
             <small>个人效率工作台</small>

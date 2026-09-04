@@ -14,8 +14,8 @@ const FIELDS: Array<{
   label: string;
   description: string;
 }> = [
-  { key: 'equipment', label: '装备', description: '六件乐斗装备和稀有度' },
-  { key: 'battleRecord', label: '战绩摘要', description: '胜场、负场和等级' },
+  { key: 'equipment', label: '历史装备（已下线）', description: '保留旧玩法资产的可见范围' },
+  { key: 'battleRecord', label: '历史对战（已下线）', description: '保留旧胜负记录的可见范围' },
   { key: 'plant', label: '工位绿植', description: '植物外观与连续照料' },
   { key: 'honors', label: '荣誉', description: '徽章和赛季荣誉' },
   { key: 'friendCount', label: '好友数量', description: '仅显示数量，不公开好友名单' },

@@ -199,7 +199,7 @@ export function CommunityAccountSecurityPage(): JSX.Element {
             </div>
           ) : confirmDeletion ? (
             <div className={styles.stack}>
-              <p>注销会影响主页、好友、绿植和乐斗资产。提交后会显示冷静期和预计完成时间。</p>
+              <p>注销会影响主页、好友、绿植和历史玩法资产。提交后会显示冷静期和预计完成时间。</p>
               <Input
                 label="输入 DELETE 确认注销"
                 value={confirmation}

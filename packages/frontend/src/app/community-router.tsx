@@ -55,12 +55,14 @@ import {
   CommunityNewsDetailPage,
   CommunityNewsPage,
 } from '../features/community-news';
-import { PublicGameLayout } from '../features/games/PublicGameLayout';
+import { CommunityArcadeGameLayout } from '../features/games/CommunityArcadeGameLayout';
 import { PublicToolsPage } from '../features/tools/PublicToolsPage';
+import { communityAvatarMark } from '../features/community/profile-options';
+import { useCommunityAuthStore } from './store/community-auth-store';
 
-const OfficeBattlePage = lazy(() =>
-  import('../features/office-battle/OfficeBattleGatewayPage').then((module) => ({
-    default: module.OfficeBattleGatewayPage,
+const WorkstationTowerDefensePage = lazy(() =>
+  import('../features/workstation-tower-defense').then((module) => ({
+    default: module.WorkstationTowerDefensePage,
   })),
 );
 const PublicGamesPage = lazy(() =>
@@ -77,6 +79,19 @@ const TankBattlePage = lazy(() =>
 
 function loading(element: JSX.Element): JSX.Element {
   return <Suspense fallback={<p role="status">页面加载中…</p>}>{element}</Suspense>;
+}
+
+function CommunityWorkstationTowerDefensePage(): JSX.Element {
+  const user = useCommunityAuthStore((state) => state.user);
+  return (
+    <WorkstationTowerDefensePage
+      character={user ? {
+        displayName: user.displayName ?? undefined,
+        avatarKey: user.avatarKey ?? undefined,
+        avatarMark: communityAvatarMark(user.avatarKey ?? undefined),
+      } : undefined}
+    />
+  );
 }
 
 function NotFoundPage(): JSX.Element {
@@ -123,14 +138,15 @@ export function CommunityModeRouter(): JSX.Element {
 
         <Route element={<RequireCommunityAccount />}>
           <Route
-            path="/ledou"
+            path="/tower-defense"
             element={
-              COMMUNITY_FEATURE_FLAGS.ledou
-                ? loading(<OfficeBattlePage />)
-                : <CommunityUnavailablePage system="ledou" />
+              COMMUNITY_FEATURE_FLAGS.towerDefense
+                ? loading(<CommunityWorkstationTowerDefensePage />)
+                : <CommunityUnavailablePage system="towerDefense" />
             }
           />
-          <Route path="/battle" element={<Navigate to="/ledou" replace />} />
+          <Route path="/ledou" element={<Navigate to="/tower-defense" replace />} />
+          <Route path="/battle" element={<Navigate to="/tower-defense" replace />} />
         </Route>
 
         <Route element={<RequireCommunityAccount skipOnboarding />}>
@@ -256,7 +272,7 @@ export function CommunityModeRouter(): JSX.Element {
 
       <Route path="/tools" element={<PublicToolsPage />} />
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
-      <Route path="/games" element={<PublicGameLayout />}>
+      <Route path="/games" element={<CommunityArcadeGameLayout />}>
         <Route index element={loading(<PublicGamesPage />)} />
         <Route path="snake" element={<Navigate to="/games" replace />} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />

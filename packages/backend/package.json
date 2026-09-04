@@ -2,7 +2,7 @@
   "name": "@stealth-reader/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "ZBRS 技术工具工坊 NestJS API",
+  "description": "摸摸公司 NestJS API",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",

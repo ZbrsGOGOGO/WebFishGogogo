@@ -5,18 +5,15 @@ import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
   communityFarmApi,
-  communityBattleApi,
-  communityBattleErrorMessage,
   communityFeedsApi,
   communityProfileApi,
   communityRelationshipsApi,
   createCommunityIdempotencyKey,
   type CommunityFeedType,
-  type CommunityBattlePublicRecord,
   type CommunityPublicProfile,
 } from '../../api/community';
 import { Button, Card, EmptyState, PageHeader, Tag } from '../../components/ui';
-import { PROFESSION_DEFINITIONS } from '../office-battle/office-battle-domain';
+import { COMMUNITY_PROFESSIONS } from './community-professions';
 import { communityAvatarMark } from './profile-options';
 import { communityRequestErrorMessage } from './request-error';
 import {
@@ -37,9 +34,6 @@ export function CommunityPublicProfilePage(): JSX.Element {
   const authUser = useCommunityAuthStore((state) => state.user);
   const socialWriteBlocked = useCommunitySocialWriteBlocked();
   const [profile, setProfile] = useState<CommunityPublicProfile | null>(null);
-  const [battleRecord, setBattleRecord] = useState<CommunityBattlePublicRecord | null>(null);
-  const [battleRecordLoading, setBattleRecordLoading] = useState(false);
-  const [battleRecordError, setBattleRecordError] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string>();
   const [confirmBlock, setConfirmBlock] = useState(false);
@@ -47,10 +41,6 @@ export function CommunityPublicProfilePage(): JSX.Element {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const encouragementTimer = useRef<number>();
-  const canLoadServerBattleRecord =
-    COMMUNITY_FEATURE_FLAGS.battleServer &&
-    phase === 'active' &&
-    authUser?.socialVerificationStatus === 'verified';
 
   const load = useCallback(async (): Promise<void> => {
     if (!publicId) return;
@@ -72,18 +62,8 @@ export function CommunityPublicProfilePage(): JSX.Element {
     };
   }, [load]);
 
-  useEffect(() => {
-    if (!publicId || !canLoadServerBattleRecord) return;
-    setBattleRecordLoading(true);
-    setBattleRecordError(undefined);
-    communityBattleApi.getPublicRecord(publicId)
-      .then(setBattleRecord)
-      .catch((requestError) => setBattleRecordError(communityBattleErrorMessage(requestError)))
-      .finally(() => setBattleRecordLoading(false));
-  }, [canLoadServerBattleRecord, publicId]);
-
   const profession = useMemo(
-    () => PROFESSION_DEFINITIONS.find((item) => item.id === profile?.battleProfession),
+    () => COMMUNITY_PROFESSIONS.find((item) => item.id === profile?.battleProfession),
     [profile?.battleProfession],
   );
 
@@ -170,7 +150,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
           <PageHeader
             title={profile.displayName}
             subtitle={`公开编号 ${profile.publicId}`}
-            actions={<Tag>乐斗职业 · {profession?.name ?? profile.battleProfession}</Tag>}
+            actions={<Tag>社区职业 · {profession?.name ?? profile.battleProfession}</Tag>}
           />
           {socialWriteBlocked ? (
             <CommunitySocialVerificationPrompt action="主动与其他用户互动" className={styles.error} />
@@ -245,41 +225,15 @@ export function CommunityPublicProfilePage(): JSX.Element {
             </Card>
           ) : null}
 
-          {canLoadServerBattleRecord ? (
-            <Card title="办公室乐斗公开战绩">
-              {battleRecordLoading ? <p role="status">正在加载公开战绩…</p> : null}
-              {battleRecordError ? <p className={styles.error} role="alert">{battleRecordError}</p> : null}
-              {battleRecord ? (
-                <div className={styles.grid}>
-                  <div>
-                    <strong>战绩摘要</strong>
-                    {battleRecord.battleLevel == null ? <p>未向当前关系开放</p> : <p>Lv.{battleRecord.battleLevel} · {battleRecord.wins ?? 0} 胜 · {battleRecord.losses ?? 0} 负</p>}
-                  </div>
-                  <div>
-                    <strong>防守装备</strong>
-                    {battleRecord.equipment == null ? <p>未向当前关系开放</p> : battleRecord.equipment.length === 0 ? <p>暂无公开装备</p> : <ul className={styles.plainList}>{battleRecord.equipment.map((item) => <li key={item.id}>{item.name} · Lv.{item.requiredLevel}</li>)}</ul>}
-                  </div>
-                  <div>
-                    <strong>最近战斗</strong>
-                    {battleRecord.recentBattles == null ? <p>未向当前关系开放</p> : battleRecord.recentBattles.length === 0 ? <p>暂无公开记录</p> : <ul className={styles.plainList}>{battleRecord.recentBattles.map((item) => <li key={item.battleId}>{item.result === 'win' ? '胜出' : '惜败'} · {new Date(item.completedAt).toLocaleDateString('zh-CN')}</li>)}</ul>}
-                  </div>
-                </div>
-              ) : null}
-              <p className={styles.muted}>展示范围由对方的隐私设置决定。</p>
-            </Card>
-          ) : (
           <div className={styles.grid}>
-            <Card title="乐斗摘要">
-              {profile.battleLevel == null ? <EmptyState title="未向你开放" message="该用户的战绩隐私设置不允许当前关系查看。" /> : <p>等级 {profile.battleLevel}</p>}
-            </Card>
-            <Card title="六件装备">
-              {!profile.equipment ? <EmptyState title="未向你开放" message="装备可见范围由该用户控制。" /> : profile.equipment.length === 0 ? <p>尚未装备物品</p> : <ul className={styles.plainList}>{profile.equipment.map((item) => <li key={item.slot}>{item.slot} · {item.name} · Lv.{item.level}</li>)}</ul>}
+            <Card title="摸鱼升职记 · 工位塔防">
+              <p>{profile.displayName}的系统头像就是工位守卫。当前版本每局只有一个角色，塔防成绩仅保存在玩家自己的浏览器中。</p>
+              <Link to="/tower-defense">进入工位塔防</Link>
             </Card>
             <Card title="荣誉">
               {!profile.honors ? <EmptyState title="未向你开放" message="荣誉可见范围由该用户控制。" /> : profile.honors.length === 0 ? <p>尚未获得荣誉</p> : <p>{profile.honors.join('、')}</p>}
             </Card>
           </div>
-          )}
         </>
       ) : null}
     </main>

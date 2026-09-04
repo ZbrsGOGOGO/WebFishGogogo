@@ -3,7 +3,7 @@ export type CommunitySystemId =
   | 'news'
   | 'community'
   | 'farm'
-  | 'ledou'
+  | 'towerDefense'
   | 'feed'
   | 'invite'
   | 'profile'
@@ -41,7 +41,7 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
   moderation: envFlag(import.meta.env.VITE_COMMUNITY_MODERATION_ENABLED, false),
   chat: envFlag(import.meta.env.VITE_COMMUNITY_CHAT_ENABLED, false),
   farm: envFlag(import.meta.env.VITE_COMMUNITY_FARM_ENABLED, false),
-  ledou: envFlag(import.meta.env.VITE_COMMUNITY_LEDOU_ENABLED, true),
+  towerDefense: envFlag(import.meta.env.VITE_COMMUNITY_TOWER_DEFENSE_ENABLED, true),
   battleServer: envFlag(import.meta.env.VITE_COMMUNITY_BATTLE_SERVER_ENABLED, false),
   feed: envFlag(import.meta.env.VITE_COMMUNITY_FEED_ENABLED, false),
   invite: envFlag(import.meta.env.VITE_COMMUNITY_INVITE_ENABLED, false),
@@ -88,12 +88,12 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     description: '一键照料工位绿植',
   },
   {
-    id: 'ledou',
-    label: '乐斗',
-    path: '/ledou',
-    enabled: COMMUNITY_FEATURE_FLAGS.ledou,
+    id: 'towerDefense',
+    label: '工位塔防',
+    path: '/tower-defense',
+    enabled: COMMUNITY_FEATURE_FLAGS.towerDefense,
     requiresAccount: true,
-    description: '办公室职业自动战斗',
+    description: '移动角色，布置防线守住核心工位',
   },
   {
     id: 'feed',

@@ -7,7 +7,6 @@ import { ChatModule } from './modules/chat/chat.module';
 import { CommunityModule } from './modules/community/community.module';
 import { CommunityContentModule } from './modules/community/community-content.module';
 import { NewsModule } from './modules/community/news/news.module';
-import { OfficeBattleModule } from './modules/community/office-battle/office-battle.module';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
 
 /**
@@ -26,7 +25,6 @@ import { ArcadeModule } from './modules/community/arcade/arcade.module';
     CommunityContentModule,
     NewsModule,
     ArcadeModule,
-    OfficeBattleModule,
   ],
   controllers: [CommunityHealthController],
 })

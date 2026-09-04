@@ -1,6 +1,6 @@
 # 社区版部署
 
-社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容和审核 API；旧文档上传、私人阅读、便签、偏好、工具目录以及尚未实现的社区前缀一律返回 404。
+社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容和审核 API；旧文档上传、私人阅读、便签、偏好、工具目录和已停服的办公室乐斗 API，以及尚未实现的社区前缀一律返回 404。“摸鱼升职记”工位塔防 V1 是纯前端短局，不新增服务端游戏 API。
 
 这套 Compose 是阶段性单机发布骨架，不是“1000 同时在线已经通过”的证明。社区部署明确不启动遗留 `main.worker.js` / `ActivityProjector`：它会把事件级 `processed` 状态误当成多消费者投递状态。认证邮件使用独立加密 Outbox，账号注销补偿使用数据库租约；其他社区领域事件在完成逐消费者回执审计前不得接入旧 Worker，也不得把积压写成已投递。
 
@@ -88,7 +88,34 @@ docker compose \
 
 ## 4. 启动与迁移
 
-首次切换前保留当前公开镜像和 `.env.public`，并对服务器做可恢复快照。原 `webfish-public` 的 gateway/web 与社区版会竞争 80、443 和 8080；先只停服原容器（不执行 `down -v`），并确认端口已释放：
+首次切换前保留当前公开镜像和 `.env.public`，并对服务器做可恢复快照。下线旧办公室乐斗入口前还必须完成一次数据安全硬闸：记录当前运行镜像的 tag 与 digest，保留可直接回滚的镜像，对 PostgreSQL 做加密备份并验证备份可读。随后在只读事务中执行下列盘点，将输出、备份校验值、镜像 digest、时间和发布 SHA 一起归档：
+
+```sql
+BEGIN TRANSACTION READ ONLY;
+
+SELECT status, COUNT(*)
+FROM office_battle_pending_rewards
+GROUP BY status;
+
+SELECT 'office_battle_profiles' AS table_name, COUNT(*) AS row_count FROM office_battle_profiles
+UNION ALL SELECT 'office_battle_offer_sets', COUNT(*) FROM office_battle_offer_sets
+UNION ALL SELECT 'office_battle_offers', COUNT(*) FROM office_battle_offers
+UNION ALL SELECT 'office_battle_records', COUNT(*) FROM office_battle_records
+UNION ALL SELECT 'office_battle_equipment', COUNT(*) FROM office_battle_equipment
+UNION ALL SELECT 'office_battle_loadout_items', COUNT(*) FROM office_battle_loadout_items
+UNION ALL SELECT 'office_battle_defense_configs', COUNT(*) FROM office_battle_defense_configs
+UNION ALL SELECT 'office_battle_pending_rewards', COUNT(*) FROM office_battle_pending_rewards
+UNION ALL SELECT 'office_battle_friend_reward_claims', COUNT(*) FROM office_battle_friend_reward_claims
+UNION ALL SELECT 'office_battle_asset_ledger', COUNT(*) FROM office_battle_asset_ledger
+UNION ALL SELECT 'office_battle_inventory_ledger', COUNT(*) FROM office_battle_inventory_ledger
+ORDER BY table_name;
+
+COMMIT;
+```
+
+如果第一个查询返回任何 `status = 'pending'` 的记录，必须立即暂停切换；不得用脚本清零、标记已领取、批量兑换或删除。先将受影响的 `user_id`、`battle_id`、奖励快照和创建时间导出到加密且限权的处置文件，由业务与隐私负责人制定并签字确认人工处置、用户通知和回滚方案后，才能继续停服。11 张表的行数只用于前后校验，切换不得改名、清空或删除这些表。
+
+原 `webfish-public` 的 gateway/web 与社区版会竞争 80、443 和 8080；数据安全硬闸留档完整后，先只停服原容器（不执行 `down -v`），并确认端口已释放：
 
 ```bash
 docker compose \
@@ -146,19 +173,19 @@ REQUIRE_AUTH_SMOKE=1 \
 sh deploy/community-smoke.sh https://zbrshyyzxx.top
 ```
 
-脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档 API 为 404、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
+脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档及办公室乐斗 API 为 404、`/tower-defense` 与历史地址 `/ledou`、`/battle` 均可达、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
 
 带专用测试账号运行时，脚本还会验证合法 `Origin` 登录、生产 `__Host-` 刷新 Cookie 的 `Secure`、`HttpOnly`、`SameSite=Strict`、`Path=/` 和无 `Domain` 属性，以及缺少 `Origin` 的刷新被拒绝、合法同源刷新成功并在结束时注销测试会话。不要使用真实用户账号，也不要把测试凭据写进仓库或命令历史。
 
 ## 6. 分阶段开启
 
-1. 首次部署保持全部业务开关为 `false`，只验证 health、登录安全、迁移、旧 API 拒绝和回滚路径。
+1. 首次部署保持全部服务端写入业务开关为 `false`，只验证 health、登录安全、迁移、旧 API 拒绝和回滚路径。工位塔防的纯前端构建开关例外，生产固定为开启。
 2. 先开启注册与账号恢复；社交核验、账号注销分别使用独立开关，只有外部 Provider 与补偿任务验收后才开启。
 3. 再开启好友、邀请、投喂、工位绿植等社区事务；公开主页与这些写能力使用同一社区总闸。
 4. 内容读取、内容写入、审核操作使用三个独立开关。先由值班审核员在写入关闭状态验收审核台，再开放发帖、评论和互动。
 5. 聊天室先开读取和连接，发送保持关闭；首发可开启 `CHAT_BUILTIN_MODERATION_ENABLED=true` 使用内置基础规则，接入外部审核 Provider 后关闭该开关。审核、举报、Redis 故障只读和重连演练通过后，再按 50 → 200 → 500 → 1000 连接逐级开放写入。
 6. 新闻总闸与后台闸同时开启后，公开列表在首篇稿件通过双人复核前仍为空；只录入真实授权来源，不得使用抓取、全文镜像或虚假种子填充页面。
-7. 服务端乐斗在迁移、资产账本、幂等与好友隐私验收后单独开启；匿名本机试玩与正式档案不得互相兑换。
+7. 生产构建固定开启 `VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=true`。工位塔防只在本机保存最高分和设置，不上传进度、不接入正式排行榜也不提供正式奖励。`FEATURE_COMMUNITY_BATTLE_ENABLED`、`VITE_COMMUNITY_LEDOU_ENABLED` 和 `VITE_COMMUNITY_BATTLE_SERVER_ENABLED` 必须保持 `false`，社区入口不再装配旧办公室乐斗服务；历史源码、迁移与表只供回滚，不改名也不删除数据。
 8. 社区领域若以后引入新的异步事件消费者，必须先实现逐消费者回执与积压/重试/死信监控；禁止直接启用遗留 `main.worker.js`。
 
 白名单不是实现状态说明：后端模块、授权、治理和验收必须同时完成。每次扩大白名单后重新构建并执行完整烟测。

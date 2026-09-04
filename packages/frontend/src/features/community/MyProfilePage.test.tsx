@@ -64,7 +64,7 @@ const farmOverview: CommunityFarmOverview = {
   pendingEncouragements: 0,
 };
 
-describe('CommunityMyProfilePage office battle entry', () => {
+describe('CommunityMyProfilePage workstation tower defense entry', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     resetCommunityAuthStoreForTests();
@@ -86,31 +86,17 @@ describe('CommunityMyProfilePage office battle entry', () => {
     );
   }
 
-  it('describes and links to the saved battle profile when battle is enabled', async () => {
+  it('describes the local character and links to workstation tower defense', async () => {
     renderPage();
 
     expect(
-      await screen.findByText('等级 8 · 六件装备、仓库、技能和战绩会跟随账号保存。'),
+      await screen.findByText(/系统头像会成为场上唯一的工位守卫/),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '进入办公室乐斗' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '带角色守工位' })).toHaveAttribute(
       'href',
-      '/ledou',
+      '/tower-defense',
     );
-    expect(screen.queryByText(/服务端|正式档案|本机试玩/)).not.toBeInTheDocument();
-  });
-
-  it('uses the same player-facing copy when the battle flag changes', async () => {
-    featureFlags.battleServer = false;
-    renderPage();
-
-    expect(
-      await screen.findByText('等级 8 · 六件装备、仓库、技能和战绩会跟随账号保存。'),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '进入乐斗' })).toHaveAttribute(
-      'href',
-      '/ledou',
-    );
-    expect(screen.queryByText(/服务端|正式档案|本机试玩/)).not.toBeInTheDocument();
+    expect(screen.getByText('社区职业 · 程序员')).toBeInTheDocument();
   });
 
   it('shows the existing desk plant from the farm overview', async () => {

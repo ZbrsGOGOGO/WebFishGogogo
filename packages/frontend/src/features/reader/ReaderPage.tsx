@@ -3,8 +3,8 @@
 //
 // 职责（任务 16.1）：
 // - 从路由参数取 docId，拉取 ArticleViewModel（useArticle）。
-// - 用历史兼容皮肤渲染成 ZBRS 技术文章页（Req 5.1/5.2）。
-// - 设置浏览器标签页标题为 ZBRS 技术文章风格文本（Req 5.3）。
+// - 用历史兼容皮肤渲染成摸摸公司技术文章页（Req 5.1/5.2）。
+// - 设置浏览器标签页标题为摸摸公司技术文章风格文本（Req 5.3）。
 //
 // 该容器同时为后续任务预留插槽，便于渐进接入而不改动皮肤层：
 // - controlsSlot：阅读控制（16.2 字号/行距/主题/翻页模式）。
@@ -110,7 +110,7 @@ export function ReaderPage({
     };
   }, [restored, progress.chapterIdx, reportProgress, flush]);
 
-  // Req 5.3：将标签页标题设为 ZBRS 技术文章风格文本。
+  // Req 5.3：将标签页标题设为摸摸公司技术文章风格文本。
   // 加载中/出错时使用统一的技术文章标题占位。
   const tabTitle = article
     ? buildBlogTabTitle(article.articleTitle)
@@ -127,7 +127,7 @@ export function ReaderPage({
     return (
       <div className={styles.statusPage} role="status" aria-live="polite">
         <span className={styles.statusMark} aria-hidden="true">
-          Z
+          摸
         </span>
         <strong>正在打开文档</strong>
         <span>正在恢复章节与上次阅读位置…</span>

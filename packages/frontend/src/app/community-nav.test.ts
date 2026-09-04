@@ -18,6 +18,7 @@ describe('community relationship and growth release gates', () => {
       passwordReset: false,
       socialVerification: false,
       accountDeletion: false,
+      towerDefense: true,
       battleServer: false,
     });
   });

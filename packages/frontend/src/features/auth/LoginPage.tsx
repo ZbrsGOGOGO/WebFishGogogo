@@ -62,10 +62,10 @@ export function LoginPage(): JSX.Element {
       <section aria-labelledby="login-title" className="auth-card">
         <div className="auth-card__brand">
           <span className="auth-card__logo" aria-hidden="true">
-            Z
+            摸
           </span>
           <strong className="auth-card__brand-name">
-            ZBRS 技术工具工坊
+            摸摸公司
           </strong>
         </div>
         <Card>

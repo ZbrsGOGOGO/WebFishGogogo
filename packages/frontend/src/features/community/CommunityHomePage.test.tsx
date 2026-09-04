@@ -56,8 +56,8 @@ describe('CommunityHomePage profile summary', () => {
     );
 
     expect(await screen.findByText('真实主页用户')).toBeInTheDocument();
-    expect(screen.getByText('乐斗职业：测试')).toBeInTheDocument();
-    expect(screen.queryByText('乐斗职业：developer')).not.toBeInTheDocument();
+    expect(screen.getByText('社区职业：测试')).toBeInTheDocument();
+    expect(screen.queryByText('社区职业：developer')).not.toBeInTheDocument();
     expect(communityProfileApi.getMe).toHaveBeenCalledTimes(1);
   });
 });

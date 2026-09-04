@@ -11,7 +11,6 @@ import {
   NewsReviewDecision,
   NewsSource,
   NewsUserPreference,
-  OfficeBattleProfile,
   PlayerProfile,
 } from '../../../database/entities';
 import { AuthModule } from '../../auth/auth.module';
@@ -46,7 +45,6 @@ import { HotNewsService } from './hot-news.service';
       NewsReviewDecision,
       NewsSource,
       NewsUserPreference,
-      OfficeBattleProfile,
       PlayerProfile,
     ]),
     AuthModule,

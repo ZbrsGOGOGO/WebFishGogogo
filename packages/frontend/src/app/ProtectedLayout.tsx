@@ -48,14 +48,14 @@ export function ProtectedLayout(): JSX.Element {
             <Link
               to="/"
               className="topbar__brand"
-              aria-label="ZBRS 技术工具工坊首页"
+              aria-label="摸摸公司首页"
             >
               <span className="topbar__brand-mark" aria-hidden="true">
-                Z
+                摸
               </span>
               <span className="topbar__brand-copy">
-                <strong>ZBRS</strong>
-                <small>技术工具工坊</small>
+                <strong>摸摸公司</strong>
+                <small>摸鱼成长工作台</small>
               </span>
             </Link>
             <nav aria-label="主导航" className="topbar__nav">

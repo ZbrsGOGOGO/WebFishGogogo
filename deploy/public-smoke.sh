@@ -154,9 +154,11 @@ forbid_regex() {
   pass "$forbidden_label is absent"
 }
 
-# Public routes: eight serial GETs, exactly once each.
+# Canonical public routes and the two legacy browser aliases are fetched exactly once each.
 fetch_exact '/' 200 "$SMOKE_TMP/home.html"
-fetch_exact '/ledou' 200 "$SMOKE_TMP/ledou.html"
+fetch_exact '/tower-defense' 200 "$SMOKE_TMP/tower-defense.html"
+fetch_exact '/ledou' 200 "$SMOKE_TMP/legacy-ledou.html"
+fetch_exact '/battle' 200 "$SMOKE_TMP/legacy-battle.html"
 fetch_exact '/tools' 200 "$SMOKE_TMP/tools.html"
 fetch_exact '/games' 200 "$SMOKE_TMP/games.html"
 fetch_exact '/games/tetris' 200 "$SMOKE_TMP/game-tetris.html"
@@ -177,7 +179,7 @@ check_hidden_redirect '/games/arena' home-or-games "$SMOKE_TMP/hidden-arena.html
 check_hidden_redirect '/games/high-low' home-or-games "$SMOKE_TMP/hidden-high-low.html"
 
 # Vite serves an SPA shell for every public route. Inspect the entry bundle and
-# the lazy office-battle and game chunks as well, otherwise curl would not see rendered copy.
+# all first-level lazy page chunks as well, otherwise curl would not see rendered copy.
 : > "$SMOKE_TMP/public-artifacts.txt"
 cat "$SMOKE_TMP/home.html" "$SMOKE_TMP/games.html" >> \
   "$SMOKE_TMP/public-artifacts.txt"
@@ -200,16 +202,13 @@ while IFS= read -r entry_path; do
   cat "$entry_file" >> "$SMOKE_TMP/public-artifacts.txt"
 done < "$SMOKE_TMP/entry-assets.txt"
 
-grep -a -E -o 'assets/[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
-  grep -E '(OfficeBattlePage|PublicGamesPage|SnakeGamePage|TetrisGamePage|TankBattlePage|ThreeSumGamePage)-' |
+grep -a -E -o 'assets/(workstation-tower-defense|PublicGamesPage|TetrisGamePage|TankBattlePage)-[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
   sed 's#^#/#' |
   sort -u > "$SMOKE_TMP/game-assets.txt"
 
 game_asset_count=$(wc -l < "$SMOKE_TMP/game-assets.txt" | tr -d ' ')
-[ "$game_asset_count" -ge 6 ] ||
-  fail "found only $game_asset_count of the 6 expected public interactive chunks"
-[ "$game_asset_count" -le 9 ] ||
-  fail "found $game_asset_count game chunks; refusing a noisy smoke test"
+[ "$game_asset_count" -eq 4 ] ||
+  fail "found $game_asset_count of the 4 expected public interactive chunks"
 
 game_asset_index=0
 while IFS= read -r game_asset_path; do
@@ -222,15 +221,16 @@ done < "$SMOKE_TMP/game-assets.txt"
 
 # Required public identity, product copy, games and ICP record.
 require_literal "$SMOKE_TMP/home.html" \
-  '办公室主题轻社区，提供本机办公室乐斗、浏览器工具与轻量单机游戏' \
+  '摸摸公司' \
   'public homepage metadata'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
-  '把工作里的角色，带进一个更有意思的办公室世界' \
-  'public homepage copy'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '办公室乐斗' 'office battle title'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '程序员' 'developer profession'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '人力资源管理' 'HR profession'
-require_literal "$SMOKE_TMP/public-artifacts.txt" '6 个装备位' 'six equipment slots'
+  '摸鱼升职记' \
+  'tower-defense campaign copy'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '工位塔防' 'tower-defense title'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '工位守卫' 'playable hero'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '本机最高分' 'local high-score storage boundary'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '不上传' 'no-upload boundary'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '不提供正式奖励' 'no formal rewards boundary'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '经典小游戏' \
   'public games copy'
@@ -239,9 +239,6 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" '坦克大战' 'tank game titl
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '浙ICP备2026060298号' \
   'ICP record'
-require_literal "$SMOKE_TMP/public-artifacts.txt" \
-  '浏览器本地存储仅用于保存部分单机游戏记录和办公室乐斗试玩进度' \
-  'local progress storage disclosure'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '不提供用户间互动、充值、提现、概率付费或交易功能' \
   'public game service boundary'
@@ -260,7 +257,7 @@ forbid_regex "$SMOKE_TMP/public-artifacts.txt" \
   '审核|上线准备|暂未开放|网站主办者' \
   'review/operator/contact wording'
 forbid_regex "$SMOKE_TMP/public-artifacts.txt" \
-  '创建本机账户|账户注册与登录|成长农场|午休斗技场|午休竞技场|比大小|个人文档库|上传文档|每日签到|任务中心|/api/auth|/api/v1|/games/arena|/games/high-low' \
+  '办公室乐斗|创建本机账户|账户注册与登录|成长农场|午休斗技场|午休竞技场|比大小|个人文档库|上传文档|每日签到|任务中心|/api/auth|/api/v1|/v1/auth|/v1/games/arcade|/games/arena|/games/high-low' \
   'hidden full-site feature wording'
 
 pass "public smoke completed with $smoke_request_number serial read-only requests"

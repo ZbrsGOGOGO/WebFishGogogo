@@ -26,15 +26,16 @@ describe('public site mode', () => {
         name: '把工作里的角色，带进一个更有意思的办公室世界',
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '开始办公室乐斗' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '开始工位塔防' })).toHaveAttribute(
       'href',
-      '/ledou',
+      '/tower-defense',
     );
     expect(screen.getByRole('heading', { name: '九个系统，围绕职业、成长和好友展开' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: '主要系统' })).toHaveTextContent(
-      '首页热点新闻经验交流农场乐斗投喂邀请我的主页好友',
+      '首页热点新闻经验交流农场工位塔防投喂邀请我的主页好友',
     );
-    expect(screen.getByText('人力资源管理')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '一个角色，三种办公用品' })).toBeInTheDocument();
+    expect(screen.getByText('订书机')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '注册' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '登录' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '农场' })).toHaveAttribute(
@@ -43,18 +44,22 @@ describe('public site mode', () => {
     );
   });
 
-  it('loads the local office battle and keeps it API-free', async () => {
+  it.each(['/tower-defense', '/ledou', '/battle'])(
+    'loads the local workstation tower defense from %s and keeps it API-free',
+    async (path) => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    renderPublicAt('/ledou');
+    renderPublicAt(path);
 
     expect(
-      await screen.findByRole('heading', { name: /先选职业/ }),
+      await screen.findByRole('heading', { name: '摸鱼升职记' }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /选择程序员/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '开始工位塔防' })).toBeInTheDocument();
+    expect(screen.getByText(/移动你的唯一守卫/)).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
+    },
+  );
 
   it('lists only the two selected games and makes no API call', async () => {
     const fetchSpy = vi.fn();

@@ -26,7 +26,6 @@ import {
   NewsReviewDecision,
   NewsSource,
   NewsUserPreference,
-  OfficeBattleProfile,
   PlayerProfile,
   User,
 } from '../../../database/entities';
@@ -1001,8 +1000,6 @@ export class NewsService {
   }
 
   private async selectedProfession(manager: EntityManager, userId: string): Promise<string | null> {
-    const battle = await manager.getRepository(OfficeBattleProfile).findOne({ where: { userId } });
-    if (battle) return battle.profession;
     const profile = await manager.getRepository(PlayerProfile).findOne({ where: { userId } });
     return profile?.battleProfession && NEWS_PROFESSION_TAGS.includes(
       profile.battleProfession as (typeof NEWS_PROFESSION_TAGS)[number],

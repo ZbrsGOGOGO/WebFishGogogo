@@ -3,8 +3,42 @@ import { Link } from 'react-router-dom';
 
 import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { IS_PUBLIC_MODE, SITE_NAME } from '../../app/site-config';
-import { PROFESSION_DEFINITIONS } from '../office-battle/office-battle-domain';
 import styles from './ReviewLandingPage.module.css';
+
+const defenseRoster = [
+  {
+    id: 'hero',
+    mark: '人',
+    name: '工位守卫',
+    shortName: '唯一角色',
+    description: '用方向键或 WASD 移动，自动攻击附近稽查，关键时刻释放专注脉冲。',
+    action: '移动 · 自动攻击',
+  },
+  {
+    id: 'stapler',
+    mark: '订',
+    name: '订书机',
+    shortName: '单体塔',
+    description: '便宜稳定，持续盯住单个目标，是最容易补齐的基础火力。',
+    action: '稳定单体输出',
+  },
+  {
+    id: 'coffee',
+    mark: '咖',
+    name: '咖啡机',
+    shortName: '减速塔',
+    description: '让路过的稽查慢下来，为角色和其他办公用品争取更多输出时间。',
+    action: '范围减速',
+  },
+  {
+    id: 'printer',
+    mark: '印',
+    name: '打印机',
+    shortName: '范围塔',
+    description: '用范围伤害清理扎堆的小股稽查，造价高但能稳住拥堵路段。',
+    action: '范围伤害',
+  },
+] as const;
 
 const systems = [
   {
@@ -48,13 +82,13 @@ const systems = [
     tone: 'green',
   },
   {
-    id: 'ledou',
-    mark: '斗',
-    title: '乐斗',
-    eyebrow: '办公室项目攻防',
-    description: '选择职业、搭配六件装备，观看十回合内结束的自动战斗。',
-    path: '/ledou',
-    available: COMMUNITY_FEATURE_FLAGS.ledou,
+    id: 'tower-defense',
+    mark: '守',
+    title: '工位塔防',
+    eyebrow: '摸鱼升职记',
+    description: '移动一个工位守卫，用三种办公用品挡住沿固定路线来袭的稽查。',
+    path: '/tower-defense',
+    available: COMMUNITY_FEATURE_FLAGS.towerDefense,
     tone: 'rose',
   },
   {
@@ -82,7 +116,7 @@ const systems = [
     mark: '我',
     title: '我的主页',
     eyebrow: '职业档案',
-    description: '展示职业、装备、荣誉与内容收藏，并由自己控制公开范围。',
+    description: '展示社区职业、系统头像、荣誉与内容收藏，并由自己控制公开范围。',
     path: '/me',
     available: !IS_PUBLIC_MODE && COMMUNITY_FEATURE_FLAGS.profile,
     tone: 'violet',
@@ -92,7 +126,7 @@ const systems = [
     mark: '友',
     title: '好友',
     eyebrow: '同事关系',
-    description: '支持邀请、投喂和异步挑战，先完成隐私、拉黑与举报能力。',
+    description: '支持邀请、投喂与成绩分享，先完成隐私、拉黑与举报能力。',
     path: '/friends',
     available: COMMUNITY_FEATURE_FLAGS.friends,
     tone: 'cyan',
@@ -104,26 +138,26 @@ export function PublicLandingPage(): JSX.Element {
     <main className={styles.page}>
       <section className={styles.hero} aria-labelledby="public-title">
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}>ZBRS · 办公室轻社区</span>
+          <span className={styles.eyebrow}>摸摸公司 · 摸鱼成长社区</span>
           <h1 id="public-title">把工作里的角色，带进一个更有意思的办公室世界</h1>
           <p>
             {SITE_NAME}正在从工具站升级为办公室主题社区。
-            你可以选择自己的职业，用装备构筑角色，在短时乐斗、轻量农场和好友互动中持续成长。
+            在“摸鱼升职记”里，你会带着自己的角色布置办公用品，守住核心工位；也可以照料绿植、使用工具和认识同事。
           </p>
           <div className={styles.actions}>
-            <Link className={styles.primaryAction} to="/ledou">开始办公室乐斗</Link>
+            <Link className={styles.primaryAction} to="/tower-defense">开始工位塔防</Link>
             <Link className={styles.secondaryAction} to="/tools">先用一个工具</Link>
           </div>
         </div>
 
-        <aside className={styles.reviewCard} aria-label="乐斗试玩说明">
+        <aside className={styles.reviewCard} aria-label="工位塔防试玩说明">
           <span className={styles.statusDot} aria-hidden="true" />
-          <strong>第一条可玩循环已经开始</strong>
-          <p>选职业 → 看装备 → 挑对手 → 读战报 → 换上新装备，单局约半分钟。</p>
+          <strong>摸鱼升职记的第一条可玩循环</strong>
+          <p>布塔 → 移动角色 → 自动迎敌 → 升级防线 → 守住三波，单局约 1～3 分钟。</p>
           <dl>
-            <div><dt>战斗职业</dt><dd>5 种</dd></div>
-            <div><dt>装备位置</dt><dd>6 个</dd></div>
-            <div><dt>最长战斗</dt><dd>10 回合</dd></div>
+            <div><dt>场上角色</dt><dd>1 个</dd></div>
+            <div><dt>办公用品塔</dt><dd>3 种</dd></div>
+            <div><dt>本次稽查</dt><dd>3 波</dd></div>
           </dl>
         </aside>
       </section>
@@ -134,7 +168,7 @@ export function PublicLandingPage(): JSX.Element {
           <h2 id="systems-title">九个系统，围绕职业、成长和好友展开</h2>
           <p>
             {IS_PUBLIC_MODE
-              ? '首页和乐斗可以直接体验，更多社区功能会陆续与大家见面。'
+              ? '首页和工位塔防可以直接体验，更多社区功能会陆续与大家见面。'
               : '选择你感兴趣的系统直接进入；需要保存成长进度的功能会请你先登录。'}
           </p>
         </div>
@@ -177,18 +211,18 @@ export function PublicLandingPage(): JSX.Element {
 
       <section className={styles.section} aria-labelledby="career-title">
         <div className={styles.sectionHeading}>
-          <span>职业方向</span>
-          <h2 id="career-title">五种办公室职业，各有自己的战斗节奏</h2>
-          <p>职业决定基础能力和专属行动，装备决定你如何把优势放大。</p>
+          <span>第一版阵容</span>
+          <h2 id="career-title">一个角色，三种办公用品</h2>
+          <p>角色负责走位与补伤害，防御塔自动迎敌；不用盯屏，也能随时暂停。</p>
         </div>
         <div className={styles.careerGrid}>
-          {PROFESSION_DEFINITIONS.map((profession) => (
-            <article key={profession.id}>
-              <span aria-hidden="true">{profession.mark}</span>
-              <small>{profession.shortName}</small>
-              <h3>{profession.name}</h3>
-              <p>{profession.slogan}</p>
-              <strong>{profession.skillName}</strong>
+          {defenseRoster.map((unit) => (
+            <article key={unit.id}>
+              <span aria-hidden="true">{unit.mark}</span>
+              <small>{unit.shortName}</small>
+              <h3>{unit.name}</h3>
+              <p>{unit.description}</p>
+              <strong>{unit.action}</strong>
             </article>
           ))}
         </div>

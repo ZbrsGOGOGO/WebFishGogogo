@@ -71,6 +71,8 @@ case "$HTTP_PORT" in
 esac
 
 check_required_text SITE_NAME
+[ "$(env_value SITE_NAME)" = "摸摸公司" ] ||
+  fail "SITE_NAME must be 摸摸公司 for this release"
 check_required_text SITE_DOMAIN
 check_required_text ACME_EMAIL
 

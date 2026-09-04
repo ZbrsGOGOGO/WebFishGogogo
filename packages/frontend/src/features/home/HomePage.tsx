@@ -181,7 +181,7 @@ export function HomePage(): JSX.Element {
     <section className={styles.page} aria-label="首页">
       <header className={styles.hero}>
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}>ZBRS · 上班族轻量工作台</span>
+          <span className={styles.eyebrow}>摸摸公司 · 上班族轻量工作台</span>
           <h1>{greeting}</h1>
           <p>工作时积累成长，空闲时收菜和玩一局。先用三分钟完成今天的开局路线。</p>
         </div>

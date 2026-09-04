@@ -9,7 +9,7 @@ services:
       args:
         VITE_API_BASE_URL: /api
         VITE_SITE_MODE: review
-        VITE_SITE_NAME: ${SITE_NAME:-ZBRS 技术工具工坊}
+        VITE_SITE_NAME: ${SITE_NAME:-摸摸公司}
         VITE_SITE_DOMAIN: ${SITE_DOMAIN:?SITE_DOMAIN must be set}
         VITE_ICP_BEIAN_NUMBER: ${ICP_BEIAN_NUMBER:-}
         VITE_PUBLIC_SECURITY_BEIAN_NUMBER: ${PUBLIC_SECURITY_BEIAN_NUMBER:-}

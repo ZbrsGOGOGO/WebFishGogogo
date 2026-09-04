@@ -20,7 +20,7 @@ export function CommunityAuthShell({
     <main className="auth-page" aria-labelledby={titleId}>
       <div className="auth-card">
         <Link className="auth-card__brand" to="/">
-          <span className="auth-card__logo" aria-hidden="true">Z</span>
+          <span className="auth-card__logo" aria-hidden="true">摸</span>
           <strong className="auth-card__brand-name">{SITE_NAME}</strong>
         </Link>
         <Card>

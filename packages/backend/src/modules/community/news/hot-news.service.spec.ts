@@ -46,7 +46,7 @@ describe('daily hot-news rules', () => {
         .resolves.toMatchObject({ refreshed: true, itemCount: 2 });
       await expect(service.refresh(new Date('2026-08-23T01:00:00.000Z')))
         .resolves.toMatchObject({ refreshed: false, itemCount: 2 });
-      const page = await service.listDaily();
+      const page = await service.listDaily(new Date('2026-08-23T01:00:00.000Z'));
       expect(page.serviceDate).toBe('2026-08-23');
       expect(page.items.map((item) => item.headline).sort()).toEqual(['中新热点', '新华热点'].sort());
     } finally {

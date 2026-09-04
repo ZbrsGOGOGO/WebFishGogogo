@@ -142,7 +142,7 @@ export function ToolRunnerModal({
       >
         <header className={styles.header}>
           <div className={styles.heading}>
-            <span className={styles.eyebrow}>ZBRS · 本机工具</span>
+            <span className={styles.eyebrow}>摸摸公司 · 本机工具</span>
             <h2 id={titleId}>{heading}</h2>
             <p id={descriptionId}>数据仅在当前浏览器中处理，不会上传。</p>
           </div>

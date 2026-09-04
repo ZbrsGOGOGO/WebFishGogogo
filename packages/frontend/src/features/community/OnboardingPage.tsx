@@ -4,7 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { communityProfileApi } from '../../api/community';
 import { Button, Card, Input, PageHeader } from '../../components/ui';
-import { PROFESSION_DEFINITIONS } from '../office-battle/office-battle-domain';
+import { COMMUNITY_PROFESSIONS } from './community-professions';
 import { validateCommunityDisplayName } from '../community-auth/validation';
 import styles from './CommunityPages.module.css';
 import { COMMUNITY_AVATARS } from './profile-options';
@@ -16,7 +16,7 @@ export function CommunityOnboardingPage(): JSX.Element {
   const [displayName, setDisplayName] = useState(user?.displayName ?? '');
   const [avatarKey, setAvatarKey] = useState(user?.avatarKey ?? COMMUNITY_AVATARS[0].id);
   const [profession, setProfession] = useState(
-    user?.battleProfession ?? PROFESSION_DEFINITIONS[0].id,
+    user?.battleProfession ?? COMMUNITY_PROFESSIONS[0].id,
   );
   const [fieldError, setFieldError] = useState<string>();
   const [requestError, setRequestError] = useState<string>();
@@ -53,7 +53,7 @@ export function CommunityOnboardingPage(): JSX.Element {
 
   return (
     <main className={styles.page}>
-      <PageHeader title="设置你的办公室身份" subtitle="这里只是乐斗与社区中的角色，不代表平台对现实职业的判断。" />
+      <PageHeader title="设置你的办公室身份" subtitle="系统头像会成为塔防中的工位守卫；社区职业只是展示标签，不代表现实职业评价。" />
       <Card>
         <form className={styles.form} noValidate onSubmit={submit}>
           <Input label="社区昵称" value={displayName} required error={fieldError} onChange={(event) => setDisplayName(event.target.value)} />
@@ -78,9 +78,9 @@ export function CommunityOnboardingPage(): JSX.Element {
           </fieldset>
 
           <fieldset className="community-consents">
-            <legend>选择乐斗职业</legend>
+            <legend>选择社区职业</legend>
             <div className={styles.choiceGrid}>
-              {PROFESSION_DEFINITIONS.map((item) => (
+              {COMMUNITY_PROFESSIONS.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -90,7 +90,7 @@ export function CommunityOnboardingPage(): JSX.Element {
                   onClick={() => setProfession(item.id)}
                 >
                   <strong>{item.name}</strong>
-                  <small>{item.skillName}</small>
+                  <small>{item.slogan}</small>
                 </button>
               ))}
             </div>

@@ -181,6 +181,7 @@ for build_flag in \
   VITE_COMMUNITY_CHAT_ENABLED \
   VITE_COMMUNITY_NEWS_ENABLED \
   VITE_COMMUNITY_NEWS_ADMIN_ENABLED \
+  VITE_COMMUNITY_TOWER_DEFENSE_ENABLED \
   VITE_COMMUNITY_LEDOU_ENABLED \
   VITE_COMMUNITY_BATTLE_SERVER_ENABLED; do
   grep -Fq "ARG ${build_flag}=" "$ROOT_DIR/Dockerfile" ||
@@ -188,6 +189,15 @@ for build_flag in \
   grep -Fq "${build_flag}=\${${build_flag}}" "$ROOT_DIR/Dockerfile" ||
     fail "Dockerfile does not inject $build_flag into the community frontend build"
 done
+grep -Fq 'test "$VITE_COMMUNITY_TOWER_DEFENSE_ENABLED" = true' \
+  "$ROOT_DIR/Dockerfile" ||
+  fail "community-build must require workstation tower defense"
+grep -Fq 'test "$VITE_COMMUNITY_LEDOU_ENABLED" = false' \
+  "$ROOT_DIR/Dockerfile" ||
+  fail "community-build must reject the retired Ledou entry"
+grep -Fq 'test "$VITE_COMMUNITY_BATTLE_SERVER_ENABLED" = false' \
+  "$ROOT_DIR/Dockerfile" ||
+  fail "community-build must reject the retired battle-server client"
 grep -Fq 'name: webfish-community' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must keep the isolated webfish-community project name"
 if grep -Fq 'webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md"; then
@@ -304,9 +314,9 @@ grep -Fq 'VITE_COMMUNITY_NEWS_ADMIN_ENABLED: ${FEATURE_NEWS_ADMIN_ENABLED:-false
 grep -Fq 'FEATURE_NEWS_ADMIN_ENABLED: ${FEATURE_NEWS_ADMIN_ENABLED:-false}' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "community Compose must pass the independent news admin flag"
-grep -Fq 'FEATURE_COMMUNITY_BATTLE_ENABLED: ${FEATURE_COMMUNITY_BATTLE_ENABLED:-false}' \
+grep -Fq 'FEATURE_COMMUNITY_BATTLE_ENABLED: "false"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
-  fail "community Compose must pass the battle flag to the API"
+  fail "community Compose must keep the retired battle API disabled"
 for frontend_flag in \
   VITE_COMMUNITY_PUBLIC_PROFILE_ENABLED \
   VITE_COMMUNITY_FRIENDS_ENABLED \
@@ -323,12 +333,15 @@ grep -Fq 'VITE_COMMUNITY_CONTENT_ENABLED: ${FEATURE_COMMUNITY_CONTENT_ENABLED:-f
 grep -Fq 'VITE_COMMUNITY_MODERATION_ENABLED: ${FEATURE_COMMUNITY_MODERATION_ENABLED:-false}' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "moderation frontend and API flags must use the same source"
-grep -Fq 'VITE_COMMUNITY_LEDOU_ENABLED: "true"' \
+grep -Fq 'VITE_COMMUNITY_TOWER_DEFENSE_ENABLED: "true"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
-  fail "anonymous local office battle must remain available independently"
-grep -Fq 'VITE_COMMUNITY_BATTLE_SERVER_ENABLED: ${FEATURE_COMMUNITY_BATTLE_ENABLED:-false}' \
+  fail "community Compose must enable the local workstation tower-defense entry"
+grep -Fq 'VITE_COMMUNITY_LEDOU_ENABLED: "false"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
-  fail "server battle frontend and API flags must use the same source"
+  fail "community Compose must disable the retired Ledou entry"
+grep -Fq 'VITE_COMMUNITY_BATTLE_SERVER_ENABLED: "false"' \
+  "$ROOT_DIR/$COMPOSE_FILE" ||
+  fail "community Compose must disable the retired battle-server client"
 if grep -Eq 'SMTP_|DB_WORKER_POOL|community-worker|main\.worker\.js|^[[:space:]]{2}worker:' "$ROOT_DIR/$COMPOSE_FILE"; then
   fail "community Compose contains an unsupported mail or legacy worker setting"
 fi
@@ -366,8 +379,11 @@ grep -Eq 'location ~ .*v1/admin/.*moderation' "$ROOT_DIR/deploy/community.nginx.
   fail "implemented moderation API prefix is missing from the Nginx allowlist"
 grep -Eq 'location ~ .*v1/.*news' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "implemented news API prefixes are missing from the Nginx allowlist"
-grep -Eq 'location ~ .*v1/games/.*office-battle.*arcade' "$ROOT_DIR/deploy/community.nginx.conf" ||
-  fail "implemented game API prefixes are missing from the Nginx allowlist"
+grep -Eq 'location ~ .*v1/games/arcade' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "implemented arcade API prefix is missing from the Nginx allowlist"
+if grep -Eq '^    location ~ .*office-battle' "$ROOT_DIR/deploy/community.nginx.conf"; then
+  fail "retired office-battle API must not remain in the community Nginx allowlist"
+fi
 grep -Eq 'location ~ .*v1/admin/.*account-appeals' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "implemented account appeal API prefix is missing from the Nginx allowlist"
 grep -Fq 'X-WebFish-Site-Mode "community"' "$ROOT_DIR/deploy/community.nginx.conf" ||
@@ -423,6 +439,13 @@ grep -Fq 'assert_origin_rejected "$auth_path" "$auth_label" missing' \
 grep -Fq 'register limiter rejects a harmless burst with HTTP 429' \
   "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must exercise a harmless auth 429 contract"
+grep -Fq '/tower-defense' "$ROOT_DIR/deploy/community-smoke.sh" &&
+grep -Fq '/ledou' "$ROOT_DIR/deploy/community-smoke.sh" &&
+grep -Fq '/battle' "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must cover tower defense and both legacy browser routes"
+grep -Fq '/api/v1/games/office-battle/catalog' \
+  "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must prove the retired battle API is unavailable"
 
 grep -Fq 'BASELINE_TIMESTAMP=1700000000007' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
@@ -494,6 +517,8 @@ case "$HTTP_PORT" in
 esac
 
 check_required_text SITE_NAME
+[ "$(env_value SITE_NAME)" = "摸摸公司" ] ||
+  fail "SITE_NAME must be 摸摸公司 for this release"
 check_required_text SITE_DOMAIN
 SITE_DOMAIN=$(env_value SITE_DOMAIN)
 printf '%s\n' "$SITE_DOMAIN" |
@@ -593,6 +618,9 @@ check_boolean CHAT_BUILTIN_MODERATION_ENABLED
 check_boolean FEATURE_COMMUNITY_NEWS_ENABLED
 check_boolean FEATURE_NEWS_ADMIN_ENABLED
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
+
+[ "$(env_value FEATURE_COMMUNITY_BATTLE_ENABLED)" = false ] ||
+  fail "FEATURE_COMMUNITY_BATTLE_ENABLED is retired and must remain false"
 
 [ "$(env_value FEATURE_COMMUNITY_CONTENT_WRITES_ENABLED)" = false ] ||
   [ "$(env_value FEATURE_COMMUNITY_CONTENT_ENABLED)" = true ] ||

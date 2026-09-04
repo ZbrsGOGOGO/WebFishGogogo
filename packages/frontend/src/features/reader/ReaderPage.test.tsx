@@ -92,7 +92,7 @@ describe('ReaderPage (Req 5.1, 5.3)', () => {
         screen.getByRole('heading', { name: 'Redis 高可用架构实践' }),
       ).toBeInTheDocument();
       expect(document.title).toBe(
-        'Redis 高可用架构实践 - ZBRS 阅读工作台',
+        'Redis 高可用架构实践 - 摸摸公司阅读工作台',
       );
     });
 

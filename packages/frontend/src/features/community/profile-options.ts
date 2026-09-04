@@ -1,5 +1,5 @@
 export const COMMUNITY_AVATARS = [
-  { id: 'violet', mark: 'Z', label: '紫色工牌' },
+  { id: 'violet', mark: '摸', label: '紫色工牌' },
   { id: 'green', mark: '芽', label: '绿色工位' },
   { id: 'orange', mark: '咖', label: '咖啡时刻' },
   { id: 'blue', mark: '云', label: '蓝色协作' },
@@ -7,5 +7,5 @@ export const COMMUNITY_AVATARS = [
 ] as const;
 
 export function communityAvatarMark(avatarKey: string | undefined): string {
-  return COMMUNITY_AVATARS.find((avatar) => avatar.id === avatarKey)?.mark ?? 'Z';
+  return COMMUNITY_AVATARS.find((avatar) => avatar.id === avatarKey)?.mark ?? '摸';
 }
