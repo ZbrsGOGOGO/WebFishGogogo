@@ -299,7 +299,12 @@ export class ChatService implements OnModuleInit {
         }
         this.assertWritableRoom(room);
         await this.assertSlowMode(manager, userId, room);
-        const reply = await this.validateReply(manager, room.slug, normalized.replyToMessageId);
+        const reply = await this.validateReply(
+          manager,
+          userId,
+          room.slug,
+          normalized.replyToMessageId,
+        );
         const mentionedUsers = await this.validateMentions(
           manager,
           userId,
@@ -878,6 +883,7 @@ export class ChatService implements OnModuleInit {
 
   private async validateReply(
     manager: EntityManager,
+    authorId: string,
     roomSlug: ChatRoomSlug,
     replyId: string | null,
   ): Promise<ChatMessage | null> {
@@ -885,6 +891,9 @@ export class ChatService implements OnModuleInit {
     const reply = await manager.getRepository(ChatMessage).findOne({ where: { id: replyId } });
     if (!reply || reply.roomSlug !== roomSlug) {
       throw chatException('CHAT_REPLY_NOT_FOUND', '回复的消息不存在于当前房间。', 404);
+    }
+    if (await this.isBlocked(manager, authorId, reply.authorId)) {
+      throw chatException('CHAT_REPLY_NOT_ALLOWED', '不能回复当前不可互动的用户。', 403);
     }
     return reply;
   }

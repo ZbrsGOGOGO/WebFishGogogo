@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   CommunityApiError,
   communityAuthApi,
+  setCommunitySessionTokens,
   setCommunitySessionInvalidatedHandler,
   type CommunityAccountStatus,
   type CommunityAuthUser,
@@ -257,6 +258,7 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
   updateUser: (user) => set({ user, phase: phaseOf(user) }),
   clearError: () => set({ error: null }),
   reset: () => {
+    setCommunitySessionTokens(null);
     savePendingRegistration(null);
     set({
       phase: 'guest',

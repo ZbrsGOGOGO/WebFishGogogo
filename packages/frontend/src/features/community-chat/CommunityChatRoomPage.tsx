@@ -254,18 +254,16 @@ export function CommunityChatRoomPage(): JSX.Element {
       if (selectedRoom.retryAfterSeconds) {
         setRetryUntil(Date.now() + selectedRoom.retryAfterSeconds * 1000);
       }
-      const next = mergeCommunityChatMessages([], messagePage.items ?? []);
-      setMessages(next);
-      const latest = latestCommunityChatSequence(next, roomSlug);
-      latestSequenceRef.current = latest;
-      connectionRef.current?.updateRoomCursor(roomSlug, latest);
+      // REST 首屏与 WebSocket 同时启动。如果实时帧先到，这里必须合并，
+      // 不能用 REST 快照覆盖已接收的更新消息。
+      acceptMessages(messagePage.items ?? []);
       setHasMoreBefore(messagePage.hasMoreBefore);
     } catch (requestError) {
       setError(communityChatErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
-  }, [roomSlug]);
+  }, [acceptMessages, roomSlug]);
 
   useEffect(() => {
     void loadInitial();
@@ -278,10 +276,8 @@ export function CommunityChatRoomPage(): JSX.Element {
 
   const mentionCandidates = useMemo(() => collectCommunityChatMentionCandidates(
     [...(room?.mentionCandidates ?? []), ...socketMentionCandidates],
-    messages,
-    roomSlug ?? 'general',
     user?.publicId,
-  ), [messages, room?.mentionCandidates, roomSlug, socketMentionCandidates, user?.publicId]);
+  ), [room?.mentionCandidates, socketMentionCandidates, user?.publicId]);
 
   const retrySeconds = Math.max(0, Math.ceil((retryUntil - clock) / 1000));
   const composerDisabled = !room || room.closed || room.readOnly ||
@@ -463,7 +459,13 @@ export function CommunityChatRoomPage(): JSX.Element {
                 return (
                   <li key={`${message.roomSlug}:${message.sequence}:${message.id}`} id={`chat-message-${message.id}`} data-visibility={message.visibility}>
                     <header>
-                      <strong>{message.visibility === 'blocked_placeholder' ? '已拉黑用户' : message.author.displayName}</strong>
+                      {message.visibility === 'blocked_placeholder' ? (
+                        <strong>已拉黑用户</strong>
+                      ) : (
+                        <Link to={`/users/${encodeURIComponent(message.author.publicId)}`}>
+                          <strong>{message.author.displayName}</strong>
+                        </Link>
+                      )}
                       <span>#{message.sequence} · {formatMessageTime(message.createdAt)}</span>
                     </header>
                     {message.replyTo ? (

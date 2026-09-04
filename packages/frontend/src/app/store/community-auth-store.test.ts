@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { communityAuthApi, type CommunityAuthUser } from '../../api/community';
 import {
+  getCommunityAccessToken,
+  setCommunitySessionTokens,
+} from '../../api/community-http';
+import {
   resetCommunityAuthStoreForTests,
   useCommunityAuthStore,
 } from './community-auth-store';
@@ -75,6 +79,20 @@ describe('community auth store', () => {
       phase: 'active',
       sessionReady: true,
       user: { onboardingCompleted: true },
+    });
+  });
+
+  it('forgets the in-memory access token when a security action resets the session', () => {
+    setCommunitySessionTokens('revoked-access-token');
+    useCommunityAuthStore.setState({ phase: 'active', user: activeUser });
+
+    useCommunityAuthStore.getState().reset();
+
+    expect(getCommunityAccessToken()).toBeNull();
+    expect(useCommunityAuthStore.getState()).toMatchObject({
+      phase: 'guest',
+      user: null,
+      sessionReady: true,
     });
   });
 });

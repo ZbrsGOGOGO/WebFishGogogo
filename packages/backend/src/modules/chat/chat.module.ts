@@ -9,6 +9,10 @@ import {
   ChatRoom,
   ChatSocketTicket,
   CommunityNotification,
+  DirectConversation,
+  DirectConversationMember,
+  DirectMessage,
+  DirectMessageReport,
   Friendship,
   PlayerProfile,
   User,
@@ -20,6 +24,8 @@ import { ChatModerationService } from './chat-moderation.service';
 import { ChatRealtimeService } from './chat-realtime.service';
 import { ChatService } from './chat.service';
 import { ChatWebSocketGateway } from './chat-websocket.gateway';
+import { DirectMessageController } from './direct-message.controller';
+import { DirectMessageService } from './direct-message.service';
 
 @Module({
   imports: [
@@ -31,6 +37,10 @@ import { ChatWebSocketGateway } from './chat-websocket.gateway';
       ChatRoom,
       ChatSocketTicket,
       CommunityNotification,
+      DirectConversation,
+      DirectConversationMember,
+      DirectMessage,
+      DirectMessageReport,
       Friendship,
       PlayerProfile,
       User,
@@ -38,13 +48,19 @@ import { ChatWebSocketGateway } from './chat-websocket.gateway';
     ]),
     AuthModule,
   ],
-  controllers: [ChatController],
+  controllers: [ChatController, DirectMessageController],
   providers: [
     ChatService,
+    DirectMessageService,
     ChatModerationService,
     ChatRealtimeService,
     ChatWebSocketGateway,
   ],
-  exports: [ChatService, ChatRealtimeService, ChatWebSocketGateway],
+  exports: [
+    ChatService,
+    DirectMessageService,
+    ChatRealtimeService,
+    ChatWebSocketGateway,
+  ],
 })
 export class ChatModule {}

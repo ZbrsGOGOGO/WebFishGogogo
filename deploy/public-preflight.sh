@@ -81,7 +81,13 @@ printf '%s\n' "$PUBLIC_BUILD_SECTION" |
   grep -Fq 'test "$VITE_SITE_MODE" = public' ||
   fail "public-build must reject non-public VITE_SITE_MODE values"
 
-for public_route in /tower-defense /ledou /battle; do
+for public_route in \
+  /tower-defense \
+  /ledou \
+  /battle \
+  /games/snake \
+  /games/zhengdao/ \
+  /games/zhengdao/js/01-data.js; do
   grep -Fq "fetch_exact '$public_route'" "$ROOT_DIR/deploy/public-smoke.sh" ||
     fail "public smoke must cover $public_route"
 done

@@ -3,6 +3,7 @@ import type {
   CommunityChatMessage,
   CommunityChatPresenceBand,
   CommunityChatRoomSlug,
+  CommunityDirectMessage,
 } from '../../api/community';
 
 export const COMMUNITY_CHAT_PROTOCOL_VERSION = 1 as const;
@@ -48,12 +49,41 @@ export interface ChatWithdrawCommand {
   messageId: string;
 }
 
+export interface ChatDirectSendCommand {
+  type: 'chat.direct.send';
+  protocolVersion: 1;
+  requestId: string;
+  clientMessageId: string;
+  conversationId: string;
+  body: string;
+  replyToMessageId?: string;
+}
+
+export interface ChatDirectWithdrawCommand {
+  type: 'chat.direct.withdraw';
+  protocolVersion: 1;
+  requestId: string;
+  conversationId: string;
+  messageId: string;
+}
+
+export interface ChatDirectReadCommand {
+  type: 'chat.direct.read';
+  protocolVersion: 1;
+  requestId: string;
+  conversationId: string;
+  throughSequence: number;
+}
+
 export type CommunityChatClientCommand =
   | ChatAuthenticateCommand
   | ChatSubscribeCommand
   | ChatUnsubscribeCommand
   | ChatSendCommand
-  | ChatWithdrawCommand;
+  | ChatWithdrawCommand
+  | ChatDirectSendCommand
+  | ChatDirectWithdrawCommand
+  | ChatDirectReadCommand;
 
 export interface ChatAuthenticatedEvent {
   type: 'chat.authenticated';
@@ -80,13 +110,43 @@ export interface ChatReadyEvent {
 export interface ChatAckEvent {
   type: 'chat.ack';
   protocolVersion: 1;
-  action: 'subscribe' | 'unsubscribe' | 'send' | 'withdraw';
+  action:
+    | 'subscribe'
+    | 'unsubscribe'
+    | 'send'
+    | 'withdraw'
+    | 'direct-send'
+    | 'direct-withdraw'
+    | 'direct-read';
   requestId: string;
   roomSlug?: CommunityChatRoomSlug;
+  conversationId?: string;
   clientMessageId?: string;
   messageId?: string;
   sequence?: number;
+  lastReadSequence?: number;
+  unreadCount?: number;
   serverTime: string;
+}
+
+export interface ChatDirectMessageCreatedEvent {
+  type: 'chat.direct.message.created';
+  protocolVersion: 1;
+  message: CommunityDirectMessage;
+}
+
+export interface ChatDirectMessageUpdatedEvent {
+  type: 'chat.direct.message.updated';
+  protocolVersion: 1;
+  message: CommunityDirectMessage;
+}
+
+export interface ChatDirectReadUpdatedEvent {
+  type: 'chat.direct.read.updated';
+  protocolVersion: 1;
+  conversationId: string;
+  reader: 'self' | 'other';
+  lastReadSequence: number;
 }
 
 export interface ChatMessageCreatedEvent {
@@ -116,6 +176,7 @@ export interface ChatErrorEvent {
   requestId?: string;
   clientMessageId?: string;
   roomSlug?: CommunityChatRoomSlug;
+  conversationId?: string;
   retryAfterSeconds?: number;
 }
 
@@ -125,6 +186,9 @@ export type CommunityChatServerEvent =
   | ChatAckEvent
   | ChatMessageCreatedEvent
   | ChatMessageUpdatedEvent
+  | ChatDirectMessageCreatedEvent
+  | ChatDirectMessageUpdatedEvent
+  | ChatDirectReadUpdatedEvent
   | ChatPresenceEvent
   | ChatErrorEvent;
 
@@ -158,6 +222,18 @@ function isMessage(value: unknown): value is CommunityChatMessage {
     typeof value.updatedAt === 'string';
 }
 
+function isDirectMessage(value: unknown): value is CommunityDirectMessage {
+  if (!isRecord(value) || !isRecord(value.author) || !isRecord(value.permissions)) return false;
+  return typeof value.id === 'string' &&
+    typeof value.conversationId === 'string' &&
+    typeof value.sequence === 'number' &&
+    typeof value.version === 'number' &&
+    typeof value.author.publicId === 'string' &&
+    typeof value.author.displayName === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.updatedAt === 'string';
+}
+
 /** 无法确认结构或协议版本的帧会被忽略，不能让未知服务端数据进入 UI。 */
 export function parseCommunityChatServerEvent(raw: unknown): CommunityChatServerEvent | null {
   let value: unknown = raw;
@@ -183,13 +259,27 @@ export function parseCommunityChatServerEvent(raw: unknown): CommunityChatServer
   }
   if (value.type === 'chat.ack') {
     return typeof value.requestId === 'string' &&
-      (value.action === 'subscribe' || value.action === 'unsubscribe' || value.action === 'send' || value.action === 'withdraw') &&
+      (value.action === 'subscribe' || value.action === 'unsubscribe' || value.action === 'send' ||
+        value.action === 'withdraw' || value.action === 'direct-send' ||
+        value.action === 'direct-withdraw' || value.action === 'direct-read') &&
       typeof value.serverTime === 'string'
       ? value as unknown as ChatAckEvent
       : null;
   }
   if (value.type === 'chat.message.created' || value.type === 'chat.message.updated') {
     return isMessage(value.message) ? value as unknown as ChatMessageCreatedEvent | ChatMessageUpdatedEvent : null;
+  }
+  if (value.type === 'chat.direct.message.created' || value.type === 'chat.direct.message.updated') {
+    return isDirectMessage(value.message)
+      ? value as unknown as ChatDirectMessageCreatedEvent | ChatDirectMessageUpdatedEvent
+      : null;
+  }
+  if (value.type === 'chat.direct.read.updated') {
+    return typeof value.conversationId === 'string' &&
+      (value.reader === 'self' || value.reader === 'other') &&
+      typeof value.lastReadSequence === 'number'
+      ? value as unknown as ChatDirectReadUpdatedEvent
+      : null;
   }
   if (value.type === 'chat.presence') {
     return isRoomSlug(value.roomSlug) && isPresenceBand(value.presenceBand)

@@ -87,6 +87,7 @@ describe('AuthController community contract', () => {
     refresh: jest.Mock;
     logout: jest.Mock;
     logoutAll: jest.Mock;
+    changePassword: jest.Mock;
     getCurrentUser: jest.Mock;
     resendVerification: jest.Mock;
     listSessions: jest.Mock;
@@ -108,6 +109,7 @@ describe('AuthController community contract', () => {
       refresh: jest.fn().mockResolvedValue(SESSION),
       logout: jest.fn().mockResolvedValue(undefined),
       logoutAll: jest.fn().mockResolvedValue(undefined),
+      changePassword: jest.fn().mockResolvedValue(undefined),
       getCurrentUser: jest.fn().mockResolvedValue(USER),
       resendVerification: jest.fn().mockResolvedValue({}),
       listSessions: jest.fn().mockResolvedValue([]),
@@ -234,6 +236,37 @@ describe('AuthController community contract', () => {
       ipAddress: '127.0.0.1',
       userAgent: 'jest',
     });
+  });
+
+  it('changes the current password, forwards abuse metadata and clears the refresh cookie', async () => {
+    const response = cookieResponse();
+
+    await expect(
+      controller.changePassword(
+        'internal-user-id',
+        {
+          currentPassword: 'Strong-Office#2026',
+          newPassword: 'Changed-Office#2026',
+        },
+        'http://127.0.0.1:5173',
+        response,
+        '127.0.0.1',
+        'jest-agent',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(service.changePassword).toHaveBeenCalledWith(
+      'internal-user-id',
+      {
+        currentPassword: 'Strong-Office#2026',
+        newPassword: 'Changed-Office#2026',
+      },
+      { ipAddress: '127.0.0.1', userAgent: 'jest-agent' },
+    );
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      'zbrs_refresh',
+      expect.objectContaining({ httpOnly: true, sameSite: 'strict', maxAge: 0 }),
+    );
   });
 
   it('exposes the same current-user view at /v1/me', async () => {

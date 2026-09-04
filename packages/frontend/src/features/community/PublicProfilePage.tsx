@@ -173,6 +173,9 @@ export function CommunityPublicProfilePage(): JSX.Element {
                   )}>发送好友申请</Button>
                 ) : null}
                 {profile.relationship.status === 'incoming_pending' && COMMUNITY_FEATURE_FLAGS.friends ? <Link to="/friends">处理好友申请</Link> : null}
+                {profile.relationship.status === 'friend' && COMMUNITY_FEATURE_FLAGS.chat && COMMUNITY_FEATURE_FLAGS.friends ? (
+                  <Link className={styles.primaryLink} to={`/messages/with/${encodeURIComponent(profile.publicId)}`}>发私聊</Link>
+                ) : null}
                 {profile.relationship.status === 'outgoing_pending' && profile.relationship.requestId && COMMUNITY_FEATURE_FLAGS.friends ? (
                   <Button variant="secondary" loading={busyKey === `cancel:${profile.relationship.requestId}`} onClick={() => void mutate(
                     `cancel:${profile.relationship.requestId}`,

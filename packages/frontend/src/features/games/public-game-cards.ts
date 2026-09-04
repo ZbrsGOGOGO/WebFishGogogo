@@ -2,6 +2,17 @@ import type { GameCard } from './GamesCatalog';
 
 export const PUBLIC_GAME_CARDS: readonly GameCard[] = [
   {
+    path: '/games/snake',
+    icon: '蛇',
+    name: '贪食蛇',
+    category: '反应挑战',
+    description: '吃下能量点让蛇身变长，避开边界和自己的身体。',
+    features: ['键盘转向', '触屏按键', '本地最高分'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'green',
+  },
+  {
     path: '/games/tetris',
     icon: '块',
     name: '俄罗斯方块',
@@ -22,5 +33,17 @@ export const PUBLIC_GAME_CARDS: readonly GameCard[] = [
     availability: '单机可玩',
     availabilityTone: 'success',
     tone: 'orange',
+  },
+  {
+    path: '/games/zhengdao/',
+    reloadDocument: true,
+    icon: '道',
+    name: '证道 · 命格模拟',
+    category: '人生模拟',
+    description: '随机抽取一世命格，从凡人起步，经历修行、破境与证道。',
+    features: ['随机命格', '多线修行', '本机存档'],
+    availability: '单机可玩',
+    availabilityTone: 'success',
+    tone: 'violet',
   },
 ];

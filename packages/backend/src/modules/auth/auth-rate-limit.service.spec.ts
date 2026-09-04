@@ -71,6 +71,28 @@ describe('AuthRateLimitService', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('limits current-password verification by both user and IP', async () => {
+    const now = new Date('2026-08-22T00:00:00.000Z');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await service.assertPasswordChangeAllowed(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        '203.0.113.22',
+        now,
+      );
+    }
+
+    await expect(
+      service.assertPasswordChangeAllowed(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        '203.0.113.22',
+        now,
+      ),
+    ).rejects.toMatchObject({
+      status: 429,
+      response: { code: 'AUTH_RATE_LIMITED', retryAfter: 900 },
+    });
+  });
+
   it('fails closed when the shared database is unavailable', async () => {
     await dataSource.destroy();
     await expect(

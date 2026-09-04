@@ -91,10 +91,10 @@ describe('Public profile privacy and persistent notifications', () => {
     const controller = new PublicProfileController(profiles);
     await expect(
       controller.exactSearch(viewer.id, { email: 'target@example.com' }),
-    ).rejects.toMatchObject({ response: { code: 'PUBLIC_ID_ONLY_SEARCH' } });
+    ).rejects.toMatchObject({ response: { code: 'EXACT_ACCOUNT_SEARCH_ONLY' } });
     await expect(
       controller.exactSearch(viewer.id, { phone: '17300000000' }),
-    ).rejects.toMatchObject({ response: { code: 'PUBLIC_ID_ONLY_SEARCH' } });
+    ).rejects.toMatchObject({ response: { code: 'EXACT_ACCOUNT_SEARCH_ONLY' } });
     await expect(
       controller.exactSearch(viewer.id, { publicId: 'target@example.com' }),
     ).rejects.toBeDefined();

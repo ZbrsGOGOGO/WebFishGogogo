@@ -160,10 +160,58 @@ describe('CommunityChatConnection', () => {
     client.disconnect();
   });
 
+  it('becomes ready without a public room and sends private messages on the authenticated user stream', async () => {
+    const sockets: FakeSocket[] = [];
+    const client = new CommunityChatConnection({
+      ticketProvider: vi.fn().mockResolvedValue({
+        ticket: 'direct-ticket', expiresAt: '2099-01-01T00:00:00.000Z', protocolVersion: 1 as const,
+      }),
+      websocketUrl: () => 'wss://example.test/ws/chat',
+      socketFactory: () => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    client.connect();
+    await nextMicrotask();
+    sockets[0].open();
+    sockets[0].receive({
+      type: 'chat.authenticated', protocolVersion: 1,
+      sessionId: 'session-direct', serverTime: 'now',
+    });
+
+    expect(client.getSnapshot().status).toBe('ready');
+    client.sendDirectMessage({
+      requestId: 'request-direct',
+      clientMessageId: 'client-direct',
+      conversationId: 'conversation-1',
+      body: '只发给好友',
+    });
+    expect(JSON.parse(sockets[0].sent.at(-1)!)).toEqual({
+      type: 'chat.direct.send', protocolVersion: 1,
+      requestId: 'request-direct', clientMessageId: 'client-direct',
+      conversationId: 'conversation-1', body: '只发给好友',
+    });
+    client.disconnect();
+  });
+
   it('caps exponential reconnect delay and ignores malformed protocol frames', () => {
     expect(communityChatReconnectDelay(20, () => 0.5)).toBe(30_000);
     expect(parseCommunityChatServerEvent('{bad json')).toBeNull();
     expect(parseCommunityChatServerEvent({ type: 'chat.ready', protocolVersion: 2, rooms: [] })).toBeNull();
     expect(parseCommunityChatServerEvent({ type: 'chat.presence', protocolVersion: 1, roomSlug: 'general', presenceBand: '937-online' })).toBeNull();
+    expect(parseCommunityChatServerEvent({
+      type: 'chat.direct.message.created',
+      protocolVersion: 1,
+      message: {
+        id: 'm1', conversationId: 'c1', sequence: 1, version: 1,
+        visibility: 'visible', body: '你好',
+        author: { publicId: 'p1', displayName: '同事' },
+        replyTo: null,
+        createdAt: 'now', updatedAt: 'now',
+        permissions: { canWithdraw: false, withdrawUntil: null, canReport: true },
+      },
+    })?.type).toBe('chat.direct.message.created');
   });
 });

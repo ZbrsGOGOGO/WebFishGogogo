@@ -20,6 +20,8 @@ export interface CommunityFriendPage {
   items: CommunityFriend[];
   nextCursor?: string | null;
   total: number;
+  pageLimit?: number;
+  friendLimit?: number;
   limit: number;
 }
 

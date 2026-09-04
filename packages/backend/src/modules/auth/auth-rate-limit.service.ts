@@ -147,6 +147,20 @@ export class AuthRateLimitService
     );
   }
 
+  assertPasswordChangeAllowed(
+    userId: string,
+    ipAddress: string | null | undefined,
+    now = new Date(),
+  ): Promise<void> {
+    return this.consume(
+      [
+        this.attempt('password-change:ip', this.ip(ipAddress), 30, 15 * 60_000),
+        this.attempt('password-change:user', userId, 5, 15 * 60_000),
+      ],
+      now,
+    );
+  }
+
   assertSocialVerificationSessionAllowed(
     userId: string,
     ipAddress: string | null | undefined,

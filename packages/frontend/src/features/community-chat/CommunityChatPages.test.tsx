@@ -185,4 +185,63 @@ describe('community fixed chat pages', () => {
     expect(await screen.findByText('这是一条真实服务端消息')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('region', { name: '待发送消息' })).not.toBeInTheDocument());
   });
+
+  it('merges the initial REST snapshot without overwriting a WebSocket message that arrived first', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    let resolveInitialMessages!: (
+      page: Awaited<ReturnType<typeof communityChatApi.listMessages>>,
+    ) => void;
+    const initialMessages = new Promise<
+      Awaited<ReturnType<typeof communityChatApi.listMessages>>
+    >((resolve) => {
+      resolveInitialMessages = resolve;
+    });
+    vi.spyOn(communityChatApi, 'listMessages').mockReturnValue(initialMessages);
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({
+      ticket: 'single-use-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/community/chat/general']}>
+        <Routes>
+          <Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(BrowserFakeSocket.instances).toHaveLength(1));
+    const socket = BrowserFakeSocket.instances[0];
+    const realtimeMessage = {
+      ...serverMessage('live-client-message'),
+      id: 'message-live',
+      sequence: 2,
+      body: '先到的实时消息',
+    };
+    act(() => {
+      socket.open();
+      socket.receive({
+        type: 'chat.authenticated', protocolVersion: 1,
+        sessionId: 'session-1', serverTime: '2026-08-22T10:00:00.000Z',
+      });
+      socket.receive({
+        type: 'chat.message.created', protocolVersion: 1, message: realtimeMessage,
+      });
+    });
+
+    const historyMessage = {
+      ...serverMessage('history-client-message'),
+      id: 'message-history',
+      sequence: 1,
+      body: 'REST 历史消息',
+    };
+    resolveInitialMessages({
+      items: [historyMessage],
+      latestSequence: 1,
+      oldestSequence: 1,
+      hasMoreBefore: false,
+    });
+
+    expect(await screen.findByText('REST 历史消息')).toBeInTheDocument();
+    expect(screen.getByText('先到的实时消息')).toBeInTheDocument();
+  });
 });

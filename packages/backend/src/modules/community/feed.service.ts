@@ -52,7 +52,11 @@ export class FeedService {
       if (recipient.id === senderId) {
         throw new BadRequestException({ code: 'CANNOT_FEED_SELF' });
       }
-      await this.policy.lockActiveUsers(manager, [senderId, recipient.id]);
+      const users = await this.policy.lockActiveUsers(manager, [
+        senderId,
+        recipient.id,
+      ]);
+      this.policy.assertProactiveSocialWriteAllowed(users.get(senderId)!);
       const repo = manager.getRepository(FriendEncouragement);
       const replay = await repo.findOne({
         where: { senderId, idempotencyKey },

@@ -28,6 +28,19 @@ export class PublicProfileService {
       where: { publicId, accountStatus: 'active' },
     });
     if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
+    return this.view(user, viewerId);
+  }
+
+  async getByUsername(usernameNormalized: string, viewerId: string | null) {
+    const user = await this.dataSource.getRepository(User).findOne({
+      where: { usernameNormalized, accountStatus: 'active' },
+    });
+    if (!user) throw new NotFoundException({ code: 'USER_NOT_FOUND' });
+    return this.view(user, viewerId);
+  }
+
+  private async view(user: User, viewerId: string | null) {
+    const manager = this.dataSource.manager;
     const self = viewerId === user.id;
     if (viewerId && !self && (await this.policy.isBlocked(manager, viewerId, user.id))) {
       throw new NotFoundException({ code: 'USER_NOT_FOUND' });
@@ -55,6 +68,7 @@ export class PublicProfileService {
 
     const result: Record<string, unknown> = {
       publicId: user.publicId,
+      username: user.username,
       displayName: user.displayName ?? '办公室同事',
       avatarKey: profile?.avatarKey ?? 'violet',
       battleProfession: profile?.battleProfession ?? 'developer',

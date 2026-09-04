@@ -1,6 +1,7 @@
-import { useEffect, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 
+import { communityDirectMessagesApi } from '../../api/community';
 import {
   COMMUNITY_FEATURE_FLAGS,
   COMMUNITY_SYSTEM_NAV,
@@ -9,6 +10,10 @@ import {
 } from '../../app/community-nav';
 import { SITE_NAME } from '../../app/site-config';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import {
+  acquireCommunityChatConnection,
+  releaseCommunityChatConnection,
+} from '../../features/community-chat/community-chat-connection';
 import { Button } from '../ui';
 import styles from './CommunitySiteLayout.module.css';
 
@@ -16,6 +21,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   home: '首',
   news: '热',
   community: '聊',
+  messages: '信',
   farm: '种',
   towerDefense: '守',
   feed: '喂',
@@ -48,15 +54,61 @@ export function CommunitySiteLayout(): JSX.Element {
   const restoreSession = useCommunityAuthStore((state) => state.restoreSession);
   const logout = useCommunityAuthStore((state) => state.logout);
   const currentSystem = communitySystemByPath(location.pathname);
+  const [directUnreadCount, setDirectUnreadCount] = useState(0);
 
   useEffect(() => {
     void restoreSession();
   }, [restoreSession]);
 
+  useEffect(() => {
+    if (
+      phase !== 'active' ||
+      !COMMUNITY_FEATURE_FLAGS.chat ||
+      !COMMUNITY_FEATURE_FLAGS.friends
+    ) {
+      setDirectUnreadCount(0);
+      return;
+    }
+    let active = true;
+    let unreadRequestVersion = 0;
+    const refreshUnread = async (): Promise<void> => {
+      const requestVersion = ++unreadRequestVersion;
+      try {
+        const page = await communityDirectMessagesApi.listConversations();
+        if (active && requestVersion === unreadRequestVersion) {
+          setDirectUnreadCount(Math.max(0, page.totalUnread ?? 0));
+        }
+      } catch {
+        // 保留上一次可信未读数；实时连接恢复后会再次同步。
+      }
+    };
+    const connection = acquireCommunityChatConnection();
+    const removeListener = connection.addListener((event) => {
+      if (
+        (event.kind === 'state' && event.snapshot.status === 'ready') ||
+        (event.kind === 'protocol' && (
+          event.event.type === 'chat.direct.message.created' ||
+          event.event.type === 'chat.direct.message.updated' ||
+          event.event.type === 'chat.direct.read.updated'
+        ))
+      ) {
+        void refreshUnread();
+      }
+    });
+    connection.connect();
+    void refreshUnread();
+    return () => {
+      active = false;
+      unreadRequestVersion += 1;
+      removeListener();
+      releaseCommunityChatConnection(connection);
+    };
+  }, [phase, user?.publicId]);
+
   const signedIn = phase !== 'guest' && phase !== 'bootstrapping';
   const workspaceRoute = isWorkspaceRoute(location.pathname);
   const primaryNav = COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).slice(0, 5);
-  const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'farm', 'towerDefense', 'profile'];
+  const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'messages', 'friends', 'profile'];
   const mobileNav = mobileNavIds
     .map((id) => COMMUNITY_SYSTEM_NAV.find((item) => item.id === id))
     .filter((item): item is NonNullable<typeof item> => Boolean(item?.enabled));
@@ -83,10 +135,16 @@ export function CommunitySiteLayout(): JSX.Element {
               <Link
                 key={item.id}
                 to={item.path}
+                aria-label={item.id === 'messages' && directUnreadCount > 0
+                  ? `${item.label}，${directUnreadCount} 条未读`
+                  : undefined}
                 data-current={currentSystem?.id === item.id}
                 aria-current={currentSystem?.id === item.id ? 'page' : undefined}
               >
                 {item.label}
+                {item.id === 'messages' && directUnreadCount > 0 ? (
+                  <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
+                ) : null}
               </Link>
             ))}
           </nav>
@@ -138,11 +196,17 @@ export function CommunitySiteLayout(): JSX.Element {
                 <Link
                   key={item.id}
                   to={item.path}
+                  aria-label={item.id === 'messages' && directUnreadCount > 0
+                    ? `${item.label}，${directUnreadCount} 条未读`
+                    : undefined}
                   data-current={currentSystem?.id === item.id}
                   aria-current={currentSystem?.id === item.id ? 'page' : undefined}
                 >
                   <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
                   <b>{item.label}</b>
+                  {item.id === 'messages' && directUnreadCount > 0 ? (
+                    <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
+                  ) : null}
                 </Link>
               ))}
             </nav>
@@ -189,9 +253,19 @@ export function CommunitySiteLayout(): JSX.Element {
       {workspaceRoute && mobileNav.length > 0 ? (
         <nav className={styles.mobileDock} aria-label="移动端快捷导航">
           {mobileNav.map((item) => (
-            <Link key={item.id} to={item.path} data-current={currentSystem?.id === item.id}>
+            <Link
+              key={item.id}
+              to={item.path}
+              data-current={currentSystem?.id === item.id}
+              aria-label={item.id === 'messages' && directUnreadCount > 0
+                ? `${item.label}，${directUnreadCount} 条未读`
+                : undefined}
+            >
               <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
               <small>{item.label === '我的主页' ? '我的' : item.label}</small>
+              {item.id === 'messages' && directUnreadCount > 0 ? (
+                <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
+              ) : null}
             </Link>
           ))}
         </nav>

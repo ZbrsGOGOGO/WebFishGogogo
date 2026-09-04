@@ -110,6 +110,27 @@ require_header() {
   pass "$label header"
 }
 
+require_literal() {
+  literal_file=$1
+  literal_value=$2
+  literal_label=$3
+
+  grep -a -Fq "$literal_value" "$literal_file" ||
+    fail "$literal_label is missing: $literal_value"
+  pass "$literal_label"
+}
+
+forbid_regex() {
+  forbidden_file=$1
+  forbidden_regex=$2
+  forbidden_label=$3
+
+  if grep -a -Eq "$forbidden_regex" "$forbidden_file"; then
+    fail "$forbidden_label is present"
+  fi
+  pass "$forbidden_label is absent"
+}
+
 assert_origin_rejected() {
   path=$1
   label=$2
@@ -180,11 +201,41 @@ for path in \
   /community-guidelines \
   /tools \
   /games \
+  /games/snake \
   /privacy-policy \
   /terms-of-service; do
   safe_name=$(printf '%s' "$path" | sed 's#[^A-Za-z0-9]#-#g')
   request GET "$path" 200 "$SMOKE_TMP/spa${safe_name}.html" "$SMOKE_TMP/spa${safe_name}.headers"
 done
+
+# These files must be served as the imported static game, not as the SPA shell
+# returned by the catch-all route when a file is missing.
+request GET /games/zhengdao/ 200 \
+  "$SMOKE_TMP/game-zhengdao.html" "$SMOKE_TMP/game-zhengdao.headers"
+request GET /games/zhengdao/js/01-data.js 200 \
+  "$SMOKE_TMP/game-zhengdao-data.js" "$SMOKE_TMP/game-zhengdao-data.headers"
+
+require_header "$SMOKE_TMP/game-zhengdao.headers" \
+  '^content-type:[[:space:]]*text/html' \
+  'zhengdao HTML content type'
+require_header "$SMOKE_TMP/game-zhengdao-data.headers" \
+  '^content-type:[[:space:]]*(application|text)/javascript' \
+  'zhengdao JavaScript content type'
+require_literal "$SMOKE_TMP/game-zhengdao.html" \
+  '<title>证道 · 命格模拟｜摸摸公司</title>' \
+  'zhengdao static page title'
+require_literal "$SMOKE_TMP/game-zhengdao.html" \
+  '<script src="js/01-data.js"></script>' \
+  'zhengdao JavaScript module reference'
+forbid_regex "$SMOKE_TMP/game-zhengdao.html" \
+  '<div[[:space:]]+id="root"[^>]*>' \
+  'zhengdao SPA fallback marker'
+require_literal "$SMOKE_TMP/game-zhengdao-data.js" \
+  'ZT.data =' \
+  'zhengdao JavaScript module body'
+forbid_regex "$SMOKE_TMP/game-zhengdao-data.js" \
+  '<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<[Hh][Tt][Mm][Ll]' \
+  'HTML fallback in zhengdao JavaScript module'
 
 grep -Fq '<title>摸摸公司</title>' "$SMOKE_TMP/spa-.html" ||
   fail "community homepage does not expose the 摸摸公司 brand"

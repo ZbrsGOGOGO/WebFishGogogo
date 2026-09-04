@@ -61,18 +61,22 @@ describe('public site mode', () => {
     },
   );
 
-  it('lists only the two selected games and makes no API call', async () => {
+  it('lists four games including the standalone fate simulator and makes no API call', async () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
     renderPublicAt('/games');
 
     expect(
-      await screen.findByRole('heading', { name: '2 款经典游戏', level: 2 }),
+      await screen.findByRole('heading', { name: '4 款精选游戏', level: 2 }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /贪食蛇/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /俄罗斯方块/ })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /坦克大战/ })).toBeInTheDocument();
-    expect(screen.queryByText('贪食蛇')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /证道 · 命格模拟/ })).toHaveAttribute(
+      'href',
+      '/games/zhengdao/',
+    );
     expect(screen.queryByText('三数之和')).not.toBeInTheDocument();
     expect(screen.queryByText('午休竞技场')).not.toBeInTheDocument();
     expect(screen.queryByText('比大小')).not.toBeInTheDocument();
@@ -80,6 +84,7 @@ describe('public site mode', () => {
   });
 
   it.each([
+    ['/games/snake', '贪食蛇'],
     ['/games/tetris', '俄罗斯方块'],
     ['/games/tank', '坦克大战'],
   ])('loads the public game deep link %s', async (path, heading) => {
@@ -98,11 +103,11 @@ describe('public site mode', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it.each(['/games/snake', '/games/three-sum'])(
+  it.each(['/games/three-sum'])(
     'redirects removed game %s to the game center',
     async (path) => {
       renderPublicAt(path);
-      expect(await screen.findByRole('heading', { name: '2 款经典游戏' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: '4 款精选游戏' })).toBeInTheDocument();
     },
   );
 

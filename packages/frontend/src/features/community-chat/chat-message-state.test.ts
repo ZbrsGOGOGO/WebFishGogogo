@@ -63,19 +63,16 @@ describe('community chat message state', () => {
     expect(canWithdrawCommunityChatMessage(item, Date.parse('2026-08-22T10:02:00.000Z'))).toBe(false);
   });
 
-  it('builds mention choices only from allowed candidates and visible message authors', () => {
+  it('builds mention choices only from server-allowed friends', () => {
     const result = collectCommunityChatMentionCandidates(
-      [{ publicId: 'allowed', displayName: '服务端允许用户' }],
       [
-        message('m1', 1, 1, 'author'),
-        message('m2', 2, 1, 'blocked', 'blocked_placeholder'),
-        message('m3', 3, 1, 'self'),
+        { publicId: 'allowed', displayName: '服务端允许用户' },
+        { publicId: 'self', displayName: '当前用户' },
       ],
-      'general',
       'self',
     );
 
-    expect(result.map((item) => item.publicId).sort()).toEqual(['allowed', 'author']);
+    expect(result.map((item) => item.publicId)).toEqual(['allowed']);
   });
 
   it('follows after-sequence cursors until a reconnect gap is complete', async () => {

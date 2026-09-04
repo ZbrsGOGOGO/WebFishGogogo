@@ -12,7 +12,8 @@ GUILD_TIMESTAMP=1700000000020
 GUILD_BOSS_TIMESTAMP=1700000000021
 HOT_NEWS_TIMESTAMP=1700000000022
 ARCADE_TIMESTAMP=1700000000023
-LATEST_TIMESTAMP=1700000000023
+DIRECT_MESSAGES_TIMESTAMP=1700000000024
+LATEST_TIMESTAMP=1700000000024
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -123,6 +124,8 @@ assert_target_applied() {
   [ "$hot_news_count" = 1 ] || fail "$database did not record migration $HOT_NEWS_TIMESTAMP"
   arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ARCADE_TIMESTAMP;")
   [ "$arcade_count" = 1 ] || fail "$database did not record migration $ARCADE_TIMESTAMP"
+  direct_messages_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $DIRECT_MESSAGES_TIMESTAMP;")
+  [ "$direct_messages_count" = 1 ] || fail "$database did not record migration $DIRECT_MESSAGES_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 1 ] || fail "$database did not record migration $LATEST_TIMESTAMP"
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
@@ -148,6 +151,12 @@ assert_target_applied() {
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$arcade_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $arcade_table after migration"
   done
+  for direct_message_table in chat_direct_conversations chat_direct_conversation_members chat_direct_messages chat_direct_message_reports; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$direct_message_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $direct_message_table after migration"
+  done
+  direct_message_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('uq_chat_direct_conversations_pair', 'idx_chat_direct_conversations_recent', 'idx_chat_direct_members_user_recent', 'uq_chat_direct_messages_sequence', 'uq_chat_direct_messages_author_client', 'idx_chat_direct_messages_conversation_created', 'uq_chat_direct_message_reports_idempotency', 'idx_chat_direct_message_reports_message');")
+  [ "$direct_message_index_count" = 8 ] || fail "$database is missing one or more 0024 direct-message indexes"
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 8 ] || fail "$database is missing one or more 0016 operational indexes"
   username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")
@@ -200,6 +209,8 @@ assert_target_absent() {
   [ "$hot_news_count" = 0 ] || fail "$database still records migration $HOT_NEWS_TIMESTAMP"
   arcade_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ARCADE_TIMESTAMP;")
   [ "$arcade_count" = 0 ] || fail "$database still records migration $ARCADE_TIMESTAMP"
+  direct_messages_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $DIRECT_MESSAGES_TIMESTAMP;")
+  [ "$direct_messages_count" = 0 ] || fail "$database still records migration $DIRECT_MESSAGES_TIMESTAMP"
   latest_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $LATEST_TIMESTAMP;")
   [ "$latest_count" = 0 ] || fail "$database still records migration $LATEST_TIMESTAMP"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
@@ -212,6 +223,8 @@ assert_target_absent() {
   [ "$news_table_count" = 0 ] || fail "$database retained news tables after rollback/failure"
   arcade_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('arcade_game_runs', 'arcade_best_scores');")
   [ "$arcade_table_count" = 0 ] || fail "$database retained arcade tables after rollback/failure"
+  direct_message_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('chat_direct_conversations', 'chat_direct_conversation_members', 'chat_direct_messages', 'chat_direct_message_reports');")
+  [ "$direct_message_table_count" = 0 ] || fail "$database retained 0024 direct-message tables after rollback/failure"
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 0 ] || fail "$database retained 0016 operational indexes after rollback/failure"
   username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")
@@ -405,4 +418,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through arcade leaderboards and chat retention 0023 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, and daily hot news/invite coin 0022), normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through friend direct messages 0024 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, and arcade leaderboards/chat retention 0023), normalized-email collision abort, lock-timeout rollback and recovery."

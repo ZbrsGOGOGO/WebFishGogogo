@@ -110,23 +110,13 @@ export async function loadCommunityChatGap(
   return collected;
 }
 
-/** @ 候选只来自服务端允许名单或已经由服务端返回的本房间消息作者。 */
+/** @ 候选只来自服务端已经按好友、拉黑和账号状态过滤的允许名单。 */
 export function collectCommunityChatMentionCandidates(
   allowed: readonly CommunityChatMentionCandidate[],
-  messages: readonly CommunityChatMessage[],
-  roomSlug: CommunityChatRoomSlug,
   ownPublicId?: string,
 ): CommunityChatMentionCandidate[] {
   const candidates = new Map<string, CommunityChatMentionCandidate>();
   for (const candidate of allowed) candidates.set(candidate.publicId, candidate);
-  for (const message of messages) {
-    if (message.roomSlug !== roomSlug || message.visibility !== 'visible') continue;
-    candidates.set(message.author.publicId, {
-      publicId: message.author.publicId,
-      displayName: message.author.displayName,
-      avatarKey: message.author.avatarKey,
-    });
-  }
   if (ownPublicId) candidates.delete(ownPublicId);
   return [...candidates.values()].sort((left, right) =>
     left.displayName.localeCompare(right.displayName, 'zh-CN'),

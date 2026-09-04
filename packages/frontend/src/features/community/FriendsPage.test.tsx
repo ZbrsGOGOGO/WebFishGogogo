@@ -47,32 +47,47 @@ describe('CommunityFriendsPage', () => {
 
   it('rejects email and phone lookup without sending an API request', async () => {
     const user = userEvent.setup();
-    const searchSpy = vi.spyOn(communityProfileApi, 'getPublic');
+    const searchSpy = vi.spyOn(communityProfileApi, 'findUser');
     renderPage();
-    const input = screen.getByLabelText('公开编号 publicId');
+    const input = screen.getByLabelText('账号或公开编号');
 
     input.focus();
     await user.keyboard('someone@example.com{Enter}');
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('不支持邮箱或手机号搜索');
+    expect(await screen.findByRole('alert')).toHaveTextContent('不支持用邮箱或手机号');
     expect(searchSpy).not.toHaveBeenCalled();
   });
 
   it('supports exact publicId search and keyboard submission', async () => {
     const user = userEvent.setup();
-    vi.spyOn(communityProfileApi, 'getPublic').mockResolvedValue(publicProfile);
+    vi.spyOn(communityProfileApi, 'findUser').mockResolvedValue(publicProfile);
     renderPage();
-    const input = screen.getByLabelText('公开编号 publicId');
+    const input = screen.getByLabelText('账号或公开编号');
 
     input.focus();
     await user.keyboard('public-abc-123{Enter}');
 
     expect(await screen.findByRole('article', { name: '查找结果' })).toHaveTextContent('协作同事');
-    expect(communityProfileApi.getPublic).toHaveBeenCalledWith('public-abc-123');
+    expect(communityProfileApi.findUser).toHaveBeenCalledWith('public-abc-123');
     await waitFor(() => expect(screen.queryByText('正在加载好友关系…')).not.toBeInTheDocument());
   });
 
-  it('keeps proactive friend requests disabled before social verification', async () => {
+  it('accepts an @username without mistaking it for an email address', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(communityProfileApi, 'findUser').mockResolvedValue({
+      ...publicProfile,
+      username: 'xiaoming',
+    });
+    renderPage();
+
+    await user.type(screen.getByLabelText('账号或公开编号'), '@xiaoming');
+    await user.click(screen.getByRole('button', { name: '查找' }));
+
+    expect(await screen.findByRole('article', { name: '查找结果' })).toHaveTextContent('协作同事');
+    expect(communityProfileApi.findUser).toHaveBeenCalledWith('@xiaoming');
+  });
+
+  it('allows proactive friend requests when social verification is disabled', async () => {
     const user = userEvent.setup();
     useCommunityAuthStore.setState({
       phase: 'active',
@@ -87,13 +102,13 @@ describe('CommunityFriendsPage', () => {
         socialVerificationStatus: 'unverified',
       },
     });
-    vi.spyOn(communityProfileApi, 'getPublic').mockResolvedValue(publicProfile);
+    vi.spyOn(communityProfileApi, 'findUser').mockResolvedValue(publicProfile);
     renderPage();
 
-    await user.type(screen.getByLabelText('公开编号 publicId'), 'public-abc-123');
+    await user.type(screen.getByLabelText('账号或公开编号'), 'public-abc-123');
     await user.click(screen.getByRole('button', { name: '查找' }));
 
-    expect(await screen.findByText(/主动建立好友关系前需要完成/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '发送申请' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: '发送申请' })).toBeEnabled();
+    expect(screen.queryByText(/主动建立好友关系前需要完成/)).not.toBeInTheDocument();
   });
 });

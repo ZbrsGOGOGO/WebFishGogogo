@@ -12,6 +12,7 @@ import {
 
 interface LoginLocationState {
   from?: { pathname?: string };
+  passwordChanged?: boolean;
 }
 
 export function CommunityLoginPage(): JSX.Element {
@@ -65,6 +66,9 @@ export function CommunityLoginPage(): JSX.Element {
       footer={<>还没有账号？<Link to="/register">立即注册</Link></>}
     >
       <form className="auth-form" noValidate onSubmit={submit}>
+        {(location.state as LoginLocationState | null)?.passwordChanged ? (
+          <p role="status">密码已更新，请使用新密码重新登录。</p>
+        ) : null}
         <Input
           label="账号"
           name="username"

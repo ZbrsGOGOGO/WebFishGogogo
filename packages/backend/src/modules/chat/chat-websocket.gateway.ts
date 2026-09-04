@@ -7,19 +7,30 @@ import {
   WebSocketServer,
   type RawData,
 } from 'ws';
+import { DataSource, In } from 'typeorm';
 
+import { AuthSession } from '../../database/entities';
 import type { ChatRoomSlug } from '../../database/entities/chat.entity';
 import { ChatException, chatException } from './chat.errors';
 import { isCommunityChatEnabled } from './chat-gates';
 import { ChatRealtimeService } from './chat-realtime.service';
 import { ChatService } from './chat.service';
-import { isChatRoomSlug, type ChatRealtimeEvent } from './chat.types';
+import { DirectMessageService } from './direct-message.service';
+import {
+  isChatRoomSlug,
+  isDirectChatRealtimeEvent,
+  type ChatDirectMessageRealtimeEvent,
+  type ChatDirectReadRealtimeEvent,
+  type ChatRealtimeEvent,
+  type ChatRoomRealtimeEvent,
+} from './chat.types';
 
 const AUTH_DEADLINE_MS = 5_000;
 const HEARTBEAT_MS = 30_000;
 const FRAME_WINDOW_MS = 10_000;
 const MAX_FRAMES_PER_WINDOW = 40;
 const MAX_PAYLOAD_BYTES = 16 * 1024;
+const PRINCIPAL_RECHECK_BATCH_SIZE = 500;
 
 interface ConnectionState {
   id: string;
@@ -53,9 +64,11 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
   constructor(
     private readonly chat: ChatService,
     private readonly realtime: ChatRealtimeService,
+    private readonly directMessages: DirectMessageService,
+    private readonly dataSource: DataSource,
   ) {
     this.stopRealtimeListener = this.realtime.subscribe((event) =>
-      this.broadcastMessage(event),
+      this.broadcastRealtimeEvent(event),
     );
     this.wss.on('connection', (socket) => this.accept(socket));
   }
@@ -177,6 +190,8 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       return;
     }
 
+    if (!(await this.recheckPrincipalForFrame(socket, state, frame))) return;
+
     if (frame.protocolVersion !== 1) {
       this.sendError(
         socket,
@@ -184,6 +199,7 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
         stringField(frame, 'requestId'),
         stringField(frame, 'clientMessageId'),
         stringField(frame, 'roomSlug'),
+        stringField(frame, 'conversationId'),
       );
       return;
     }
@@ -201,6 +217,15 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
           break;
         case 'chat.withdraw':
           await this.withdrawMessage(socket, state, frame);
+          break;
+        case 'chat.direct.send':
+          await this.sendDirectMessage(socket, state, frame);
+          break;
+        case 'chat.direct.withdraw':
+          await this.withdrawDirectMessage(socket, state, frame);
+          break;
+        case 'chat.direct.read':
+          await this.readDirectConversation(socket, state, frame);
           break;
         default:
           throw chatException('CHAT_FRAME_UNSUPPORTED', '不支持的消息帧。');
@@ -357,8 +382,107 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     await this.chat.publishMessageEvent('updated', roomSlug, message.id);
   }
 
-  private async broadcastMessage(event: ChatRealtimeEvent): Promise<void> {
-    const deliveries: Promise<void>[] = [];
+  private async sendDirectMessage(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame: ClientFrame,
+  ): Promise<void> {
+    const requestId = requiredString(frame, 'requestId');
+    const clientMessageId = requiredString(frame, 'clientMessageId');
+    const conversationId = requiredString(frame, 'conversationId');
+    if (typeof frame.body !== 'string') {
+      throw chatException('CHAT_MESSAGE_TOO_LONG', '消息须为 1 到 500 个字符。', 422);
+    }
+    const message = await this.directMessages.send(state.userId!, {
+      conversationId,
+      clientMessageId,
+      body: frame.body,
+      ...(typeof frame.replyToMessageId === 'string'
+        ? { replyToMessageId: frame.replyToMessageId }
+        : {}),
+    });
+    this.send(socket, {
+      type: 'chat.ack',
+      action: 'direct-send',
+      requestId,
+      conversationId,
+      clientMessageId,
+      messageId: message.id,
+      sequence: message.sequence,
+      serverTime: new Date().toISOString(),
+    });
+    await this.directMessages.publishMessageEvent(
+      'created',
+      conversationId,
+      message.id,
+    );
+  }
+
+  private async withdrawDirectMessage(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame: ClientFrame,
+  ): Promise<void> {
+    const requestId = requiredString(frame, 'requestId');
+    const conversationId = requiredString(frame, 'conversationId');
+    const messageId = requiredString(frame, 'messageId');
+    const message = await this.directMessages.withdraw(
+      state.userId!,
+      conversationId,
+      messageId,
+    );
+    this.send(socket, {
+      type: 'chat.ack',
+      action: 'direct-withdraw',
+      requestId,
+      conversationId,
+      messageId: message.id,
+      sequence: message.sequence,
+      serverTime: new Date().toISOString(),
+    });
+    await this.directMessages.publishMessageEvent(
+      'updated',
+      conversationId,
+      message.id,
+    );
+  }
+
+  private async readDirectConversation(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame: ClientFrame,
+  ): Promise<void> {
+    const requestId = requiredString(frame, 'requestId');
+    const conversationId = requiredString(frame, 'conversationId');
+    const throughSequence = requiredNonNegativeInteger(frame, 'throughSequence');
+    // markRead 在数据库提交后自行发布定向 read 事件，gateway 不重复发布。
+    const result = await this.directMessages.markRead(
+      state.userId!,
+      conversationId,
+      throughSequence,
+    );
+    this.send(socket, {
+      type: 'chat.ack',
+      action: 'direct-read',
+      requestId,
+      conversationId: result.conversationId,
+      lastReadSequence: result.lastReadSequence,
+      unreadCount: result.unreadCount,
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  private async broadcastRealtimeEvent(event: ChatRealtimeEvent): Promise<void> {
+    if (isDirectChatRealtimeEvent(event)) {
+      return event.kind === 'read'
+        ? this.broadcastDirectRead(event)
+        : this.broadcastDirectMessage(event);
+    }
+    return this.broadcastRoomMessage(event);
+  }
+
+  private async broadcastRoomMessage(event: ChatRoomRealtimeEvent): Promise<void> {
+    const socketsByUser = new Map<string, WebSocket[]>();
     for (const [socket, state] of this.states) {
       if (
         socket.readyState !== WebSocket.OPEN ||
@@ -368,22 +492,89 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       ) {
         continue;
       }
-      deliveries.push(
-        this.chat
-          .messageForViewer(state.userId, event.messageId)
-          .then((message) => {
-            this.send(socket, {
-              type: event.kind === 'created' ? 'chat.message.created' : 'chat.message.updated',
-              message,
-            });
-          })
-          .catch(() => undefined),
-      );
+      const sockets = socketsByUser.get(state.userId) ?? [];
+      sockets.push(socket);
+      socketsByUser.set(state.userId, sockets);
     }
-    await Promise.allSettled(deliveries);
+    await Promise.allSettled(
+      [...socketsByUser].map(async ([userId, sockets]) => {
+        const message = await this.chat.messageForViewer(userId, event.messageId);
+        for (const socket of sockets) {
+          this.send(socket, {
+            type: event.kind === 'created' ? 'chat.message.created' : 'chat.message.updated',
+            message,
+          });
+        }
+      }),
+    );
+  }
+
+  private async broadcastDirectMessage(
+    event: ChatDirectMessageRealtimeEvent,
+  ): Promise<void> {
+    const participantIds = [...new Set(event.participantIds)];
+    if (participantIds.length !== 2) return;
+    await Promise.allSettled(
+      participantIds.map(async (userId) => {
+        const sockets = this.openUserSockets(userId);
+        if (sockets.length === 0) return;
+        // 一个用户即使打开多个标签页，也只生成一次个性化消息视图。
+        const message = await this.directMessages.messageForViewer(
+          userId,
+          event.messageId,
+        );
+        for (const socket of sockets) {
+          this.send(socket, {
+            type:
+              event.kind === 'created'
+                ? 'chat.direct.message.created'
+                : 'chat.direct.message.updated',
+            message,
+          });
+        }
+      }),
+    );
+  }
+
+  private broadcastDirectRead(event: ChatDirectReadRealtimeEvent): Promise<void> {
+    const participantIds = [...new Set(event.participantIds)];
+    if (
+      participantIds.length !== 2 ||
+      !participantIds.includes(event.readerUserId)
+    ) {
+      return Promise.resolve();
+    }
+    for (const userId of participantIds) {
+      for (const socket of this.openUserSockets(userId)) {
+        this.send(socket, {
+          type: 'chat.direct.read.updated',
+          conversationId: event.conversationId,
+          reader: userId === event.readerUserId ? 'self' : 'other',
+          lastReadSequence: event.lastReadSequence,
+        });
+      }
+    }
+    return Promise.resolve();
+  }
+
+  private openUserSockets(userId: string): WebSocket[] {
+    const sockets = this.userConnections.get(userId);
+    if (!sockets) return [];
+    return [...sockets].filter((socket) => {
+      const state = this.states.get(socket);
+      return (
+        socket.readyState === WebSocket.OPEN &&
+        state?.authenticated === true &&
+        state.userId === userId
+      );
+    });
   }
 
   private async heartbeatTick(): Promise<void> {
+    const authenticatedConnections: Array<{
+      socket: WebSocket;
+      state: ConnectionState;
+    }> = [];
     const roomConnections = new Map<ChatRoomSlug, Array<{ socket: WebSocket; state: ConnectionState }>>();
     for (const [socket, state] of this.states) {
       if (!state.isAlive) {
@@ -393,6 +584,37 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       state.isAlive = false;
       socket.ping();
       if (!state.authenticated) continue;
+      authenticatedConnections.push({ socket, state });
+    }
+
+    let activeSessions: Map<string, string>;
+    try {
+      activeSessions = await this.activeSessionUsers(
+        authenticatedConnections.map(({ state }) => state),
+      );
+    } catch {
+      this.logger.error('Chat connection session heartbeat recheck failed.');
+      for (const { socket, state } of authenticatedConnections) {
+        this.closeForSessionCheckFailure(socket, state);
+      }
+      return;
+    }
+
+    for (const { socket, state } of authenticatedConnections) {
+      if (
+        socket.readyState !== WebSocket.OPEN ||
+        this.states.get(socket) !== state
+      ) {
+        continue;
+      }
+      if (
+        !state.sessionId ||
+        !state.userId ||
+        activeSessions.get(state.sessionId) !== state.userId
+      ) {
+        this.closeForInvalidSession(socket, state);
+        continue;
+      }
       for (const roomSlug of state.subscriptions.keys()) {
         const connections = roomConnections.get(roomSlug) ?? [];
         connections.push({ socket, state });
@@ -411,6 +633,100 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
         }
       }),
     );
+  }
+
+  private async recheckPrincipalForFrame(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame: ClientFrame,
+  ): Promise<boolean> {
+    try {
+      if (await this.isActivePrincipal(state)) return true;
+    } catch {
+      this.logger.error('Chat connection session frame recheck failed.');
+      this.closeForSessionCheckFailure(socket, state, frame);
+      return false;
+    }
+    this.closeForInvalidSession(socket, state, frame);
+    return false;
+  }
+
+  private async isActivePrincipal(state: ConnectionState): Promise<boolean> {
+    if (!state.userId || !state.sessionId) return false;
+    const session = await this.dataSource.getRepository(AuthSession).findOne({
+      where: { id: state.sessionId, userId: state.userId },
+      relations: { user: true },
+    });
+    return Boolean(
+      session &&
+      session.revokedAt === null &&
+      session.expiresAt.getTime() > Date.now() &&
+      session.user?.accountStatus === 'active',
+    );
+  }
+
+  private async activeSessionUsers(
+    states: readonly ConnectionState[],
+  ): Promise<Map<string, string>> {
+    const sessionIds = [
+      ...new Set(
+        states
+          .map((state) => state.sessionId)
+          .filter((sessionId): sessionId is string => Boolean(sessionId)),
+      ),
+    ];
+    const active = new Map<string, string>();
+    const now = Date.now();
+    for (let index = 0; index < sessionIds.length; index += PRINCIPAL_RECHECK_BATCH_SIZE) {
+      const sessions = await this.dataSource.getRepository(AuthSession).find({
+        where: { id: In(sessionIds.slice(index, index + PRINCIPAL_RECHECK_BATCH_SIZE)) },
+        relations: { user: true },
+      });
+      for (const session of sessions) {
+        if (
+          session.revokedAt === null &&
+          session.expiresAt.getTime() > now &&
+          session.user?.accountStatus === 'active'
+        ) {
+          active.set(session.id, session.userId);
+        }
+      }
+    }
+    return active;
+  }
+
+  private closeForInvalidSession(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame?: ClientFrame,
+  ): void {
+    state.authenticated = false;
+    this.sendError(
+      socket,
+      chatException('INVALID_SESSION', '登录会话已失效。', 401),
+      frame ? stringField(frame, 'requestId') : undefined,
+      frame ? stringField(frame, 'clientMessageId') : undefined,
+      frame ? stringField(frame, 'roomSlug') : undefined,
+      frame ? stringField(frame, 'conversationId') : undefined,
+    );
+    socket.close(4401, 'Session invalid');
+  }
+
+  private closeForSessionCheckFailure(
+    socket: WebSocket,
+    state: ConnectionState,
+    frame?: ClientFrame,
+  ): void {
+    state.authenticated = false;
+    this.sendError(
+      socket,
+      chatException('CHAT_INTERNAL_ERROR', '聊天室操作失败，请稍后再试。', 500),
+      frame ? stringField(frame, 'requestId') : undefined,
+      frame ? stringField(frame, 'clientMessageId') : undefined,
+      frame ? stringField(frame, 'roomSlug') : undefined,
+      frame ? stringField(frame, 'conversationId') : undefined,
+    );
+    socket.close(1011, 'Session validation unavailable');
   }
 
   private async cleanup(socket: WebSocket, state: ConnectionState): Promise<void> {
@@ -436,6 +752,7 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       stringField(frame, 'requestId'),
       stringField(frame, 'clientMessageId'),
       stringField(frame, 'roomSlug'),
+      stringField(frame, 'conversationId'),
     );
     if (!(error instanceof ChatException)) {
       this.logger.error(`Chat operation failed with code ${exception.code}.`);
@@ -448,6 +765,7 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     requestId?: string,
     clientMessageId?: string,
     roomSlug?: string,
+    conversationId?: string,
   ): void {
     this.send(socket, {
       type: 'chat.error',
@@ -456,6 +774,7 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       ...(requestId ? { requestId } : {}),
       ...(clientMessageId ? { clientMessageId } : {}),
       ...(roomSlug ? { roomSlug } : {}),
+      ...(conversationId ? { conversationId } : {}),
       ...(exception.retryAfterSeconds === undefined
         ? {}
         : { retryAfterSeconds: exception.retryAfterSeconds }),
@@ -563,6 +882,17 @@ function optionalNonNegativeInteger(value: unknown): number | undefined {
     throw chatException('CHAT_FRAME_INVALID', '消息游标无效。');
   }
   return Number(value);
+}
+
+function requiredNonNegativeInteger(
+  frame: Record<string, unknown>,
+  key: string,
+): number {
+  const value = optionalNonNegativeInteger(frame[key]);
+  if (value === undefined) {
+    throw chatException('CHAT_FRAME_INVALID', `${key} 无效。`);
+  }
+  return value;
 }
 
 function optionalStringArray(value: unknown, max: number): string[] | undefined {

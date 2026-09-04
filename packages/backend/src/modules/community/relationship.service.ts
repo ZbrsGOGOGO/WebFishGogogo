@@ -69,6 +69,7 @@ export class RelationshipService {
         requesterId,
         recipient.id,
       ]);
+      this.policy.assertProactiveSocialWriteAllowed(users.get(requesterId)!);
       const replay = await this.replay<RelationshipMutationView>(
         manager,
         requesterId,
@@ -438,6 +439,9 @@ export class RelationshipService {
           ? this.pageCursor(page.at(-1)!.id, page.at(-1)!.currentStartedAt)
           : null,
       total,
+      pageLimit: PAGE_SIZE,
+      friendLimit: FRIEND_LIMIT,
+      // 旧客户端兼容；limit 历史上表示单页条数。
       limit: PAGE_SIZE,
     };
   }
@@ -584,6 +588,9 @@ export class RelationshipService {
         recipientId,
         initial.requesterId,
       ]);
+      if (response === 'accepted') {
+        this.policy.assertProactiveSocialWriteAllowed(users.get(recipientId)!);
+      }
       const replay = await this.replay<RelationshipMutationView>(
         manager,
         recipientId,

@@ -84,10 +84,42 @@ export interface ChatHistoryPage {
   nextAfterSequence?: number;
 }
 
-export interface ChatRealtimeEvent {
+export interface ChatRoomRealtimeEvent {
   kind: 'created' | 'updated';
   roomSlug: ChatRoomSlug;
   messageId: string;
+}
+
+/**
+ * 私聊实时事件只在 Redis 与后端实例之间流转。participantIds 是
+ * 内部用户 ID，gateway 必须用它定向已认证连接，不得原样发往浏览器。
+ */
+export interface ChatDirectMessageRealtimeEvent {
+  scope: 'direct';
+  kind: 'created' | 'updated';
+  conversationId: string;
+  messageId: string;
+  participantIds: string[];
+}
+
+export interface ChatDirectReadRealtimeEvent {
+  scope: 'direct';
+  kind: 'read';
+  conversationId: string;
+  readerUserId: string;
+  lastReadSequence: number;
+  participantIds: string[];
+}
+
+export type ChatRealtimeEvent =
+  | ChatRoomRealtimeEvent
+  | ChatDirectMessageRealtimeEvent
+  | ChatDirectReadRealtimeEvent;
+
+export function isDirectChatRealtimeEvent(
+  event: ChatRealtimeEvent,
+): event is ChatDirectMessageRealtimeEvent | ChatDirectReadRealtimeEvent {
+  return 'scope' in event && event.scope === 'direct';
 }
 
 export interface ChatPrincipal {

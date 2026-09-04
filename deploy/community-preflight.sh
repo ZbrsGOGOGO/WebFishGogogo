@@ -443,6 +443,14 @@ grep -Fq '/tower-defense' "$ROOT_DIR/deploy/community-smoke.sh" &&
 grep -Fq '/ledou' "$ROOT_DIR/deploy/community-smoke.sh" &&
 grep -Fq '/battle' "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must cover tower defense and both legacy browser routes"
+grep -Fq '/games/snake' "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must cover the restored snake route"
+grep -Fq 'request GET /games/zhengdao/ 200' \
+  "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must cover the zhengdao static HTML page"
+grep -Fq 'request GET /games/zhengdao/js/01-data.js 200' \
+  "$ROOT_DIR/deploy/community-smoke.sh" ||
+  fail "community smoke must cover a zhengdao JavaScript module"
 grep -Fq '/api/v1/games/office-battle/catalog' \
   "$ROOT_DIR/deploy/community-smoke.sh" ||
   fail "community smoke must prove the retired battle API is unavailable"
@@ -469,7 +477,9 @@ grep -Fq 'HOT_NEWS_TIMESTAMP=1700000000022' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'ARCADE_TIMESTAMP=1700000000023' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000023' \
+grep -Fq 'DIRECT_MESSAGES_TIMESTAMP=1700000000024' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000024' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -488,8 +498,10 @@ grep -Fq 'guild_boss_contributions' \
 grep -Fq 'hot_news_headlines' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'arcade_best_scores' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'chat_direct_messages' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014 through arcade leaderboards 0023"
+  fail "migration rehearsal must verify chat 0014 through direct messages 0024"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

@@ -15,11 +15,19 @@ import { ChatModerationService } from './chat-moderation.service';
 import { ChatRealtimeService } from './chat-realtime.service';
 import { ChatService } from './chat.service';
 import { ChatWebSocketGateway } from './chat-websocket.gateway';
+import type { DirectMessageService } from './direct-message.service';
 
 describe('ChatWebSocketGateway real socket protocol', () => {
   let dataSource: DataSource;
   let realtime: ChatRealtimeService;
   let chat: ChatService;
+  let directMessages: {
+    send: jest.Mock;
+    withdraw: jest.Mock;
+    markRead: jest.Mock;
+    messageForViewer: jest.Mock;
+    publishMessageEvent: jest.Mock;
+  };
   let gateway: ChatWebSocketGateway;
   let server: Server;
   let baseUrl: string;
@@ -46,7 +54,19 @@ describe('ChatWebSocketGateway real socket protocol', () => {
     realtime = new ChatRealtimeService();
     await realtime.onModuleInit();
     chat = new ChatService(dataSource, realtime, new ChatModerationService());
-    gateway = new ChatWebSocketGateway(chat, realtime);
+    directMessages = {
+      send: jest.fn(),
+      withdraw: jest.fn(),
+      markRead: jest.fn(),
+      messageForViewer: jest.fn(),
+      publishMessageEvent: jest.fn(),
+    };
+    gateway = new ChatWebSocketGateway(
+      chat,
+      realtime,
+      directMessages as unknown as DirectMessageService,
+      dataSource,
+    );
     server = createServer((_request, response) => {
       response.writeHead(404).end();
     });
@@ -186,6 +206,243 @@ describe('ChatWebSocketGateway real socket protocol', () => {
     ).resolves.toBe(404);
   });
 
+  it.each(['revoked', 'expired', 'suspended'] as const)(
+    'rechecks the authenticated principal before a business frame when it is %s',
+    async (condition) => {
+      const user = await activeUser(
+        `principal-${condition}@example.com`,
+        `Principal ${condition}`,
+      );
+      const session = await authSession(user.id);
+      const client = await authenticatedSocket(
+        user.id,
+        session.id,
+        `principal-${condition}`,
+      );
+      if (condition === 'revoked') {
+        await dataSource.getRepository(AuthSession).update(
+          { id: session.id },
+          { revokedAt: new Date(), revokeReason: 'device_revoked' },
+        );
+      } else if (condition === 'expired') {
+        await dataSource.getRepository(AuthSession).update(
+          { id: session.id },
+          { expiresAt: new Date(Date.now() - 1_000) },
+        );
+      } else {
+        await dataSource.getRepository(User).update(
+          { id: user.id },
+          { accountStatus: 'suspended' },
+        );
+      }
+
+      const closed = closeCode(client.socket);
+      client.socket.send(JSON.stringify({
+        type: 'chat.direct.read',
+        protocolVersion: 1,
+        requestId: `invalid-${condition}`,
+        conversationId: randomUUID(),
+        throughSequence: 0,
+      }));
+
+      expect(await client.events.next('chat.error')).toMatchObject({
+        code: 'INVALID_SESSION',
+        requestId: `invalid-${condition}`,
+      });
+      await expect(closed).resolves.toBe(4401);
+      expect(directMessages.markRead).not.toHaveBeenCalled();
+    },
+  );
+
+  it('closes an idle authenticated connection on heartbeat after its session is revoked', async () => {
+    const user = await activeUser('idle-revoked@example.com', 'Idle Revoked');
+    const session = await authSession(user.id);
+    const client = await authenticatedSocket(user.id, session.id, 'idle-revoked');
+    await dataSource.getRepository(AuthSession).update(
+      { id: session.id },
+      { revokedAt: new Date(), revokeReason: 'logout_all' },
+    );
+
+    const closed = closeCode(client.socket);
+    await (gateway as unknown as { heartbeatTick(): Promise<void> }).heartbeatTick();
+
+    expect(await client.events.next('chat.error')).toMatchObject({
+      code: 'INVALID_SESSION',
+    });
+    await expect(closed).resolves.toBe(4401);
+  });
+
+  it('routes private message, withdrawal and read events only to both participants', async () => {
+    const [author, recipient, outsider] = await Promise.all([
+      activeUser('direct-author@example.com', 'Direct Author'),
+      activeUser('direct-recipient@example.com', 'Direct Recipient'),
+      activeUser('direct-outsider@example.com', 'Direct Outsider'),
+    ]);
+    const [authorSession, recipientSession, outsiderSession] = await Promise.all([
+      authSession(author.id),
+      authSession(recipient.id),
+      authSession(outsider.id),
+    ]);
+    const [authorFirst, authorSecond, recipientClient, outsiderClient] = await Promise.all([
+      authenticatedSocket(author.id, authorSession.id, 'author-first'),
+      authenticatedSocket(author.id, authorSession.id, 'author-second'),
+      authenticatedSocket(recipient.id, recipientSession.id, 'recipient'),
+      authenticatedSocket(outsider.id, outsiderSession.id, 'outsider'),
+    ]);
+    const conversationId = randomUUID();
+    const messageId = randomUUID();
+    const message = {
+      id: messageId,
+      conversationId,
+      sequence: 1,
+      version: 1,
+      visibility: 'visible',
+      body: '仅参与者可见的私聊',
+    };
+    directMessages.send.mockResolvedValue(message);
+    directMessages.withdraw.mockResolvedValue({
+      ...message,
+      version: 2,
+      visibility: 'withdrawn_placeholder',
+      body: null,
+    });
+    directMessages.messageForViewer.mockImplementation(
+      async (viewerId: string) => ({ ...message, viewerId }),
+    );
+    directMessages.publishMessageEvent.mockImplementation(
+      async (kind: 'created' | 'updated', emittedConversationId: string, emittedMessageId: string) => {
+        await realtime.publish({
+          scope: 'direct',
+          kind,
+          conversationId: emittedConversationId,
+          messageId: emittedMessageId,
+          participantIds: [author.id, recipient.id],
+        });
+      },
+    );
+    directMessages.markRead.mockImplementation(
+      async (readerUserId: string, emittedConversationId: string, lastReadSequence: number) => {
+        await realtime.publish({
+          scope: 'direct',
+          kind: 'read',
+          conversationId: emittedConversationId,
+          readerUserId,
+          lastReadSequence,
+          participantIds: [author.id, recipient.id],
+        });
+        return { conversationId: emittedConversationId, lastReadSequence, unreadCount: 0 };
+      },
+    );
+
+    authorFirst.socket.send(JSON.stringify({
+      type: 'chat.direct.send',
+      protocolVersion: 1,
+      requestId: 'direct-send-1',
+      clientMessageId: 'direct-client-message-1',
+      conversationId,
+      body: '仅参与者可见的私聊',
+    }));
+    expect(await authorFirst.events.next('chat.ack')).toMatchObject({
+      action: 'direct-send',
+      requestId: 'direct-send-1',
+      conversationId,
+      messageId,
+    });
+    await Promise.all([
+      authorFirst.events.next('chat.direct.message.created'),
+      authorSecond.events.next('chat.direct.message.created'),
+      recipientClient.events.next('chat.direct.message.created'),
+    ]);
+    expect(outsiderClient.events.types()).not.toContain('chat.direct.message.created');
+    expect(
+      directMessages.messageForViewer.mock.calls.map(([viewerId]) => viewerId).sort(),
+    ).toEqual([author.id, recipient.id].sort());
+
+    authorFirst.socket.send(JSON.stringify({
+      type: 'chat.direct.withdraw',
+      protocolVersion: 1,
+      requestId: 'direct-withdraw-1',
+      conversationId,
+      messageId,
+    }));
+    expect(await authorFirst.events.next('chat.ack')).toMatchObject({
+      action: 'direct-withdraw',
+      requestId: 'direct-withdraw-1',
+      conversationId,
+      messageId,
+    });
+    await Promise.all([
+      authorFirst.events.next('chat.direct.message.updated'),
+      authorSecond.events.next('chat.direct.message.updated'),
+      recipientClient.events.next('chat.direct.message.updated'),
+    ]);
+    expect(outsiderClient.events.types()).not.toContain('chat.direct.message.updated');
+
+    recipientClient.socket.send(JSON.stringify({
+      type: 'chat.direct.read',
+      protocolVersion: 1,
+      requestId: 'direct-read-1',
+      conversationId,
+      throughSequence: 1,
+    }));
+    const [authorRead, recipientRead, readAck] = await Promise.all([
+      authorFirst.events.next('chat.direct.read.updated'),
+      recipientClient.events.next('chat.direct.read.updated'),
+      recipientClient.events.next('chat.ack'),
+    ]);
+    expect(authorRead).toMatchObject({
+      conversationId,
+      reader: 'other',
+      lastReadSequence: 1,
+    });
+    expect(recipientRead).toMatchObject({
+      conversationId,
+      reader: 'self',
+      lastReadSequence: 1,
+    });
+    expect(readAck).toMatchObject({
+      action: 'direct-read',
+      requestId: 'direct-read-1',
+      unreadCount: 0,
+    });
+    expect(outsiderClient.events.types()).not.toContain('chat.direct.read.updated');
+  });
+
+  it('builds one public-room message view per user and fans it out to all of their sockets', async () => {
+    const user = await activeUser('public-multi-tab@example.com', 'Public Multi Tab');
+    const session = await authSession(user.id);
+    const [first, second] = await Promise.all([
+      authenticatedSocket(user.id, session.id, 'public-first'),
+      authenticatedSocket(user.id, session.id, 'public-second'),
+    ]);
+    for (const [index, client] of [first, second].entries()) {
+      client.socket.send(JSON.stringify({
+        type: 'chat.subscribe',
+        protocolVersion: 1,
+        requestId: `public-subscribe-${index}`,
+        roomSlug: 'general',
+        afterSequence: 0,
+      }));
+      await client.events.next('chat.ack');
+      await client.events.next('chat.ready');
+    }
+    const message = await chat.send(user.id, {
+      clientMessageId: randomUUID(),
+      roomSlug: 'general',
+      body: '同一用户多标签只查询一次视图',
+    });
+    const messageForViewer = jest.spyOn(chat, 'messageForViewer');
+
+    await chat.publishMessageEvent('created', 'general', message.id);
+
+    await Promise.all([
+      first.events.next('chat.message.created'),
+      second.events.next('chat.message.created'),
+    ]);
+    expect(messageForViewer).toHaveBeenCalledTimes(1);
+    expect(messageForViewer).toHaveBeenCalledWith(user.id, message.id);
+  });
+
   async function openSocket(path: string, origin: string): Promise<WebSocket> {
     const socket = new WebSocket(`${baseUrl}${path}`, { origin });
     sockets.push(socket);
@@ -207,6 +464,24 @@ describe('ChatWebSocketGateway real socket protocol', () => {
       socket.once('open', () => reject(new Error('Upgrade unexpectedly succeeded')));
       socket.once('error', () => undefined);
     });
+  }
+
+  async function authenticatedSocket(
+    userId: string,
+    sessionId: string,
+    requestId: string,
+  ): Promise<{ socket: WebSocket; events: EventCollector }> {
+    const ticket = await chat.issueSocketTicket(userId, sessionId);
+    const socket = await openSocket('/ws/chat', 'http://localhost:5173');
+    const events = collect(socket);
+    socket.send(JSON.stringify({
+      type: 'chat.authenticate',
+      protocolVersion: 1,
+      requestId,
+      ticket: ticket.ticket,
+    }));
+    await events.next('chat.authenticated');
+    return { socket, events };
   }
 
   async function activeUser(email: string, displayName: string): Promise<User> {
@@ -270,9 +545,23 @@ describe('ChatWebSocketGateway heartbeat cardinality', () => {
       ),
       presenceBand: jest.fn(async (_roomSlug: string) => 'very_busy' as const),
     };
+    const sessions = Array.from({ length: 1_000 }, (_, index) => ({
+      id: `session-${index}`,
+      userId: `user-${index}`,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      user: { accountStatus: 'active' },
+    }));
+    const dataSource = {
+      getRepository: jest.fn(() => ({
+        find: jest.fn(async () => sessions),
+      })),
+    };
     const gateway = new ChatWebSocketGateway(
       {} as ChatService,
       realtime as unknown as ChatRealtimeService,
+      {} as DirectMessageService,
+      dataSource as unknown as DataSource,
     );
     const internals = gateway as unknown as {
       states: Map<

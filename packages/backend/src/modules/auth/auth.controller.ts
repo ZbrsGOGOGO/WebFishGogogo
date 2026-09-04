@@ -24,6 +24,7 @@ import {
   RegistrationResult,
   VerificationDeliveryResult,
 } from './auth.service';
+import { parsePasswordChange } from './auth-security-validation';
 import {
   AuthCookieResponse,
   assertTrustedCookieOrigin,
@@ -196,6 +197,26 @@ export class AuthController {
   ): Promise<void> {
     assertTrustedCookieOrigin(origin);
     await this.authService.logoutAll(userId);
+    this.clearRefreshCookie(response);
+  }
+
+  @Post('password-change')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async changePassword(
+    @CurrentUserId() userId: string,
+    @Body() body: unknown,
+    @Headers('origin') origin: string | undefined,
+    @Res({ passthrough: true }) response: AuthCookieResponse,
+    @Ip() ipAddress?: string,
+    @Headers('user-agent') userAgent?: string,
+  ): Promise<void> {
+    assertTrustedCookieOrigin(origin);
+    await this.authService.changePassword(
+      userId,
+      parsePasswordChange(body),
+      this.metadata(ipAddress, userAgent),
+    );
     this.clearRefreshCookie(response);
   }
 

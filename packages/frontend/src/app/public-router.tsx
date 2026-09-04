@@ -23,6 +23,11 @@ const TankBattlePage = lazy(() =>
     default: module.TankBattlePage,
   })),
 );
+const SnakeGamePage = lazy(() =>
+  import('../features/games/snake/SnakeGamePage').then((module) => ({
+    default: module.SnakeGamePage,
+  })),
+);
 const WorkstationTowerDefensePage = lazy(() =>
   import('../features/workstation-tower-defense').then((module) => ({
     default: module.WorkstationTowerDefensePage,
@@ -50,7 +55,7 @@ export function PublicModeRouter(): JSX.Element {
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<PublicGameLayout />}>
         <Route index element={loading(<PublicGamesPage />)} />
-        <Route path="snake" element={<Navigate to="/games" replace />} />
+        <Route path="snake" element={loading(<SnakeGamePage />)} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />
         <Route path="tank" element={loading(<TankBattlePage />)} />
         <Route path="three-sum" element={<Navigate to="/games" replace />} />

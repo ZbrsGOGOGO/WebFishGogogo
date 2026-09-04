@@ -162,6 +162,17 @@ export function resetCommunityPassword(payload: {
   });
 }
 
+export function changeCommunityPassword(payload: {
+  currentPassword: string;
+  newPassword: string;
+}): Promise<void> {
+  return communityHttp.post<void>('/v1/auth/password-change', payload, {
+    // A successful request revokes the credential used for this request. Never
+    // replay it automatically when the response boundary is uncertain.
+    retryAfterRefresh: false,
+  });
+}
+
 export function getCommunitySessions(): Promise<CommunityDeviceSession[]> {
   return communityHttp.get('/v1/auth/sessions');
 }
@@ -180,6 +191,7 @@ export const communityAuthApi = {
   logoutAll: logoutAllCommunitySessions,
   forgotPassword: forgotCommunityPassword,
   resetPassword: resetCommunityPassword,
+  changePassword: changeCommunityPassword,
   sessions: getCommunitySessions,
   revokeSession: revokeCommunitySession,
 };

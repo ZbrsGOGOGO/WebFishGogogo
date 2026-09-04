@@ -154,15 +154,18 @@ forbid_regex() {
   pass "$forbidden_label is absent"
 }
 
-# Canonical public routes and the two legacy browser aliases are fetched exactly once each.
+# Canonical public routes, static games and the two legacy browser aliases are fetched exactly once each.
 fetch_exact '/' 200 "$SMOKE_TMP/home.html"
 fetch_exact '/tower-defense' 200 "$SMOKE_TMP/tower-defense.html"
 fetch_exact '/ledou' 200 "$SMOKE_TMP/legacy-ledou.html"
 fetch_exact '/battle' 200 "$SMOKE_TMP/legacy-battle.html"
 fetch_exact '/tools' 200 "$SMOKE_TMP/tools.html"
 fetch_exact '/games' 200 "$SMOKE_TMP/games.html"
+fetch_exact '/games/snake' 200 "$SMOKE_TMP/game-snake.html"
 fetch_exact '/games/tetris' 200 "$SMOKE_TMP/game-tetris.html"
 fetch_exact '/games/tank' 200 "$SMOKE_TMP/game-tank.html"
+fetch_exact '/games/zhengdao/' 200 "$SMOKE_TMP/game-zhengdao.html"
+fetch_exact '/games/zhengdao/js/01-data.js' 200 "$SMOKE_TMP/game-zhengdao-data.js"
 fetch_exact '/privacy-policy' 200 "$SMOKE_TMP/privacy.html"
 fetch_exact '/terms-of-service' 200 "$SMOKE_TMP/terms.html"
 
@@ -202,13 +205,13 @@ while IFS= read -r entry_path; do
   cat "$entry_file" >> "$SMOKE_TMP/public-artifacts.txt"
 done < "$SMOKE_TMP/entry-assets.txt"
 
-grep -a -E -o 'assets/(workstation-tower-defense|PublicGamesPage|TetrisGamePage|TankBattlePage)-[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
+grep -a -E -o 'assets/(workstation-tower-defense|PublicGamesPage|SnakeGamePage|TetrisGamePage|TankBattlePage)-[A-Za-z0-9._/-]+\.js' "$SMOKE_TMP/public-artifacts.txt" |
   sed 's#^#/#' |
   sort -u > "$SMOKE_TMP/game-assets.txt"
 
 game_asset_count=$(wc -l < "$SMOKE_TMP/game-assets.txt" | tr -d ' ')
-[ "$game_asset_count" -eq 4 ] ||
-  fail "found $game_asset_count of the 4 expected public interactive chunks"
+[ "$game_asset_count" -eq 5 ] ||
+  fail "found $game_asset_count of the 5 expected public interactive chunks"
 
 game_asset_index=0
 while IFS= read -r game_asset_path; do
@@ -234,6 +237,7 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" '不提供正式奖励' 'no fo
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '经典小游戏' \
   'public games copy'
+require_literal "$SMOKE_TMP/public-artifacts.txt" '贪食蛇' 'snake game title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '俄罗斯方块' 'tetris title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" '坦克大战' 'tank game title'
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
@@ -251,6 +255,24 @@ require_literal "$SMOKE_TMP/public-artifacts.txt" \
 require_literal "$SMOKE_TMP/public-artifacts.txt" \
   '常规访问日志保存期限为 0 天' \
   'zero-day public application log retention'
+
+# Static game checks use content unique to the imported files. This prevents
+# Nginx's SPA fallback from turning a missing HTML page or JavaScript file into a false 200.
+require_literal "$SMOKE_TMP/game-zhengdao.html" \
+  '<title>证道 · 命格模拟｜摸摸公司</title>' \
+  'zhengdao static page title'
+require_literal "$SMOKE_TMP/game-zhengdao.html" \
+  '<script src="js/01-data.js"></script>' \
+  'zhengdao JavaScript module reference'
+forbid_regex "$SMOKE_TMP/game-zhengdao.html" \
+  '<div[[:space:]]+id="root"[^>]*>' \
+  'zhengdao SPA fallback marker'
+require_literal "$SMOKE_TMP/game-zhengdao-data.js" \
+  'ZT.data =' \
+  'zhengdao JavaScript module body'
+forbid_regex "$SMOKE_TMP/game-zhengdao-data.js" \
+  '<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<[Hh][Tt][Mm][Ll]' \
+  'HTML fallback in zhengdao JavaScript module'
 
 # Public artifacts must not contain review/PII text or hidden full-site features.
 forbid_regex "$SMOKE_TMP/public-artifacts.txt" \

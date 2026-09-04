@@ -3,9 +3,10 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
 import { GamesPage } from './GamesPage';
+import { PUBLIC_GAME_CARDS } from './public-game-cards';
 
 describe('GamesPage', () => {
-  it('只提供俄罗斯方块和坦克大战入口', () => {
+  it('提供三款动作游戏和命格模拟入口', () => {
     render(
       <MemoryRouter>
         <GamesPage />
@@ -15,6 +16,10 @@ describe('GamesPage', () => {
     expect(
       screen.getByRole('heading', { name: '小游戏中心' }),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /贪食蛇/ })).toHaveAttribute(
+      'href',
+      '/games/snake',
+    );
     expect(screen.getByRole('link', { name: /俄罗斯方块/ })).toHaveAttribute(
       'href',
       '/games/tetris',
@@ -23,7 +28,15 @@ describe('GamesPage', () => {
       'href',
       '/games/tank',
     );
-    expect(screen.queryByRole('link', { name: /贪食蛇|三数之和|午休竞技场|比大小/ })).not.toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /证道 · 命格模拟/ })).toHaveAttribute(
+      'href',
+      '/games/zhengdao/',
+    );
+    expect(
+      PUBLIC_GAME_CARDS.find((game) => game.path === '/games/zhengdao/'),
+    ).toMatchObject({ reloadDocument: true });
+    expect(screen.queryByRole('link', { name: /三数之和|午休竞技场|比大小/ })).not.toBeInTheDocument();
+    expect(screen.getByText('4')).toBeInTheDocument();
+    expect(screen.getByText(/模拟游戏的进度与记录仅保存在当前浏览器/)).toBeInTheDocument();
   });
 });

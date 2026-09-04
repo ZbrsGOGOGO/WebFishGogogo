@@ -8,7 +8,7 @@ export function GamesPage(): JSX.Element {
     <GamesCatalog
       games={PUBLIC_GAME_CARDS}
       title="小游戏中心"
-      subtitle="俄罗斯方块与坦克大战，登录后可以挑战全站排行榜。"
+      subtitle="玩一局贪食蛇、俄罗斯方块或坦克大战，也可以在命格模拟中走完一世修行。"
     />
   );
 }

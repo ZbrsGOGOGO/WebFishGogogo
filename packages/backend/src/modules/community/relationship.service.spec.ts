@@ -28,6 +28,7 @@ describe('RelationshipService transactional invariants', () => {
   });
 
   beforeEach(async () => {
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     dataSource = await createLocalDevDataSource();
     const policy = new RelationshipPolicyService();
     const notifications = new NotificationService(dataSource);
@@ -178,6 +179,49 @@ describe('RelationshipService transactional invariants', () => {
     expect(
       new Set([...first.items, ...second.items].map((item) => item.publicId)).size,
     ).toBe(55);
+  });
+
+  it('requires verification for creating and accepting friendships only when enabled', async () => {
+    const [alice, bob, carol, dave] = await Promise.all([
+      activeUser('social-alice@example.com', 'Social Alice'),
+      activeUser('social-bob@example.com', 'Social Bob'),
+      activeUser('social-carol@example.com', 'Social Carol'),
+      activeUser('social-dave@example.com', 'Social Dave'),
+    ]);
+
+    // Disabled means the current registered-account behavior remains unchanged.
+    const pending = await service.sendRequest(
+      alice.id,
+      bob.publicId,
+      'social-disabled-request',
+    );
+
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'true';
+    await expect(
+      service.sendRequest(carol.id, dave.publicId, 'social-required-request'),
+    ).rejects.toMatchObject({
+      response: { code: 'SOCIAL_VERIFICATION_REQUIRED' },
+    });
+    await expect(
+      service.accept(bob.id, pending.requestId!, 'social-required-accept'),
+    ).rejects.toMatchObject({
+      response: { code: 'SOCIAL_VERIFICATION_REQUIRED' },
+    });
+    expect(
+      await dataSource.getRepository(FriendRequest).findOneByOrFail({
+        id: pending.requestId!,
+      }),
+    ).toMatchObject({ status: 'pending' });
+
+    carol.socialVerificationStatus = 'verified';
+    bob.socialVerificationStatus = 'verified';
+    await dataSource.getRepository(User).save([carol, bob]);
+    await expect(
+      service.sendRequest(carol.id, dave.publicId, 'social-verified-request'),
+    ).resolves.toMatchObject({ status: 'pending' });
+    await expect(
+      service.accept(bob.id, pending.requestId!, 'social-verified-accept'),
+    ).resolves.toMatchObject({ status: 'friend' });
   });
 
   it('fails closed when production community writes are not explicitly enabled', async () => {

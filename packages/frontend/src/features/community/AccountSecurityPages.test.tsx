@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -8,6 +8,7 @@ import {
   useCommunityAuthStore,
 } from '../../app/store/community-auth-store';
 import {
+  CommunityApiError,
   communityAccountApi,
   communityAuthApi,
   communitySecurityApi,
@@ -43,6 +44,70 @@ describe('community account security pages', () => {
     expect(await screen.findByText('暂时没有设备记录')).toBeInTheDocument();
     expect(getDeletion).not.toHaveBeenCalled();
     expect(screen.queryByRole('heading', { name: '注销账号' })).not.toBeInTheDocument();
+  });
+
+  it('changes the password, clears local auth state and forces a fresh login', async () => {
+    const user = userEvent.setup();
+    useCommunityAuthStore.setState({ phase: 'active', user: activeUser, sessionReady: true });
+    vi.spyOn(communityAuthApi, 'sessions').mockResolvedValue([]);
+    const changePassword = vi.spyOn(communityAuthApi, 'changePassword').mockResolvedValue();
+
+    render(
+      <MemoryRouter initialEntries={['/account/security']}>
+        <Routes>
+          <Route path="/account/security" element={<CommunityAccountSecurityPage />} />
+          <Route path="/login" element={<h1>请重新登录</h1>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await user.type(screen.getByLabelText(/^当前密码/), 'Current-Office#2026');
+    await user.type(screen.getByLabelText(/^新密码/), 'Changed-Office#2026');
+    await user.type(screen.getByLabelText(/^确认新密码/), 'Changed-Office#2026');
+    await user.click(screen.getByRole('button', { name: '更新密码并退出全部设备' }));
+
+    expect(changePassword).toHaveBeenCalledWith({
+      currentPassword: 'Current-Office#2026',
+      newPassword: 'Changed-Office#2026',
+    });
+    expect(await screen.findByRole('heading', { name: '请重新登录' })).toBeInTheDocument();
+    expect(useCommunityAuthStore.getState()).toMatchObject({ phase: 'guest', user: null });
+  });
+
+  it('keeps the session when the current password is rejected', async () => {
+    const user = userEvent.setup();
+    useCommunityAuthStore.setState({ phase: 'active', user: activeUser, sessionReady: true });
+    vi.spyOn(communityAuthApi, 'sessions').mockResolvedValue([]);
+    vi.spyOn(communityAuthApi, 'changePassword').mockRejectedValue(
+      new CommunityApiError(401, 'unauthorized', { code: 'CURRENT_PASSWORD_INVALID' }),
+    );
+
+    render(<MemoryRouter><CommunityAccountSecurityPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText(/^当前密码/), 'Wrong-Office#2026');
+    await user.type(screen.getByLabelText(/^新密码/), 'Changed-Office#2026');
+    await user.type(screen.getByLabelText(/^确认新密码/), 'Changed-Office#2026');
+    await user.click(screen.getByRole('button', { name: '更新密码并退出全部设备' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('当前密码不正确');
+    expect(useCommunityAuthStore.getState().phase).toBe('active');
+  });
+
+  it('rejects reusing the current password before sending a request', async () => {
+    const user = userEvent.setup();
+    useCommunityAuthStore.setState({ phase: 'active', user: activeUser, sessionReady: true });
+    vi.spyOn(communityAuthApi, 'sessions').mockResolvedValue([]);
+    const changePassword = vi.spyOn(communityAuthApi, 'changePassword');
+
+    render(<MemoryRouter><CommunityAccountSecurityPage /></MemoryRouter>);
+
+    await user.type(screen.getByLabelText(/^当前密码/), 'Current-Office#2026');
+    await user.type(screen.getByLabelText(/^新密码/), 'Current-Office#2026');
+    await user.type(screen.getByLabelText(/^确认新密码/), 'Current-Office#2026');
+    await user.click(screen.getByRole('button', { name: '更新密码并退出全部设备' }));
+
+    expect(screen.getByText('新密码不能与当前密码相同')).toBeInTheDocument();
+    expect(changePassword).not.toHaveBeenCalled();
   });
 
   it('shows pending verification as pending and never presents it as verified', async () => {

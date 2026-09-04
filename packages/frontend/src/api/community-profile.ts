@@ -53,6 +53,7 @@ export interface CommunityPublicPlant {
 
 export interface CommunityPublicProfile {
   publicId: string;
+  username?: string | null;
   displayName: string;
   avatarKey: string;
   battleProfession: string;
@@ -108,9 +109,24 @@ export function getCommunityPublicProfile(
   return communityHttp.get(`/v1/users/${encodeURIComponent(publicId)}`);
 }
 
+export async function findCommunityUser(
+  identifier: string,
+): Promise<CommunityPublicProfile | null> {
+  const value = identifier.trim();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const page = await communityHttp.get<{ items: CommunityPublicProfile[] }>(
+    '/v1/users/search',
+    { query: uuid.test(value)
+      ? { publicId: value }
+      : { username: value.replace(/^@/, '') } },
+  );
+  return page.items[0] ?? null;
+}
+
 export const communityProfileApi = {
   getMe: getMyCommunityProfile,
   updateProfile: updateMyCommunityProfile,
   updatePrivacy: updateMyCommunityPrivacy,
   getPublic: getCommunityPublicProfile,
+  findUser: findCommunityUser,
 };

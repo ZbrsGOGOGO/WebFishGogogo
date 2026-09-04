@@ -12,6 +12,8 @@ import {
   COMMUNITY_CHAT_PROTOCOL_VERSION,
   parseCommunityChatServerEvent,
   type ChatSendCommand,
+  type ChatDirectReadCommand,
+  type ChatDirectSendCommand,
   type CommunityChatClientCommand,
   type CommunityChatServerEvent,
 } from './chat-protocol';
@@ -206,6 +208,53 @@ export class CommunityChatConnection {
     });
   }
 
+  sendDirectMessage(
+    command: Omit<ChatDirectSendCommand, 'type' | 'protocolVersion'>,
+  ): void {
+    if (this.snapshot.status !== 'ready' || !this.isSocketOpen()) {
+      throw new Error('私聊尚未连接，消息没有发送');
+    }
+    const characterCount = [...command.body].length;
+    if (characterCount < 1 || characterCount > 500) {
+      throw new Error('消息需为 1–500 个字符');
+    }
+    this.sendFrame({
+      type: 'chat.direct.send',
+      protocolVersion: COMMUNITY_CHAT_PROTOCOL_VERSION,
+      ...command,
+    });
+  }
+
+  withdrawDirectMessage(
+    conversationId: string,
+    messageId: string,
+    requestId: string,
+  ): void {
+    if (this.snapshot.status !== 'ready' || !this.isSocketOpen()) {
+      throw new Error('私聊尚未连接，撤回请求没有发送');
+    }
+    this.sendFrame({
+      type: 'chat.direct.withdraw',
+      protocolVersion: COMMUNITY_CHAT_PROTOCOL_VERSION,
+      requestId,
+      conversationId,
+      messageId,
+    });
+  }
+
+  markDirectRead(
+    command: Omit<ChatDirectReadCommand, 'type' | 'protocolVersion'>,
+  ): void {
+    if (this.snapshot.status !== 'ready' || !this.isSocketOpen()) {
+      throw new Error('私聊尚未连接，已读状态没有同步');
+    }
+    this.sendFrame({
+      type: 'chat.direct.read',
+      protocolVersion: COMMUNITY_CHAT_PROTOCOL_VERSION,
+      ...command,
+    });
+  }
+
   withdrawMessage(roomSlug: CommunityChatRoomSlug, messageId: string, requestId: string): void {
     if (this.snapshot.status !== 'ready' || !this.isSocketOpen()) {
       throw new Error('聊天室尚未连接，撤回请求没有发送');
@@ -291,6 +340,10 @@ export class CommunityChatConnection {
     if (event.type === 'chat.authenticated') {
       this.authenticated = true;
       for (const roomSlug of this.desiredRooms.keys()) this.sendSubscribe(roomSlug);
+      if (this.desiredRooms.size === 0) {
+        this.snapshot.reconnectAttempt = 0;
+        this.setState('ready', null);
+      }
     }
     if (event.type === 'chat.ready') {
       if (!this.authenticated) return;

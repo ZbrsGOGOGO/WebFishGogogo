@@ -6,6 +6,7 @@ import { PrivacyPolicyPage, TermsOfServicePage } from '../features/compliance';
 import { FarmPage } from '../features/farm';
 import {
   GamesPage,
+  SnakeGamePage,
   TankBattlePage,
   TetrisGamePage,
 } from '../features/games';
@@ -43,7 +44,7 @@ export function RuntimeRouter(): JSX.Element {
         <Route path="/farm" element={<FarmPage />} />
         <Route path="/games" element={<GamesPage />} />
         <Route path="/games/arena" element={<Navigate to="/games" replace />} />
-        <Route path="/games/snake" element={<Navigate to="/games" replace />} />
+        <Route path="/games/snake" element={<SnakeGamePage />} />
         <Route path="/games/tetris" element={<TetrisGamePage />} />
         <Route path="/games/tank" element={<TankBattlePage />} />
         <Route path="/games/high-low" element={<Navigate to="/games" replace />} />

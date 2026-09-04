@@ -18,6 +18,16 @@ export function CommunityExperienceNav(): JSX.Element {
           固定聊天室
         </Link>
       ) : null}
+      {COMMUNITY_FEATURE_FLAGS.chat && COMMUNITY_FEATURE_FLAGS.friends ? (
+        <Link to="/messages" aria-current={location.pathname.startsWith('/messages') ? 'page' : undefined}>
+          私人消息
+        </Link>
+      ) : null}
+      {COMMUNITY_FEATURE_FLAGS.friends ? (
+        <Link to="/friends" aria-current={location.pathname.startsWith('/friends') ? 'page' : undefined}>
+          好友与申请
+        </Link>
+      ) : null}
     </nav>
   );
 }

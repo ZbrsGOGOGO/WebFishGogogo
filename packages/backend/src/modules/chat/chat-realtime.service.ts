@@ -90,15 +90,27 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
   }
 
   async publish(event: ChatRealtimeEvent): Promise<void> {
-    if (!this.available) return;
     if (this.memoryMode) {
       await this.emit(event);
       return;
     }
+    // 业务事务可能在 Redis 断线与 available 更新之间已经提交。
+    // 跨实例此时无法保证，但至少不让当前实例的连接漏掉事件。
+    if (!this.available || !this.publisher) {
+      await this.emit(event);
+      return;
+    }
     try {
-      await this.publisher?.publish(CHAT_CHANNEL, JSON.stringify(event));
+      const receiverCount = await this.publisher.publish(
+        CHAT_CHANNEL,
+        JSON.stringify(event),
+      );
+      if (receiverCount === 0) await this.emit(event);
     } catch {
       this.handleRedisFailure();
+      // Redis publish 是至少一次语义：极端情况下可能与订阅回调重复，
+      // 消息 ID/version 会让客户端合并幂等。
+      await this.emit(event);
     }
   }
 
@@ -178,13 +190,44 @@ export class ChatRealtimeService implements OnModuleInit, OnModuleDestroy {
 
   private parseEvent(payload: string): ChatRealtimeEvent | null {
     try {
-      const value = JSON.parse(payload) as Partial<ChatRealtimeEvent>;
+      const parsed = JSON.parse(payload) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      const value = parsed as Record<string, unknown>;
+      if (value.scope === 'direct') {
+        if (
+          typeof value.conversationId !== 'string' ||
+          !Array.isArray(value.participantIds) ||
+          value.participantIds.length !== 2 ||
+          value.participantIds.some(
+            (id) => typeof id !== 'string' || id.length === 0,
+          ) ||
+          new Set(value.participantIds).size !== 2
+        ) {
+          return null;
+        }
+        if (
+          (value.kind === 'created' || value.kind === 'updated') &&
+          typeof value.messageId === 'string'
+        ) {
+          return value as unknown as ChatRealtimeEvent;
+        }
+        if (
+          value.kind === 'read' &&
+          typeof value.readerUserId === 'string' &&
+          value.participantIds.includes(value.readerUserId) &&
+          Number.isSafeInteger(value.lastReadSequence) &&
+          Number(value.lastReadSequence) >= 0
+        ) {
+          return value as unknown as ChatRealtimeEvent;
+        }
+        return null;
+      }
       if (
         (value.kind === 'created' || value.kind === 'updated') &&
         typeof value.roomSlug === 'string' &&
         typeof value.messageId === 'string'
       ) {
-        return value as ChatRealtimeEvent;
+        return value as unknown as ChatRealtimeEvent;
       }
     } catch {
       // An invalid pub/sub payload is ignored and never logged.

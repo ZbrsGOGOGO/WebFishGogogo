@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { EntityManager, IsNull } from 'typeorm';
 
 import { Friendship } from '../../database/entities/friendship.entity';
@@ -7,6 +7,15 @@ import { User } from '../../database/entities/user.entity';
 
 @Injectable()
 export class RelationshipPolicyService {
+  assertProactiveSocialWriteAllowed(user: User): void {
+    if (
+      process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED === 'true' &&
+      user.socialVerificationStatus !== 'verified'
+    ) {
+      throw new ForbiddenException({ code: 'SOCIAL_VERIFICATION_REQUIRED' });
+    }
+  }
+
   pair(left: string, right: string): [string, string] {
     return left < right ? [left, right] : [right, left];
   }

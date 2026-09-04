@@ -159,7 +159,7 @@ describe('ChatService safety and persistence invariants', () => {
     const author = await activeUser('blocked-author@example.com', 'Blocked Author');
     const viewer = await activeUser('blocked-viewer@example.com', 'Blocked Viewer');
     const body = 'Sensitive message body that must not cross a block boundary.';
-    await service.send(author.id, {
+    const authored = await service.send(author.id, {
       clientMessageId: randomUUID(),
       roomSlug: 'developer',
       body,
@@ -177,6 +177,12 @@ describe('ChatService safety and persistence invariants', () => {
       body: null,
     });
     expect(JSON.stringify(history)).not.toContain(body);
+    await expect(service.send(viewer.id, {
+      clientMessageId: randomUUID(),
+      roomSlug: 'developer',
+      body: 'This forged reply must not cross the block boundary.',
+      replyToMessageId: authored.id,
+    })).rejects.toMatchObject({ response: { code: 'CHAT_REPLY_NOT_ALLOWED' } });
   });
 
   it('hydrates a full history page with fixed batch queries', async () => {

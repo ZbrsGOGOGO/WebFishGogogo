@@ -34,6 +34,10 @@ import { ReferralRedemption } from '../../database/entities/referral-redemption.
 import { secretHash } from '../community/community-validation';
 import { assertCommunityWritesEnabled } from '../community/community-write-gate';
 import {
+  validateNewPassword,
+  validateUsernamePassword,
+} from './dto/auth-validation';
+import {
   generateEmailVerificationCode,
   generateRefreshToken,
   hashEmailVerificationCode,
@@ -87,6 +91,11 @@ export interface AccountRegisterInput {
 export interface AccountLoginInput {
   username: string;
   password: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
 }
 
 export interface VerifyEmailInput {
@@ -823,6 +832,57 @@ export class AuthService {
       );
       await manager.getRepository(AuthRefreshToken).update(
         { sessionId: In(ids), status: 'active' },
+        { status: 'revoked', revokedAt: now },
+      );
+    });
+  }
+
+  async changePassword(
+    userId: string,
+    input: ChangePasswordInput,
+    metadata: AuthRequestMetadata = {},
+  ): Promise<void> {
+    const now = new Date();
+    await this.rateLimits.assertPasswordChangeAllowed(
+      userId,
+      metadata.ipAddress,
+      now,
+    );
+
+    await this.dataSource.transaction(async (manager) => {
+      const users = manager.getRepository(User);
+      const user = await users.findOne({
+        where: { id: userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!user || user.accountStatus !== 'active') {
+        throw new UnauthorizedException({ code: 'INVALID_SESSION' });
+      }
+      if (!(await verifyPassword(input.currentPassword, user.passwordHash))) {
+        throw new UnauthorizedException({ code: 'CURRENT_PASSWORD_INVALID' });
+      }
+      if (input.currentPassword === input.newPassword) {
+        throw new BadRequestException({ code: 'NEW_PASSWORD_MUST_DIFFER' });
+      }
+
+      const newPassword = user.username
+        ? validateUsernamePassword(input.newPassword, user.username)
+        : validateNewPassword(input.newPassword, user.email);
+      user.passwordHash = await hashPassword(newPassword);
+      user.passwordChangedAt = now;
+      await users.save(user);
+
+      const sessions = await manager.getRepository(AuthSession).find({
+        where: { userId, revokedAt: IsNull() },
+      });
+      if (sessions.length === 0) return;
+      const sessionIds = sessions.map((session) => session.id);
+      await manager.getRepository(AuthSession).update(
+        { id: In(sessionIds) },
+        { revokedAt: now, revokeReason: 'password_change' },
+      );
+      await manager.getRepository(AuthRefreshToken).update(
+        { sessionId: In(sessionIds), status: 'active' },
         { status: 'revoked', revokedAt: now },
       );
     });

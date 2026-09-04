@@ -35,6 +35,12 @@ import { Document } from './document.entity';
 import { DeskPlant } from './desk-plant.entity';
 import { DeskPlantCycle } from './desk-plant-cycle.entity';
 import { DeskPlantRewardClaim } from './desk-plant-reward-claim.entity';
+import {
+  DirectConversation,
+  DirectConversationMember,
+  DirectMessage,
+  DirectMessageReport,
+} from './direct-message.entity';
 import { EnergyState } from './energy-state.entity';
 import { EmailVerification } from './email-verification.entity';
 import { CropDefinition } from './crop-definition.entity';
@@ -151,6 +157,10 @@ export {
   DeskPlant,
   DeskPlantCycle,
   DeskPlantRewardClaim,
+  DirectConversation,
+  DirectConversationMember,
+  DirectMessage,
+  DirectMessageReport,
   EnergyState,
   EmailVerification,
   CropDefinition,
@@ -304,6 +314,10 @@ export const entities = [
   DeskPlant,
   DeskPlantCycle,
   DeskPlantRewardClaim,
+  DirectConversation,
+  DirectConversationMember,
+  DirectMessage,
+  DirectMessageReport,
   FriendEncouragement,
   FriendRequest,
   Friendship,

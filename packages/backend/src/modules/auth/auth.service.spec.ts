@@ -349,6 +349,88 @@ describe('AuthService community account flow', () => {
     });
   });
 
+  it('changes a verified current password and atomically revokes every device', async () => {
+    const first = await service.registerAccount(accountRegistration('password_user'));
+    const second = await service.loginAccount({
+      username: 'password_user',
+      password: PASSWORD,
+    });
+    const user = await dataSource.getRepository(User).findOneByOrFail({
+      usernameNormalized: 'password_user',
+    });
+    user.passwordChangedAt = new Date('2020-01-01T00:00:00.000Z');
+    await dataSource.getRepository(User).save(user);
+
+    await expect(
+      service.changePassword(
+        user.id,
+        {
+          currentPassword: PASSWORD,
+          newPassword: 'Changed-Office#2026',
+        },
+        { ipAddress: '203.0.113.20', userAgent: 'change-password-test' },
+      ),
+    ).resolves.toBeUndefined();
+
+    const updated = await dataSource.getRepository(User).findOneByOrFail({ id: user.id });
+    await expect(passwordUtil.verifyPassword(PASSWORD, updated.passwordHash)).resolves.toBe(false);
+    await expect(
+      passwordUtil.verifyPassword('Changed-Office#2026', updated.passwordHash),
+    ).resolves.toBe(true);
+    expect(updated.passwordChangedAt.getTime()).toBeGreaterThan(
+      new Date('2020-01-01T00:00:00.000Z').getTime(),
+    );
+    const sessions = await dataSource.getRepository(AuthSession).findBy({ userId: user.id });
+    expect(sessions).toHaveLength(2);
+    expect(sessions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: jwtService.decode<{ sid: string }>(first.accessToken).sid,
+          revokeReason: 'password_change',
+        }),
+        expect.objectContaining({
+          id: jwtService.decode<{ sid: string }>(second.accessToken).sid,
+          revokeReason: 'password_change',
+        }),
+      ]),
+    );
+    expect(sessions.every((session) => session.revokedAt instanceof Date)).toBe(true);
+    const refreshTokens = await dataSource.getRepository(AuthRefreshToken).find();
+    expect(refreshTokens).toHaveLength(2);
+    expect(refreshTokens.every((token) => token.status === 'revoked')).toBe(true);
+    await expect(
+      service.loginAccount({ username: 'password_user', password: PASSWORD }),
+    ).rejects.toMatchObject({ response: { code: 'INVALID_CREDENTIALS' } });
+    await expect(
+      service.loginAccount({
+        username: 'password_user',
+        password: 'Changed-Office#2026',
+      }),
+    ).resolves.toMatchObject({ user: { publicId: user.publicId } });
+  });
+
+  it('keeps the credential and sessions unchanged when the current password is wrong', async () => {
+    const first = await service.registerAccount(accountRegistration('wrong_password_user'));
+    const user = await dataSource.getRepository(User).findOneByOrFail({
+      usernameNormalized: 'wrong_password_user',
+    });
+
+    await expect(
+      service.changePassword(user.id, {
+        currentPassword: 'Wrong-Current#2026',
+        newPassword: 'Changed-Office#2026',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'CURRENT_PASSWORD_INVALID' } });
+
+    const unchanged = await dataSource.getRepository(User).findOneByOrFail({ id: user.id });
+    await expect(passwordUtil.verifyPassword(PASSWORD, unchanged.passwordHash)).resolves.toBe(true);
+    await expect(
+      dataSource.getRepository(AuthSession).findOneByOrFail({
+        id: jwtService.decode<{ sid: string }>(first.accessToken).sid,
+      }),
+    ).resolves.toMatchObject({ revokedAt: null });
+  });
+
   it('persists onboarding profile and privacy fields across me and refresh', async () => {
     const pending = await service.register(registration());
     const session = await service.verifyEmail({

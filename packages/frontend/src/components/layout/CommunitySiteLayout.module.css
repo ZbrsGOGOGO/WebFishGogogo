@@ -10,6 +10,8 @@
 .topNav::-webkit-scrollbar { display: none; }
 .topNav a { height: 100%; padding: 0 14px; display: inline-flex; flex: 0 0 auto; align-items: center; border-bottom: 3px solid transparent; color: #bfc8d7; font-size: 13px; font-weight: 700; }
 .topNav a:hover, .topNav a[data-current='true'] { border-bottom-color: #9be36d; color: #fff; background: rgba(255, 255, 255, .05); }
+.unreadBadge { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; color: #fff; background: #df514c; font-size: 10px; font-style: normal; font-weight: 900; line-height: 1; }
+.topNav .unreadBadge { margin-left: 6px; }
 .accountActions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 .sessionState, .accountLink, .loginLink, .noticeLink { max-width: 144px; padding: 7px 9px; overflow: hidden; color: #d4dae4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .registerLink { padding: 8px 12px; border-radius: 9px; color: #173122; background: #a7e975; font-size: 12px; font-weight: 800; }
@@ -70,10 +72,11 @@
   .leftRail, .rightRail { display: none; }
   .main { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   .mobileDock { position: fixed; z-index: var(--z-nav); right: 10px; bottom: calc(9px + env(safe-area-inset-bottom)); left: 10px; min-height: 58px; padding: 5px; display: flex; align-items: stretch; justify-content: space-around; border: 1px solid rgba(255, 255, 255, .12); border-radius: 17px; background: rgba(32, 40, 58, .96); box-shadow: 0 14px 36px rgba(20, 26, 39, .32); backdrop-filter: blur(18px); }
-  .mobileDock a { min-width: 52px; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 12px; color: #9eabc0; }
+  .mobileDock a { position: relative; min-width: 52px; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 12px; color: #9eabc0; }
   .mobileDock a > span { font-size: 13px; font-weight: 900; }
   .mobileDock small { font-size: 9px; }
   .mobileDock a[data-current='true'] { color: #21352a; background: #a7e975; }
+  .mobileDock .unreadBadge { position: absolute; top: 3px; left: calc(50% + 7px); min-width: 16px; height: 16px; padding-inline: 4px; font-size: 9px; }
 }
 
 @media (max-width: 430px) {

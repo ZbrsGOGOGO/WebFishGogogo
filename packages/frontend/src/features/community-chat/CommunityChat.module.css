@@ -389,6 +389,259 @@ div.error p {
   font-size: 12px;
 }
 
+.directLayout {
+  min-height: 680px;
+  display: grid;
+  grid-template-columns: minmax(250px, 310px) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.conversationSidebar {
+  min-width: 0;
+  padding: 14px;
+  border-right: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+}
+
+.conversationSidebarHeader,
+.directConversationHeader,
+.directComposerActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.conversationSidebarHeader {
+  min-height: 42px;
+  margin-bottom: 8px;
+}
+
+.conversationSidebarHeader a,
+.directConversationHeader a {
+  color: var(--color-brand-strong);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.conversationList {
+  display: grid;
+  gap: 5px;
+}
+
+.conversationList > a {
+  min-width: 0;
+  min-height: 64px;
+  padding: 9px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  border-radius: 12px;
+  color: var(--color-text);
+}
+
+.conversationList > a:hover,
+.conversationList > a[aria-current='page'] {
+  background: var(--color-brand-soft);
+}
+
+.conversationList > a > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+}
+
+.conversationList small {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversationList > a > b {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--color-danger);
+  font-size: 10px;
+}
+
+.directAvatar {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--color-surface);
+  font-size: 20px;
+}
+
+.directConversation {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.directConversation > :global(.empty-state) {
+  align-self: center;
+}
+
+.directConversationHeader {
+  min-height: 70px;
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.directConversationHeader > div {
+  min-width: 0;
+  display: grid;
+}
+
+.directConversationHeader small {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.directMessageScroller {
+  min-height: 460px;
+  max-height: 64vh;
+  padding: 18px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, var(--color-surface-2), var(--color-surface));
+}
+
+.directWelcome {
+  margin: 40px auto;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.directMessageList {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  list-style: none;
+}
+
+.directMessageList > li {
+  width: min(78%, 620px);
+  padding: 10px 12px;
+  justify-self: start;
+  border: 1px solid var(--color-border);
+  border-radius: 5px 15px 15px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.directMessageList > li[data-mine='true'] {
+  justify-self: end;
+  border-color: color-mix(in srgb, var(--color-brand) 20%, var(--color-border));
+  border-radius: 15px 5px 15px 15px;
+  background: var(--color-brand-soft);
+}
+
+.directMessageList > li[data-visibility]:not([data-visibility='visible']) {
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+}
+
+.directMessageList > li > div,
+.directMessageList footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.directMessageList span,
+.directMessageList time {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.directMessageList p {
+  margin: 6px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.directMessageList blockquote {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
+  font-size: 11px;
+}
+
+.directMessageList footer {
+  justify-content: flex-end;
+}
+
+.directMessageList footer button {
+  padding: 3px 6px;
+  border: 0;
+  color: var(--color-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.directOutbox {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.directOutbox article {
+  width: min(78%, 620px);
+  padding: 9px 11px;
+  display: grid;
+  justify-self: end;
+  gap: 4px;
+  border: 1px dashed var(--color-border);
+  border-radius: 14px 5px 14px 14px;
+  background: var(--color-surface-2);
+}
+
+.directOutbox article[data-state='failed'] {
+  border-color: var(--color-danger);
+}
+
+.directOutbox p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.directOutbox span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.directComposer {
+  padding: 14px 18px 16px;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.directComposerActions small {
+  color: var(--color-text-muted);
+}
+
 .experienceNav a:focus-visible,
 .primaryLink:focus-visible,
 .messageActions button:focus-visible,
@@ -423,6 +676,10 @@ div.error p {
     min-height: 440px;
     max-height: 62vh;
   }
+
+  .directLayout {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 560px) {
@@ -455,6 +712,35 @@ div.error p {
 
   .messageActions button {
     min-height: 40px;
+  }
+
+  .directLayout {
+    min-height: auto;
+    display: block;
+  }
+
+  .conversationSidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .conversationList {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .conversationList > a {
+    min-width: 190px;
+  }
+
+  .directMessageScroller {
+    min-height: 52vh;
+    max-height: none;
+  }
+
+  .directMessageList > li,
+  .directOutbox article {
+    width: 88%;
   }
 }
 

@@ -126,7 +126,7 @@ const systems = [
     mark: '友',
     title: '好友',
     eyebrow: '同事关系',
-    description: '支持邀请、投喂与成绩分享，先完成隐私、拉黑与举报能力。',
+    description: '支持精确查找、好友申请、实时私聊、拉黑与举报。',
     path: '/friends',
     available: COMMUNITY_FEATURE_FLAGS.friends,
     tone: 'cyan',

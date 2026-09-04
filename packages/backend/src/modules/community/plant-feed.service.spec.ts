@@ -38,6 +38,7 @@ describe('DeskPlantService and FeedService integration', () => {
   });
 
   beforeEach(async () => {
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     now = new Date('2026-08-22T00:00:00Z');
     dataSource = await createLocalDevDataSource();
     const policy = new RelationshipPolicyService();
@@ -164,6 +165,47 @@ describe('DeskPlantService and FeedService integration', () => {
 
     const farm = await plants.overview(bob.id);
     expect(farm.pendingEncouragements).toBe(1);
+  });
+
+  it('requires a verified sender for friend feed only when verification is enabled', async () => {
+    const [alice, bob] = await Promise.all([
+      activeUser('verified-feed-alice@example.com', 'Feed Alice'),
+      activeUser('verified-feed-bob@example.com', 'Feed Bob'),
+    ]);
+    const request = await relationships.sendRequest(
+      alice.id,
+      bob.publicId,
+      'verified-feed-friend-request',
+    );
+    await relationships.accept(
+      bob.id,
+      request.requestId!,
+      'verified-feed-friend-accept',
+    );
+
+    process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'true';
+    await expect(
+      feeds.send(
+        alice.id,
+        bob.publicId,
+        'coffee',
+        'unverified-feed-attempt',
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'SOCIAL_VERIFICATION_REQUIRED' },
+    });
+    expect(await dataSource.getRepository(FriendEncouragement).count()).toBe(0);
+
+    alice.socialVerificationStatus = 'verified';
+    await dataSource.getRepository(User).save(alice);
+    await expect(
+      feeds.send(
+        alice.id,
+        bob.publicId,
+        'coffee',
+        'verified-feed-attempt',
+      ),
+    ).resolves.toMatchObject({ event: { type: 'coffee' } });
   });
 
   it('persists farm tool and skill upgrades behind version checks', async () => {

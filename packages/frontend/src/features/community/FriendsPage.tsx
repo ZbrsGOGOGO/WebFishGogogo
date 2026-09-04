@@ -7,6 +7,7 @@ import {
 } from 'react';
 import { Link } from 'react-router-dom';
 
+import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import {
   communityProfileApi,
   communityRelationshipsApi,
@@ -35,7 +36,8 @@ const TAB_LABELS: Array<{ id: FriendsTab; label: string }> = [
 ];
 
 function looksLikePrivateIdentifier(value: string): boolean {
-  return value.includes('@') || /^\+?[\d\s()-]{6,}$/.test(value);
+  const withoutUsernamePrefix = value.startsWith('@') ? value.slice(1) : value;
+  return withoutUsernamePrefix.includes('@') || /^\+?[\d\s()-]{6,}$/.test(value);
 }
 
 export function CommunityFriendsPage(): JSX.Element {
@@ -48,6 +50,8 @@ export function CommunityFriendsPage(): JSX.Element {
   const [friendLimit, setFriendLimit] = useState(200);
   const [dailySent, setDailySent] = useState(0);
   const [dailyLimit, setDailyLimit] = useState(0);
+  const [nextCursors, setNextCursors] = useState<Partial<Record<FriendsTab, string | null>>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
   const [query, setQuery] = useState('');
   const [searchResult, setSearchResult] = useState<CommunityPublicProfile | null>(null);
   const [searching, setSearching] = useState(false);
@@ -69,12 +73,18 @@ export function CommunityFriendsPage(): JSX.Element {
         communityRelationshipsApi.listBlocks(),
       ]);
       setFriends(friendPage.items ?? []);
-      setFriendLimit(friendPage.limit ?? 200);
+      setFriendLimit(friendPage.friendLimit ?? 200);
       setIncoming(incomingPage.items ?? []);
       setOutgoing(outgoingPage.items ?? []);
       setBlocks(blockPage.items ?? []);
       setDailySent(outgoingPage.dailySent ?? 0);
       setDailyLimit(outgoingPage.dailyLimit ?? 0);
+      setNextCursors({
+        friends: friendPage.nextCursor ?? null,
+        incoming: incomingPage.nextCursor ?? null,
+        outgoing: outgoingPage.nextCursor ?? null,
+        blocked: blockPage.nextCursor ?? null,
+      });
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '好友数据加载失败'));
     } finally {
@@ -82,31 +92,60 @@ export function CommunityFriendsPage(): JSX.Element {
     }
   }, []);
 
+  async function loadMore(): Promise<void> {
+    const cursor = nextCursors[tab];
+    if (!cursor) return;
+    setLoadingMore(true);
+    setError(undefined);
+    try {
+      if (tab === 'friends') {
+        const page = await communityRelationshipsApi.listFriends(cursor);
+        setFriends((current) => [...current, ...(page.items ?? [])]);
+        setNextCursors((current) => ({ ...current, friends: page.nextCursor ?? null }));
+      } else if (tab === 'blocked') {
+        const page = await communityRelationshipsApi.listBlocks(cursor);
+        setBlocks((current) => [...current, ...(page.items ?? [])]);
+        setNextCursors((current) => ({ ...current, blocked: page.nextCursor ?? null }));
+      } else {
+        const page = await communityRelationshipsApi.listRequests(tab, cursor);
+        if (tab === 'incoming') setIncoming((current) => [...current, ...(page.items ?? [])]);
+        else setOutgoing((current) => [...current, ...(page.items ?? [])]);
+        setNextCursors((current) => ({ ...current, [tab]: page.nextCursor ?? null }));
+      }
+    } catch (requestError) {
+      setError(communityRequestErrorMessage(requestError, '更多好友数据加载失败'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   useEffect(() => {
     void load();
   }, [load]);
 
   async function search(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    const publicId = query.trim();
+    const identifier = query.trim();
     setSearchResult(null);
     setSearchError(undefined);
     setNotice(undefined);
-    if (!publicId) {
-      setSearchError('请输入完整公开编号');
+    if (!identifier) {
+      setSearchError('请输入账号或完整公开编号');
       return;
     }
-    if (looksLikePrivateIdentifier(publicId)) {
-      setSearchError('只支持精确公开编号，不支持邮箱或手机号搜索');
+    if (looksLikePrivateIdentifier(identifier)) {
+      setSearchError('不支持用邮箱或手机号查找用户');
       return;
     }
-    if (/\s/.test(publicId) || publicId.length > 80) {
-      setSearchError('公开编号格式不正确，请完整复制后重试');
+    if (/\s/.test(identifier) || identifier.length > 80) {
+      setSearchError('账号或公开编号格式不正确');
       return;
     }
     setSearching(true);
     try {
-      setSearchResult(await communityProfileApi.getPublic(publicId));
+      const result = await communityProfileApi.findUser(identifier);
+      if (!result) throw new Error('没有找到该用户');
+      setSearchResult(result);
     } catch (requestError) {
       setSearchError(communityRequestErrorMessage(requestError, '没有找到该公开编号'));
     } finally {
@@ -170,35 +209,39 @@ export function CommunityFriendsPage(): JSX.Element {
     <main className={styles.page}>
       <PageHeader
         title="好友"
-        subtitle="通过完整公开编号建立关系。平台不提供邮箱、手机号反查，也不上传通讯录。"
+        subtitle="用 @账号或公开编号找到同事，发送申请后即可私聊。"
       />
       {socialWriteBlocked ? (
         <CommunitySocialVerificationPrompt action="主动建立好友关系" className={styles.error} />
       ) : null}
 
-      <Card title="精确查找用户">
+      <Card title="查找用户">
         <form className={styles.searchForm} noValidate onSubmit={search}>
           <Input
-            label="公开编号 publicId"
+            label="账号或公开编号"
             value={query}
             autoComplete="off"
-            placeholder="粘贴完整公开编号"
+            placeholder="例如 @xiaoming"
             onChange={(event) => setQuery(event.target.value)}
           />
           <Button type="submit" loading={searching}>查找</Button>
         </form>
-        <p className={styles.muted}>只支持精确 publicId；禁止使用邮箱、手机号或通讯录查找用户。</p>
+        <p className={styles.muted}>账号和公开编号都是精确查找；不支持邮箱、手机号或通讯录反查。</p>
         {searchError ? <p className={styles.error} role="alert">{searchError}</p> : null}
         {searchResult ? (
           <article className={styles.personRow} aria-label="查找结果">
             <span className={styles.smallAvatar} aria-hidden="true">{communityAvatarMark(searchResult.avatarKey)}</span>
             <div>
               <strong>{searchResult.displayName}</strong>
+              {searchResult.username ? <span>@{searchResult.username}</span> : null}
               <small>{searchResult.publicId}</small>
               <Tag>{searchResult.relationship.status === 'friend' ? '已是好友' : '查找结果'}</Tag>
             </div>
             <div className={styles.inlineActions}>
               <Link to={`/users/${encodeURIComponent(searchResult.publicId)}`}>查看主页</Link>
+              {searchResult.relationship.status === 'friend' && COMMUNITY_FEATURE_FLAGS.chat ? (
+                <Link to={`/messages/with/${encodeURIComponent(searchResult.publicId)}`}>发消息</Link>
+              ) : null}
               {searchResult.relationship.canRequest ? (
                 <Button
                   size="sm"
@@ -268,6 +311,9 @@ export function CommunityFriendsPage(): JSX.Element {
             </div>
             <div className={styles.inlineActions}>
               <Link to={`/users/${encodeURIComponent(friend.publicId)}`}>主页</Link>
+              {COMMUNITY_FEATURE_FLAGS.chat ? (
+                <Link to={`/messages/with/${encodeURIComponent(friend.publicId)}`}>发消息</Link>
+              ) : null}
               {dangerButton(
                 `remove:${friend.publicId}`,
                 '删除好友',
@@ -312,6 +358,11 @@ export function CommunityFriendsPage(): JSX.Element {
             <Button variant="secondary" size="sm" loading={busyKey === `unblock:${block.publicId}`} onClick={() => void mutate(`unblock:${block.publicId}`, (key) => communityRelationshipsApi.unblock(block.publicId, key), '已解除拉黑')}>解除拉黑</Button>
           </article>
         )) : null}
+        {!loading && nextCursors[tab] ? (
+          <Button variant="secondary" fullWidth loading={loadingMore} onClick={() => void loadMore()}>
+            加载更多
+          </Button>
+        ) : null}
       </Card>
     </main>
   );

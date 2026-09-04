@@ -1,6 +1,11 @@
 import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 
-import { normalizeEmail, objectBody, validateNewPassword } from './dto/auth-validation';
+import {
+  normalizeEmail,
+  objectBody,
+  validateLoginPassword,
+  validateNewPassword,
+} from './dto/auth-validation';
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -43,6 +48,19 @@ export function parsePasswordReset(body: unknown): {
   }
   return {
     token: raw.token,
+    newPassword: validateNewPassword(raw.newPassword, ''),
+  };
+}
+
+export function parsePasswordChange(body: unknown): {
+  currentPassword: string;
+  newPassword: string;
+} {
+  const raw = strictObject(body, ['currentPassword', 'newPassword']);
+  return {
+    currentPassword: validateLoginPassword(raw.currentPassword),
+    // The service repeats this validation with the account identifier so a new
+    // password cannot equal the username or email either.
     newPassword: validateNewPassword(raw.newPassword, ''),
   };
 }

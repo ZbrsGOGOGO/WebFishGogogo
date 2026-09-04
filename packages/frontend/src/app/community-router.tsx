@@ -49,6 +49,7 @@ import {
 import {
   CommunityChatLobbyPage,
   CommunityChatRoomPage,
+  CommunityDirectMessagesPage,
 } from '../features/community-chat';
 import {
   CommunityNewsAdminPage,
@@ -75,6 +76,9 @@ const TetrisGamePage = lazy(() =>
 );
 const TankBattlePage = lazy(() =>
   import('../features/games/tank/TankBattlePage').then((module) => ({ default: module.TankBattlePage })),
+);
+const SnakeGamePage = lazy(() =>
+  import('../features/games/snake/SnakeGamePage').then((module) => ({ default: module.SnakeGamePage })),
 );
 
 function loading(element: JSX.Element): JSX.Element {
@@ -257,11 +261,19 @@ export function CommunityModeRouter(): JSX.Element {
           <Route element={<RequireCommunityAccount />}>
             <Route path="/community/chat" element={<CommunityChatLobbyPage />} />
             <Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} />
+            {COMMUNITY_FEATURE_FLAGS.friends ? (
+              <>
+                <Route path="/messages" element={<CommunityDirectMessagesPage />} />
+                <Route path="/messages/:conversationId" element={<CommunityDirectMessagesPage />} />
+                <Route path="/messages/with/:friendPublicId" element={<CommunityDirectMessagesPage />} />
+              </>
+            ) : null}
           </Route>
         ) : (
           <Route element={<RequireCommunityAccount />}>
             <Route path="/community/chat" element={<CommunityUnavailablePage system="community" title="固定聊天室尚未开放" />} />
             <Route path="/community/chat/*" element={<CommunityUnavailablePage system="community" title="固定聊天室尚未开放" />} />
+            <Route path="/messages/*" element={<CommunityUnavailablePage system="community" title="私人消息尚未开放" />} />
           </Route>
         )}
         <Route path="/privacy-policy" element={<CommunityPrivacyPolicyPage />} />
@@ -274,7 +286,7 @@ export function CommunityModeRouter(): JSX.Element {
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<CommunityArcadeGameLayout />}>
         <Route index element={loading(<PublicGamesPage />)} />
-        <Route path="snake" element={<Navigate to="/games" replace />} />
+        <Route path="snake" element={loading(<SnakeGamePage />)} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />
         <Route path="tank" element={loading(<TankBattlePage />)} />
         <Route path="three-sum" element={<Navigate to="/games" replace />} />

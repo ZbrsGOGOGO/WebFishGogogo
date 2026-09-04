@@ -2,6 +2,7 @@ export type CommunitySystemId =
   | 'home'
   | 'news'
   | 'community'
+  | 'messages'
   | 'farm'
   | 'towerDefense'
   | 'feed'
@@ -51,7 +52,7 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
 });
 
 /**
- * 正式社区九系统导航。尚未达到发布闸门的系统保留真实路由，但不会渲染成
+ * 正式社区系统导航。尚未达到发布闸门的系统保留真实路由，但不会渲染成
  * 可点击链接，避免把路线图误呈现为已上线功能。
  */
 export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
@@ -78,6 +79,14 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat,
     requiresAccount: false,
     description: '帖子、问答和固定聊天室',
+  },
+  {
+    id: 'messages',
+    label: '私人消息',
+    path: '/messages',
+    enabled: COMMUNITY_FEATURE_FLAGS.chat && COMMUNITY_FEATURE_FLAGS.friends,
+    requiresAccount: true,
+    description: '与好友实时私聊',
   },
   {
     id: 'farm',

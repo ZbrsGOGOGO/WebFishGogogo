@@ -181,7 +181,7 @@ export function CommunityHomePage(): JSX.Element {
           <Link to="/tower-defense"><time>01</time><div><strong>第一次来：带角色守住三波</strong><p>角色自动攻击，你只需移动站位、布塔并在关键时刻释放专注脉冲。</p></div><span>去塔防</span></Link>
           {COMMUNITY_FEATURE_FLAGS.farm ? <Link to="/farm"><time>02</time><div><strong>每天来：点一下照料绿植</strong><p>成熟后收获，再自动开始下一轮，进度离线继续。</p></div><span>去农场</span></Link> : null}
           <Link to="/tools"><time>03</time><div><strong>工作时：常用工具随手打开</strong><p>站点不只用来玩，也能处理日常的小任务。</p></div><span>工具箱</span></Link>
-          <Link to="/games"><time>04</time><div><strong>想放松：玩一局经典小游戏</strong><p>俄罗斯方块和坦克大战，随开随停，还能挑战排行榜。</p></div><span>游戏厅</span></Link>
+          <Link to="/games"><time>04</time><div><strong>想放松：玩一局经典小游戏</strong><p>贪食蛇、俄罗斯方块和坦克大战，随开随停。</p></div><span>游戏厅</span></Link>
         </div>
       </section>
     </main>

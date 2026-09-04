@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
+  CommunityApiError,
   communityAccountApi,
   communityAuthApi,
   createCommunityIdempotencyKey,
@@ -11,6 +12,7 @@ import {
   type CommunityDeviceSession,
 } from '../../api/community';
 import { Button, Card, EmptyState, Input, PageHeader, Tag } from '../../components/ui';
+import { validateCommunityPassword } from '../community-auth/validation';
 import styles from './CommunityPages.module.css';
 import { communityRequestErrorMessage } from './request-error';
 
@@ -24,11 +26,25 @@ function hasDeletionRequest(deletion: CommunityAccountDeletion | null): boolean 
   return Boolean(deletion && !['none', 'cancelled'].includes(deletion.status));
 }
 
+function passwordChangeErrorMessage(error: unknown): string {
+  if (error instanceof CommunityApiError) {
+    const code = error.body && typeof error.body === 'object' && 'code' in error.body
+      ? (error.body as { code?: unknown }).code
+      : undefined;
+    if (code === 'CURRENT_PASSWORD_INVALID') return '当前密码不正确';
+    if (code === 'NEW_PASSWORD_MUST_DIFFER') return '新密码不能与当前密码相同';
+    if (error.status === 429) return '尝试次数过多，请稍后再试';
+    if (error.status === 401) return '登录状态已失效，请重新登录后修改';
+  }
+  return communityRequestErrorMessage(error, '密码修改失败');
+}
+
 export function CommunityAccountSecurityPage(): JSX.Element {
   const navigate = useNavigate();
   const user = useCommunityAuthStore((state) => state.user);
   const updateUser = useCommunityAuthStore((state) => state.updateUser);
   const logoutAll = useCommunityAuthStore((state) => state.logoutAll);
+  const resetSession = useCommunityAuthStore((state) => state.reset);
   const deletionKey = useRef<string>();
   const [sessions, setSessions] = useState<CommunityDeviceSession[]>([]);
   const [deletion, setDeletion] = useState<CommunityAccountDeletion | null>(null);
@@ -38,6 +54,14 @@ export function CommunityAccountSecurityPage(): JSX.Element {
   const [notice, setNotice] = useState<string>();
   const [confirmDeletion, setConfirmDeletion] = useState(false);
   const [confirmation, setConfirmation] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordErrors, setPasswordErrors] = useState<{
+    currentPassword?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+  }>({});
 
   useEffect(() => {
     let active = true;
@@ -79,6 +103,37 @@ export function CommunityAccountSecurityPage(): JSX.Element {
       }
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '退出设备失败'));
+    } finally {
+      setBusy(undefined);
+    }
+  }
+
+  async function changePassword(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    const nextErrors = {
+      currentPassword: currentPassword ? undefined : '请输入当前密码',
+      newPassword: validateCommunityPassword(newPassword) ?? (
+        newPassword === currentPassword
+          ? '新密码不能与当前密码相同'
+          : undefined
+      ),
+      confirmPassword: newPassword === confirmPassword ? undefined : '两次输入的新密码不一致',
+    };
+    setPasswordErrors(nextErrors);
+    if (Object.values(nextErrors).some(Boolean)) return;
+
+    setBusy('password-change');
+    setError(undefined);
+    setNotice(undefined);
+    try {
+      await communityAuthApi.changePassword({ currentPassword, newPassword });
+      resetSession();
+      navigate('/login', {
+        replace: true,
+        state: { passwordChanged: true },
+      });
+    } catch (requestError) {
+      setError(passwordChangeErrorMessage(requestError));
     } finally {
       setBusy(undefined);
     }
@@ -166,6 +221,42 @@ export function CommunityAccountSecurityPage(): JSX.Element {
       />
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
+      <Card title="修改密码">
+        <form className={styles.form} noValidate onSubmit={changePassword}>
+          <p className={styles.muted}>修改后会立即退出所有设备，需要使用新密码重新登录。</p>
+          <Input
+            label="当前密码"
+            type="password"
+            name="currentPassword"
+            autoComplete="current-password"
+            value={currentPassword}
+            required
+            error={passwordErrors.currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+          <Input
+            label="新密码"
+            type="password"
+            name="newPassword"
+            autoComplete="new-password"
+            value={newPassword}
+            required
+            error={passwordErrors.newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+          <Input
+            label="确认新密码"
+            type="password"
+            name="confirmPassword"
+            autoComplete="new-password"
+            value={confirmPassword}
+            required
+            error={passwordErrors.confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+          />
+          <Button type="submit" loading={busy === 'password-change'}>更新密码并退出全部设备</Button>
+        </form>
+      </Card>
       <Card
         title="登录设备"
         headerActions={<Button variant="secondary" size="sm" onClick={() => void logoutAll()}>退出全部设备</Button>}
