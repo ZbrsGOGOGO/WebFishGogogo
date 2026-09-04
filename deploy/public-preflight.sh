@@ -81,6 +81,10 @@ printf '%s\n' "$PUBLIC_BUILD_SECTION" |
   grep -Fq 'test "$VITE_SITE_MODE" = public' ||
   fail "public-build must reject non-public VITE_SITE_MODE values"
 
+grep -Fq 'location = /games {' "$ROOT_DIR/deploy/public.nginx.conf" &&
+grep -Fq 'location = /games/ {' "$ROOT_DIR/deploy/public.nginx.conf" ||
+  fail "public Nginx must keep both game-catalog URLs in the SPA"
+
 for public_route in \
   /tower-defense \
   /ledou \

@@ -368,6 +368,9 @@ grep -Fq 'proxy_set_header Upgrade $http_upgrade' \
   fail "community Nginx must forward WebSocket Upgrade"
 grep -Fq 'location /api/' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "community Nginx must have a deny-by-default /api fallback"
+grep -Fq 'location = /games {' "$ROOT_DIR/deploy/community.nginx.conf" &&
+grep -Fq 'location = /games/ {' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "community Nginx must keep both game-catalog URLs in the SPA"
 if grep -E '^    location ~ .*\b(documents|reading|memo|preferences|tools|skins)\b' \
   "$ROOT_DIR/deploy/community.nginx.conf" >/dev/null; then
   fail "legacy private APIs must not appear in the community allowlist"
