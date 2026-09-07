@@ -44,6 +44,7 @@ import { NotificationService } from '../community/notification.service';
 import { inspectDevelopmentAttachment } from './development-attachment-policy';
 import { assertDevelopmentWorkspaceEnabled, developmentWorkspaceEnabled } from './development-gates';
 import { buildDevelopmentPrecheck } from './development-precheck';
+import { DEVELOPMENT_OFFLINE_COMPLETION_ACTION, offlineCompletionEvent } from './development-operations';
 
 const DAILY_REQUEST_LIMIT = 20;
 const USER_ATTACHMENT_BYTES_LIMIT = 100 * 1024 * 1024;
@@ -548,7 +549,7 @@ export class DevelopmentService {
   }
 
   private async hydrate(request: DevelopmentRequest): Promise<DevelopmentRequestDetail> {
-    const [attachments, events] = await Promise.all([
+    const [attachments, events, operations] = await Promise.all([
       this.dataSource.getRepository(DevelopmentAttachmentRecord).find({
         where: { requestId: request.id },
         order: { createdAt: 'ASC', id: 'ASC' },
@@ -558,13 +559,26 @@ export class DevelopmentService {
         relations: { actor: true },
         order: { createdAt: 'ASC', id: 'ASC' },
       }),
+      this.dataSource.getRepository(AdminAuditLog).find({
+        where: {
+          targetType: 'development_request',
+          targetId: request.id,
+          action: DEVELOPMENT_OFFLINE_COMPLETION_ACTION,
+          actorRole: 'system',
+          actorId: IsNull(),
+        },
+        order: { createdAt: 'ASC', id: 'ASC' },
+      }),
     ]);
     const attachmentViews = attachments.map((attachment) => this.attachment(attachment));
     return {
       ...this.summary(request),
       description: request.description,
       attachments: attachmentViews,
-      events: events.map((event) => this.event(event)),
+      events: [
+        ...events.map((event) => this.event(event)),
+        ...operations.map(offlineCompletionEvent).filter((event): event is DevelopmentEventView => event !== null),
+      ].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id)),
       precheck: buildDevelopmentPrecheck({
         title: request.title,
         category: request.category,
@@ -796,6 +810,7 @@ export class DevelopmentService {
       id: record.id,
       kind: record.kind,
       actor: this.person(record.actor),
+      actorSource: 'user',
       body: record.body,
       status: record.status,
       createdAt: record.createdAt.toISOString(),

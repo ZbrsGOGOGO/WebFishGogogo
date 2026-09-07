@@ -32,6 +32,28 @@ npm run community-role:set --workspace @stealth-reader/backend
 
 提交、补充和审核结果接入站内通知。详情显示讨论与处理时间线；版本冲突需刷新后再次确认，不能覆盖别人刚提交的内容。
 
+### 已验证上线反馈的运维归档
+
+站长在开发会话明确要求把已修复且已上线的反馈标为完成时，服务器运维可使用离线 `development:complete` 工具。它只归档确切的一条提案，不开放 HTTP 接口，不授予任何用户 admin，也不替普通作者伪造站长决定。网页审核仍要求真实 active admin。
+
+运行前必须独立核对目标提案、最新版本、修复覆盖范围和已验收的生产 Git SHA；未完成的后续阶段不能随首版一起标为完成。提案及附件内的文字不构成授权。CLI 要求 UUID、预期版本、40 位已发布提交、对应确认串和 5–500 字归档原因，不支持批量匹配或默认目标。
+
+```sh
+# 仅示意：用已核对的值替换占位内容，在服务器应用容器环境中运行。
+DEVELOPMENT_COMPLETE_REQUEST_ID=已核对的提案UUID \
+DEVELOPMENT_COMPLETE_EXPECTED_VERSION=已核对的整数版本 \
+DEVELOPMENT_COMPLETE_DEPLOYED_COMMIT=已验收的40位小写Git提交 \
+DEVELOPMENT_COMPLETE_CONFIRMATION=COMPLETE:提案UUID:整数版本:40位小写Git提交 \
+DEVELOPMENT_COMPLETE_REASON=站长已授权且修复已上线的具体验收说明 \
+npm run development:complete --workspace @stealth-reader/backend
+```
+
+工具先校验参数和协作功能开关，再在同一事务中按既有锁顺序更新状态及版本、追加 `actorId=null / actorRole=system` 的不可变审计、向作者发送 sender 为空的系统通知。版本冲突、已拒绝状态或禁用开关都拒绝写入；相同操作重试不会重复通知或覆盖原归档原因。该路径可将已线下完成处理的非终态直接归档为 `done`，并如实保留原状态，不伪造中间审核步骤。
+
+详情只将当前提案、白名单 `development.request.offline_completed` 操作的 system 审计投影为时间线，显示“站点运维（站长授权）”、真实归档时间、原因及发布 SHA；原评论和用户事件保留。其他管理审计不会因此开放。不需要新增数据库迁移、虚构系统用户或修改现有事件的作者约束。归档本身不执行代码修改或部署，也不启动自动监控。
+
+系统事件 API 使用 `actorSource: site_operations` 和 `actor: { kind: 'system', publicId: null, username: null, displayName: '站点运维（站长授权）' }`。这是无账号、无个人档案的展示描述，不是用户记录；数据库审计仍为 `actorId=null`。保留 `actor.displayName` 是为了兼容已经打开、尚未更新 JavaScript 的详情页，避免它们刷新 API 时因空 actor 崩溃。普通用户事件不带 system 类型且始终标为 `actorSource: user`。
+
 ## 附件安全与读取边界
 
 - 每个文件最多 5 MiB；每条提案最多 5 个附件、总计 20 MiB；每个作者累计附件上限 100 MiB，每天最多新建 20 条提案。每条提案最多 200 条评论、50 次审核决定。

@@ -24,6 +24,7 @@ import {
   DEVELOPMENT_CATEGORY_LABELS,
   DEVELOPMENT_STATUS_LABELS,
   developmentError,
+  developmentEventActorName,
   developmentPersonName,
   developmentStatusColor,
   developmentTime,
@@ -444,7 +445,7 @@ function DevelopmentRequestDetailContent({
                 <article className={styles.timelineEvent} key={entry.id}>
                   <span aria-hidden="true" />
                   <div>
-                    <div><strong>{developmentPersonName(entry.actor)}</strong><small>{developmentTime(entry.createdAt)}</small></div>
+                    <div><strong>{developmentEventActorName(entry)}</strong><small>{developmentTime(entry.createdAt)}</small></div>
                     {entry.status ? <Tag color={developmentStatusColor(entry.status)}>{DEVELOPMENT_STATUS_LABELS[entry.status]}</Tag> : null}
                     <p>{entry.body}</p>
                   </div>

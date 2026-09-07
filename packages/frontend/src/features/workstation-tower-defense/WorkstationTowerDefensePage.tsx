@@ -1,50 +1,26 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type JSX,
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 
-import { Button, Card, PageHeader, Tag } from '../../components/ui';
 import { shouldIgnoreGameKeyboard } from '../games/game-input';
 import {
-  HERO_MAX_LEVEL,
-  TOWER_DEFINITIONS,
-  TOWER_DEFENSE_CORE_HP,
-  TOWER_DEFENSE_HEIGHT,
-  TOWER_DEFENSE_PATH,
-  TOWER_DEFENSE_WAVES,
-  TOWER_DEFENSE_WIDTH,
-  TOWER_MAX_LEVEL,
-  TOWER_SLOTS,
-  WAVE_NAMES,
-  buildTower,
-  createTowerDefenseState,
-  heroUpgradeCost,
-  moveTowerDefenseHero,
-  pauseTowerDefense,
-  resumeTowerDefense,
-  sellTower,
-  startNextTowerDefenseWave,
-  startTowerDefense,
-  stepTowerDefense,
-  towerUpgradeCost,
-  triggerFocusPulse,
-  upgradeTower,
-  upgradeTowerDefenseHero,
-  type TowerDefenseDirection,
-  type TowerDefenseState,
-  type TowerType,
+  HERO_MAX_LEVEL, TOWER_DEFINITIONS, TOWER_DEFENSE_CORE_HP, TOWER_DEFENSE_HEIGHT,
+  TOWER_DEFENSE_PATH, TOWER_DEFENSE_TICK_MS, TOWER_DEFENSE_WAVES, TOWER_DEFENSE_WIDTH,
+  TOWER_INVENTORY_CAPACITY, TOWER_PLANT_INCOME_INTERVAL, TOWER_PLANT_MAX_LEVEL,
+  TOWER_SHOP_REFRESH_COST, TOWER_SLOTS, WAVE_NAMES,
+  buyTowerShopOffer, createTowerDefenseState, deployInventoryTower, heroUpgradeCost,
+  mergeDeployedTower, moveTowerDefenseHero, pauseTowerDefense, plantIncomePerPayout,
+  plantUpgradeCost, refreshTowerDefenseShop, resumeTowerDefense, sellDeployedTower,
+  sellInventoryTower, startNextTowerDefenseWave, startTowerDefense, stepTowerDefense,
+  triggerFocusPulse, upgradeTowerDefenseHero, upgradeTowerDefensePlant,
+  type TowerDefenseDirection, type TowerDefenseState,
 } from './tower-defense-logic';
+import { OfficeHeroArt, OfficePlantArt, OfficeTowerArt } from './OfficeTowerArt';
 import styles from './WorkstationTowerDefensePage.module.css';
 
-const GAME_TICK_MS = 280;
-const SETTINGS_STORAGE_KEY = 'momo.workstation-tower-defense.settings.v1';
+// The old action-tower-defense record remains untouched and is not comparable.
+const SETTINGS_STORAGE_KEY = 'momo.workstation-tower-defense.settings.v2';
 
-interface LocalSettings {
-  bestScore: number;
+function createNewRun(): TowerDefenseState {
+  return createTowerDefenseState(Math.floor(Math.random() * 0x1_0000_0000));
 }
 
 export interface WorkstationTowerDefenseCharacter {
@@ -52,508 +28,238 @@ export interface WorkstationTowerDefenseCharacter {
   avatarKey?: string;
   avatarMark?: string;
 }
+export interface WorkstationTowerDefensePageProps { character?: WorkstationTowerDefenseCharacter }
 
-export interface WorkstationTowerDefensePageProps {
-  character?: WorkstationTowerDefenseCharacter;
-}
-
-const DIRECTION_KEYS: Record<string, TowerDefenseDirection | undefined> = {
-  ArrowUp: 'up',
-  w: 'up',
-  W: 'up',
-  ArrowDown: 'down',
-  s: 'down',
-  S: 'down',
-  ArrowLeft: 'left',
-  a: 'left',
-  A: 'left',
-  ArrowRight: 'right',
-  d: 'right',
-  D: 'right',
+const DIRECTIONS: Record<string, TowerDefenseDirection | undefined> = {
+  ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down',
+  ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right',
 };
 
-function loadLocalSettings(): LocalSettings {
+function loadBestScore(): number {
   try {
     const raw = globalThis.localStorage?.getItem(SETTINGS_STORAGE_KEY);
-    if (!raw) return { bestScore: 0 };
-    const parsed = JSON.parse(raw) as Partial<LocalSettings>;
-    if (
-      !Number.isInteger(parsed.bestScore) ||
-      (parsed.bestScore ?? -1) < 0 ||
-      (parsed.bestScore ?? 0) > 10_000_000
-    ) throw new Error('invalid tower-defense settings');
-    return { bestScore: parsed.bestScore ?? 0 };
-  } catch {
-    try {
-      globalThis.localStorage?.removeItem(SETTINGS_STORAGE_KEY);
-    } catch {
-      // Storage is optional; the current run remains playable.
-    }
-    return { bestScore: 0 };
-  }
-}
-
-function saveLocalSettings(settings: LocalSettings): void {
-  try {
-    globalThis.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // A blocked quota must not stop an in-progress local game.
-  }
-}
-
-function pointKey(x: number, y: number): string {
-  return `${x}:${y}`;
+    const value: unknown = raw ? JSON.parse(raw)?.bestScore : 0;
+    return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 10_000_000 ? value : 0;
+  } catch { return 0; }
 }
 
 function statusLabel(state: TowerDefenseState): string {
-  if (state.status === 'idle') return '等待开局';
-  if (state.status === 'paused') return '已暂停';
-  if (state.status === 'intermission') return '波次间歇';
-  if (state.status === 'won') return '守卫成功';
-  if (state.status === 'lost') return '核心失守';
-  return '防守中';
+  return { idle: '准备阶段', running: '防守中', paused: '已暂停', intermission: '波次间歇', won: '准点下班', lost: '防线失守' }[state.status];
 }
+type RunAction = (state: TowerDefenseState) => { state: TowerDefenseState; ok: boolean; message: string };
 
-function enemyCountLabel(count: number): string {
-  return `${count} 个目标`;
-}
-
-export function WorkstationTowerDefensePage({
-  character,
-}: WorkstationTowerDefensePageProps = {}): JSX.Element {
-  const [game, setGame] = useState<TowerDefenseState>(createTowerDefenseState);
+export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefensePageProps = {}): JSX.Element {
+  const [game, setGame] = useState<TowerDefenseState>(createNewRun);
+  const gameRef = useRef(game);
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
-  const [announcement, setAnnouncement] = useState('准备好后开始第一波。');
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [hoveredSlot, setHoveredSlot] = useState<number | null>(null);
+  const [showHeroRange, setShowHeroRange] = useState(false);
+  const [announcement, setAnnouncement] = useState('先种绿植，再买三件订书机零件：背包会自动合成可部署的 2 阶塔。');
+  const [actionFailed, setActionFailed] = useState(false);
   const [autoPaused, setAutoPaused] = useState(false);
-  const [settings, setSettings] = useState<LocalSettings>(loadLocalSettings);
+  const [bestScore, setBestScore] = useState(loadBestScore);
+  const [mergeFlash, setMergeFlash] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
-  const previousGameRef = useRef(game);
+  const previousGame = useRef(game);
 
-  const displayName = character?.displayName?.trim() || '游客同事';
+  const name = character?.displayName?.trim() || '游客同事';
   const avatarMark = character?.avatarMark?.trim() || '守';
-  const avatarKey = character?.avatarKey?.trim() || 'guest';
+  const editable = ['idle', 'running', 'intermission'].includes(game.status);
+  const selectedTower = game.towers.find((tower) => tower.slotIndex === selectedSlot);
+  const selectedItem = game.inventory.find((item) => item.id === selectedItemId);
+  const cells = useMemo(() => Array.from({ length: TOWER_DEFENSE_WIDTH * TOWER_DEFENSE_HEIGHT }, (_, index) => ({
+    x: index % TOWER_DEFENSE_WIDTH, y: Math.floor(index / TOWER_DEFENSE_WIDTH),
+  })), []);
+  const pathIndexes = useMemo(() => new Map(TOWER_DEFENSE_PATH.map((point, index) => [`${point.x}:${point.y}`, index])), []);
+  const slotIndexes = useMemo(() => new Map(TOWER_SLOTS.map((point, index) => [`${point.x}:${point.y}`, index])), []);
 
-  const cells = useMemo(
-    () => Array.from(
-      { length: TOWER_DEFENSE_WIDTH * TOWER_DEFENSE_HEIGHT },
-      (_, index) => ({
-        x: index % TOWER_DEFENSE_WIDTH,
-        y: Math.floor(index / TOWER_DEFENSE_WIDTH),
-      }),
-    ),
-    [],
-  );
-  const pathIndexes = useMemo(
-    () => new Map(TOWER_DEFENSE_PATH.map((point, index) => [pointKey(point.x, point.y), index])),
-    [],
-  );
-  const slotIndexes = useMemo(
-    () => new Map(TOWER_SLOTS.map((point, index) => [pointKey(point.x, point.y), index])),
-    [],
-  );
-  const selectedTower = selectedSlot == null
-    ? undefined
-    : game.towers.find((tower) => tower.slotIndex === selectedSlot);
+  const commit = useCallback((next: TowerDefenseState): void => { gameRef.current = next; setGame(next); }, []);
+  const focusBoard = useCallback((): void => { boardRef.current?.focus({ preventScroll: true }); }, []);
+  function announce(message: string, failed = false): void { setAnnouncement(message); setActionFailed(failed); }
+  function runAction(action: RunAction): boolean {
+    const current = gameRef.current;
+    const result = action(current);
+    if (result.ok) {
+      const before = current.inventory.reduce((sum, item) => sum + (item.tier >= 2 ? 1 : 0), 0);
+      const after = result.state.inventory.reduce((sum, item) => sum + (item.tier >= 2 ? 1 : 0), 0);
+      if (after > before || /合成/.test(result.message)) setMergeFlash((value) => value + 1);
+      commit(result.state);
+    }
+    announce(result.message, !result.ok);
+    return result.ok;
+  }
 
-  const focusBoard = useCallback(() => {
-    boardRef.current?.focus({ preventScroll: true });
-  }, []);
+  const moveHero = useCallback((direction: TowerDefenseDirection): void => { commit(moveTowerDefenseHero(gameRef.current, direction)); focusBoard(); }, [commit, focusBoard]);
+  const activatePulse = useCallback((): void => {
+    const current = gameRef.current;
+    const next = triggerFocusPulse(current);
+    commit(next);
+    focusBoard();
+    if (next !== current) { setAnnouncement('专注脉冲！守卫正在清理附近的工作洪流。'); setActionFailed(false); }
+  }, [commit, focusBoard]);
+  const togglePause = useCallback((): void => {
+    setAutoPaused(false);
+    const current = gameRef.current;
+    commit(current.status === 'paused' ? resumeTowerDefense(current) : pauseTowerDefense(current));
+    focusBoard();
+  }, [commit, focusBoard]);
 
   useEffect(() => {
     if (game.status !== 'running') return undefined;
-    const timer = window.setInterval(() => {
-      setGame((current) => stepTowerDefense(current));
-    }, GAME_TICK_MS);
+    const timer = window.setInterval(() => commit(stepTowerDefense(gameRef.current)), TOWER_DEFENSE_TICK_MS);
     return () => window.clearInterval(timer);
-  }, [game.status]);
-
+  }, [commit, game.status]);
   useEffect(() => {
-    const previous = previousGameRef.current;
-    if (game.coreHp < previous.coreHp) {
-      setAnnouncement(`核心工位受到冲击，剩余 ${game.coreHp} 点耐久。`);
-    }
+    const previous = previousGame.current;
+    if (game.coreHp < previous.coreHp) announce(`有工作突破防线！核心剩余 ${game.coreHp} 点耐久。`, true);
     if (game.status !== previous.status) {
-      if (game.status === 'intermission') setAnnouncement(`第 ${game.wave} 波已守住，可以布置后续防线。`);
-      if (game.status === 'won') setAnnouncement('三波工位攻势全部化解，守卫成功。');
-      if (game.status === 'lost') setAnnouncement('核心工位失守，可以重新挑战。');
+      if (game.status === 'intermission') announce(`第 ${game.wave} 波守住了。可以整理背包、合成和部署；间歇期间不产币。`);
+      if (game.status === 'won') announce('三波全部守住，今天也要准点下班！');
+      if (game.status === 'lost') announce('这次防线失守了。试试更早部署塔，或将守卫移到工作堆积的位置。', true);
     }
-    previousGameRef.current = game;
+    previousGame.current = game;
   }, [game]);
-
+  useEffect(() => { if (selectedItemId && !game.inventory.some((item) => item.id === selectedItemId)) setSelectedItemId(null); }, [game.inventory, selectedItemId]);
   useEffect(() => {
-    if (game.status !== 'won' && game.status !== 'lost') return;
-    if (game.score <= settings.bestScore) return;
-    const next = { bestScore: game.score };
-    setSettings(next);
-    saveLocalSettings(next);
-  }, [game.score, game.status, settings.bestScore]);
-
+    if (!['won', 'lost'].includes(game.status) || game.score <= bestScore) return;
+    setBestScore(game.score);
+    try { globalThis.localStorage?.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ bestScore: game.score })); } catch { /* Local storage is optional. */ }
+  }, [bestScore, game.score, game.status]);
   useEffect(() => {
     if (game.status !== 'running') return undefined;
-    const pauseForInterruption = () => {
-      setAutoPaused(true);
-      setGame((current) => pauseTowerDefense(current));
+    const pause = () => {
+      if (gameRef.current.status !== 'running') return;
+      setAutoPaused(true); commit(pauseTowerDefense(gameRef.current));
     };
-    const handleVisibilityChange = () => {
-      if (document.hidden) pauseForInterruption();
-    };
-    window.addEventListener('blur', pauseForInterruption);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      window.removeEventListener('blur', pauseForInterruption);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [game.status]);
-
-  const moveHero = useCallback((direction: TowerDefenseDirection) => {
-    setGame((current) => moveTowerDefenseHero(current, direction));
-  }, []);
-
-  const activatePulse = useCallback(() => {
-    setGame((current) => {
-      const next = triggerFocusPulse(current);
-      if (next !== current) setAnnouncement('工位守卫释放了专注脉冲。');
-      return next;
-    });
-  }, []);
-
+    const hidden = () => { if (document.hidden) pause(); };
+    window.addEventListener('blur', pause); document.addEventListener('visibilitychange', hidden);
+    return () => { window.removeEventListener('blur', pause); document.removeEventListener('visibilitychange', hidden); };
+  }, [commit, game.status]);
   useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (shouldIgnoreGameKeyboard(event.target)) return;
-      const direction = DIRECTION_KEYS[event.key];
-      if (direction && ['idle', 'running', 'intermission'].includes(game.status)) {
-        event.preventDefault();
-        moveHero(direction);
-        return;
-      }
-      if (event.code === 'Space' && game.status === 'running') {
-        event.preventDefault();
-        activatePulse();
-        return;
-      }
-      if (
-        (event.key.toLowerCase() === 'p' || event.key === 'Escape') &&
-        ['running', 'paused', 'intermission'].includes(game.status)
-      ) {
-        event.preventDefault();
-        setAutoPaused(false);
-        setGame((current) => current.status === 'paused'
-          ? resumeTowerDefense(current)
-          : pauseTowerDefense(current));
-      }
+      const state = gameRef.current;
+      const direction = DIRECTIONS[event.key];
+      if (direction && ['idle', 'running', 'intermission'].includes(state.status)) { event.preventDefault(); moveHero(direction); }
+      else if (event.code === 'Space' && state.status === 'running') { event.preventDefault(); activatePulse(); }
+      else if ((event.key.toLowerCase() === 'p' || event.key === 'Escape') && ['running', 'paused', 'intermission'].includes(state.status)) { event.preventDefault(); togglePause(); }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activatePulse, game.status, moveHero]);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activatePulse, moveHero, togglePause]);
 
-  const start = () => {
-    setAutoPaused(false);
-    setGame((current) => startTowerDefense(current));
-    setAnnouncement('第 1 波“零散待办”开始。');
+  function chooseSlot(slot: number): void {
+    setSelectedSlot(slot);
+    if (selectedItem && runAction((state) => deployInventoryTower(state, selectedItem.id, slot))) setSelectedItemId(null);
     focusBoard();
-  };
-
-  const restart = () => {
-    setAutoPaused(false);
-    setSelectedSlot(null);
-    setGame(createTowerDefenseState());
-    setAnnouncement('新的防线已重置，请先布置办公用品塔。');
+  }
+  function chooseItem(itemId: string): void {
+    const item = gameRef.current.inventory.find((entry) => entry.id === itemId);
+    if (!item || item.tier < 2) return;
+    if (selectedItemId === itemId) { setSelectedItemId(null); announce('已取消部署选择。'); return; }
+    setSelectedItemId(itemId); setSelectedSlot(null);
+    announce(`已选择 ${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶，请点击地图上的空塔位部署。`);
+    boardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }
+  function start(): void { setAutoPaused(false); commit(startTowerDefense(gameRef.current)); announce('第一波开始！绿植在战斗时产币，守卫会自动攻击附近目标。'); focusBoard(); }
+  function nextWave(): void {
+    commit(startNextTowerDefenseWave(gameRef.current));
+    announce('下一波开始，守好你的工位！');
     focusBoard();
-  };
-
-  const togglePause = () => {
-    setAutoPaused(false);
-    setGame((current) => current.status === 'paused'
-      ? resumeTowerDefense(current)
-      : pauseTowerDefense(current));
+  }
+  function restart(): void {
+    setAutoPaused(false); setSelectedSlot(null); setSelectedItemId(null); setHoveredSlot(null); commit(createNewRun());
+    announce('新一局已准备好。优先买绿植，再凑齐三件同名零件。');
     focusBoard();
-  };
+  }
 
-  const nextWave = () => {
-    setGame((current) => {
-      const next = startNextTowerDefenseWave(current);
-      if (next !== current) setAnnouncement(`第 ${next.wave} 波“${WAVE_NAMES[next.wave - 1]}”开始。`);
-      return next;
-    });
-    focusBoard();
-  };
+  const intervalSeconds = TOWER_PLANT_INCOME_INTERVAL * TOWER_DEFENSE_TICK_MS / 1000;
+  const secondsUntilIncome = Math.max(0, Math.ceil((TOWER_PLANT_INCOME_INTERVAL - game.plantIncomeTick) * TOWER_DEFENSE_TICK_MS / 1000));
+  const activeEnemies = game.enemies.filter((enemy) => enemy.hp > 0);
+  const currentRangeSlot = hoveredSlot ?? selectedSlot;
+  const rangeTower = currentRangeSlot == null ? undefined : game.towers.find((tower) => tower.slotIndex === currentRangeSlot);
+  const rangeDefinition = selectedItem ? TOWER_DEFINITIONS[selectedItem.type] : rangeTower ? TOWER_DEFINITIONS[rangeTower.type] : undefined;
+  const rangeOrigin = showHeroRange ? game.hero : currentRangeSlot == null ? null : TOWER_SLOTS[currentRangeSlot];
+  const range = showHeroRange ? game.hero.range : rangeDefinition ? rangeDefinition.range + Math.floor(((selectedItem?.tier ?? rangeTower?.level ?? 2) - 1) / 2) : 0;
+  const guidance = game.towers.length > 0 ? '防线就绪 · 战斗中也能购买、合成和布塔'
+    : game.inventory.some((item) => item.tier >= 2) ? '③ 选择背包成品，再点击地图空塔位'
+      : game.plantLevel > 0 ? '② 买三件同名零件，背包自动合成 2 阶塔' : '① 推荐先买一盆绿植，为本局持续赚金币';
 
-  const build = (type: TowerType) => {
-    if (selectedSlot == null) return;
-    setGame((current) => {
-      const next = buildTower(current, selectedSlot, type);
-      setAnnouncement(next === current
-        ? '资源不足，或工位守卫正站在该塔位。'
-        : `${TOWER_DEFINITIONS[type].name}已安装。`);
-      return next;
-    });
-    focusBoard();
-  };
-
-  const improveTower = () => {
-    if (selectedSlot == null) return;
-    setGame((current) => {
-      const next = upgradeTower(current, selectedSlot);
-      setAnnouncement(next === current ? '当前无法升级这座塔。' : '办公用品塔已升级。');
-      return next;
-    });
-    focusBoard();
-  };
-
-  const removeTower = () => {
-    if (selectedSlot == null) return;
-    setGame((current) => {
-      const next = sellTower(current, selectedSlot);
-      if (next !== current) setAnnouncement('已卖出该塔，返还 60% 投入资源。');
-      return next;
-    });
-    focusBoard();
-  };
-
-  const improveHero = () => {
-    setGame((current) => {
-      const next = upgradeTowerDefenseHero(current);
-      setAnnouncement(next === current ? '角色已满级或当前资源不足。' : `工位守卫升到 ${next.hero.level} 级。`);
-      return next;
-    });
-    focusBoard();
-  };
-
-  const activeEnemyCount = game.enemies.filter((enemy) => enemy.hp > 0).length;
-  const waitingEnemyCount = game.spawnQueue.length;
-  const boardLabel = `工位塔防地图，第 ${game.wave} 波，核心耐久 ${game.coreHp}，${enemyCountLabel(activeEnemyCount)}，角色 ${game.hero.level} 级`;
-
-  return (
-    <main className={styles.page}>
-      <PageHeader
-        title="摸鱼升职记"
-        subtitle="工位塔防 · 移动你的唯一守卫，布置办公用品塔，挡住三波工作洪流。"
-        actions={<Tag color={game.status === 'running' ? 'success' : 'neutral'}>{statusLabel(game)}</Tag>}
-      />
-
-      <p className={styles.srStatus} role="status" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </p>
-
-      <section className={styles.layout} aria-label="工位塔防游戏">
-        <Card className={styles.boardCard}>
-          <div className={styles.statusBar} aria-label="当前战局">
-            <span>核心 <strong>{game.coreHp}/{TOWER_DEFENSE_CORE_HP}</strong></span>
-            <span>波次 <strong>{game.wave}/{TOWER_DEFENSE_WAVES}</strong></span>
-            <span>资源 <strong>{game.credits}</strong></span>
-            <span>得分 <strong>{game.score}</strong></span>
+  return <main className={styles.page}>
+    <header className={styles.pageHeader}>
+      <div><span className={styles.eyebrow}>MOMO COMPANY · DESK DEFENSE</span><h1>工位合成塔防<span>午休作战计划</span></h1><p>种点绿，攒点钱，把办公用品拼成你的下班防线。</p></div>
+      <div className={styles.runBadge} data-state={game.status}><i />{statusLabel(game)}<small>3 波短局 · 纯本地</small></div>
+    </header>
+    <div className={styles.layout}>
+      <section className={styles.battlePanel} aria-label="工位塔防战场">
+        <div className={styles.statusBar} aria-label="当前战局">
+          <div><span>核心耐久</span><strong aria-label="核心耐久">{game.coreHp}<small> / {TOWER_DEFENSE_CORE_HP}</small></strong><i style={{ '--value': `${game.coreHp / TOWER_DEFENSE_CORE_HP * 100}%` } as React.CSSProperties} /></div>
+          <div><span>局内金币</span><strong className={styles.gold} aria-label="局内金币">{game.credits}<small> G</small></strong><small>不消耗账号办公币</small></div>
+          <div><span>当前波次</span><strong aria-label="当前波次">{game.wave}<small> / {TOWER_DEFENSE_WAVES}</small></strong><small>{WAVE_NAMES[game.wave - 1]}</small></div>
+          <div><span>本局得分</span><strong aria-label="本局得分">{game.score}</strong><small>已清理 {game.defeated} 项工作</small></div>
+        </div>
+        <div className={styles.deskEdge}><span><i /> {name}的办公桌</span><small>{guidance}</small></div>
+        <div className={styles.boardWrap}>
+          <div className={styles.board} ref={boardRef} tabIndex={0} role="group" aria-label={`工位塔防地图，第 ${game.wave} 波，核心耐久 ${game.coreHp}，${activeEnemies.length} 个目标，角色 ${game.hero.level} 级`}>
+            {cells.map(({ x, y }) => {
+              const key = `${x}:${y}`; const pathIndex = pathIndexes.get(key); const slotIndex = slotIndexes.get(key);
+              const tower = slotIndex == null ? undefined : game.towers.find((entry) => entry.slotIndex === slotIndex);
+              const enemies = pathIndex == null ? [] : activeEnemies.filter((enemy) => enemy.pathIndex === pathIndex);
+              const isHero = game.hero.x === x && game.hero.y === y; const core = pathIndex === TOWER_DEFENSE_PATH.length - 1;
+              const inRange = Boolean(rangeOrigin && range > 0 && Math.abs(rangeOrigin.x - x) + Math.abs(rangeOrigin.y - y) <= range);
+              return <span key={key} className={`${styles.cell} ${pathIndex == null ? styles.floor : styles.path} ${core ? styles.core : ''}`} data-in-range={inRange} aria-hidden={slotIndex == null ? true : undefined}>
+                {pathIndex === 0 ? <span className={styles.entrance}>IN →</span> : null}
+                {core ? <span className={styles.coreDesk}><i /><b>下班</b></span> : null}
+                {pathIndex == null && slotIndex == null && !isHero && ((x === 10 && y === 1) || (x === 0 && y === 7)) ? <OfficePlantArt className={styles.deskPlant} /> : null}
+                {slotIndex != null ? <button type="button" className={styles.towerSlot} data-selected={selectedSlot === slotIndex} data-empty={!tower} data-placement={Boolean(selectedItem)} data-firing={game.effects.some((effect) => effect.from.x === x && effect.from.y === y && effect.source !== 'hero' && effect.source !== 'pulse')} aria-label={tower ? `塔位 ${slotIndex + 1}，${TOWER_DEFINITIONS[tower.type].name} ${tower.level} 阶` : `空塔位 ${slotIndex + 1}`} aria-pressed={selectedSlot === slotIndex} onClick={() => chooseSlot(slotIndex)} onMouseEnter={() => setHoveredSlot(slotIndex)} onMouseLeave={() => setHoveredSlot(null)}>
+                  {tower ? <><OfficeTowerArt kind={tower.type} tier={tower.level} /><small>{tower.level === 3 ? '★★★' : '★★'}</small></> : <><b>＋</b><small>{slotIndex + 1}</small></>}
+                </button> : null}
+                {enemies.slice(0, 2).map((enemy, index) => <span key={enemy.id} className={`${styles.enemy} ${enemy.boss ? styles.boss : ''}`} data-stack={index} data-hit={game.effects.some((effect) => effect.targetEnemyIds.includes(enemy.id))} title={`${enemy.name} · ${enemy.hp}/${enemy.maxHp}`}><i className={styles.enemyPaper}><b>{enemy.boss ? '会' : '!'}</b></i><small style={{ '--value': `${Math.max(0, enemy.hp) / enemy.maxHp * 100}%` } as React.CSSProperties} /></span>)}
+                {enemies.length > 2 ? <b className={styles.enemyCount}>+{enemies.length - 2}</b> : null}
+                {isHero ? <span className={styles.hero} data-avatar={character?.avatarKey || 'guest'} data-pulsing={game.hero.lastPulseTick === game.tick} data-direction={game.hero.direction}><OfficeHeroArt mark={avatarMark} /><b>YOU</b></span> : null}
+              </span>;
+            })}
+            <svg className={styles.battleEffects} viewBox={`0 0 ${TOWER_DEFENSE_WIDTH * 64} ${TOWER_DEFENSE_HEIGHT * 64}`} aria-hidden="true" focusable="false">
+              {game.effects.map((effect) => <g key={effect.id} data-source={effect.source} className={styles.shot}><path d={`M ${effect.from.x * 64 + 32} ${effect.from.y * 64 + 32} L ${effect.to.x * 64 + 32} ${effect.to.y * 64 + 32}`} /><circle cx={effect.to.x * 64 + 32} cy={effect.to.y * 64 + 32} r={effect.source === 'pulse' ? 35 : 11} /></g>)}
+            </svg>
           </div>
-
-          <div className={styles.boardWrap}>
-            <div
-              className={styles.board}
-              ref={boardRef}
-              role="group"
-              tabIndex={0}
-              aria-label={boardLabel}
-            >
-              {cells.map((cell) => {
-                const key = pointKey(cell.x, cell.y);
-                const pathIndex = pathIndexes.get(key);
-                const slotIndex = slotIndexes.get(key);
-                const tower = slotIndex == null
-                  ? undefined
-                  : game.towers.find((entry) => entry.slotIndex === slotIndex);
-                const enemies = pathIndex == null
-                  ? []
-                  : game.enemies.filter((enemy) => enemy.pathIndex === pathIndex && enemy.hp > 0);
-                const heroHere = game.hero.x === cell.x && game.hero.y === cell.y;
-                const isCore = pathIndex === TOWER_DEFENSE_PATH.length - 1;
-                const isEntrance = pathIndex === 0;
-                return (
-                  <span
-                    className={`${styles.cell} ${pathIndex == null ? styles.floor : styles.path} ${isCore ? styles.core : ''}`}
-                    key={key}
-                    aria-hidden={slotIndex == null ? 'true' : undefined}
-                  >
-                    {isEntrance ? <i className={styles.entrance} aria-hidden="true">IN</i> : null}
-                    {isCore ? <i className={styles.coreMark} aria-hidden="true">核</i> : null}
-                    {slotIndex != null ? (
-                      <button
-                        type="button"
-                        className={`${styles.towerSlot} ${tower ? styles.hasTower : ''}`}
-                        data-selected={selectedSlot === slotIndex}
-                        aria-label={tower
-                          ? `塔位 ${slotIndex + 1}，${TOWER_DEFINITIONS[tower.type].name} ${tower.level} 级`
-                          : `空塔位 ${slotIndex + 1}`}
-                        aria-pressed={selectedSlot === slotIndex}
-                        onClick={() => setSelectedSlot(slotIndex)}
-                      >
-                        {tower ? (
-                          <><b>{TOWER_DEFINITIONS[tower.type].mark}</b><small>Lv.{tower.level}</small></>
-                        ) : <b>+</b>}
-                      </button>
-                    ) : null}
-                    {enemies.slice(0, 2).map((enemy, index) => (
-                      <i
-                        key={enemy.id}
-                        className={`${styles.enemy} ${enemy.boss ? styles.boss : ''}`}
-                        data-stack={index}
-                        aria-hidden="true"
-                        title={enemy.name}
-                      >
-                        {enemy.boss ? '会' : '待'}
-                        <span style={{ '--hp': `${Math.max(0, enemy.hp) / enemy.maxHp * 100}%` } as React.CSSProperties} />
-                      </i>
-                    ))}
-                    {enemies.length > 2 ? <b className={styles.enemyCount} aria-hidden="true">+{enemies.length - 2}</b> : null}
-                    {heroHere ? (
-                      <i
-                        className={`${styles.hero} ${styles[game.hero.direction]}`}
-                        data-avatar={avatarKey}
-                        data-pulsing={game.hero.lastPulseTick === game.tick}
-                        aria-hidden="true"
-                      >
-                        <b>{avatarMark}</b>
-                      </i>
-                    ) : null}
-                  </span>
-                );
-              })}
-            </div>
-
-            {['paused', 'won', 'lost'].includes(game.status) ? (
-              <div className={styles.overlay}>
-                {game.status === 'paused' ? (
-                  <>
-                    <strong>{autoPaused ? '已为你自动暂停' : '工位塔防已暂停'}</strong>
-                    <p>{autoPaused ? '窗口失去焦点时，敌人不会继续前进。' : '可以看清防线后再继续。'}</p>
-                    <Button onClick={togglePause}>继续防守</Button>
-                  </>
-                ) : null}
-                {game.status === 'won' || game.status === 'lost' ? (
-                  <>
-                    <span aria-hidden="true">{game.status === 'won' ? '★' : '×'}</span>
-                    <strong>{game.status === 'won' ? '核心工位守住了' : '工作洪流冲进了核心'}</strong>
-                    <p>本局 {game.score} 分，化解 {game.defeated} 个目标 · 本机最高分 {Math.max(settings.bestScore, game.score)}</p>
-                    <Button onClick={restart}>重新挑战</Button>
-                  </>
-                ) : null}
-              </div>
-            ) : null}
-            {game.status === 'idle' ? (
-              <div className={styles.prepareBar} role="status">
-                <div><strong>工位防线准备中</strong><small>先点击“+”塔位安装办公用品塔，再明确开波</small></div>
-                <Button onClick={start}>开始工位塔防</Button>
-              </div>
-            ) : null}
-            {game.status === 'intermission' ? (
-              <div className={styles.intermissionBar} role="status">
-                <div><strong>第 {game.wave} 波已守住</strong><small>可移动角色、建造和升级防御塔</small></div>
-                <Button onClick={nextWave}>开始第 {game.wave + 1} 波</Button>
-              </div>
-            ) : null}
-          </div>
-
-          <div className={styles.mobileControls} aria-label="工位守卫控制">
-            <span />
-            <button type="button" aria-label="向上移动" disabled={!['idle', 'running', 'intermission'].includes(game.status)} onClick={() => { moveHero('up'); focusBoard(); }}>↑</button>
-            <span />
-            <button type="button" aria-label="向左移动" disabled={!['idle', 'running', 'intermission'].includes(game.status)} onClick={() => { moveHero('left'); focusBoard(); }}>←</button>
-            <button type="button" aria-label="向下移动" disabled={!['idle', 'running', 'intermission'].includes(game.status)} onClick={() => { moveHero('down'); focusBoard(); }}>↓</button>
-            <button type="button" aria-label="向右移动" disabled={!['idle', 'running', 'intermission'].includes(game.status)} onClick={() => { moveHero('right'); focusBoard(); }}>→</button>
-            <button
-              type="button"
-              className={styles.pulseButton}
-              aria-label="释放专注脉冲"
-              disabled={game.status !== 'running' || game.hero.pulseCooldown > 0}
-              onClick={() => { activatePulse(); focusBoard(); }}
-            >
-              <b>脉冲</b>
-              <small>{game.hero.pulseCooldown > 0 ? `${Math.ceil(game.hero.pulseCooldown * GAME_TICK_MS / 1000)}s` : '空格'}</small>
-            </button>
-          </div>
-        </Card>
-
-        <aside className={styles.sidePanel}>
-          <Card title="唯一角色" headerActions={<Tag color="brand">Lv.{game.hero.level}</Tag>}>
-            <div className={styles.heroProfile}>
-              <span data-avatar={avatarKey}>{avatarMark}</span>
-              <div><strong>{displayName} · 工位守卫</strong><p>自动攻击范围内最靠前的目标。</p></div>
-            </div>
-            <dl className={styles.heroStats}>
-              <div><dt>执行力</dt><dd>{game.hero.attack}</dd></div>
-              <div><dt>范围</dt><dd>{game.hero.range}</dd></div>
-              <div><dt>脉冲</dt><dd>{game.hero.pulseCooldown > 0 ? '冷却中' : '已就绪'}</dd></div>
-            </dl>
-            <Button
-              variant="secondary"
-              disabled={game.hero.level >= HERO_MAX_LEVEL || game.credits < heroUpgradeCost(game.hero.level) || !['idle', 'running', 'intermission'].includes(game.status)}
-              onClick={improveHero}
-            >
-              {game.hero.level >= HERO_MAX_LEVEL ? '角色已满级' : `升级角色 · ${heroUpgradeCost(game.hero.level)} 资源`}
-            </Button>
-          </Card>
-
-          <Card title="塔位工具箱" headerActions={selectedSlot == null ? undefined : <Tag>塔位 {selectedSlot + 1}</Tag>}>
-            {selectedSlot == null ? (
-              <p className={styles.hint}>点击地图中的“+”塔位，然后选择一种办公用品塔。</p>
-            ) : selectedTower ? (
-              <div className={styles.towerActions}>
-                <div className={styles.selectedTower}>
-                  <span>{TOWER_DEFINITIONS[selectedTower.type].mark}</span>
-                  <div><strong>{TOWER_DEFINITIONS[selectedTower.type].name}</strong><small>Lv.{selectedTower.level} · 已投入 {selectedTower.invested}</small></div>
-                </div>
-                <Button
-                  variant="secondary"
-                  disabled={selectedTower.level >= TOWER_MAX_LEVEL || game.credits < towerUpgradeCost(selectedTower) || !['idle', 'running', 'intermission'].includes(game.status)}
-                  onClick={improveTower}
-                >
-                  {selectedTower.level >= TOWER_MAX_LEVEL ? '已满级' : `升级 · ${towerUpgradeCost(selectedTower)} 资源`}
-                </Button>
-                <Button variant="ghost" disabled={!['idle', 'running', 'intermission'].includes(game.status)} onClick={removeTower}>
-                  卖出 · 返还 {Math.floor(selectedTower.invested * 0.6)}
-                </Button>
-              </div>
-            ) : (
-              <div className={styles.buildList}>
-                {(Object.keys(TOWER_DEFINITIONS) as TowerType[]).map((type) => {
-                  const tower = TOWER_DEFINITIONS[type];
-                  return (
-                    <button type="button" key={type} disabled={game.credits < tower.cost || !['idle', 'running', 'intermission'].includes(game.status)} onClick={() => build(type)}>
-                      <span>{tower.mark}</span>
-                      <div><strong>{tower.name}</strong><small>{tower.description}</small></div>
-                      <b>{tower.cost}</b>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
-
-          <Card title="防守说明">
-            <dl className={styles.keyList}>
-              <div><dt>移动角色</dt><dd>方向键 / WASD</dd></div>
-              <div><dt>专注脉冲</dt><dd>空格键</dd></div>
-              <div><dt>暂停 / 继续</dt><dd>P / Esc</dd></div>
-              <div><dt>本机最高分</dt><dd>{Math.max(settings.bestScore, game.score)}</dd></div>
-            </dl>
-            <p className={styles.ruleText}>
-              本版是纯本地三波短局；只保存本机最高分，不上传进度、不提供正式奖励。
-            </p>
-            <div className={styles.gameActions}>
-              <Button
-                variant="secondary"
-                disabled={!['running', 'paused', 'intermission'].includes(game.status)}
-                onClick={togglePause}
-              >
-                {game.status === 'paused' ? '继续' : '暂停'}
-              </Button>
-              <Button variant="ghost" onClick={restart}>重新开局</Button>
-            </div>
-            <small className={styles.waveHint}>
-              当前波次：{WAVE_NAMES[game.wave - 1]} · 场上 {activeEnemyCount} · 待进入 {waitingEnemyCount}
-            </small>
-          </Card>
-        </aside>
+          {game.status === 'paused' ? <div className={styles.boardOverlay}><span>Ⅱ</span><h2>{autoPaused ? '已为你自动暂停' : '工位塔防已暂停'}</h2><p>战斗和绿植产币都已暂停，不会偷偷流失进度。</p><button type="button" className={styles.primaryButton} onClick={togglePause}>继续防守</button></div> : null}
+          {game.status === 'won' || game.status === 'lost' ? <div className={styles.boardOverlay} data-result={game.status}><span>{game.status === 'won' ? '✦' : '↻'}</span><h2>{game.status === 'won' ? '守住工位，准点下班！' : '工作洪流突破了防线'}</h2><p>得分 {game.score} · 清理 {game.defeated} 项工作</p><button type="button" className={styles.primaryButton} onClick={restart}>再来一局</button></div> : null}
+        </div>
+        <div className={styles.battleToolbar}>
+          {game.status === 'idle' ? <button type="button" className={styles.primaryButton} aria-label="开始工位塔防" onClick={start}>开始第一波 <span>→</span></button> : game.status === 'intermission' ? <button type="button" className={styles.primaryButton} onClick={nextWave}>开始第 {game.wave + 1} 波 <span>→</span></button> : <button type="button" className={styles.secondaryButton} disabled={!['running', 'paused'].includes(game.status)} onClick={togglePause}>{game.status === 'paused' ? '继续防守' : '暂停战斗'}</button>}
+          <span>{game.status === 'idle' ? '准备时不产币；建议先合成一座塔' : `场上 ${activeEnemies.length} · 后续 ${game.spawnQueue.length}`}</span><button type="button" className={styles.textButton} onClick={restart}>重新开局</button>
+        </div>
+        <div className={styles.feedback} data-error={actionFailed} role="status" aria-live="polite" aria-atomic="true"><span>{actionFailed ? '!' : '✦'}</span><p>{announcement}</p></div>
+        <section className={styles.heroPanel} aria-label="唯一守卫控制">
+          <div className={styles.heroIdentity}><OfficeHeroArt mark={avatarMark} /><div><span>唯一角色 · 自动普攻</span><strong>{name} · 工位守卫</strong><small>Lv.{game.hero.level} · 攻击 {game.hero.attack} · 范围 {game.hero.range}</small></div></div>
+          <div className={styles.heroButtons}><button type="button" className={styles.secondaryButton} disabled={!editable || game.hero.level >= HERO_MAX_LEVEL || game.credits < heroUpgradeCost(game.hero.level)} onClick={() => { const current = gameRef.current; const next = upgradeTowerDefenseHero(current); commit(next); announce(next === current ? '金币不足或角色已满级。' : `守卫升到 ${next.hero.level} 级，自动防守更有力了。`, next === current); focusBoard(); }}>{game.hero.level >= HERO_MAX_LEVEL ? '守卫已满级' : `升级守卫 · ${heroUpgradeCost(game.hero.level)} G`}</button><button type="button" className={styles.textButton} aria-pressed={showHeroRange} onClick={() => setShowHeroRange((value) => !value)}>{showHeroRange ? '隐藏守卫射程' : '显示守卫射程'}</button></div>
+          <div className={styles.touchControls} aria-label="移动角色"><div className={styles.dpad}>
+            <button type="button" className={styles.up} aria-label="向上移动" disabled={!editable} onClick={() => moveHero('up')}>↑</button><button type="button" className={styles.left} aria-label="向左移动" disabled={!editable} onClick={() => moveHero('left')}>←</button><span>移动</span><button type="button" className={styles.right} aria-label="向右移动" disabled={!editable} onClick={() => moveHero('right')}>→</button><button type="button" className={styles.down} aria-label="向下移动" disabled={!editable} onClick={() => moveHero('down')}>↓</button>
+          </div><button type="button" className={styles.pulseButton} aria-label="释放专注脉冲" disabled={game.status !== 'running' || game.hero.pulseCooldown > 0} onClick={activatePulse}><span>◎</span><strong>专注脉冲</strong><small>{game.hero.pulseCooldown > 0 ? `${Math.ceil(game.hero.pulseCooldown * TOWER_DEFENSE_TICK_MS / 1000)}s 冷却` : '空格释放'}</small></button></div>
+          <p>不用一直操作：守卫会自动处理射程内目标。手动移动和脉冲可解围。方向键 / WASD 移动，P / Esc 暂停。</p>
+        </section>
       </section>
-    </main>
-  );
+      <aside className={styles.workbench} aria-label="合成工作台">
+        <section className={styles.plantCard} aria-labelledby="plant-title"><OfficePlantArt /><div><span className={styles.eyebrow}>你的第一份被动收入</span><h2 id="plant-title">办公桌绿植 <small>Lv.{game.plantLevel}</small></h2><p aria-label="绿植产币">{game.plantLevel > 0 ? `每 ${Number(intervalSeconds.toFixed(1))} 秒 +${plantIncomePerPayout(game.plantLevel)} G` : '买一盆绿植，战斗时持续产金币'}</p><small>{game.plantLevel === 0 ? '不占塔位，只影响本局' : game.status === 'running' ? `约 ${secondsUntilIncome} 秒后产币` : '等待战斗开始后产币'}</small></div><button type="button" className={styles.plantButton} aria-label={game.plantLevel === 0 ? '购买办公桌绿植' : '升级办公桌绿植'} disabled={!editable || game.plantLevel >= TOWER_PLANT_MAX_LEVEL || game.credits < plantUpgradeCost(game.plantLevel)} onClick={() => runAction(upgradeTowerDefensePlant)}>{game.plantLevel >= TOWER_PLANT_MAX_LEVEL ? '绿植已满级' : `${game.plantLevel === 0 ? '种下' : '升级'} · ${plantUpgradeCost(game.plantLevel)} G`}</button></section>
+        <section className={styles.workCard} aria-labelledby="shop-title">
+          <p className={styles.shopBalance} aria-label="商店可用局内金币"><span>本局可用金币</span><strong>{game.credits} <small>G</small></strong><small>仅本局使用</small></p>
+          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>SUPPLY ROOM</span><h2 id="shop-title">零件补给站</h2></div><button type="button" className={styles.refreshButton} aria-label={`刷新零件商店，${TOWER_SHOP_REFRESH_COST} 金币`} disabled={!editable || game.credits < TOWER_SHOP_REFRESH_COST} onClick={() => runAction(refreshTowerDefenseShop)}>↻ 刷新 <b>{TOWER_SHOP_REFRESH_COST} G</b></button></div><p className={styles.sectionHint}>买下后自动补货；同名同阶满 3 件自动合成。</p>
+          <div className={styles.shopGrid} aria-label="五格零件商店">{game.shop.map((offer, index) => <button type="button" key={offer.id} className={styles.shopOffer} data-type={offer.type} aria-label={`购买第 ${index + 1} 格${TOWER_DEFINITIONS[offer.type].name}零件，${offer.cost} 金币`} disabled={!editable || game.credits < offer.cost} onClick={() => runAction((state) => buyTowerShopOffer(state, offer.id))}><small>1 阶零件</small><OfficeTowerArt kind={offer.type} tier={1} /><strong>{TOWER_DEFINITIONS[offer.type].name}</strong><span>{offer.cost} <small>G</small></span></button>)}</div>
+          <div className={styles.mergeRecipe} aria-label="合成规则"><span>同名 1 阶 ×3</span><b>→</b><strong>2 阶可部署</strong><b>→</b><span>同名 2 阶 ×3<br /><strong>3 阶满级</strong></span></div>
+        </section>
+        <section className={styles.workCard} aria-labelledby="inventory-title">
+          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>ASSEMBLY BENCH</span><h2 id="inventory-title">合成背包 <small aria-label="背包容量">{game.inventory.length}/{TOWER_INVENTORY_CAPACITY}</small></h2></div><span className={styles.autoMergeBadge} key={mergeFlash}>✦ 自动三合一</span></div>
+          {selectedItem ? <p className={styles.placementHint}>已选 {TOWER_DEFINITIONS[selectedItem.type].name} {selectedItem.tier} 阶 · 点击上方空塔位部署<button type="button" onClick={() => setSelectedItemId(null)}>取消</button></p> : <p className={styles.sectionHint}>点击 2 / 3 阶成品，再点地图空塔位。1 阶不能部署。</p>}
+          {game.inventory.length ? <div className={styles.inventoryGrid} aria-label="背包物品">{game.inventory.map((item) => <article key={item.id} data-tier={item.tier} data-selected={selectedItemId === item.id}><button type="button" className={styles.inventoryItem} disabled={!editable || item.tier === 1} aria-label={`${item.tier === 1 ? '待合成' : '选择部署'}${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶`} aria-pressed={selectedItemId === item.id} onClick={() => chooseItem(item.id)}><OfficeTowerArt kind={item.type} tier={item.tier} /><strong>{TOWER_DEFINITIONS[item.type].name}</strong><small>{item.tier === 1 ? '1 阶 · 等待合成' : `${item.tier} 阶 · 点击部署`}</small></button><button type="button" className={styles.sellItem} disabled={!editable} aria-label={`出售背包${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶`} onClick={() => runAction((state) => sellInventoryTower(state, item.id))}>出售</button></article>)}</div> : <div className={styles.emptyInventory}><span>▧</span><strong>零件会在这里集合</strong><p>先从上方购买三个同名零件，试试第一次合成。</p></div>}
+          {selectedTower ? <div className={styles.selectedTower} aria-label="选中的防御塔"><OfficeTowerArt kind={selectedTower.type} tier={selectedTower.level} /><div><strong>塔位 {selectedTower.slotIndex + 1} · {TOWER_DEFINITIONS[selectedTower.type].name}</strong><small>{selectedTower.level} 阶 · {selectedTower.level === 3 ? '已到最高阶' : '背包再备 2 个同名 2 阶可原地升阶'}</small></div><button type="button" className={styles.secondaryButton} disabled={!editable || selectedTower.level >= 3} onClick={() => runAction((state) => mergeDeployedTower(state, selectedTower.slotIndex))}>合成升阶</button><button type="button" className={styles.textButton} disabled={!editable} onClick={() => runAction((state) => sellDeployedTower(state, selectedTower.slotIndex))}>卖出防御塔</button></div> : null}
+        </section>
+        <details className={styles.guide}><summary>五条防线 · 玩法说明 <span>＋</span></summary><div className={styles.towerGuide}>{Object.values(TOWER_DEFINITIONS).map((tower) => <div key={tower.type}><OfficeTowerArt kind={tower.type} tier={2} /><p><strong>{tower.name}</strong><span>{tower.description}</span></p></div>)}</div><p>只买零件，不直接买塔；三件同名同阶自动合成。已部署的 2 阶塔可以消耗背包内两座同名 2 阶塔原地升至 3 阶。卖出返还部分局内金币。</p><p>准备、暂停和波次间歇不产币。切出窗口会自动暂停。本版是纯本地三波短局，只保存本机最高分；刷新页面将重新开局，没有账号奖励、离线收益或付费抽卡。</p></details>
+        <footer className={styles.localRecord}><span>合成版 · 本机最高分</span><strong>{Math.max(bestScore, ['won', 'lost'].includes(game.status) ? game.score : 0)}</strong><small>与旧塔防记录分开保存</small></footer>
+      </aside>
+    </div>
+  </main>;
 }
 
 export default WorkstationTowerDefensePage;

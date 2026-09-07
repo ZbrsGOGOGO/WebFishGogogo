@@ -57,10 +57,20 @@ export interface DevelopmentPrecheck {
   aiReviewed: false;
 }
 
+/** Display metadata only: not a website account and never a profile target. */
+export interface DevelopmentSystemActor {
+  kind: 'system';
+  publicId: null;
+  username: null;
+  displayName: '站点运维（站长授权）';
+}
+
 export interface DevelopmentEvent {
   id: string;
   kind: 'created' | 'comment' | 'decision' | 'attachment';
-  actor: DevelopmentPerson;
+  /** Keep displayName readable for already-open clients; system has no user ID. */
+  actor: DevelopmentPerson | DevelopmentSystemActor;
+  actorSource?: 'user' | 'site_operations';
   body: string;
   status: DevelopmentStatus | null;
   createdAt: string;

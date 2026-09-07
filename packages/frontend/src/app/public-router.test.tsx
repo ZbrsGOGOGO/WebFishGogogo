@@ -34,7 +34,7 @@ describe('public site mode', () => {
     expect(screen.getByRole('navigation', { name: '主要系统' })).toHaveTextContent(
       '首页热点新闻经验交流农场工位塔防投喂邀请我的主页好友',
     );
-    expect(screen.getByRole('heading', { name: '一个角色，三种办公用品' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '一个角色，五条合成防线' })).toBeInTheDocument();
     expect(screen.getByText('订书机')).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '注册' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '登录' })).not.toBeInTheDocument();
@@ -53,10 +53,10 @@ describe('public site mode', () => {
     renderPublicAt(path);
 
     expect(
-      await screen.findByRole('heading', { name: '摸鱼升职记' }),
+      await screen.findByRole('heading', { name: /工位合成塔防/ }),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始工位塔防' })).toBeInTheDocument();
-    expect(screen.getByText(/移动你的唯一守卫/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '唯一守卫控制' })).toHaveTextContent('唯一角色 · 自动普攻');
     expect(fetchSpy).not.toHaveBeenCalled();
     },
   );

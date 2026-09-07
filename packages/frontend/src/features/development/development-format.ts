@@ -1,5 +1,6 @@
 import type {
   DevelopmentCategory,
+  DevelopmentEvent,
   DevelopmentPerson,
   DevelopmentStatus,
 } from '@stealth-reader/shared';
@@ -33,6 +34,18 @@ export function developmentStatusColor(status: DevelopmentStatus): TagColor {
 
 export function developmentPersonName(person: DevelopmentPerson): string {
   return person.displayName || (person.username ? `@${person.username}` : person.publicId);
+}
+
+export function developmentEventActorName(event: DevelopmentEvent): string {
+  const actor = event.actor;
+  if (!actor) return '未知操作人';
+  if ('kind' in actor) {
+    return event.actorSource === 'site_operations' && actor.kind === 'system' &&
+      actor.publicId === null && actor.username === null
+      ? '站点运维（站长授权）'
+      : '未知操作人';
+  }
+  return developmentPersonName(actor);
 }
 
 export function developmentTime(value: string): string {

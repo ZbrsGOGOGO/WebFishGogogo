@@ -125,7 +125,7 @@ export function CommunityHomePage(): JSX.Element {
         <div className={styles.actionGrid}>
           <Link className={styles.bigAction} data-tone="battle" to="/tower-defense">
             <span className={styles.actionMark}>守</span>
-            <div><small>摸鱼升职记 · 工位塔防</small><strong>带角色守住核心工位</strong><p>移动唯一角色，布置订书机、咖啡机和打印机，挡住三波稽查。</p></div>
+            <div><small>摸鱼升职记 · 合成塔防</small><strong>种绿植，合成你的防线</strong><p>绿植产币、零件三合一，组合五条办公用品塔线，和唯一守卫挡住三波稽查。</p></div>
             <b>开守 →</b>
           </Link>
           {COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat ? (

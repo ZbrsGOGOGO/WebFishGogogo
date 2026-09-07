@@ -144,6 +144,39 @@ describe('development pages', () => {
     resetCommunityAuthStoreForTests();
   });
 
+  it('labels audited operations honestly without adding owner controls or executing timeline text', async () => {
+    vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(detail({
+      status: 'done',
+      version: 2,
+      events: [
+        ...detail().events,
+        {
+          id: 'operation:audit-1',
+          kind: 'decision',
+          actor: { kind: 'system', publicId: null, username: null, displayName: '站点运维（站长授权）' },
+          actorSource: 'site_operations',
+          body: '<img src=x onerror=alert(1)> 已验证上线，保留收获并提示种子费用。',
+          status: 'done',
+          createdAt: '2026-09-07T03:00:00.000Z',
+        },
+      ],
+    }));
+    const view = renderDetail('contributor');
+    expect(await screen.findByText('站点运维（站长授权）')).toBeInTheDocument();
+    expect(screen.getByText('创建了提案')).toBeInTheDocument();
+    expect(screen.getByText('<img src=x onerror=alert(1)> 已验证上线，保留收获并提示种子费用。')).toBeInTheDocument();
+    expect(view.container.querySelector('img[src="x"]')).toBeNull();
+    expect(screen.queryByLabelText('决策理由')).not.toBeInTheDocument();
+    expect(developmentFormat.developmentEventActorName({
+      ...detail().events[0], actorSource: 'site_operations', actor: person,
+    })).toBe('小张');
+    expect(developmentFormat.developmentEventActorName({
+      ...detail().events[0],
+      actorSource: 'user',
+      actor: { kind: 'system', publicId: null, username: null, displayName: '站点运维（站长授权）' },
+    })).toBe('未知操作人');
+  });
+
   it('keeps owner management/export controls away from contributors', async () => {
     vi.spyOn(communityDevelopmentApi, 'listRequests').mockResolvedValue(page([detail()]));
     const listMembers = vi.spyOn(communityDevelopmentApi, 'listMembers').mockResolvedValue({ items: [] });

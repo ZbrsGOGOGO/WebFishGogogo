@@ -19,7 +19,7 @@ const defenseRoster = [
     mark: '订',
     name: '订书机',
     shortName: '单体塔',
-    description: '便宜稳定，持续盯住单个目标，是最容易补齐的基础火力。',
+    description: '集齐同名零件合成基础火力，持续盯住单个目标，升阶后加强输出。',
     action: '稳定单体输出',
   },
   {
@@ -35,8 +35,24 @@ const defenseRoster = [
     mark: '印',
     name: '打印机',
     shortName: '范围塔',
-    description: '用范围伤害清理扎堆的小股稽查，造价高但能稳住拥堵路段。',
+    description: '合成打印机，用范围伤害清理扎堆的小股稽查，稳住拥堵路段。',
     action: '范围伤害',
+  },
+  {
+    id: 'chair',
+    mark: '椅',
+    name: '转椅',
+    shortName: '击退塔',
+    description: '把冲过来的工作推回前段，为整条防线争取处理时间。',
+    action: '击退控制',
+  },
+  {
+    id: 'shredder',
+    mark: '碎',
+    name: '碎纸机',
+    shortName: '易伤塔',
+    description: '给待办留下易伤标记，让守卫和其他塔的后续攻击更有效。',
+    action: '易伤协作',
   },
 ] as const;
 
@@ -86,7 +102,7 @@ const systems = [
     mark: '守',
     title: '工位塔防',
     eyebrow: '摸鱼升职记',
-    description: '移动一个工位守卫，用三种办公用品挡住沿固定路线来袭的稽查。',
+    description: '绿植产币、购买零件、三合一造塔，和唯一守卫一起挡住稽查。',
     path: '/tower-defense',
     available: COMMUNITY_FEATURE_FLAGS.towerDefense,
     tone: 'rose',
@@ -211,9 +227,9 @@ export function PublicLandingPage(): JSX.Element {
 
       <section className={styles.section} aria-labelledby="career-title">
         <div className={styles.sectionHeading}>
-          <span>第一版阵容</span>
-          <h2 id="career-title">一个角色，三种办公用品</h2>
-          <p>角色负责走位与补伤害，防御塔自动迎敌；不用盯屏，也能随时暂停。</p>
+          <span>合成版阵容</span>
+          <h2 id="career-title">一个角色，五条合成防线</h2>
+          <p>先种绿植、攒零件，再三合一部署办公用品。守卫和塔自动迎敌，切出页面会暂停；本版不提供离线收益。</p>
         </div>
         <div className={styles.careerGrid}>
           {defenseRoster.map((unit) => (
