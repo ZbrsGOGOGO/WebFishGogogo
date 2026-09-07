@@ -247,7 +247,7 @@ export function CommunitySiteLayout(): JSX.Element {
             <section className={styles.actionWidget}>
               <span>现在就玩</span>
               <strong>摸鱼升职记</strong>
-              <p>移动你的角色，布置办公用品，守住三波稽查。</p>
+              <p>首回合经营布阵，次回合迎战混合稽查与加班首领。</p>
               <Link to="/tower-defense">开始守工位 <b>→</b></Link>
             </section>
             {COMMUNITY_FEATURE_FLAGS.farm ? (

@@ -1,6 +1,6 @@
 export const TOWER_DEFENSE_WIDTH = 12;
 export const TOWER_DEFENSE_HEIGHT = 8;
-export const TOWER_DEFENSE_WAVES = 3;
+export const TOWER_DEFENSE_WAVES = 2;
 export const TOWER_DEFENSE_CORE_HP = 10;
 export const TOWER_DEFENSE_TICK_MS = 280;
 export const HERO_MAX_LEVEL = 5;
@@ -8,6 +8,11 @@ export const TOWER_MAX_LEVEL = 3;
 export const TOWER_INVENTORY_CAPACITY = 12;
 export const TOWER_SHOP_SIZE = 5;
 export const TOWER_SHOP_REFRESH_COST = 10;
+export const TOWER_FOCUSED_ORDER_INDEX = TOWER_SHOP_SIZE - 1;
+export const TOWER_FOCUSED_ORDER_PREMIUM_RATE = 1.25;
+export const TOWER_INTERMISSION_CREDIT_BONUS = 50;
+export const TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP = 2;
+export const TOWER_PRINTER_ARMOR_PIERCE = 2;
 export const TOWER_PLANT_MAX_LEVEL = 3;
 export const TOWER_PLANT_INCOME_INTERVAL = 12;
 export const TOWER_PLANT_UPGRADE_COSTS = [30, 50, 80] as const;
@@ -15,7 +20,6 @@ export const TOWER_PLANT_UPGRADE_COSTS = [30, 50, 80] as const;
 const TOWER_PLANT_INCOMES = [0, 4, 7, 11] as const;
 const TOWER_SELL_REFUND_RATE = 0.6;
 const DEFAULT_RNG_SEED = 0x5eed_1234;
-const ENEMY_SPAWN_INTERVAL = 11;
 
 export type TowerDefenseStatus =
   | 'idle'
@@ -27,6 +31,8 @@ export type TowerDefenseStatus =
 export type TowerDefenseDirection = 'up' | 'down' | 'left' | 'right';
 export type TowerType = 'single' | 'slow' | 'splash' | 'push' | 'shred';
 export type TowerTier = 1 | 2 | 3;
+export type TowerEnemyArchetype = 'basic' | 'fast' | 'swarm' | 'elite' | 'midboss';
+export type TowerShopOfferSource = 'random' | 'guaranteed' | 'focused';
 export type TowerCombatSource = 'hero' | 'pulse' | TowerType;
 export type TowerDefenseActionCode =
   | 'ok'
@@ -34,6 +40,7 @@ export type TowerDefenseActionCode =
   | 'insufficient_credits'
   | 'plant_max_level'
   | 'shop_offer_missing'
+  | 'invalid_tower_type'
   | 'inventory_full'
   | 'inventory_item_missing'
   | 'tier_not_deployable'
@@ -69,6 +76,9 @@ export interface TowerDefenseEnemy {
   slowTicks: number;
   shredTicks: number;
   shredStacks: number;
+  archetype: TowerEnemyArchetype;
+  armor: number;
+  singleTargetDamageCap: number | null;
   reward: number;
   score: number;
   coreDamage: number;
@@ -96,6 +106,9 @@ export interface TowerShopOffer {
   type: TowerType;
   tier: 1;
   cost: number;
+  source?: TowerShopOfferSource;
+  /** Reserved for a possible explicit-refresh shop mode; current offers refill immediately. */
+  soldOut?: boolean;
 }
 
 export interface TowerCombatEffect {
@@ -114,14 +127,40 @@ export interface TowerDefenseActionFeedback {
   tick: number;
 }
 
-interface EnemySpawn {
+export interface TowerRoundEnemySpawn {
   name: string;
+  archetype: TowerEnemyArchetype;
   hp: number;
   speedTicks: number;
+  armor: number;
+  singleTargetDamageCap: number | null;
   reward: number;
   score: number;
   coreDamage: number;
   boss?: boolean;
+  spawnDelayTicks?: number;
+}
+
+export interface TowerRoundConfig {
+  wave: 1 | 2;
+  name: string;
+  description: string;
+  spawnIntervalTicks: number;
+  targetCountMultiplier: number;
+  targetHpMultiplier: number;
+  spawns: readonly TowerRoundEnemySpawn[];
+}
+
+export interface TowerRoundSummary {
+  wave: 1 | 2;
+  name: string;
+  description: string;
+  enemyCount: number;
+  totalHp: number;
+  countMultiplier: number;
+  totalHpMultiplier: number;
+  archetypes: TowerEnemyArchetype[];
+  hasMidboss: boolean;
 }
 
 export interface TowerDefenseState {
@@ -136,12 +175,13 @@ export interface TowerDefenseState {
   hero: TowerDefenseHero;
   enemies: TowerDefenseEnemy[];
   towers: TowerDefenseTower[];
-  spawnQueue: EnemySpawn[];
+  spawnQueue: TowerRoundEnemySpawn[];
   nextSpawnAt: number;
   nextEnemyId: number;
   plantLevel: number;
   plantIncomeTick: number;
   shop: TowerShopOffer[];
+  shopFocus: TowerType;
   inventory: TowerInventoryItem[];
   rngSeed: number;
   nextItemId: number;
@@ -191,7 +231,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'splash',
     name: '打印机',
     mark: '印',
-    description: '打印风暴同时处理相邻的拥堵待办。',
+    description: `打印风暴同时处理相邻待办，并穿透 ${TOWER_PRINTER_ARMOR_PIERCE} 点护甲。`,
     cost: 22,
     partCost: 22,
     range: 3,
@@ -218,7 +258,121 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
 
 const TOWER_TYPES = Object.keys(TOWER_DEFINITIONS) as TowerType[];
 
-export const WAVE_NAMES = ['零散待办', '催办邮件', '会议风暴'] as const;
+const ROUND_TWO_TEMPLATES: Record<
+  TowerEnemyArchetype,
+  Omit<TowerRoundEnemySpawn, 'spawnDelayTicks'>
+> = {
+  basic: {
+    name: '常规任务', archetype: 'basic', hp: 14, speedTicks: 5, armor: 0,
+    singleTargetDamageCap: null, reward: 7, score: 115, coreDamage: 1,
+  },
+  fast: {
+    name: '紧急消息', archetype: 'fast', hp: 8, speedTicks: 2, armor: 0,
+    singleTargetDamageCap: null, reward: 5, score: 90, coreDamage: 1,
+  },
+  swarm: {
+    name: '群聊轰炸', archetype: 'swarm', hp: 6, speedTicks: 5, armor: 2,
+    singleTargetDamageCap: TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP,
+    reward: 4, score: 70, coreDamage: 3,
+  },
+  elite: {
+    name: '重点催办', archetype: 'elite', hp: 25, speedTicks: 6, armor: 3,
+    singleTargetDamageCap: null, reward: 16, score: 220, coreDamage: 2,
+  },
+  midboss: {
+    name: '临时加班通知', archetype: 'midboss', hp: 60, speedTicks: 6, armor: 4,
+    singleTargetDamageCap: null, reward: 30, score: 500, coreDamage: 4, boss: true,
+  },
+};
+
+function roundTwoSpawn(
+  archetype: TowerEnemyArchetype,
+  spawnDelayTicks: number,
+): TowerRoundEnemySpawn {
+  return { ...ROUND_TWO_TEMPLATES[archetype], spawnDelayTicks };
+}
+
+const ROUND_ONE_SPAWNS: readonly TowerRoundEnemySpawn[] = Array.from({ length: 6 }, () => ({
+  name: '待办便签',
+  archetype: 'basic' as const,
+  hp: 12,
+  speedTicks: 5,
+  armor: 0,
+  singleTargetDamageCap: null,
+  reward: 8,
+  score: 100,
+  coreDamage: 1,
+}));
+
+const ROUND_TWO_SPAWNS: readonly TowerRoundEnemySpawn[] = [
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 20),
+  roundTwoSpawn('fast', 6),
+  roundTwoSpawn('fast', 8),
+  roundTwoSpawn('basic', 12),
+  roundTwoSpawn('elite', 14),
+  roundTwoSpawn('basic', 12),
+  roundTwoSpawn('midboss', 18),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 1),
+  roundTwoSpawn('swarm', 20),
+  roundTwoSpawn('fast', 6),
+  roundTwoSpawn('fast', 8),
+  roundTwoSpawn('basic', 12),
+  roundTwoSpawn('elite', 14),
+  roundTwoSpawn('fast', 6),
+  roundTwoSpawn('basic', 12),
+  roundTwoSpawn('fast', 8),
+  roundTwoSpawn('basic', 10),
+];
+
+export const TOWER_ROUND_CONFIGS: readonly TowerRoundConfig[] = [
+  {
+    wave: 1,
+    name: '摸鱼热身',
+    description: '低压待办依次到来，用有效战斗时间积累绿植收入并完成基础合成。',
+    spawnIntervalTicks: 16,
+    targetCountMultiplier: 1,
+    targetHpMultiplier: 1,
+    spawns: ROUND_ONE_SPAWNS,
+  },
+  {
+    wave: 2,
+    name: '加班风暴',
+    description: '快速消息、突破时冲击 3 点的成团群聊与护甲催办交错来袭，中段还有临时加班通知。',
+    spawnIntervalTicks: 8,
+    targetCountMultiplier: 4,
+    targetHpMultiplier: 4,
+    spawns: ROUND_TWO_SPAWNS,
+  },
+] as const;
+
+export function getTowerRoundSummary(wave: number): TowerRoundSummary {
+  const first = TOWER_ROUND_CONFIGS[0];
+  if (!first) throw new Error('Tower defense requires at least one round configuration.');
+  const config = TOWER_ROUND_CONFIGS.find((entry) => entry.wave === wave) ?? first;
+  const enemyCount = config.spawns.length;
+  const totalHp = config.spawns.reduce((sum, spawn) => sum + spawn.hp, 0);
+  const firstTotalHp = first.spawns.reduce((sum, spawn) => sum + spawn.hp, 0);
+  return {
+    wave: config.wave,
+    name: config.name,
+    description: config.description,
+    enemyCount,
+    totalHp,
+    countMultiplier: Number((enemyCount / first.spawns.length).toFixed(2)),
+    totalHpMultiplier: Number((totalHp / firstTotalHp).toFixed(2)),
+    archetypes: [...new Set(config.spawns.map((spawn) => spawn.archetype))],
+    hasMidboss: config.spawns.some((spawn) => spawn.archetype === 'midboss'),
+  };
+}
+
+export const WAVE_NAMES = ['摸鱼热身', '加班风暴'] as const;
 
 export const TOWER_DEFENSE_PATH: readonly TowerDefensePoint[] = [
   { x: 0, y: 2 },
@@ -250,35 +404,9 @@ export const TOWER_SLOTS: readonly TowerDefensePoint[] = [
   { x: 10, y: 6 },
 ] as const;
 
-function waveSpawns(wave: number): EnemySpawn[] {
-  if (wave === 1) {
-    return Array.from({ length: 6 }, () => ({
-      name: '待办便签', hp: 12, speedTicks: 5, reward: 8, score: 100, coreDamage: 1,
-    }));
-  }
-  if (wave === 2) {
-    return Array.from({ length: 8 }, (_, index) => ({
-      name: index % 3 === 2 ? '加急邮件' : '催办邮件',
-      hp: index % 3 === 2 ? 44 : 36,
-      speedTicks: index % 3 === 2 ? 4 : 5,
-      reward: index % 3 === 2 ? 12 : 9,
-      score: index % 3 === 2 ? 150 : 115,
-      coreDamage: 1,
-    }));
-  }
-  return [
-    ...Array.from({ length: 10 }, (_, index) => ({
-      name: index % 2 === 0 ? '临时会议' : '重点议题',
-      hp: index % 2 === 0 ? 58 : 72,
-      speedTicks: 5,
-      reward: index % 2 === 0 ? 12 : 15,
-      score: index % 2 === 0 ? 130 : 165,
-      coreDamage: 1,
-    })),
-    {
-      name: '终审会议', hp: 180, speedTicks: 6, reward: 30, score: 500, coreDamage: 3, boss: true,
-    },
-  ];
+function waveSpawns(wave: number): TowerRoundEnemySpawn[] {
+  const config = TOWER_ROUND_CONFIGS.find((entry) => entry.wave === wave);
+  return config ? config.spawns.map((spawn) => ({ ...spawn })) : [];
 }
 
 function pointKey(point: TowerDefensePoint): string {
@@ -307,7 +435,22 @@ function randomOffer(
       type,
       tier: 1,
       cost: TOWER_DEFINITIONS[type].partCost,
+      source: 'random',
     },
+  };
+}
+
+export function focusedTowerPartCost(type: TowerType): number {
+  return Math.ceil(TOWER_DEFINITIONS[type].partCost * TOWER_FOCUSED_ORDER_PREMIUM_RATE);
+}
+
+function focusedOffer(type: TowerType, offerId: number): TowerShopOffer {
+  return {
+    id: `offer-${offerId}`,
+    type,
+    tier: 1,
+    cost: focusedTowerPartCost(type),
+    source: 'focused',
   };
 }
 
@@ -321,14 +464,11 @@ function createInitialShop(seed: number): {
     type: 'single',
     tier: 1,
     cost: TOWER_DEFINITIONS.single.partCost,
+    source: 'guaranteed',
   }));
-  let nextSeed = seed;
-  for (let id = 4; id <= TOWER_SHOP_SIZE; id += 1) {
-    const generated = randomOffer(nextSeed, id);
-    nextSeed = generated.seed;
-    shop.push(generated.offer);
-  }
-  return { shop, seed: nextSeed, nextOfferId: TOWER_SHOP_SIZE + 1 };
+  const random = randomOffer(seed, 4);
+  shop.push(random.offer, focusedOffer('single', 5));
+  return { shop, seed: random.seed, nextOfferId: TOWER_SHOP_SIZE + 1 };
 }
 
 function makeFeedback(
@@ -386,6 +526,7 @@ export function createTowerDefenseState(seed = DEFAULT_RNG_SEED): TowerDefenseSt
     plantLevel: 0,
     plantIncomeTick: 0,
     shop: initialShop.shop,
+    shopFocus: 'single',
     inventory: [],
     rngSeed: initialShop.seed,
     nextItemId: 1,
@@ -489,16 +630,19 @@ export function upgradeTowerDefensePlant(state: TowerDefenseState): TowerDefense
 function createRandomShop(
   seed: number,
   firstOfferId: number,
+  focus: TowerType,
 ): { shop: TowerShopOffer[]; seed: number; nextOfferId: number } {
   const shop: TowerShopOffer[] = [];
   let nextSeed = seed;
   let nextOfferId = firstOfferId;
-  while (shop.length < TOWER_SHOP_SIZE) {
+  while (shop.length < TOWER_FOCUSED_ORDER_INDEX) {
     const generated = randomOffer(nextSeed, nextOfferId);
     shop.push(generated.offer);
     nextSeed = generated.seed;
     nextOfferId += 1;
   }
+  shop.push(focusedOffer(focus, nextOfferId));
+  nextOfferId += 1;
   return { shop, seed: nextSeed, nextOfferId };
 }
 
@@ -514,7 +658,7 @@ export function refreshTowerDefenseShop(state: TowerDefenseState): TowerDefenseA
       `刷新商店需要 ${TOWER_SHOP_REFRESH_COST} 金币。`,
     );
   }
-  const generated = createRandomShop(state.rngSeed, state.nextOfferId);
+  const generated = createRandomShop(state.rngSeed, state.nextOfferId, state.shopFocus);
   return makeFeedback(
     {
       ...state,
@@ -526,6 +670,41 @@ export function refreshTowerDefenseShop(state: TowerDefenseState): TowerDefenseA
     true,
     'ok',
     `已花费 ${TOWER_SHOP_REFRESH_COST} 金币刷新零件。`,
+  );
+}
+
+export function setTowerShopFocus(
+  state: TowerDefenseState,
+  type: TowerType,
+): TowerDefenseActionResult {
+  if (!canManage(state)) {
+    return makeFeedback(state, false, 'invalid_status', '当前状态不能调整定向订货。');
+  }
+  if (!TOWER_TYPES.includes(type)) {
+    return makeFeedback(state, false, 'invalid_tower_type', '找不到这种办公用品。');
+  }
+  const currentIndex = state.shop.findIndex((offer) => offer.source === 'focused');
+  const focusIndex = currentIndex >= 0 ? currentIndex : TOWER_FOCUSED_ORDER_INDEX;
+  if (state.shopFocus === type && state.shop[focusIndex]?.type === type) {
+    return makeFeedback(
+      state,
+      true,
+      'ok',
+      `定向订货已经是${TOWER_DEFINITIONS[type].name}。`,
+    );
+  }
+  const shop = state.shop.slice();
+  shop[focusIndex] = focusedOffer(type, state.nextOfferId);
+  return makeFeedback(
+    {
+      ...state,
+      shop,
+      shopFocus: type,
+      nextOfferId: state.nextOfferId + 1,
+    },
+    true,
+    'ok',
+    `定向订货已切换为${TOWER_DEFINITIONS[type].name}，价格包含加急服务费。`,
   );
 }
 
@@ -560,7 +739,9 @@ export function buyTowerShopOffer(
   }
   const offerIndex = state.shop.findIndex((offer) => offer.id === offerId);
   const offer = state.shop[offerIndex];
-  if (!offer) return makeFeedback(state, false, 'shop_offer_missing', '这个零件已经不在商店里了。');
+  if (!offer || offer.soldOut) {
+    return makeFeedback(state, false, 'shop_offer_missing', '这个零件已经不在商店里了。');
+  }
   if (state.credits < offer.cost) {
     return makeFeedback(state, false, 'insufficient_credits', `还差 ${offer.cost - state.credits} 金币。`);
   }
@@ -576,7 +757,10 @@ export function buyTowerShopOffer(
     return makeFeedback(state, false, 'inventory_full', '背包已满，请部署、合成或出售后再购买。');
   }
 
-  const replacement = randomOffer(state.rngSeed, state.nextOfferId);
+  const focused = offer.source === 'focused';
+  const replacement = focused
+    ? { offer: focusedOffer(state.shopFocus, state.nextOfferId), seed: state.rngSeed }
+    : randomOffer(state.rngSeed, state.nextOfferId);
   const shop = state.shop.map((entry, index) => index === offerIndex ? replacement.offer : entry);
   const didMerge = merged.finalItem.tier > offer.tier;
   return makeFeedback(
@@ -788,9 +972,24 @@ function targetIndex(
   return bestIndex;
 }
 
-function damageEnemy(enemy: TowerDefenseEnemy, damage: number): TowerDefenseEnemy {
+interface DamageOptions {
+  area?: boolean;
+  armorPiercing?: number;
+}
+
+function damageEnemy(
+  enemy: TowerDefenseEnemy,
+  damage: number,
+  options: DamageOptions = {},
+): TowerDefenseEnemy {
   const vulnerability = enemy.shredTicks > 0 ? enemy.shredStacks : 0;
-  return { ...enemy, hp: enemy.hp - damage - vulnerability };
+  const rawDamage = Math.max(0, damage) + vulnerability;
+  const armor = Math.max(0, enemy.armor - (options.armorPiercing ?? 0));
+  let dealt = rawDamage > 0 ? Math.max(1, rawDamage - armor) : 0;
+  if (!options.area && enemy.singleTargetDamageCap !== null) {
+    dealt = Math.min(dealt, enemy.singleTargetDamageCap);
+  }
+  return { ...enemy, hp: enemy.hp - dealt };
 }
 
 function collectDefeated(state: TowerDefenseState): TowerDefenseState {
@@ -847,7 +1046,7 @@ export function triggerFocusPulse(state: TowerDefenseState): TowerDefenseState {
       targets.map((enemy) => enemy.id),
     )],
     enemies: state.enemies.map((enemy) =>
-      targetIds.has(enemy.id) ? damageEnemy(enemy, state.hero.attack * 2) : enemy,
+      targetIds.has(enemy.id) ? damageEnemy(enemy, state.hero.attack * 2, { area: true }) : enemy,
     ),
   });
 }
@@ -923,7 +1122,11 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
     ));
     if (tower.type === 'slow') {
       for (const enemyIndex of affectedIndexes) {
-        const damaged = damageEnemy(enemies[enemyIndex], tower.level === 3 ? 4 : 2);
+        const damaged = damageEnemy(
+          enemies[enemyIndex],
+          tower.level === 3 ? 4 : 2,
+          { area: true },
+        );
         enemies[enemyIndex] = {
           ...damaged,
           slowTicks: Math.max(damaged.slowTicks, tower.level === 3 ? 9 : 7),
@@ -932,7 +1135,11 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
       return { ...nextTower, cooldown: 4 };
     }
     for (const enemyIndex of affectedIndexes) {
-      enemies[enemyIndex] = damageEnemy(enemies[enemyIndex], tower.level === 3 ? 6 : 3);
+      enemies[enemyIndex] = damageEnemy(
+        enemies[enemyIndex],
+        tower.level === 3 ? 6 : 3,
+        { area: true, armorPiercing: TOWER_PRINTER_ARMOR_PIERCE },
+      );
     }
     return { ...nextTower, cooldown: 5 };
   });
@@ -946,7 +1153,11 @@ function spawnEnemy(state: TowerDefenseState, tick: number): TowerDefenseState {
   return {
     ...state,
     spawnQueue,
-    nextSpawnAt: tick + ENEMY_SPAWN_INTERVAL,
+    nextSpawnAt: tick + (
+      spawn.spawnDelayTicks ??
+      TOWER_ROUND_CONFIGS.find((round) => round.wave === state.wave)?.spawnIntervalTicks ??
+      8
+    ),
     nextEnemyId: state.nextEnemyId + 1,
     enemies: [
       ...state.enemies,
@@ -960,6 +1171,9 @@ function spawnEnemy(state: TowerDefenseState, tick: number): TowerDefenseState {
         slowTicks: 0,
         shredTicks: 0,
         shredStacks: 0,
+        archetype: spawn.archetype,
+        armor: spawn.armor,
+        singleTargetDamageCap: spawn.singleTargetDamageCap,
         reward: spawn.reward,
         score: spawn.score,
         coreDamage: spawn.coreDamage,
@@ -1021,7 +1235,12 @@ export function stepTowerDefense(state: TowerDefenseState): TowerDefenseState {
     const waveBonus = next.wave * 300;
     return next.wave >= TOWER_DEFENSE_WAVES
       ? { ...next, status: 'won', score: next.score + waveBonus }
-      : { ...next, status: 'intermission', score: next.score + waveBonus };
+      : {
+        ...next,
+        status: 'intermission',
+        credits: next.credits + TOWER_INTERMISSION_CREDIT_BONUS,
+        score: next.score + waveBonus,
+      };
   }
   return next;
 }
@@ -1033,7 +1252,6 @@ export function startNextTowerDefenseWave(state: TowerDefenseState): TowerDefens
     ...state,
     status: 'running',
     wave,
-    credits: state.credits + 45,
     spawnQueue: waveSpawns(wave),
     nextSpawnAt: state.tick + 1,
     effects: [],

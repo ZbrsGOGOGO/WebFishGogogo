@@ -2,7 +2,7 @@
 
 本次待发布版本新增私有开发协作模块，迁移目标为 `1700000000026`。`FEATURE_DEVELOPMENT_WORKSPACE_ENABLED` 默认关闭；确认站长账号后可启用 `/development`。附件存于私有 PostgreSQL 字段，会进入数据库备份；本模块不启动 AI 任务或自动部署。使用与权限说明见 [开发协作台](../docs/DEVELOPMENT_WORKSPACE.md)。
 
-社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容、审核和 Arcade API；旧文档上传、私人阅读、便签、偏好、工具目录和已停服的办公室乐斗 API，以及尚未实现的社区前缀一律返回 404。“摸鱼升职记”工位塔防 V1 是纯前端短局，不新增服务端游戏 API；“遮司”由 `/games/zhesi` React 页面承载、复用 `/games/zhengdao/` 静态 iframe 资源，并以 `zhesi` game key 接入现有 Arcade 赛局和排行榜。
+社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容、审核和 Arcade API；旧文档上传、私人阅读、便签、偏好、工具目录和已停服的办公室乐斗 API，以及尚未实现的社区前缀一律返回 404。“摸鱼升职记”工位塔防 V3 是纯前端短局，不新增服务端游戏 API；“遮司”由 `/games/zhesi` React 页面承载、复用 `/games/zhengdao/` 静态 iframe 资源，并以 `zhesi` game key 接入现有 Arcade 赛局和排行榜。
 
 这套 Compose 是阶段性单机发布骨架，不是“1000 同时在线已经通过”的证明。社区部署明确不启动遗留 `main.worker.js` / `ActivityProjector`：它会把事件级 `processed` 状态误当成多消费者投递状态。认证邮件使用独立加密 Outbox，账号注销补偿使用数据库租约；其他社区领域事件在完成逐消费者回执审计前不得接入旧 Worker，也不得把积压写成已投递。
 
@@ -192,7 +192,7 @@ sh deploy/community-smoke.sh https://zbrshyyzxx.top
 4. 内容读取、内容写入、审核操作使用三个独立开关。先由值班审核员在写入关闭状态验收审核台，再开放发帖、评论和互动。
 5. 聊天室先开读取和连接，发送保持关闭；首发可开启 `CHAT_BUILTIN_MODERATION_ENABLED=true` 使用内置基础规则，接入外部审核 Provider 后关闭该开关。审核、举报、Redis 故障只读和重连演练通过后，再按 50 → 200 → 500 → 1000 连接逐级开放写入。
 6. 新闻总闸与后台闸同时开启后，公开列表在首篇稿件通过双人复核前仍为空；只录入真实授权来源，不得使用抓取、全文镜像或虚假种子填充页面。
-7. 生产构建固定开启 `VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=true`。工位塔防只在本机保存最高分和设置，不上传进度、不接入正式排行榜也不提供正式奖励。“遮司”可在未登录时本机游玩和读取公开排行榜；只有登录账号才会创建 `zhesi` 赛局并提交经服务端校验的最佳战力，不发放正式资产。`FEATURE_COMMUNITY_BATTLE_ENABLED`、`VITE_COMMUNITY_LEDOU_ENABLED` 和 `VITE_COMMUNITY_BATTLE_SERVER_ENABLED` 必须保持 `false`，社区入口不再装配旧办公室乐斗服务；历史源码、迁移与表只供回滚，不改名也不删除数据。
+7. 生产构建固定开启 `VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=true`。工位塔防只在本机保存最高分，不上传进度、不接入正式排行榜也不提供正式奖励。“遮司”可在未登录时本机游玩和读取公开排行榜；只有登录账号才会创建 `zhesi` 赛局并提交经服务端校验的最佳战力，不发放正式资产。`FEATURE_COMMUNITY_BATTLE_ENABLED`、`VITE_COMMUNITY_LEDOU_ENABLED` 和 `VITE_COMMUNITY_BATTLE_SERVER_ENABLED` 必须保持 `false`，社区入口不再装配旧办公室乐斗服务；历史源码、迁移与表只供回滚，不改名也不删除数据。
 8. 社区领域若以后引入新的异步事件消费者，必须先实现逐消费者回执与积压/重试/死信监控；禁止直接启用遗留 `main.worker.js`。
 
 白名单不是实现状态说明：后端模块、授权、治理和验收必须同时完成。每次扩大白名单后重新构建并执行完整烟测。

@@ -169,11 +169,11 @@ export function PublicLandingPage(): JSX.Element {
         <aside className={styles.reviewCard} aria-label="工位塔防试玩说明">
           <span className={styles.statusDot} aria-hidden="true" />
           <strong>摸鱼升职记的第一条可玩循环</strong>
-          <p>布塔 → 移动角色 → 自动迎敌 → 升级防线 → 守住三波，单局约 1～3 分钟。</p>
+          <p>首回合种绿植、合成布阵，次回合迎战混合敌群与加班首领，单局约 1～3 分钟。</p>
           <dl>
             <div><dt>场上角色</dt><dd>1 个</dd></div>
-            <div><dt>办公用品塔</dt><dd>3 种</dd></div>
-            <div><dt>本次稽查</dt><dd>3 波</dd></div>
+            <div><dt>办公用品塔</dt><dd>5 种</dd></div>
+            <div><dt>本次稽查</dt><dd>2 回合</dd></div>
           </dl>
         </aside>
       </section>

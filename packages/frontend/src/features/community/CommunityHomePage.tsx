@@ -125,7 +125,7 @@ export function CommunityHomePage(): JSX.Element {
         <div className={styles.actionGrid}>
           <Link className={styles.bigAction} data-tone="battle" to="/tower-defense">
             <span className={styles.actionMark}>守</span>
-            <div><small>摸鱼升职记 · 合成塔防</small><strong>种绿植，合成你的防线</strong><p>绿植产币、零件三合一，组合五条办公用品塔线，和唯一守卫挡住三波稽查。</p></div>
+            <div><small>摸鱼升职记 · 合成塔防</small><strong>先经营布阵，再迎战突袭</strong><p>绿植产币、零件三合一，首回合养阵容，次回合用五条办公用品塔线迎战混合稽查。</p></div>
             <b>开守 →</b>
           </Link>
           {COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat ? (
@@ -178,7 +178,7 @@ export function CommunityHomePage(): JSX.Element {
           <h2 id="board-title">从这里开始，不会走错</h2>
         </div>
         <div className={styles.boardList}>
-          <Link to="/tower-defense"><time>01</time><div><strong>第一次来：带角色守住三波</strong><p>角色自动攻击，你只需移动站位、布塔并在关键时刻释放专注脉冲。</p></div><span>去塔防</span></Link>
+          <Link to="/tower-defense"><time>01</time><div><strong>第一次来：两回合守住工位</strong><p>先经营合成，再迎战混合敌群与加班首领；角色自动攻击，专注脉冲可解围。</p></div><span>去塔防</span></Link>
           {COMMUNITY_FEATURE_FLAGS.farm ? <Link to="/farm"><time>02</time><div><strong>每天来：点一下照料绿植</strong><p>成熟后收获，再自动开始下一轮，进度离线继续。</p></div><span>去农场</span></Link> : null}
           <Link to="/tools"><time>03</time><div><strong>工作时：常用工具随手打开</strong><p>站点不只用来玩，也能处理日常的小任务。</p></div><span>工具箱</span></Link>
           <Link to="/games"><time>04</time><div><strong>想放松：玩一局经典小游戏</strong><p>贪食蛇、俄罗斯方块和坦克大战，随开随停。</p></div><span>游戏厅</span></Link>

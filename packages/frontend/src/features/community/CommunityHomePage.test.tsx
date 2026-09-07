@@ -59,5 +59,8 @@ describe('CommunityHomePage profile summary', () => {
     expect(screen.getByText('社区职业：测试')).toBeInTheDocument();
     expect(screen.queryByText('社区职业：developer')).not.toBeInTheDocument();
     expect(communityProfileApi.getMe).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('先经营布阵，再迎战突袭')).toBeInTheDocument();
+    expect(screen.getByText('第一次来：两回合守住工位')).toBeInTheDocument();
+    expect(screen.queryByText(/守住三波/)).not.toBeInTheDocument();
   });
 });

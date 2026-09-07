@@ -6,7 +6,8 @@ import * as engine from './tower-defense-logic';
 import styles from './WorkstationTowerDefensePage.module.css';
 
 const OLD_SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v1';
-const SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v2';
+const MERGE_SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v2';
+const SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v3';
 
 function renderPage(character?: WorkstationTowerDefenseCharacter) {
   return render(<WorkstationTowerDefensePage character={character} />);
@@ -22,7 +23,7 @@ function useInitialState(overrides: Partial<engine.TowerDefenseState>): void {
   vi.spyOn(engine, 'createTowerDefenseState').mockReturnValue({ ...initial, ...overrides });
 }
 
-describe('WorkstationTowerDefensePage merging edition', () => {
+describe('WorkstationTowerDefensePage two-round merging edition', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.spyOn(Math, 'random').mockReturnValue(0.314159); window.localStorage.clear(); });
   afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -37,6 +38,9 @@ describe('WorkstationTowerDefensePage merging edition', () => {
     for (const type of ['single', 'slow', 'splash', 'push', 'shred']) expect(document.querySelector(`svg[data-art="${type}"]`)).not.toBeNull();
     expect(screen.getByText('游客同事 · 工位守卫')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '开始工位塔防' })).toBeEnabled();
+    expect(screen.getByLabelText('当前回合')).toHaveTextContent('1 / 2');
+    expect(screen.getByLabelText('两回合进度').querySelector('[aria-current="step"]')).toHaveTextContent('经营回合');
+    expect(screen.getByText('2 回合短局 · 纯本地')).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -91,6 +95,50 @@ describe('WorkstationTowerDefensePage merging edition', () => {
     expect(originalOffers.every((offer) => !offer.isConnected)).toBe(true);
     expect(screen.getByRole('status')).toHaveTextContent('刷新零件');
     expect(screen.getByLabelText('商店可用局内金币')).toHaveTextContent(String(coins()));
+  });
+
+  it('offers free selection of a clearly priced targeted part without rerolling the random slots', () => {
+    renderPage(); const before = coins();
+    const shop = screen.getByLabelText('五格零件商店');
+    const originalRandomSlots = within(shop).getAllByRole('button').slice(0, 4);
+    fireEvent.change(screen.getByRole('combobox', { name: '定向订货塔型' }), { target: { value: 'splash' } });
+    expect(coins()).toBe(before);
+    expect(originalRandomSlots.every((offer) => offer.isConnected)).toBe(true);
+    const expectedCost = engine.focusedTowerPartCost('splash');
+    const focusedOffer = screen.getByRole('button', { name: `购买第 5 格打印机零件，${expectedCost} 金币，定向订货` });
+    expect(focusedOffer).toHaveAttribute('data-focused', 'true');
+    fireEvent.click(focusedOffer);
+    expect(coins()).toBe(before - expectedCost);
+    expect(screen.getByRole('button', { name: '待合成打印机 1 阶' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '定向订货塔型' })).toHaveValue('splash');
+    expect(within(shop).getAllByRole('button')).toHaveLength(5);
+  });
+
+  it('explains sold-out slots and disables purchase until refresh', () => {
+    const initial = engine.createTowerDefenseState();
+    useInitialState({ shop: initial.shop.map((offer, index) => index === 0 ? { ...offer, soldOut: true } : offer) });
+    renderPage(); const before = coins();
+    const soldOut = screen.getByRole('button', { name: '第 1 格已售罄，刷新后补货' });
+    expect(soldOut).toBeDisabled();
+    fireEvent.click(soldOut); expect(coins()).toBe(before);
+    expect(soldOut).toHaveTextContent('待刷新');
+  });
+
+  it('keeps native order-selection arrow keys from moving the hero', () => {
+    renderPage();
+    const heroCell = document.querySelector(`.${styles.hero}`)?.parentElement;
+    const selector = screen.getByRole('combobox', { name: '定向订货塔型' });
+    selector.focus(); fireEvent.keyDown(selector, { key: 'ArrowDown' });
+    expect(document.querySelector(`.${styles.hero}`)?.parentElement).toBe(heroCell);
+    expect(selector).toHaveFocus();
+  });
+
+  it('explains printer armor piercing using the live engine definition', () => {
+    renderPage();
+    const summary = screen.getByText(/五条防线 · 玩法说明/);
+    fireEvent.click(summary);
+    expect(engine.TOWER_DEFINITIONS.splash.description).toContain(`穿透 ${engine.TOWER_PRINTER_ARMOR_PIERCE} 点护甲`);
+    expect(screen.getByText(engine.TOWER_DEFINITIONS.splash.description)).toBeVisible();
   });
 
   it('prevents unaffordable purchases and upgrades without changing the balance', () => {
@@ -192,6 +240,7 @@ describe('WorkstationTowerDefensePage merging edition', () => {
     const before = coins(); expect(screen.getByText('工位塔防已暂停')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /刷新零件商店/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: '升级办公桌绿植' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: '定向订货塔型' })).toBeDisabled();
     act(() => vi.advanceTimersByTime(60_000)); expect(coins()).toBe(before);
     fireEvent.keyDown(window, { key: 'p' });
     expect(screen.queryByText('工位塔防已暂停')).not.toBeInTheDocument();
@@ -214,18 +263,22 @@ describe('WorkstationTowerDefensePage merging edition', () => {
 
   it('keeps the old high score separate and tolerates a corrupt new record', () => {
     window.localStorage.setItem(OLD_SETTINGS_KEY, JSON.stringify({ bestScore: 999999 }));
+    window.localStorage.setItem(MERGE_SETTINGS_KEY, JSON.stringify({ bestScore: 888888 }));
     window.localStorage.setItem(SETTINGS_KEY, '{broken');
     renderPage();
-    expect(screen.getByText('合成版 · 本机最高分').nextElementSibling).toHaveTextContent('0');
+    expect(screen.getByText('两回合版 · 本机最高分').nextElementSibling).toHaveTextContent('0');
     expect(window.localStorage.getItem(OLD_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 999999 }));
+    expect(window.localStorage.getItem(MERGE_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 888888 }));
     expect(screen.getByRole('button', { name: '开始工位塔防' })).toBeEnabled();
   });
 
   it('saves a finished merging run only to the new local record key', () => {
     window.localStorage.setItem(OLD_SETTINGS_KEY, JSON.stringify({ bestScore: 999999 }));
+    window.localStorage.setItem(MERGE_SETTINGS_KEY, JSON.stringify({ bestScore: 888888 }));
     useInitialState({ status: 'won', score: 1234 }); renderPage();
     expect(window.localStorage.getItem(SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 1234 }));
     expect(window.localStorage.getItem(OLD_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 999999 }));
+    expect(window.localStorage.getItem(MERGE_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 888888 }));
     expect(screen.getByText('守住工位，准点下班！')).toBeInTheDocument();
   });
 
@@ -233,7 +286,7 @@ describe('WorkstationTowerDefensePage merging edition', () => {
     const base = engine.createTowerDefenseState();
     useInitialState({
       status: 'running', spawnQueue: [],
-      enemies: [{ id: 'nearby', name: '待办', pathIndex: 10, hp: 100, maxHp: 100, speedTicks: 100, slowTicks: 0, shredTicks: 0, shredStacks: 0, reward: 1, score: 1, coreDamage: 1, boss: false }],
+      enemies: [{ id: 'nearby', name: '待办', archetype: 'basic', armor: 0, singleTargetDamageCap: null, pathIndex: 10, hp: 100, maxHp: 100, speedTicks: 100, slowTicks: 0, shredTicks: 0, shredStacks: 0, reward: 1, score: 1, coreDamage: 1, boss: false }],
       hero: { ...base.hero, x: 7, y: 6 },
     });
     renderPage(); fireEvent.keyDown(window, { key: ' ', code: 'Space' });
@@ -241,6 +294,51 @@ describe('WorkstationTowerDefensePage merging edition', () => {
     expect(screen.getByRole('button', { name: '释放专注脉冲' })).toBeDisabled();
     expect(document.querySelector(`.${styles.battleEffects} [data-source="pulse"]`)).not.toBeNull();
     expect(document.querySelectorAll(`.${styles.hero}`)).toHaveLength(1);
+  });
+
+  it('warns before the high-pressure round and only starts it after an explicit click', () => {
+    useInitialState({ status: 'intermission', wave: 1, spawnQueue: [], enemies: [], plantLevel: 1 });
+    renderPage(); const before = coins();
+    expect(screen.getByRole('heading', { name: '第二回合突袭预警' })).toBeInTheDocument();
+    expect(screen.getByLabelText('两回合进度').querySelector('[aria-current="step"]')).toHaveTextContent('突袭回合');
+    expect(screen.getByText('快速催办')).toBeInTheDocument();
+    expect(screen.getByText('密集群怪')).toBeInTheDocument();
+    expect(screen.getByText('护甲精英')).toBeInTheDocument();
+    expect(screen.getByText('小 Boss')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '第二回合突袭预警' })).toHaveTextContent(`经营回合奖励 ${engine.TOWER_INTERMISSION_CREDIT_BONUS} 金币已到账`);
+    expect(screen.getByRole('region', { name: '第二回合突袭预警' })).toHaveTextContent('间歇不持续产币');
+    expect(screen.getByText(`成团：单体每次最多 ${engine.TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP} 伤害，范围处理有效`)).toBeVisible();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(coins()).toBe(before);
+    expect(screen.getByLabelText('当前回合')).toHaveTextContent('1 / 2');
+    fireEvent.click(screen.getByRole('button', { name: /迎战第二回合/ }));
+    expect(screen.queryByRole('heading', { name: '第二回合突袭预警' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('当前回合')).toHaveTextContent('2 / 2');
+    expect(screen.getByRole('status')).toHaveTextContent('第二回合突袭');
+    expect(screen.getByRole('group', { name: /工位塔防地图/ })).toHaveFocus();
+    expect(screen.queryByRole('button', { name: /第三回合|第 3 波/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the live armored midboss health and distinguishes enemy archetypes visually', () => {
+    useInitialState({ status: 'running', wave: 2, spawnQueue: [], enemies: [
+      { id: 'midboss', name: '临时加班通知', archetype: 'midboss', armor: 5, singleTargetDamageCap: null, pathIndex: 3, hp: 135, maxHp: 270, speedTicks: 100, slowTicks: 0, shredTicks: 0, shredStacks: 0, reward: 1, score: 1, coreDamage: 3, boss: true },
+      { id: 'fast', name: '催办', archetype: 'fast', armor: 0, singleTargetDamageCap: null, pathIndex: 1, hp: 20, maxHp: 20, speedTicks: 2, slowTicks: 0, shredTicks: 0, shredStacks: 0, reward: 1, score: 1, coreDamage: 1, boss: false },
+    ] });
+    renderPage();
+    expect(screen.getByLabelText('小 Boss 战况')).toHaveTextContent('临时加班通知');
+    expect(screen.getByLabelText('小 Boss 战况')).toHaveTextContent('护甲 5');
+    expect(screen.getByRole('progressbar', { name: '小 Boss 生命值' })).toHaveAttribute('value', '135');
+    expect(screen.getByRole('progressbar', { name: '小 Boss 生命值' })).toHaveAttribute('max', '270');
+    expect(document.querySelector(`.${styles.enemy}[data-archetype="fast"]`)).toHaveTextContent('快');
+  });
+
+  it('gives actionable loss advice based on missing economy or defenses', () => {
+    useInitialState({ status: 'lost', wave: 2, plantLevel: 1, coreHp: 0 }); renderPage();
+    expect(screen.getByRole('heading', { name: '下一局，试试这样调整' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '下一局，试试这样调整' })).toHaveTextContent('定向订货可凑齐三件');
+    expect(screen.getByRole('region', { name: '下一局，试试这样调整' })).toHaveTextContent('打印机清群怪');
+    expect(screen.getByRole('button', { name: '再来一局' })).toBeEnabled();
+    expect(window.localStorage.getItem(MERGE_SETTINGS_KEY)).toBeNull();
   });
 
   it('cleans up the battle interval on unmount and resets the whole run explicitly', () => {

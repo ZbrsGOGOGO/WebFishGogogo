@@ -36,6 +36,9 @@ describe('public site mode', () => {
     );
     expect(screen.getByRole('heading', { name: '一个角色，五条合成防线' })).toBeInTheDocument();
     expect(screen.getByText('订书机')).toBeInTheDocument();
+    expect(screen.getByLabelText('工位塔防试玩说明')).toHaveTextContent('5 种');
+    expect(screen.getByLabelText('工位塔防试玩说明')).toHaveTextContent('2 回合');
+    expect(screen.getByLabelText('工位塔防试玩说明')).not.toHaveTextContent('3 波');
     expect(screen.queryByRole('link', { name: '注册' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '登录' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '农场' })).toHaveAttribute(
