@@ -110,7 +110,8 @@ export function careForCommunityPlant(
 ): Promise<CommunityFarmMutationResult> {
   return communityHttp.post('/v1/farm/care', undefined, {
     headers: communityIdempotencyHeaders(idempotencyKey),
-    retryAfterRefresh: false,
+    // 后端按此键去重；登录续期后仅以同一键重试一次，不重复扣种子费。
+    retryAfterRefresh: true,
   });
 }
 
@@ -119,7 +120,7 @@ export function harvestAndCareForCommunityPlant(
 ): Promise<CommunityFarmMutationResult> {
   return communityHttp.post('/v1/farm/harvest-and-care', undefined, {
     headers: communityIdempotencyHeaders(idempotencyKey),
-    retryAfterRefresh: false,
+    retryAfterRefresh: true,
   });
 }
 

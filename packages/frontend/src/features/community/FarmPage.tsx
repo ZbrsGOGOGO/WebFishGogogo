@@ -16,6 +16,7 @@ import styles from './FarmPage.module.css';
 const GUEST_FARM_KEY = 'zbrs.guest-farm.v1';
 const GUEST_FIRST_CYCLE_SECONDS = 30;
 const GUEST_STANDARD_CYCLE_SECONDS = 5 * 60;
+const MATURITY_REFRESH_LIMIT = 3;
 
 const GUEST_CROPS: CommunityFarmOverview['crops'] = [
   { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, seedCost: 10, seedCostPerPlot: 10, coins: 100, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
@@ -127,16 +128,35 @@ function growthProgress(overview: CommunityFarmOverview, remainingSeconds: numbe
 
 export function CommunityFarmPage(): JSX.Element {
   const phase = useCommunityAuthStore((state) => state.phase);
+  const userId = useCommunityAuthStore((state) => state.user?.publicId);
   const authenticated = phase !== 'bootstrapping' && phase !== 'guest';
   const [overview, setOverview] = useState<CommunityFarmOverview | null>(null);
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [clientNowMs, setClientNowMs] = useState(Date.now());
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [growthBusy, setGrowthBusy] = useState<string>();
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
-  const refreshedMaturity = useRef<string>();
+  const [maturityRefreshPaused, setMaturityRefreshPaused] = useState(false);
+  const maturityRefresh = useRef({ maturesAt: '', attempts: 0, retryAt: 0 });
+  const mounted = useRef(true);
+  const requestInFlight = useRef(false);
+  const requestVersion = useRef(0);
+
+  const beginRequest = useCallback((): number | undefined => {
+    if (!mounted.current || requestInFlight.current) return undefined;
+    requestInFlight.current = true;
+    requestVersion.current += 1;
+    return requestVersion.current;
+  }, []);
+
+  const isCurrentRequest = useCallback((version: number): boolean => {
+    const auth = useCommunityAuthStore.getState();
+    return mounted.current && version === requestVersion.current &&
+      auth.phase === phase && auth.user?.publicId === userId;
+  }, [phase, userId]);
 
   const applyOverview = useCallback((next: CommunityFarmOverview): void => {
     const serverNow = Date.parse(next.serverTime);
@@ -146,18 +166,42 @@ export function CommunityFarmPage(): JSX.Element {
   }, []);
 
   const load = useCallback(async (showLoading = true): Promise<void> => {
+    const version = beginRequest();
+    if (version === undefined) return;
     if (showLoading) setLoading(true);
+    setRefreshing(true);
     setError(undefined);
     try {
-      applyOverview(authenticated ? await communityFarmApi.getOverview() : loadGuestFarm());
+      const next = authenticated ? await communityFarmApi.getOverview() : loadGuestFarm();
+      if (isCurrentRequest(version)) applyOverview(next);
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '绿植暂时没有连接上，请稍后再试'));
+      if (isCurrentRequest(version)) {
+        setError(communityRequestErrorMessage(requestError, '绿植暂时没有连接上，请稍后再试'));
+      }
     } finally {
-      if (showLoading) setLoading(false);
+      if (isCurrentRequest(version)) {
+        requestInFlight.current = false;
+        setRefreshing(false);
+        if (showLoading) setLoading(false);
+      }
     }
-  }, [applyOverview, authenticated]);
+  }, [applyOverview, authenticated, beginRequest, isCurrentRequest]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    mounted.current = true;
+    setOverview(null);
+    setBusy(false);
+    setGrowthBusy(undefined);
+    setNotice(undefined);
+    maturityRefresh.current = { maturesAt: '', attempts: 0, retryAt: 0 };
+    setMaturityRefreshPaused(false);
+    void load();
+    return () => {
+      mounted.current = false;
+      requestVersion.current += 1;
+      requestInFlight.current = false;
+    };
+  }, [load]);
   useEffect(() => {
     const interval = window.setInterval(() => setClientNowMs(Date.now()), 1000);
     return () => window.clearInterval(interval);
@@ -170,13 +214,36 @@ export function CommunityFarmPage(): JSX.Element {
 
   useEffect(() => {
     const maturesAt = overview?.plant.maturesAt;
-    if (overview?.state !== 'growing' || !maturesAt || remainingSeconds !== 0 || refreshedMaturity.current === maturesAt) return;
-    refreshedMaturity.current = maturesAt;
+    if (overview?.state !== 'growing' || !maturesAt) {
+      maturityRefresh.current = { maturesAt: '', attempts: 0, retryAt: 0 };
+      setMaturityRefreshPaused(false);
+      return;
+    }
+    if (maturityRefresh.current.maturesAt !== maturesAt) {
+      maturityRefresh.current = { maturesAt, attempts: 0, retryAt: 0 };
+      setMaturityRefreshPaused(false);
+    }
+    const retry = maturityRefresh.current;
+    if (remainingSeconds !== 0 || requestInFlight.current ||
+      retry.attempts >= MATURITY_REFRESH_LIMIT || clientNowMs < retry.retryAt) return;
+    retry.attempts += 1;
+    retry.retryAt = clientNowMs + (retry.attempts === 1 ? 3000 : 8000);
+    setMaturityRefreshPaused(retry.attempts >= MATURITY_REFRESH_LIMIT);
     void load(false);
-  }, [load, overview?.plant.maturesAt, overview?.state, remainingSeconds]);
+  }, [clientNowMs, load, overview?.plant.maturesAt, overview?.state, remainingSeconds]);
+
+  function refreshState(): void {
+    if (requestInFlight.current) return;
+    maturityRefresh.current = { maturesAt: '', attempts: 0, retryAt: 0 };
+    setMaturityRefreshPaused(false);
+    setNotice(undefined);
+    void load(false);
+  }
 
   async function mainAction(): Promise<void> {
     if (!overview || overview.state === 'growing') return;
+    const version = beginRequest();
+    if (version === undefined) return;
     setBusy(true);
     setError(undefined);
     setNotice(undefined);
@@ -229,19 +296,34 @@ export function CommunityFarmPage(): JSX.Element {
       const result = overview.state === 'idle'
         ? await communityFarmApi.care(key)
         : await communityFarmApi.harvestAndCare(key);
+      if (!isCurrentRequest(version)) return;
       applyOverview(result.farm);
-      setNotice(overview.state === 'idle'
-        ? '照料完成！绿植已经开始成长。'
-        : result.reward?.summary ?? '收获成功！下一轮成长已经开始。');
+      if (overview.state === 'idle') {
+        setNotice(result.farm.state === 'growing'
+          ? '照料完成！绿植已经开始成长。'
+          : '农场状态已同步，请查看当前成长状态。');
+      } else {
+        const harvestSummary = result.reward?.summary ?? '收获成功！';
+        setNotice(result.farm.state === 'idle'
+          ? `${harvestSummary} 本次收获已保存，办公币不足以购买下一轮种子，尚未续种。请选择低成本作物或补充办公币后浇水。`
+          : `${harvestSummary} 下一轮成长已经开始。`);
+      }
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '这次操作没有成功，请再试一次'));
+      if (isCurrentRequest(version)) {
+        setError(communityRequestErrorMessage(requestError, '这次操作没有成功，请再试一次'));
+      }
     } finally {
-      setBusy(false);
+      if (isCurrentRequest(version)) {
+        requestInFlight.current = false;
+        setBusy(false);
+      }
     }
   }
 
   async function selectCrop(cropKey: string, cropName: string): Promise<void> {
     if (!authenticated || !overview) return;
+    const version = beginRequest();
+    if (version === undefined) return;
     setGrowthBusy(`crop:${cropKey}`);
     setError(undefined);
     try {
@@ -250,17 +332,23 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-crop'),
       );
+      if (!isCurrentRequest(version)) return;
       applyOverview(result.farm);
       setNotice(`${cropName}已设为下一轮作物，当前成长不会被打断。`);
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '作物选择没有保存，请刷新后再试'));
+      if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '作物选择没有保存，请刷新后再试'));
     } finally {
-      setGrowthBusy(undefined);
+      if (isCurrentRequest(version)) {
+        requestInFlight.current = false;
+        setGrowthBusy(undefined);
+      }
     }
   }
 
   async function upgradeTool(tool: CommunityFarmTool): Promise<void> {
     if (!authenticated || !overview) return;
+    const version = beginRequest();
+    if (version === undefined) return;
     setGrowthBusy(`tool:${tool.id}`);
     setError(undefined);
     try {
@@ -269,17 +357,23 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-tool'),
       );
+      if (!isCurrentRequest(version)) return;
       applyOverview(result.farm);
       setNotice(`${tool.name}已升到 Lv.${result.farm.tools.find((item) => item.id === tool.id)?.level ?? tool.level + 1}，消耗 ${result.cost} 办公币。`);
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '工具升级没有成功，请确认办公币余额和档案状态'));
+      if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '工具升级没有成功，请确认办公币余额和档案状态'));
     } finally {
-      setGrowthBusy(undefined);
+      if (isCurrentRequest(version)) {
+        requestInFlight.current = false;
+        setGrowthBusy(undefined);
+      }
     }
   }
 
   async function upgradeSkill(skill: CommunityFarmSkill): Promise<void> {
     if (!authenticated || !overview) return;
+    const version = beginRequest();
+    if (version === undefined) return;
     setGrowthBusy(`skill:${skill.id}`);
     setError(undefined);
     try {
@@ -288,12 +382,16 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-skill'),
       );
+      if (!isCurrentRequest(version)) return;
       applyOverview(result.farm);
       setNotice(`${skill.name}已升到 Lv.${result.farm.skills.find((item) => item.id === skill.id)?.level ?? skill.level + 1}。`);
     } catch (requestError) {
-      setError(communityRequestErrorMessage(requestError, '技能升级没有成功，请确认技能点和解锁等级'));
+      if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '技能升级没有成功，请确认技能点和解锁等级'));
     } finally {
-      setGrowthBusy(undefined);
+      if (isCurrentRequest(version)) {
+        requestInFlight.current = false;
+        setGrowthBusy(undefined);
+      }
     }
   }
 
@@ -308,7 +406,18 @@ export function CommunityFarmPage(): JSX.Element {
   const progress = growthProgress(overview, remainingSeconds);
   const ready = overview.state === 'ready';
   const idle = overview.state === 'idle';
-  const actionLabel = idle ? '浇水，开始成长' : ready ? '收获并种下新一轮' : '正在成长';
+  const operationBusy = busy || Boolean(growthBusy) || refreshing;
+  const selectedCrop = overview.crops.find((crop) => crop.selected);
+  // Older servers reported firstCycle=true whenever there was no active cycle.
+  const freeFirstCycle = idle && overview.plant.firstCycle && overview.growth.totalHarvests === 0;
+  const seedCost = !authenticated || freeFirstCycle ? 0 : selectedCrop?.seedCost ?? 0;
+  const insufficientSeeds = authenticated && seedCost > overview.growth.officeCoins;
+  const affordableCrops = overview.crops.filter((crop) =>
+    crop.unlocked && !crop.selected && crop.seedCost < seedCost && crop.seedCost <= overview.growth.officeCoins,
+  );
+  const actionLabel = idle
+    ? insufficientSeeds ? '办公币不足，请先选择低成本作物' : '浇水，开始成长'
+    : ready ? '收获并尝试种下新一轮' : '正在成长';
   const statusLabel = idle ? '等待照料' : ready ? '已经成熟' : '成长中';
   const levelProgress = overview.plant.experienceToNextLevel
     ? Math.min(100, Math.round(overview.plant.experienceInLevel / overview.plant.experienceToNextLevel * 100))
@@ -354,18 +463,36 @@ export function CommunityFarmPage(): JSX.Element {
             <div className={styles.progressTrack}><i style={{ width: `${progress}%` }} /></div>
             <p aria-live="polite">
               {idle
-                ? '浇一次水，就会开始第一轮成长'
+                ? freeFirstCycle ? '首次浇水免费，开始第一轮成长' : '浇水会购买所选种子，开始新一轮成长'
                 : ready
                   ? '已经长好，现在可以收获'
                   : remainingSeconds === 0
-                    ? '正在确认成熟状态…'
+                    ? maturityRefreshPaused && !refreshing
+                      ? '成熟状态尚未确认，请点击“刷新状态”重试。'
+                      : '正在确认成熟状态…'
                     : `还有 ${formatCommunityFarmDuration(remainingSeconds)} 成熟`}
             </p>
           </div>
 
-          <Button className={styles.mainAction} fullWidth loading={busy} disabled={!idle && !ready} onClick={() => void mainAction()}>
+          <div className={styles.seedBudget} data-insufficient={insufficientSeeds} aria-label="下一轮种植预算">
+            <strong>下一轮作物：{selectedCrop?.name ?? overview.plant.name}</strong>
+            <p>{!authenticated
+              ? '游客试玩免费，进度仅保存在当前浏览器。'
+              : freeFirstCycle
+                ? '首次种植免费；后续每轮会按已解锁地块购买种子。'
+                : `${selectedCrop?.seedCostPerPlot ?? 0} 办公币/块 × ${overview.growth.plotCount} 块 = ${seedCost} 办公币`}</p>
+            {authenticated ? <p>当前余额：{overview.growth.officeCoins} 办公币{insufficientSeeds ? `，还差 ${seedCost - overview.growth.officeCoins}。` : '。'}</p> : null}
+            {insufficientSeeds ? <p>
+              {ready ? '仍可收获，收益会先到账；余额足够才会续种。' : '种子办公币不足，刷新不会增加余额。'}
+              {affordableCrops.length
+                ? ` 可在下方手动选择：${affordableCrops.map((crop) => `${crop.name}（${crop.seedCost} 办公币）`).join('、')}。`
+                : ' 当前没有买得起的已解锁作物，请补充办公币后再种植。'}
+            </p> : ready && authenticated ? <p>收获后如解锁更多地块，续种费用会按新地块数计算；余额不足时仅收获、不续种。</p> : null}
+          </div>
+          <Button className={styles.mainAction} fullWidth loading={busy} disabled={operationBusy || (!idle && !ready) || (idle && insufficientSeeds)} onClick={() => void mainAction()}>
             {actionLabel}
           </Button>
+          <Button className={styles.refreshAction} variant="secondary" fullWidth loading={refreshing} disabled={operationBusy} onClick={refreshState}>刷新状态</Button>
           <small className={styles.actionHint}>今日订单 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}；前三次收获会获得办公币。</small>
         </div>
       </section>
@@ -406,7 +533,7 @@ export function CommunityFarmPage(): JSX.Element {
               <Button
                 variant={crop.selected ? 'secondary' : 'primary'}
                 loading={growthBusy === `crop:${crop.key}`}
-                disabled={!authenticated || !crop.unlocked || crop.selected || Boolean(growthBusy)}
+                disabled={!authenticated || !crop.unlocked || crop.selected || operationBusy}
                 onClick={() => void selectCrop(crop.key, crop.name)}
               >
                 {!authenticated ? '登录后选择' : !crop.unlocked ? `Lv.${crop.unlockLevel} 解锁` : crop.selected ? '下一轮已选' : '设为下一轮'}
@@ -422,7 +549,7 @@ export function CommunityFarmPage(): JSX.Element {
           <div className={styles.upgradeList}>
             {overview.tools.map((tool) => {
               const maxed = tool.level >= tool.maxLevel;
-              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || overview.growth.officeCoins < tool.nextCost || Boolean(growthBusy)} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 办公币升级`}</Button></article>;
+              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || overview.growth.officeCoins < tool.nextCost || operationBusy} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 办公币升级`}</Button></article>;
             })}
           </div>
         </div>
@@ -431,7 +558,7 @@ export function CommunityFarmPage(): JSX.Element {
           <div className={styles.upgradeList}>
             {overview.skills.map((skill) => {
               const maxed = skill.level >= skill.maxLevel;
-              return <article key={skill.id} data-locked={!skill.unlocked}><div><span>{skill.unlocked ? '已解锁' : `Lv.${skill.unlockLevel} 解锁`}</span><strong>{skill.name}</strong><small>{skill.description}</small></div><b>Lv.{skill.level}</b><Button variant="secondary" loading={growthBusy === `skill:${skill.id}`} disabled={!authenticated || !skill.unlocked || maxed || overview.growth.skillPointsAvailable < 1 || Boolean(growthBusy)} onClick={() => void upgradeSkill(skill)}>{!authenticated ? '登录后升级' : !skill.unlocked ? '未解锁' : maxed ? '已满级' : '1 点升级'}</Button></article>;
+              return <article key={skill.id} data-locked={!skill.unlocked}><div><span>{skill.unlocked ? '已解锁' : `Lv.${skill.unlockLevel} 解锁`}</span><strong>{skill.name}</strong><small>{skill.description}</small></div><b>Lv.{skill.level}</b><Button variant="secondary" loading={growthBusy === `skill:${skill.id}`} disabled={!authenticated || !skill.unlocked || maxed || overview.growth.skillPointsAvailable < 1 || operationBusy} onClick={() => void upgradeSkill(skill)}>{!authenticated ? '登录后升级' : !skill.unlocked ? '未解锁' : maxed ? '已满级' : '1 点升级'}</Button></article>;
             })}
           </div>
         </div>

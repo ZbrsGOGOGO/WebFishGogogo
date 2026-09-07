@@ -241,7 +241,7 @@ export class DeskPlantService {
       plant.level = farmLevelSnapshot(plant.plantExperience).level;
       plant.farmVersion = Math.max(1, Number(plant.farmVersion ?? 1)) + 1;
       await manager.getRepository(DeskPlant).save(plant);
-      await this.startCycle(
+      const nextCycle = await this.startCycle(
         manager,
         users.get(userId)!,
         plant,
@@ -271,6 +271,7 @@ export class DeskPlantService {
             ? `今日订单 ${completedBefore + 1}/${FARM_DAILY_ORDER_LIMIT}：职场经验 +8、办公币 +${officeCoins}`
             : '今日三份办公币订单已完成，作物继续进入仓库进度',
           plant.level > previousLevel ? `农场升到 Lv.${plant.level}` : null,
+          nextCycle ? null : '本轮收获已保留；办公币不足，未开始下一轮，可切换低成本作物后再浇水',
         ].filter(Boolean).join('；'),
       };
       const result = {
@@ -468,7 +469,7 @@ export class DeskPlantService {
       category: 'farm',
       eventType: 'farm.plant.matured',
       title: '工位绿植成熟了',
-      summary: '点击主按钮即可收获并自动开始下一轮照料',
+      summary: '点击主按钮收获，办公币足够时自动开始下一轮照料',
       resourceType: 'desk_plant_cycle',
       resourceId: cycle.id,
       resourcePath: '/farm',
@@ -530,6 +531,9 @@ export class DeskPlantService {
     const cycle = await manager.getRepository(DeskPlantCycle).findOne({
       where: { userId, harvestedAt: IsNull() },
     });
+    const firstCycle = cycle
+      ? cycle.sequence === 1
+      : !(await manager.getRepository(DeskPlantCycle).exist({ where: { userId } }));
     const serviceDate = toCommunityServiceDate(now);
     const ordersCompleted = await manager
       .getRepository(DeskPlantRewardClaim)
@@ -570,7 +574,7 @@ export class DeskPlantService {
         cycleStartedAt: cycle?.startedAt.toISOString() ?? null,
         maturesAt: cycle?.maturesAt.toISOString() ?? null,
         cycleSeconds: cycle?.durationSeconds ?? null,
-        firstCycle: cycle ? cycle.sequence === 1 : true,
+        firstCycle,
       },
       growth: {
         farmCoins: 0,

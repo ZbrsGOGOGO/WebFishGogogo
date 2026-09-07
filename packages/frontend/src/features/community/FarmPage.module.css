@@ -29,6 +29,9 @@
 .progressBlock { margin: 18px 0 21px; display: grid; gap: 8px; }.progressBlock > div:first-child { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; }.progressBlock strong { color: #4d7041; }.progressTrack { height: 10px; overflow: hidden; border-radius: 999px; background: #e7ece3; }.progressTrack i { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, #74b964, #a7dd72); transition: width .35s ease; }.progressBlock p { min-height: 19px; margin: 0; color: #6f7b8c; font-size: 11px; }
 .mainAction { min-height: 48px !important; border-radius: 12px !important; color: #16311e !important; background: #a6e576 !important; font-weight: 850 !important; box-shadow: 0 9px 22px rgba(92,153,77,.2); }.mainAction:disabled { box-shadow: none; filter: grayscale(.55); }
 .actionHint { margin-top: 10px; color: #8c95a3; text-align: center; }
+.seedBudget { margin: 0 0 14px; padding: 11px 12px; border: 1px solid #dce8d5; border-radius: 11px; color: #476048; background: #f5faf1; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.seedBudget strong { display: block; font-size: 12px; }.seedBudget p { margin: 4px 0 0; }.seedBudget[data-insufficient='true'] { border-color: #ecd1a6; color: #80551d; background: #fff8e9; }
+.refreshAction { margin-top: 9px; min-height: 38px; }
 .plotSection { padding: 19px; border: 1px solid #dce2d8; border-radius: 17px; background: #fbfdf9; }
 .plotGrid { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 9px; }
 .plotGrid article { min-height: 86px; display: grid; place-content: center; justify-items: center; gap: 5px; border: 1px dashed #ccd3ca; border-radius: 13px; color: #89918a; background: #f1f3f0; }

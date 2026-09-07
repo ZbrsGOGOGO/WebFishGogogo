@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import { type DataSource } from 'typeorm';
+import { IsNull, type DataSource } from 'typeorm';
 
+import { CommunityCommandReceipt } from '../../database/entities/community-command-receipt.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
 import { DeskPlantCycle } from '../../database/entities/desk-plant-cycle.entity';
 import { DeskPlantRewardClaim } from '../../database/entities/desk-plant-reward-claim.entity';
@@ -13,6 +14,7 @@ import { PlayerProgression } from '../../database/entities/player-progression.en
 import { RewardGrant } from '../../database/entities/reward-grant.entity';
 import { User } from '../../database/entities/user.entity';
 import { WalletBalance } from '../../database/entities/wallet-balance.entity';
+import { WalletLedger } from '../../database/entities/wallet-ledger.entity';
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
 import { PlatformAssetsService } from '../platform';
 import type { CommunityClock } from './community-clock';
@@ -67,11 +69,13 @@ describe('DeskPlantService and FeedService integration', () => {
 
   it('uses a 30-second first cycle and replays harvest without duplicate rewards', async () => {
     const user = await activeUser('plant@example.com', 'Plant');
+    expect((await plants.overview(user.id)).plant.firstCycle).toBe(true);
     const cared = await plants.care(user.id, 'plant-care-first-key');
     const caredReplay = await plants.care(user.id, 'plant-care-first-key');
     expect(caredReplay).toEqual(cared);
     expect((cared as any).farm.state).toBe('growing');
     expect((cared as any).farm.plant.cycleSeconds).toBe(30);
+    expect((cared as any).farm.plant.firstCycle).toBe(true);
     expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(1);
 
     now = new Date(now.getTime() + 31_000);
@@ -91,6 +95,7 @@ describe('DeskPlantService and FeedService integration', () => {
       }),
     );
     expect((harvested as any).farm.plant.cycleSeconds).toBe(5 * 60);
+    expect((harvested as any).farm.plant.firstCycle).toBe(false);
     expect((harvested as any).farm.plant.level).toBe(2);
     expect((harvested as any).farm.growth).toMatchObject({
       farmCoins: 0,
@@ -121,6 +126,114 @@ describe('DeskPlantService and FeedService integration', () => {
       })).balance,
     ).toBe(590);
     expect(await dataSource.getRepository(OutboxEvent).count()).toBe(0);
+  });
+
+  it('reports the full batch seed cost without spending and allows an idempotent cheaper restart', async () => {
+    const user = await activeUser('seed-balance@example.com', 'Seed Balance');
+    await plants.care(user.id, 'seed-balance-first-care');
+    // Returning Lv.13 player: four plots of coffee cost 440, not 110.
+    await dataSource.getRepository(DeskPlantCycle).update(
+      { userId: user.id },
+      { harvestedAt: now },
+    );
+    await dataSource.getRepository(DeskPlant).update({ userId: user.id }, {
+      state: 'idle',
+      plantExperience: 1157,
+      level: 13,
+      totalHarvests: 1,
+      selectedCropKey: 'overtime_coffee',
+    });
+    await dataSource.getRepository(WalletBalance).update(
+      { userId: user.id, currency: 'office_coin' },
+      { balance: '237' },
+    );
+
+    await expect(plants.care(user.id, 'seed-balance-insufficient')).rejects.toMatchObject({
+      response: { code: 'OFFICE_COIN_INSUFFICIENT', required: 440, current: 237 },
+    });
+    const idle = await plants.overview(user.id);
+    expect(idle).toMatchObject({
+      state: 'idle',
+      plant: { firstCycle: false },
+      growth: { officeCoins: 237, plotCount: 4 },
+    });
+    expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(1);
+    expect(await dataSource.getRepository(DeskPlantCycle).countBy({ harvestedAt: IsNull() })).toBe(0);
+    expect(await dataSource.getRepository(WalletLedger).countBy({ sourceType: 'farm_seed' })).toBe(0);
+    expect(await dataSource.getRepository(CommunityCommandReceipt).countBy({
+      userId: user.id,
+      idempotencyKey: 'seed-balance-insufficient',
+    })).toBe(0);
+
+    await plants.selectCrop(user.id, 'desk_mint', idle.growth.farmVersion, 'seed-balance-select-mint');
+    const restarted = await plants.care(user.id, 'seed-balance-restart');
+    expect(await plants.care(user.id, 'seed-balance-restart')).toEqual(restarted);
+    // Even another key cannot debit an already growing cycle again.
+    await plants.care(user.id, 'seed-balance-already-growing');
+    expect(await plants.overview(user.id)).toMatchObject({
+      state: 'growing',
+      plant: { firstCycle: false, cycleSeconds: 300 },
+      growth: { officeCoins: 197 },
+    });
+    expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(2);
+    expect(await dataSource.getRepository(WalletLedger).countBy({ sourceType: 'farm_seed' })).toBe(1);
+    expect(Number((await dataSource.getRepository(WalletLedger).findOneByOrFail({
+      sourceType: 'farm_seed',
+    })).delta)).toBe(-40);
+  });
+
+  it('keeps a mature harvest and its reward when the next batch is unaffordable', async () => {
+    const user = await activeUser('harvest-balance@example.com', 'Harvest Balance');
+    await plants.care(user.id, 'harvest-balance-first-care');
+    now = new Date(now.getTime() + 31_000);
+    await plants.harvestAndCare(user.id, 'harvest-balance-first-harvest');
+    await dataSource.getRepository(DeskPlant).update({ userId: user.id }, {
+      plantExperience: 1157,
+      level: 13,
+      selectedCropKey: 'overtime_coffee',
+    });
+    const matureCycle = await dataSource.getRepository(DeskPlantCycle).findOneByOrFail({
+      userId: user.id,
+      harvestedAt: IsNull(),
+    });
+    await dataSource.getRepository(DeskPlantCycle).update({ id: matureCycle.id }, {
+      cropKey: 'meeting_tomato',
+      maturesAt: now,
+    });
+    await dataSource.getRepository(WalletBalance).update(
+      { userId: user.id, currency: 'office_coin' },
+      { balance: '100' },
+    );
+
+    const harvested = await plants.harvestAndCare(user.id, 'harvest-balance-preserved');
+    expect(harvested).toMatchObject({
+      farm: {
+        state: 'idle',
+        plant: { firstCycle: false, experience: 1285, maturesAt: null },
+        growth: { officeCoins: 232, totalHarvests: 2 },
+      },
+      reward: {
+        orderRewardGranted: true,
+        onboardingRewardGranted: false,
+        farmExperience: 128,
+        officeCoins: 132,
+        summary: expect.stringContaining('未开始下一轮'),
+      },
+    });
+    expect(await plants.harvestAndCare(user.id, 'harvest-balance-preserved')).toEqual(harvested);
+    expect(await plants.overview(user.id)).toMatchObject({
+      state: 'idle',
+      plant: { experience: 1285, firstCycle: false },
+      growth: { officeCoins: 232, totalHarvests: 2 },
+    });
+    expect((await dataSource.getRepository(DeskPlantCycle).findOneByOrFail({
+      id: matureCycle.id,
+    })).harvestedAt).toEqual(now);
+    expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(2);
+    expect(await dataSource.getRepository(DeskPlantCycle).countBy({ harvestedAt: IsNull() })).toBe(0);
+    expect(await dataSource.getRepository(WalletLedger).countBy({ sourceType: 'farm_seed' })).toBe(1);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(2);
+    expect(await dataSource.getRepository(DeskPlantRewardClaim).count()).toBe(3);
   });
 
   it('treats feed as a capped, idempotent animation without moving assets', async () => {
