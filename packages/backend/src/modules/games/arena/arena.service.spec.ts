@@ -339,6 +339,13 @@ async function createArenaTestDataSource(): Promise<DataSource> {
     returns: 'integer' as never,
     implementation: (value: string) => [...value].length,
   });
+  // This fixture runs every migration, including the private attachment CHECK.
+  db.public.registerFunction({
+    name: 'octet_length',
+    args: ['bytea' as never],
+    returns: 'integer' as never,
+    implementation: (value: Buffer | Uint8Array) => value.byteLength,
+  });
   db.registerExtension('pgcrypto', () => {});
   db.registerExtension('uuid-ossp', () => {});
 

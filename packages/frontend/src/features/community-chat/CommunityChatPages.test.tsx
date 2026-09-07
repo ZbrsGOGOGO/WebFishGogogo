@@ -1,5 +1,11 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+} from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -57,6 +63,22 @@ class BrowserFakeSocket {
   receive(value: unknown): void {
     this.onmessage?.({ data: JSON.stringify(value) } as MessageEvent);
   }
+
+  remoteClose(code = 1006): void {
+    this.readyState = 3;
+    this.onclose?.({ code, reason: 'remote close' } as CloseEvent);
+  }
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
 }
 
 function serverMessage(clientMessageId: string): CommunityChatMessage {
@@ -243,5 +265,212 @@ describe('community fixed chat pages', () => {
 
     expect(await screen.findByText('REST 历史消息')).toBeInTheDocument();
     expect(screen.getByText('先到的实时消息')).toBeInTheDocument();
+  });
+
+  it('recovers an acknowledged send when its realtime created frame is lost', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    let committedClientMessageId: string | undefined;
+    vi.spyOn(communityChatApi, 'listMessages').mockImplementation(async (roomSlug, options = {}) => {
+      if (roomSlug === 'general' && committedClientMessageId && options.afterSequence === 0) {
+        return {
+          items: [serverMessage(committedClientMessageId)],
+          latestSequence: 1,
+          oldestSequence: 1,
+          hasMoreBefore: false,
+          hasMoreAfter: false,
+        };
+      }
+      return { items: [], latestSequence: 0, oldestSequence: null, hasMoreBefore: false };
+    });
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({
+      ticket: 'single-use-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/community/chat/general']}>
+        <Routes>
+          <Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole('textbox', { name: '消息内容' });
+    const socket = BrowserFakeSocket.instances[0];
+    act(() => {
+      socket.open();
+      socket.receive({
+        type: 'chat.authenticated', protocolVersion: 1,
+        sessionId: 'session-1', serverTime: '2026-08-22T10:00:00.000Z',
+      });
+      socket.receive({
+        type: 'chat.ready', protocolVersion: 1,
+        rooms: [{ roomSlug: 'general', latestSequence: 0 }],
+      });
+    });
+    await screen.findByText('在线');
+
+    fireEvent.change(screen.getByRole('textbox', { name: '消息内容' }), {
+      target: { value: '这是一条真实服务端消息' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
+    const sent = socket.sent.map((frame) => JSON.parse(frame)).find((frame) => frame.type === 'chat.send');
+    committedClientMessageId = sent.clientMessageId;
+
+    act(() => socket.receive({
+      type: 'chat.ack', protocolVersion: 1, action: 'send',
+      requestId: sent.requestId, clientMessageId: sent.clientMessageId,
+      roomSlug: 'general', messageId: 'message-1', sequence: 1,
+      serverTime: '2026-08-22T10:00:01.000Z',
+    }));
+
+    await waitFor(() => expect(communityChatApi.listMessages).toHaveBeenCalledWith(
+      'general',
+      expect.objectContaining({ afterSequence: 0 }),
+    ));
+    expect(await screen.findByText('这是一条真实服务端消息')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: '待发送消息' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps a disconnected send with its original room and retries it safely after navigation', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    vi.spyOn(communityChatApi, 'listMessages').mockResolvedValue({
+      items: [], latestSequence: 0, oldestSequence: null, hasMoreBefore: false,
+    });
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({
+      ticket: 'single-use-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1,
+    });
+    const router = createMemoryRouter([
+      { path: '/community/chat/:roomSlug', element: <CommunityChatRoomPage /> },
+    ], { initialEntries: ['/community/chat/general'] });
+    render(<RouterProvider router={router} />);
+
+    await screen.findByRole('textbox', { name: '消息内容' });
+    const firstSocket = BrowserFakeSocket.instances[0];
+    act(() => {
+      firstSocket.open();
+      firstSocket.receive({
+        type: 'chat.authenticated', protocolVersion: 1,
+        sessionId: 'session-1', serverTime: '2026-08-22T10:00:00.000Z',
+      });
+      firstSocket.receive({
+        type: 'chat.ready', protocolVersion: 1,
+        rooms: [{ roomSlug: 'general', latestSequence: 0 }],
+      });
+    });
+    await screen.findByText('在线');
+    fireEvent.change(screen.getByRole('textbox', { name: '消息内容' }), {
+      target: { value: '只应发往综合房间' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
+    const firstSend = firstSocket.sent
+      .map((frame) => JSON.parse(frame))
+      .find((frame) => frame.type === 'chat.send');
+
+    act(() => firstSocket.remoteClose());
+    expect(await screen.findByText(/发送失败：连接中断/)).toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate('/community/chat/developer');
+    });
+    await screen.findByText('房间当前只读，可以查看消息但不能发言。');
+    expect(screen.queryByText('只应发往综合房间')).not.toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate('/community/chat/general');
+    });
+    await waitFor(() => expect(BrowserFakeSocket.instances.length).toBeGreaterThanOrEqual(3));
+    const currentSocket = BrowserFakeSocket.instances.at(-1)!;
+    act(() => {
+      currentSocket.open();
+      currentSocket.receive({
+        type: 'chat.authenticated', protocolVersion: 1,
+        sessionId: 'session-3', serverTime: '2026-08-22T10:00:02.000Z',
+      });
+      currentSocket.receive({
+        type: 'chat.ready', protocolVersion: 1,
+        rooms: [{ roomSlug: 'general', latestSequence: 0 }],
+      });
+    });
+    await screen.findByText('在线');
+    fireEvent.click(screen.getByRole('button', { name: '重新发送' }));
+
+    const retried = currentSocket.sent
+      .map((frame) => JSON.parse(frame))
+      .filter((frame) => frame.type === 'chat.send')
+      .at(-1);
+    expect(retried).toMatchObject({
+      roomSlug: 'general',
+      clientMessageId: firstSend.clientMessageId,
+      body: '只应发往综合房间',
+    });
+  });
+
+  it('ignores an old A-room response after switching A to B and back to A', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    const oldRoomRequest = deferred<Awaited<ReturnType<typeof communityChatApi.listMessages>>>();
+    const developerMessage = {
+      ...serverMessage('developer-message'),
+      id: 'developer-message',
+      roomSlug: 'developer' as const,
+      body: '研发房间消息',
+    };
+    const freshGeneralMessage = {
+      ...serverMessage('fresh-general'),
+      id: 'fresh-general',
+      body: '重新进入后的综合房间消息',
+    };
+    let generalRequestCount = 0;
+    vi.spyOn(communityChatApi, 'listMessages').mockImplementation((roomSlug) => {
+      if (roomSlug === 'general') {
+        generalRequestCount += 1;
+        if (generalRequestCount === 1) return oldRoomRequest.promise;
+        return Promise.resolve({
+          items: [freshGeneralMessage], latestSequence: 1, oldestSequence: 1,
+          hasMoreBefore: false,
+        });
+      }
+      return Promise.resolve({
+        items: [developerMessage], latestSequence: 1, oldestSequence: 1, hasMoreBefore: false,
+      });
+    });
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({
+      ticket: 'single-use-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1,
+    });
+    const router = createMemoryRouter([
+      { path: '/community/chat/:roomSlug', element: <CommunityChatRoomPage /> },
+    ], { initialEntries: ['/community/chat/general'] });
+    render(<RouterProvider router={router} />);
+
+    await waitFor(() => expect(communityChatApi.listMessages).toHaveBeenCalledWith(
+      'general', { limit: 50 },
+    ));
+    await act(async () => {
+      await router.navigate('/community/chat/developer');
+    });
+
+    expect(await screen.findByText('研发房间消息')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '房间只读' })).toBeDisabled();
+
+    await act(async () => {
+      await router.navigate('/community/chat/general');
+    });
+    expect(await screen.findByText('重新进入后的综合房间消息')).toBeInTheDocument();
+    expect(screen.queryByText('研发房间消息')).not.toBeInTheDocument();
+    expect(screen.queryByText('房间当前只读，可以查看消息但不能发言。')).not.toBeInTheDocument();
+
+    await act(async () => {
+      oldRoomRequest.resolve({
+        items: [{ ...serverMessage('stale-general'), body: '迟到的综合房间消息' }],
+        latestSequence: 1,
+        oldestSequence: 1,
+        hasMoreBefore: false,
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText('重新进入后的综合房间消息')).toBeInTheDocument();
+    expect(screen.queryByText('迟到的综合房间消息')).not.toBeInTheDocument();
   });
 });

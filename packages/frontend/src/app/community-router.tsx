@@ -58,6 +58,7 @@ import {
 } from '../features/community-news';
 import { CommunityArcadeGameLayout } from '../features/games/CommunityArcadeGameLayout';
 import { PublicToolsPage } from '../features/tools/PublicToolsPage';
+import { DevelopmentAccessGate } from '../features/development/development-access';
 import { communityAvatarMark } from '../features/community/profile-options';
 import { useCommunityAuthStore } from './store/community-auth-store';
 
@@ -82,6 +83,16 @@ const SnakeGamePage = lazy(() =>
 );
 const ZhesiGamePage = lazy(() =>
   import('../features/games/zhesi/ZhesiGamePage').then((module) => ({ default: module.ZhesiGamePage })),
+);
+const DevelopmentDashboardPage = lazy(() =>
+  import('../features/development/DevelopmentDashboardPage').then((module) => ({
+    default: module.DevelopmentDashboardPage,
+  })),
+);
+const DevelopmentRequestDetailPage = lazy(() =>
+  import('../features/development/DevelopmentRequestDetailPage').then((module) => ({
+    default: module.DevelopmentRequestDetailPage,
+  })),
 );
 
 function loading(element: JSX.Element): JSX.Element {
@@ -167,6 +178,12 @@ export function CommunityModeRouter(): JSX.Element {
             <Route path="/settings/verification" element={<CommunitySocialVerificationPage />} />
           ) : null}
           <Route path="/notifications" element={<CommunityNotificationsPage />} />
+        </Route>
+        <Route element={<RequireCommunityAccount />}>
+          <Route element={<DevelopmentAccessGate />}>
+            <Route path="/development" element={loading(<DevelopmentDashboardPage />)} />
+            <Route path="/development/requests/:id" element={loading(<DevelopmentRequestDetailPage />)} />
+          </Route>
         </Route>
         {!COMMUNITY_FEATURE_FLAGS.socialVerification ? (
           <Route element={<RequireCommunityAccount />}>

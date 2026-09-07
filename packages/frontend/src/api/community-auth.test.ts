@@ -2,9 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { communityAuthApi } from './community-auth';
 import {
+  getCommunityAccessToken,
   resetCommunityHttpForTests,
   setCommunitySessionTokens,
 } from './community-http';
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
 
 describe('community auth credential client', () => {
   afterEach(() => {
@@ -58,5 +70,46 @@ describe('community auth credential client', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toMatch(
       /\/api\/v1\/auth\/password-change$/,
     );
+  });
+
+  it.each(['logout', 'logoutAll'] as const)(
+    'does not let a delayed %s cleanup clear a newer login token',
+    async (method) => {
+      const response = deferred<Response>();
+      vi.stubGlobal('fetch', vi.fn(() => response.promise));
+      setCommunitySessionTokens('old-session-token', 'old-session-csrf');
+
+      const loggingOut = communityAuthApi[method]();
+      setCommunitySessionTokens('new-login-token', 'new-login-csrf');
+      response.resolve(new Response(null, { status: 204 }));
+      await loggingOut;
+
+      expect(getCommunityAccessToken()).toBe('new-login-token');
+    },
+  );
+
+  it('rejects an old login response instead of publishing it over a newer session', async () => {
+    const response = deferred<Response>();
+    vi.stubGlobal('fetch', vi.fn(() => response.promise));
+
+    const oldLogin = communityAuthApi.login({
+      username: 'old-user',
+      password: 'a-secure-password',
+    });
+    setCommunitySessionTokens('new-session-token', 'new-session-csrf');
+    response.resolve(new Response(JSON.stringify({
+      accessToken: 'old-login-token',
+      csrfToken: 'old-login-csrf',
+      user: { id: 'old-user' },
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    await expect(oldLogin).rejects.toMatchObject({
+      status: 409,
+      body: { code: 'STALE_AUTH_RESULT' },
+    });
+    expect(getCommunityAccessToken()).toBe('new-session-token');
   });
 });

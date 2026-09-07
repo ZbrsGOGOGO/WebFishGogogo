@@ -390,6 +390,15 @@
   </div>
 </div>
 
+<dialog id="recClearDialog" aria-labelledby="recClearTitle" aria-describedby="recClearDescription" style="max-width:360px;border:1px solid var(--line);border-radius:12px;padding:24px;background:var(--paper);color:var(--ink);">
+  <h2 id="recClearTitle">清空命格录？</h2>
+  <p id="recClearDescription">本机保存的修行记录将被删除，无法恢复。成就和账号排行榜记录会保留。</p>
+  <div class="btns">
+    <button type="button" id="recClearCancel" autofocus>取消</button>
+    <button type="button" id="recClearConfirm">确认清空</button>
+  </div>
+</dialog>
+
 <div class="overlay" id="overlay">
   <div class="result">
     <div class="grade" id="rGrade">凡</div>

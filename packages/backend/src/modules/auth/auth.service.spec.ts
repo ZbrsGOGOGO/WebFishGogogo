@@ -409,6 +409,73 @@ describe('AuthService community account flow', () => {
     ).resolves.toMatchObject({ user: { publicId: user.publicId } });
   });
 
+  it.each([
+    {
+      label: 'email',
+      create: async () => {
+        const pending = await service.register(registration());
+        await service.verifyEmail({
+          registrationId: pending.registrationId,
+          code: pending.devVerificationCode!,
+        });
+        const user = await dataSource.getRepository(User).findOneByOrFail({
+          emailNormalized: 'person@example.com',
+        });
+        return {
+          user,
+          login: () => service.login({ email: user.email, password: PASSWORD }),
+        };
+      },
+    },
+    {
+      label: 'username',
+      create: async () => {
+        await service.registerAccount(accountRegistration('password_race_user'));
+        const user = await dataSource.getRepository(User).findOneByOrFail({
+          usernameNormalized: 'password_race_user',
+        });
+        return {
+          user,
+          login: () => service.loginAccount({
+            username: user.username!,
+            password: PASSWORD,
+          }),
+        };
+      },
+    },
+  ])(
+    'rejects an old $label password when its hash changes after the initial verification',
+    async ({ create }) => {
+      const { user, login } = await create();
+      const sessionsBefore = await dataSource
+        .getRepository(AuthSession)
+        .countBy({ userId: user.id });
+      const replacementHash = await passwordUtil.hashPassword(
+        'Replacement-Office#2026',
+      );
+      jest
+        .spyOn(passwordUtil, 'verifyPassword')
+        .mockImplementationOnce(async () => {
+          await dataSource.getRepository(User).update(
+            { id: user.id },
+            {
+              passwordHash: replacementHash,
+              passwordChangedAt: new Date(),
+            },
+          );
+          return true;
+        });
+
+      await expect(login()).rejects.toMatchObject({
+        response: { code: 'INVALID_CREDENTIALS' },
+      });
+      await expect(
+        dataSource.getRepository(AuthSession).countBy({ userId: user.id }),
+      ).resolves.toBe(sessionsBefore);
+      expect(passwordUtil.verifyPassword).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('keeps the credential and sessions unchanged when the current password is wrong', async () => {
     const first = await service.registerAccount(accountRegistration('wrong_password_user'));
     const user = await dataSource.getRepository(User).findOneByOrFail({

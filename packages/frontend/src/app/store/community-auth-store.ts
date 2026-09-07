@@ -14,6 +14,17 @@ import {
 
 const PENDING_REGISTRATION_KEY = 'zbrs.community.pending-registration.v1';
 let restorePromise: Promise<void> | null = null;
+let authTransitionId = 0;
+
+function beginAuthTransition(): number {
+  authTransitionId += 1;
+  // Detach restoration immediately. Its network request may still settle, but
+  // both the store transition id and HTTP session generation prevent it from
+  // publishing into the new guest/login state.
+  restorePromise = null;
+  setCommunitySessionTokens(null);
+  return authTransitionId;
+}
 
 export type CommunitySessionPhase =
   | 'bootstrapping'
@@ -107,10 +118,13 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
   restoreSession: () => {
     if (restorePromise) return restorePromise;
     if (get().sessionReady) return Promise.resolve();
+    const transitionId = authTransitionId;
     set({ phase: 'bootstrapping', loading: true, bootstrapError: null });
-    restorePromise = communityAuthApi
+    let trackedPromise: Promise<void>;
+    trackedPromise = communityAuthApi
       .refresh()
       .then((session) => {
+        if (transitionId !== authTransitionId) return;
         savePendingRegistration(null);
         set({
           phase: phaseOf(session.user),
@@ -123,6 +137,7 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
         });
       })
       .catch((error) => {
+        if (transitionId !== authTransitionId) return;
         const expectedGuest =
           error instanceof CommunityApiError &&
           (error.status === 401 || error.status === 403);
@@ -136,15 +151,18 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
         });
       })
       .finally(() => {
-        restorePromise = null;
+        if (restorePromise === trackedPromise) restorePromise = null;
       });
+    restorePromise = trackedPromise;
     return restorePromise;
   },
 
   register: async (payload) => {
+    const transitionId = beginAuthTransition();
     set({ loading: true, error: null });
     try {
       const session = await communityAuthApi.register(payload);
+      if (transitionId !== authTransitionId) return session.user;
       savePendingRegistration(null);
       set({
         phase: phaseOf(session.user),
@@ -155,7 +173,9 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
       });
       return session.user;
     } catch (error) {
-      set({ loading: false, error: messageFrom(error) });
+      if (transitionId === authTransitionId) {
+        set({ loading: false, error: messageFrom(error) });
+      }
       throw error;
     }
   },
@@ -163,12 +183,14 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
   verifyEmail: async (code) => {
     const registration = get().pendingRegistration;
     if (!registration) throw new Error('注册验证信息已失效，请重新注册');
+    const transitionId = beginAuthTransition();
     set({ loading: true, error: null });
     try {
       const session = await communityAuthApi.verifyEmail({
         registrationId: registration.registrationId,
         code,
       });
+      if (transitionId !== authTransitionId) return session.user;
       savePendingRegistration(null);
       set({
         phase: phaseOf(session.user),
@@ -179,7 +201,9 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
       });
       return session.user;
     } catch (error) {
-      set({ loading: false, error: messageFrom(error) });
+      if (transitionId === authTransitionId) {
+        set({ loading: false, error: messageFrom(error) });
+      }
       throw error;
     }
   },
@@ -187,25 +211,31 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
   resendVerification: async () => {
     const registration = get().pendingRegistration;
     if (!registration) throw new Error('注册验证信息已失效，请重新注册');
+    const transitionId = authTransitionId;
     set({ loading: true, error: null });
     try {
       const timing = await communityAuthApi.resendVerification(
         registration.registrationId,
       );
+      if (transitionId !== authTransitionId) return;
       const next = { ...registration, ...timing };
       savePendingRegistration(next);
       set({ pendingRegistration: next, loading: false });
     } catch (error) {
-      set({ loading: false, error: messageFrom(error) });
+      if (transitionId === authTransitionId) {
+        set({ loading: false, error: messageFrom(error) });
+      }
       throw error;
     }
   },
 
   login: async (payload) => {
+    const transitionId = beginAuthTransition();
     set({ loading: true, error: null });
     try {
       const session = await communityAuthApi.login(payload);
       const phase = phaseOf(session.user);
+      if (transitionId !== authTransitionId) return phase;
       savePendingRegistration(null);
       set({
         phase,
@@ -216,49 +246,60 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
       });
       return phase;
     } catch (error) {
-      set({ loading: false, error: messageFrom(error) });
+      if (transitionId === authTransitionId) {
+        set({ loading: false, error: messageFrom(error) });
+      }
       throw error;
     }
   },
 
   logout: async () => {
+    // Start the cookie revocation request while the old access/CSRF values are
+    // still available, then make local logout observable without waiting for
+    // restoration or an unreliable network response.
+    const logoutRequest = communityAuthApi.logout();
+    beginAuthTransition();
+    savePendingRegistration(null);
+    set({
+      phase: 'guest',
+      user: null,
+      pendingRegistration: null,
+      loading: false,
+      sessionReady: true,
+      error: null,
+      bootstrapError: null,
+    });
     try {
-      await communityAuthApi.logout();
+      await logoutRequest;
     } catch {
       // 即使网络不可用也立即清理浏览器内存会话；服务端短期令牌会自行过期。
-    } finally {
-      savePendingRegistration(null);
-      set({
-        phase: 'guest',
-        user: null,
-        pendingRegistration: null,
-        loading: false,
-        sessionReady: true,
-      });
     }
   },
 
   logoutAll: async () => {
+    const logoutRequest = communityAuthApi.logoutAll();
+    beginAuthTransition();
+    savePendingRegistration(null);
+    set({
+      phase: 'guest',
+      user: null,
+      pendingRegistration: null,
+      loading: false,
+      sessionReady: true,
+      error: null,
+      bootstrapError: null,
+    });
     try {
-      await communityAuthApi.logoutAll();
+      await logoutRequest;
     } catch {
       // 与单设备退出一致，前端不得因网络错误继续保留可用访问令牌。
-    } finally {
-      savePendingRegistration(null);
-      set({
-        phase: 'guest',
-        user: null,
-        pendingRegistration: null,
-        loading: false,
-        sessionReady: true,
-      });
     }
   },
 
   updateUser: (user) => set({ user, phase: phaseOf(user) }),
   clearError: () => set({ error: null }),
   reset: () => {
-    setCommunitySessionTokens(null);
+    beginAuthTransition();
     savePendingRegistration(null);
     set({
       phase: 'guest',
@@ -273,6 +314,7 @@ export const useCommunityAuthStore = create<CommunityAuthState>((set, get) => ({
 }));
 
 setCommunitySessionInvalidatedHandler(() => {
+  beginAuthTransition();
   useCommunityAuthStore.setState({
     phase: 'guest',
     user: null,
@@ -282,7 +324,7 @@ setCommunitySessionInvalidatedHandler(() => {
 });
 
 export function resetCommunityAuthStoreForTests(): void {
-  restorePromise = null;
+  beginAuthTransition();
   savePendingRegistration(null);
   useCommunityAuthStore.setState({
     phase: 'guest',

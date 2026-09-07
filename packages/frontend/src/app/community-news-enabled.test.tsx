@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEVELOPMENT_LIMITS } from '@stealth-reader/shared';
 
 describe('community news release flag', () => {
   afterEach(() => {
@@ -31,6 +32,14 @@ describe('community news release flag', () => {
     vi.resetModules();
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/v1/development/access')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          enabled: false,
+          role: null,
+          reviewMode: 'manual',
+          limits: DEVELOPMENT_LIMITS,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
       if (url.includes('/v1/me/news-preferences')) {
         return Promise.resolve(new Response(JSON.stringify({
           personalizationEnabled: false,
@@ -80,7 +89,18 @@ describe('community news release flag', () => {
     vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
     vi.stubEnv('VITE_COMMUNITY_NEWS_ADMIN_ENABLED', 'false');
     vi.resetModules();
-    const fetchMock = vi.fn();
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/v1/development/access')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          enabled: false,
+          role: null,
+          reviewMode: 'manual',
+          limits: DEVELOPMENT_LIMITS,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
+      throw new Error(`unexpected request: ${url}`);
+    });
     vi.stubGlobal('fetch', fetchMock);
     const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests, useCommunityAuthStore }] = await Promise.all([
       import('./community-router'),
@@ -104,7 +124,8 @@ describe('community news release flag', () => {
     render(<MemoryRouter initialEntries={['/news/admin']}><CommunityModeRouter /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: '热点资讯编辑发布台尚未开放' })).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.every(([url]) => String(url).includes('/v1/development/access'))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(false);
   });
 
   it('mounts the guarded editing desk only when both news flags are enabled', async () => {
@@ -113,6 +134,14 @@ describe('community news release flag', () => {
     vi.resetModules();
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.includes('/v1/development/access')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          enabled: false,
+          role: null,
+          reviewMode: 'manual',
+          limits: DEVELOPMENT_LIMITS,
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
       if (url.includes('/v1/admin/news/sources')) {
         return Promise.resolve(new Response(JSON.stringify({ items: [] }), {
           status: 200,

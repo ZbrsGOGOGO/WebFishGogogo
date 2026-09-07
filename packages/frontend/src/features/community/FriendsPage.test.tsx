@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,6 +85,47 @@ describe('CommunityFriendsPage', () => {
 
     expect(await screen.findByRole('article', { name: '查找结果' })).toHaveTextContent('协作同事');
     expect(communityProfileApi.findUser).toHaveBeenCalledWith('@xiaoming');
+  });
+
+  it.each(['success', 'failure'] as const)('ignores a late lookup %s after a new search', async (outcome) => {
+    const user = userEvent.setup();
+    let resolveOld!: (profile: CommunityPublicProfile) => void;
+    let rejectOld!: (error: Error) => void;
+    const oldLookup = new Promise<CommunityPublicProfile>((resolve, reject) => {
+      resolveOld = resolve;
+      rejectOld = reject;
+    });
+    vi.spyOn(communityProfileApi, 'findUser')
+      .mockReturnValueOnce(oldLookup)
+      .mockResolvedValueOnce({ ...publicProfile, publicId: 'new-person', displayName: '新查找的同事' });
+    renderPage();
+    const input = screen.getByLabelText('账号或公开编号');
+    await user.type(input, '@old_person');
+    await user.click(screen.getByRole('button', { name: '查找' }));
+    await user.clear(input);
+    await user.type(input, '@new_person');
+    await user.click(screen.getByRole('button', { name: '查找' }));
+    expect(await screen.findByRole('article', { name: '查找结果' })).toHaveTextContent('新查找的同事');
+    await act(async () => {
+      if (outcome === 'success') resolveOld(publicProfile);
+      else rejectOld(new Error('旧查询失败'));
+    });
+    expect(screen.getByRole('article', { name: '查找结果' })).toHaveTextContent('新查找的同事');
+    expect(screen.queryByText('协作同事')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('hides the previous profile as soon as the lookup identifier changes', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(communityProfileApi, 'findUser').mockResolvedValue(publicProfile);
+    renderPage();
+    const input = screen.getByLabelText('账号或公开编号');
+    await user.type(input, '@old_person');
+    await user.click(screen.getByRole('button', { name: '查找' }));
+    expect(await screen.findByRole('button', { name: '发送申请' })).toBeInTheDocument();
+    await user.clear(input);
+    expect(screen.queryByRole('article', { name: '查找结果' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '发送申请' })).not.toBeInTheDocument();
   });
 
   it('allows proactive friend requests when social verification is disabled', async () => {

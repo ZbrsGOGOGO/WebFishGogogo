@@ -26,6 +26,7 @@ describe('ChatWebSocketGateway real socket protocol', () => {
     withdraw: jest.Mock;
     markRead: jest.Mock;
     messageForViewer: jest.Mock;
+    participants: jest.Mock;
     publishMessageEvent: jest.Mock;
   };
   let gateway: ChatWebSocketGateway;
@@ -59,6 +60,7 @@ describe('ChatWebSocketGateway real socket protocol', () => {
       withdraw: jest.fn(),
       markRead: jest.fn(),
       messageForViewer: jest.fn(),
+      participants: jest.fn(),
       publishMessageEvent: jest.fn(),
     };
     gateway = new ChatWebSocketGateway(
@@ -206,6 +208,116 @@ describe('ChatWebSocketGateway real socket protocol', () => {
     ).resolves.toBe(404);
   });
 
+  it('does not register a socket that closes while ticket authentication is pending', async () => {
+    const user = await activeUser('closed-auth@example.com', 'Closed Auth');
+    const session = await authSession(user.id);
+    let authenticationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      authenticationStarted = resolve;
+    });
+    let resolvePrincipal!: (principal: { userId: string; sessionId: string }) => void;
+    const pendingPrincipal = new Promise<{ userId: string; sessionId: string }>(
+      (resolve) => {
+        resolvePrincipal = resolve;
+      },
+    );
+    jest.spyOn(chat, 'consumeSocketTicket').mockImplementation(() => {
+      authenticationStarted();
+      return pendingPrincipal;
+    });
+    const socket = await openSocket('/ws/chat', 'http://localhost:5173');
+    socket.send(JSON.stringify({
+      type: 'chat.authenticate',
+      protocolVersion: 1,
+      requestId: 'auth-then-close',
+      ticket: 'pending-ticket',
+    }));
+    await started;
+
+    const closed = closeCode(socket);
+    socket.close(1000, 'client closed');
+    await closed;
+    resolvePrincipal({ userId: user.id, sessionId: session.id });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const internals = gateway as unknown as {
+      states: Map<WebSocket, unknown>;
+      userConnections: Map<string, Set<WebSocket>>;
+    };
+    expect(internals.states.size).toBe(0);
+    expect(internals.userConnections.has(user.id)).toBe(false);
+  });
+
+  it('serializes authentication frames so a second principal cannot overwrite the first', async () => {
+    const [firstUser, secondUser] = await Promise.all([
+      activeUser('first-concurrent-auth@example.com', 'First Concurrent Auth'),
+      activeUser('second-concurrent-auth@example.com', 'Second Concurrent Auth'),
+    ]);
+    const [firstSession, secondSession] = await Promise.all([
+      authSession(firstUser.id),
+      authSession(secondUser.id),
+    ]);
+    let authenticationStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      authenticationStarted = resolve;
+    });
+    let resolvePrincipal!: (principal: { userId: string; sessionId: string }) => void;
+    const pendingPrincipal = new Promise<{ userId: string; sessionId: string }>(
+      (resolve) => {
+        resolvePrincipal = resolve;
+      },
+    );
+    const consume = jest
+      .spyOn(chat, 'consumeSocketTicket')
+      .mockImplementation((ticket) => {
+        if (ticket === 'first-ticket') {
+          authenticationStarted();
+          return pendingPrincipal;
+        }
+        return Promise.resolve({
+          userId: secondUser.id,
+          sessionId: secondSession.id,
+        });
+      });
+    const socket = await openSocket('/ws/chat', 'http://localhost:5173');
+    const events = collect(socket);
+    socket.send(JSON.stringify({
+      type: 'chat.authenticate',
+      protocolVersion: 1,
+      requestId: 'first-auth',
+      ticket: 'first-ticket',
+    }));
+    await started;
+    socket.send(JSON.stringify({
+      type: 'chat.authenticate',
+      protocolVersion: 1,
+      requestId: 'second-auth',
+      ticket: 'second-ticket',
+    }));
+
+    expect(await events.next('chat.error')).toMatchObject({
+      code: 'CHAT_AUTH_IN_PROGRESS',
+      requestId: 'second-auth',
+    });
+    expect(consume).toHaveBeenCalledTimes(1);
+    resolvePrincipal({ userId: firstUser.id, sessionId: firstSession.id });
+    expect(await events.next('chat.authenticated')).toMatchObject({
+      sessionId: firstSession.id,
+    });
+
+    const internals = gateway as unknown as {
+      states: Map<WebSocket, { userId: string | null; sessionId: string | null }>;
+      userConnections: Map<string, Set<WebSocket>>;
+    };
+    const serverState = [...internals.states.values()][0];
+    expect(serverState).toMatchObject({
+      userId: firstUser.id,
+      sessionId: firstSession.id,
+    });
+    expect(internals.userConnections.get(firstUser.id)?.size).toBe(1);
+    expect(internals.userConnections.has(secondUser.id)).toBe(false);
+  });
+
   it.each(['revoked', 'expired', 'suspended'] as const)(
     'rechecks the authenticated principal before a business frame when it is %s',
     async (condition) => {
@@ -333,6 +445,7 @@ describe('ChatWebSocketGateway real socket protocol', () => {
         return { conversationId: emittedConversationId, lastReadSequence, unreadCount: 0 };
       },
     );
+    directMessages.participants.mockResolvedValue([author.id, recipient.id]);
 
     authorFirst.socket.send(JSON.stringify({
       type: 'chat.direct.send',
@@ -405,6 +518,24 @@ describe('ChatWebSocketGateway real socket protocol', () => {
       requestId: 'direct-read-1',
       unreadCount: 0,
     });
+    expect(outsiderClient.events.types()).not.toContain('chat.direct.read.updated');
+
+    const authorReadCount = authorFirst.events.types().filter(
+      (type) => type === 'chat.direct.read.updated',
+    ).length;
+    await realtime.publish({
+      scope: 'direct',
+      kind: 'read',
+      conversationId,
+      readerUserId: author.id,
+      participantIds: [author.id, outsider.id],
+      lastReadSequence: 99,
+    });
+    expect(
+      authorFirst.events.types().filter(
+        (type) => type === 'chat.direct.read.updated',
+      ),
+    ).toHaveLength(authorReadCount);
     expect(outsiderClient.events.types()).not.toContain('chat.direct.read.updated');
   });
 

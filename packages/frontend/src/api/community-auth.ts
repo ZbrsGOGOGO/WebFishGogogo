@@ -1,7 +1,9 @@
 import {
+  CommunityApiError,
   communityHttp,
+  getCommunitySessionGeneration,
   refreshCommunitySession,
-  setCommunitySessionTokens,
+  setCommunitySessionTokensIfCurrent,
   type CommunitySessionEnvelope,
 } from './community-http';
 
@@ -73,32 +75,47 @@ export interface CommunityDeviceSession {
   region?: string | null;
 }
 
-function acceptSession(result: CommunityLoginResult): CommunityLoginResult {
-  setCommunitySessionTokens(result.accessToken, result.csrfToken);
+function acceptSession(
+  result: CommunityLoginResult,
+  expectedGeneration: number,
+): CommunityLoginResult {
+  if (
+    !setCommunitySessionTokensIfCurrent(
+      expectedGeneration,
+      result.accessToken,
+      result.csrfToken,
+    )
+  ) {
+    throw new CommunityApiError(409, '会话已更新，忽略过期的登录结果', {
+      code: 'STALE_AUTH_RESULT',
+    });
+  }
   return result;
 }
 
 export async function registerCommunityAccount(
   payload: CommunityRegisterPayload,
 ): Promise<CommunityLoginResult> {
+  const sessionGeneration = getCommunitySessionGeneration();
   const result = await communityHttp.post<CommunityLoginResult>(
     '/v1/auth/account/register',
     payload,
     { auth: false, retryAfterRefresh: false },
   );
-  return acceptSession(result);
+  return acceptSession(result, sessionGeneration);
 }
 
 export async function verifyCommunityEmail(payload: {
   registrationId: string;
   code: string;
 }): Promise<CommunityLoginResult> {
+  const sessionGeneration = getCommunitySessionGeneration();
   const result = await communityHttp.post<CommunityLoginResult>(
     '/v1/auth/verify-email',
     payload,
     { auth: false, retryAfterRefresh: false },
   );
-  return acceptSession(result);
+  return acceptSession(result, sessionGeneration);
 }
 
 export function resendCommunityVerification(registrationId: string): Promise<
@@ -116,12 +133,13 @@ export function resendCommunityVerification(registrationId: string): Promise<
 export async function loginCommunityAccount(
   payload: CommunityLoginPayload,
 ): Promise<CommunityLoginResult> {
+  const sessionGeneration = getCommunitySessionGeneration();
   const result = await communityHttp.post<CommunityLoginResult>(
     '/v1/auth/account/login',
     payload,
     { auth: false, retryAfterRefresh: false },
   );
-  return acceptSession(result);
+  return acceptSession(result, sessionGeneration);
 }
 
 export function restoreCommunitySession(): Promise<CommunityLoginResult> {
@@ -129,18 +147,20 @@ export function restoreCommunitySession(): Promise<CommunityLoginResult> {
 }
 
 export async function logoutCommunityAccount(): Promise<void> {
+  const sessionGeneration = getCommunitySessionGeneration();
   try {
     await communityHttp.post<void>('/v1/auth/logout');
   } finally {
-    setCommunitySessionTokens(null);
+    setCommunitySessionTokensIfCurrent(sessionGeneration, null);
   }
 }
 
 export async function logoutAllCommunitySessions(): Promise<void> {
+  const sessionGeneration = getCommunitySessionGeneration();
   try {
     await communityHttp.post<void>('/v1/auth/logout-all');
   } finally {
-    setCommunitySessionTokens(null);
+    setCommunitySessionTokensIfCurrent(sessionGeneration, null);
   }
 }
 

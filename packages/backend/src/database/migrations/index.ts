@@ -24,6 +24,7 @@ import { AddDailyHotNewsAndInviteCoin1700000000022 } from './1700000000022-AddDa
 import { AddArcadeLeaderboardsAndChatRetention1700000000023 } from './1700000000023-AddArcadeLeaderboardsAndChatRetention';
 import { AddDirectMessages1700000000024 } from './1700000000024-AddDirectMessages';
 import { AddZhesiArcadeGame1700000000025 } from './1700000000025-AddZhesiArcadeGame';
+import { AddDevelopmentWorkspace1700000000026 } from './1700000000026-AddDevelopmentWorkspace';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -53,4 +54,5 @@ export const migrations = [
   AddArcadeLeaderboardsAndChatRetention1700000000023,
   AddDirectMessages1700000000024,
   AddZhesiArcadeGame1700000000025,
+  AddDevelopmentWorkspace1700000000026,
 ];

@@ -23,14 +23,18 @@ export interface CommunityRequestOptions extends Omit<RequestInit, 'body'> {
   query?: Record<string, string | number | boolean | undefined | null>;
   auth?: boolean;
   retryAfterRefresh?: boolean;
+  /** Private file downloads retain the same authentication/session boundary as JSON reads. */
+  responseType?: 'json' | 'blob';
 }
 
 let accessToken: string | null = null;
 let csrfToken: string | null = null;
 let refreshPromise: Promise<CommunitySessionEnvelope> | null = null;
 let invalidatedHandler: (() => void) | null = null;
+let sessionGeneration = 0;
 const COMMUNITY_REFRESH_LOCK_NAME = 'zbrs-community-refresh-v1';
 const ROTATION_RACE_RETRY_DELAY_MS = 150;
+const STALE_SESSION_REFRESH_CODE = 'STALE_SESSION_REFRESH';
 
 export function getCommunityAccessToken(): string | null {
   return accessToken;
@@ -40,8 +44,45 @@ export function setCommunitySessionTokens(
   token: string | null,
   nextCsrfToken?: string | null,
 ): void {
+  // A login, logout, or explicit reset establishes a new client-side session
+  // boundary. Any refresh already in flight belongs to the previous boundary
+  // and must never be allowed to publish its result into the new one.
+  sessionGeneration += 1;
+  refreshPromise = null;
+  applyCommunitySessionTokens(token, nextCsrfToken);
+}
+
+/**
+ * Captures the current explicit-session boundary for an async auth operation.
+ * The value is intentionally opaque to callers; it is only meaningful when
+ * passed back to setCommunitySessionTokensIfCurrent.
+ */
+export function getCommunitySessionGeneration(): number {
+  return sessionGeneration;
+}
+
+export function setCommunitySessionTokensIfCurrent(
+  expectedGeneration: number,
+  token: string | null,
+  nextCsrfToken?: string | null,
+): boolean {
+  if (expectedGeneration !== sessionGeneration) return false;
+  setCommunitySessionTokens(token, nextCsrfToken);
+  return true;
+}
+
+function applyCommunitySessionTokens(
+  token: string | null,
+  nextCsrfToken?: string | null,
+): void {
   accessToken = token;
   csrfToken = nextCsrfToken ?? null;
+}
+
+function staleSessionRefreshError(): CommunityApiError {
+  return new CommunityApiError(409, '会话已更新，忽略过期的响应', {
+    code: STALE_SESSION_REFRESH_CODE,
+  });
 }
 
 export function setCommunitySessionInvalidatedHandler(
@@ -96,6 +137,7 @@ async function rawRequest<T>(
     query,
     auth: _auth,
     retryAfterRefresh: _retryAfterRefresh,
+    responseType = 'json',
     headers,
     ...requestInit
   } = options;
@@ -133,7 +175,9 @@ async function rawRequest<T>(
     );
   }
 
-  const payload = await parseBody(response);
+  const payload = response.ok && responseType === 'blob'
+    ? await response.blob()
+    : await parseBody(response);
   if (!response.ok) {
     throw new CommunityApiError(
       response.status,
@@ -200,27 +244,39 @@ export function refreshCommunitySession<TUser = unknown>(): Promise<
     return refreshPromise as Promise<CommunitySessionEnvelope<TUser>>;
   }
 
-  refreshPromise = requestRefreshWithCrossTabLock()
+  const refreshGeneration = sessionGeneration;
+  let trackedPromise: Promise<CommunitySessionEnvelope>;
+  trackedPromise = requestRefreshWithCrossTabLock()
     .then((session) => {
       if (!session || typeof session.accessToken !== 'string' || !session.accessToken) {
         throw new CommunityApiError(502, '会话响应缺少访问令牌');
       }
-      setCommunitySessionTokens(session.accessToken, session.csrfToken);
+      if (refreshGeneration !== sessionGeneration) {
+        throw staleSessionRefreshError();
+      }
+      // Publishing a successful refresh keeps the same logical session, so it
+      // deliberately does not advance the generation itself.
+      applyCommunitySessionTokens(session.accessToken, session.csrfToken);
       return session;
     })
     .catch((error) => {
-      setCommunitySessionTokens(null);
-      if (
-        error instanceof CommunityApiError &&
-        (error.status === 401 || error.status === 403)
-      ) {
-        invalidatedHandler?.();
+      if (refreshGeneration === sessionGeneration) {
+        applyCommunitySessionTokens(null);
+        if (
+          error instanceof CommunityApiError &&
+          (error.status === 401 || error.status === 403)
+        ) {
+          invalidatedHandler?.();
+        }
       }
       throw error;
     })
     .finally(() => {
-      refreshPromise = null;
+      // An explicit session transition can detach this request and start a new
+      // refresh before the old one settles. Only clear the promise we own.
+      if (refreshPromise === trackedPromise) refreshPromise = null;
     });
+  refreshPromise = trackedPromise;
 
   return refreshPromise as Promise<CommunitySessionEnvelope<TUser>>;
 }
@@ -231,12 +287,17 @@ export async function communityRequest<T = unknown>(
 ): Promise<T> {
   const auth = options.auth ?? true;
   const method = (options.method ?? 'GET').toUpperCase();
+  const readOnly = ['GET', 'HEAD', 'OPTIONS'].includes(method);
   // 未明确声明幂等的写请求绝不自动重放，避免 401 到达客户端前服务端其实
   // 已完成投喂、邀请、奖励或资产写入。调用方只有在具备幂等键时才可显式开启。
-  const retryAfterRefresh =
-    options.retryAfterRefresh ?? ['GET', 'HEAD', 'OPTIONS'].includes(method);
+  const retryAfterRefresh = options.retryAfterRefresh ?? readOnly;
+  const requestGeneration = sessionGeneration;
   try {
-    return await rawRequest<T>(path, options, auth ? accessToken : null);
+    const result = await rawRequest<T>(path, options, auth ? accessToken : null);
+    if (auth && readOnly && requestGeneration !== sessionGeneration) {
+      throw staleSessionRefreshError();
+    }
+    return result;
   } catch (error) {
     if (
       !auth ||
@@ -246,12 +307,22 @@ export async function communityRequest<T = unknown>(
     ) {
       throw error;
     }
+    // The 401 belongs to the session that originated this request. Replaying
+    // it after logout/account switching could perform a read as another user.
+    if (requestGeneration !== sessionGeneration) throw error;
     await refreshCommunitySession();
-    return rawRequest<T>(
+    if (requestGeneration !== sessionGeneration) {
+      throw staleSessionRefreshError();
+    }
+    const result = await rawRequest<T>(
       path,
       { ...options, retryAfterRefresh: false },
       accessToken,
     );
+    if (readOnly && requestGeneration !== sessionGeneration) {
+      throw staleSessionRefreshError();
+    }
+    return result;
   }
 }
 
@@ -271,5 +342,4 @@ export const communityHttp = {
 export function resetCommunityHttpForTests(): void {
   setCommunitySessionTokens(null);
   setCommunitySessionInvalidatedHandler(null);
-  refreshPromise = null;
 }

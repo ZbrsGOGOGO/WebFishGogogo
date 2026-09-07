@@ -1,6 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
 
+import {
+  ArcadeBestScore,
+  ArcadeGameRun,
+  User,
+} from '../../../database/entities';
 import { ArcadeService, validateArcadeResult } from './arcade.service';
 
 describe('arcade score validation', () => {
@@ -155,14 +160,18 @@ describe('arcade run lifetime', () => {
       create: jest.fn((value) => value),
       save: jest.fn(async (value) => ({ ...value, id: 'run-zhesi' })),
     };
+    const userRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        accountStatus: 'active',
+      }),
+    };
     const manager = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
-      getRepository: jest.fn().mockReturnValue(runRepository),
+      getRepository: jest.fn((entity) =>
+        entity === User ? userRepository : runRepository),
     };
     const dataSource = {
-      getRepository: jest.fn().mockReturnValue({
-        findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }),
-      }),
       transaction: jest.fn(async (work) => work(manager)),
     } as unknown as DataSource;
 
@@ -174,6 +183,86 @@ describe('arcade run lifetime', () => {
         startedAt: '2026-09-04T08:00:00.000Z',
         expiresAt: '2026-09-04T10:00:00.000Z',
       });
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(userRepository.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+        execute.mock.invocationCallOrder[0],
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('locks the account before a first best-score row is created', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-04T08:00:10.000Z'));
+    const userRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        publicId: '11111111-1111-4111-8111-111111111111',
+        accountStatus: 'active',
+      }),
+    };
+    const runRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'run-1',
+        userId: 'user-1',
+        gameKey: 'tetris',
+        status: 'active',
+        score: null,
+        metrics: {},
+        startedAt: new Date('2026-09-04T08:00:00.000Z'),
+        expiresAt: new Date('2026-09-04T10:00:00.000Z'),
+        completedAt: null,
+      }),
+      save: jest.fn(async (value) => value),
+    };
+    const rankQuery = {
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getCount: jest.fn().mockResolvedValue(0),
+    };
+    const bestRepository = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((value) => value),
+      save: jest.fn(async (value) => value),
+      createQueryBuilder: jest.fn().mockReturnValue(rankQuery),
+    };
+    const manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === User) return userRepository;
+        if (entity === ArcadeGameRun) return runRepository;
+        if (entity === ArcadeBestScore) return bestRepository;
+        throw new Error('unexpected repository');
+      }),
+    };
+    const dataSource = {
+      transaction: jest.fn(async (work) => work(manager)),
+    } as unknown as DataSource;
+
+    try {
+      await expect(
+        new ArcadeService(dataSource).finishRun('user-1', 'run-1', {
+          score: 0,
+          metrics: { lines: 0, level: 1 },
+        }),
+      ).resolves.toMatchObject({
+        bestScore: 0,
+        isPersonalBest: true,
+        rank: 1,
+      });
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'user-1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(userRepository.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+        runRepository.findOne.mock.invocationCallOrder[0],
+      );
+      expect(userRepository.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+        bestRepository.findOne.mock.invocationCallOrder[0],
+      );
     } finally {
       jest.useRealTimers();
     }

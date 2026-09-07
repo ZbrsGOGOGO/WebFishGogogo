@@ -14,7 +14,8 @@ HOT_NEWS_TIMESTAMP=1700000000022
 ARCADE_TIMESTAMP=1700000000023
 DIRECT_MESSAGES_TIMESTAMP=1700000000024
 ZHESI_ARCADE_TIMESTAMP=1700000000025
-LATEST_TIMESTAMP=1700000000025
+DEVELOPMENT_TIMESTAMP=1700000000026
+LATEST_TIMESTAMP=1700000000026
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -156,6 +157,12 @@ assert_target_applied() {
   done
   zhesi_arcade_constraint_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_constraint WHERE conname IN ('chk_arcade_game_runs_game', 'chk_arcade_best_scores_game') AND pg_get_constraintdef(oid) LIKE '%zhesi%';")
   [ "$zhesi_arcade_constraint_count" = 2 ] || fail "$database is missing one or more 0025 zhesi arcade constraints"
+  for development_table in development_members development_requests development_events development_attachments; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$development_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $development_table after migration"
+  done
+  development_constraint_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_constraint WHERE conname = 'chk_development_attachments_content_bytes';")
+  [ "$development_constraint_count" = 1 ] || fail "$database is missing attachment byte-length integrity constraint"
   for direct_message_table in chat_direct_conversations chat_direct_conversation_members chat_direct_messages chat_direct_message_reports; do
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$direct_message_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $direct_message_table after migration"
@@ -232,6 +239,8 @@ assert_target_absent() {
   [ "$arcade_table_count" = 0 ] || fail "$database retained arcade tables after rollback/failure"
   direct_message_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('chat_direct_conversations', 'chat_direct_conversation_members', 'chat_direct_messages', 'chat_direct_message_reports');")
   [ "$direct_message_table_count" = 0 ] || fail "$database retained 0024 direct-message tables after rollback/failure"
+  development_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('development_members', 'development_requests', 'development_events', 'development_attachments');")
+  [ "$development_table_count" = 0 ] || fail "$database retained 0026 development tables after rollback/failure"
   operational_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('idx_auth_sessions_active_order', 'idx_community_notifications_page', 'idx_community_notifications_unread_category', 'idx_friend_requests_requester_created', 'idx_user_blocks_blocker_created', 'idx_chat_messages_author_room_created', 'idx_news_articles_public_feed', 'idx_office_battle_offer_sets_unconsumed');")
   [ "$operational_index_count" = 0 ] || fail "$database retained 0016 operational indexes after rollback/failure"
   username_column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name IN ('username', 'username_normalized');")
@@ -246,6 +255,15 @@ assert_target_absent() {
   [ "$guild_boss_table_count" = 0 ] || fail "$database retained 0021 guild-boss tables after rollback/failure"
   hot_news_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('hot_news_headlines', 'hot_news_refresh_runs');")
   [ "$hot_news_table_count" = 0 ] || fail "$database retained 0022 daily-hot-news tables after rollback/failure"
+}
+
+assert_development_reverted() {
+  database=$1
+  latest=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
+  [ "$latest" = "$ZHESI_ARCADE_TIMESTAMP" ] ||
+    fail "$database latest migration is $latest after reverting 0026, expected $ZHESI_ARCADE_TIMESTAMP"
+  development_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('development_members', 'development_requests', 'development_events', 'development_attachments');")
+  [ "$development_table_count" = 0 ] || fail "$database retained development tables after reverting 0026"
 }
 
 assert_zhesi_arcade_reverted() {
@@ -346,6 +364,13 @@ run_migration_cli rehearsal_clean 5000 migration:run \
   fail "clean migration up failed"
 assert_target_applied rehearsal_clean
 pass "clean snapshot migrated up through $LATEST_TIMESTAMP"
+
+# Exercise the newest migration's down path in this disposable database only.
+run_migration_cli rehearsal_clean 5000 migration:revert \
+  >"$REHEARSAL_TMP/development-revert.log" 2>&1 ||
+  fail "migration 0026 revert failed"
+assert_development_reverted rehearsal_clean
+pass "development migration reverted to $ZHESI_ARCADE_TIMESTAMP"
 
 # Exercise 0025's own down path while the 0023 arcade tables still exist. A
 # final all-the-way rollback alone could hide a broken constraint restoration
@@ -462,4 +487,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through zhesi arcade 0025 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, arcade leaderboards/chat retention 0023, and friend direct messages 0024), targeted 0025 constraint revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through private development workspace 0026 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, arcade leaderboards/chat retention 0023, friend direct messages 0024, and zhesi arcade 0025), targeted 0026 then 0025 revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."

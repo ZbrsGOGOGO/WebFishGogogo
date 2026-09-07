@@ -61,7 +61,7 @@
       list.innerHTML='<div class="rec-empty">尚无记录。走完一世，你的修行足迹便会镌刻于此。</div>';
       return;
     }
-    const grades={'神':0,'天':0,'地':0,'玄':0,'黄':0,'凡':0};
+    const grades={'神':0,'帝':0,'天':0,'地':0,'玄':0,'黄':0,'凡':0};
     h.forEach(r=>{ if(grades[r.grade]!=null) grades[r.grade]++; });
     stats.innerHTML=
       `<div class="rs"><div class="k">已历世</div><div class="v">${h.length}</div></div>`+

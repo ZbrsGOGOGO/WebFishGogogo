@@ -27,11 +27,12 @@
     "@stealth-reader/shared": "*",
     "bcrypt": "^6.0.0",
     "pg": "^8.22.0",
-    "reflect-metadata": "^0.2.2",
     "redis": "^5.8.2",
+    "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.31",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.24",
@@ -41,6 +42,7 @@
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.10",
     "@types/ws": "^8.18.1",
+    "@types/yauzl": "^3.4.0",
     "fast-check": "^3.23.1",
     "jest": "^29.7.0",
     "pg-mem": "^3.0.14",

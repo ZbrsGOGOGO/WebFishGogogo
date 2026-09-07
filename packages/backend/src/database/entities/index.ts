@@ -36,6 +36,12 @@ import { DeskPlant } from './desk-plant.entity';
 import { DeskPlantCycle } from './desk-plant-cycle.entity';
 import { DeskPlantRewardClaim } from './desk-plant-reward-claim.entity';
 import {
+  DevelopmentAttachmentRecord,
+  DevelopmentEvent,
+  DevelopmentMember,
+  DevelopmentRequest,
+} from './development.entity';
+import {
   DirectConversation,
   DirectConversationMember,
   DirectMessage,
@@ -157,6 +163,10 @@ export {
   DeskPlant,
   DeskPlantCycle,
   DeskPlantRewardClaim,
+  DevelopmentAttachmentRecord,
+  DevelopmentEvent,
+  DevelopmentMember,
+  DevelopmentRequest,
   DirectConversation,
   DirectConversationMember,
   DirectMessage,
@@ -314,6 +324,10 @@ export const entities = [
   DeskPlant,
   DeskPlantCycle,
   DeskPlantRewardClaim,
+  DevelopmentMember,
+  DevelopmentRequest,
+  DevelopmentEvent,
+  DevelopmentAttachmentRecord,
   DirectConversation,
   DirectConversationMember,
   DirectMessage,

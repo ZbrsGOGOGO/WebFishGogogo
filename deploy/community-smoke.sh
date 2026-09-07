@@ -354,6 +354,10 @@ done
 
 # 认证路由必须存在，但未登录不能取得本人数据。
 request_status GET /api/v1/me "$SMOKE_TMP/me.json" "$SMOKE_TMP/me.headers" 401 403
+request GET /api/v1/development/access 401 \
+  "$SMOKE_TMP/development-access.json" "$SMOKE_TMP/development-access.headers"
+request GET /api/v1/development/requests 401 \
+  "$SMOKE_TMP/development-requests.json" "$SMOKE_TMP/development-requests.headers"
 request_status GET /api/v1/guilds/me "$SMOKE_TMP/guild-me.json" "$SMOKE_TMP/guild-me.headers" 401 403
 
 # 旧 full 站的上传、阅读、便签、偏好、工具目录、鉴权入口和已停服乐斗 API

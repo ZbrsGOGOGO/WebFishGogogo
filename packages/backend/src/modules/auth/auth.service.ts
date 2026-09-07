@@ -645,6 +645,17 @@ export class AuthService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!user) throw this.invalidCredentials();
+      // Password verification happens before opening the transaction so the
+      // account row is not held while bcrypt runs. A password change/reset can
+      // commit in that interval, though. Recheck only when the locked row no
+      // longer has the hash that was originally verified; otherwise an old
+      // password could create a fresh session after revocation completed.
+      if (
+        user.passwordHash !== candidate.passwordHash &&
+        !(await verifyPassword(input.password, user.passwordHash))
+      ) {
+        throw this.invalidCredentials();
+      }
       this.assertLoginAllowed(user);
       return this.createSession(manager, user, metadata, new Date());
     });
@@ -674,6 +685,12 @@ export class AuthService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!user) throw this.invalidCredentials();
+      if (
+        user.passwordHash !== candidate.passwordHash &&
+        !(await verifyPassword(input.password, user.passwordHash))
+      ) {
+        throw this.invalidCredentials();
+      }
       this.assertLoginAllowed(user);
       return this.createSession(manager, user, metadata, new Date());
     });

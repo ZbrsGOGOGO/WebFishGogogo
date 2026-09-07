@@ -164,6 +164,53 @@ describe('DirectMessageService', () => {
     expect(await dataSource.getRepository(DirectMessage).count()).toBe(2);
   });
 
+  it('does not silently mark incoming messages read when the recipient replies', async () => {
+    const [alice, bob] = await Promise.all([
+      activeUser('unread-alice@example.com', 'unread_alice', 'Alice'),
+      activeUser('unread-bob@example.com', 'unread_bob', 'Bob'),
+    ]);
+    await makeFriends(alice.id, bob.id);
+    const conversation = await service.openConversation(alice.id, bob.publicId);
+    await service.send(alice.id, {
+      conversationId: conversation.id,
+      clientMessageId: randomUUID(),
+      body: '这条消息尚未显式标记已读',
+    });
+
+    await service.send(bob.id, {
+      conversationId: conversation.id,
+      clientMessageId: randomUUID(),
+      body: '我先回复，不代表客户端已提交已读',
+    });
+
+    expect(await service.listConversations(bob.id)).toMatchObject({
+      totalUnread: 1,
+      items: [{ id: conversation.id, unreadCount: 1 }],
+    });
+    const member = await dataSource
+      .getRepository(DirectConversationMember)
+      .findOneByOrFail({
+        conversationId: conversation.id,
+        userId: bob.id,
+      });
+    expect(member).toMatchObject({ lastReadSequence: 0, unreadCount: 1 });
+
+    const publish = jest.spyOn(realtime, 'publish');
+    await expect(service.markRead(bob.id, conversation.id, 2)).resolves.toEqual({
+      conversationId: conversation.id,
+      lastReadSequence: 2,
+      unreadCount: 0,
+    });
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: 'direct',
+        kind: 'read',
+        readerUserId: bob.id,
+        lastReadSequence: 2,
+      }),
+    );
+  });
+
   it('keeps history readable after friendship removal but disables new sends', async () => {
     const [alice, bob] = await Promise.all([
       activeUser('former-alice@example.com', 'former_alice', 'Alice'),

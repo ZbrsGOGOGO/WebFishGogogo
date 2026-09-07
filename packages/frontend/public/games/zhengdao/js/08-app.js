@@ -67,8 +67,14 @@
     $('modeAuto').addEventListener('click', ()=>Replay.setAutoMode(true));
 
     $('recClear').addEventListener('click', ()=>{
-      if(typeof confirm==='function' && !confirm('确定清空本地命格录？此操作不可恢复。')) return;
+      $('recClearDialog').showModal();
+    });
+    $('recClearCancel').addEventListener('click', ()=>{
+      $('recClearDialog').close();
+    });
+    $('recClearConfirm').addEventListener('click', ()=>{
       Record.clear();
+      $('recClearDialog').close();
     });
 
     $('menuRec').addEventListener('click', ()=>openSheet('rec'));

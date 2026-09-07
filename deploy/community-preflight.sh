@@ -116,6 +116,14 @@ grep -Fq 'AddZhesiArcadeGame1700000000025' \
 grep -Fq "CHECK (\"game_key\" IN ('tetris', 'tank', 'zhesi'))" \
   "$ROOT_DIR/packages/backend/src/database/migrations/1700000000025-AddZhesiArcadeGame.ts" ||
   fail "migration 0025 does not allow zhesi in the arcade constraints"
+[ -f "$ROOT_DIR/packages/backend/src/database/migrations/1700000000026-AddDevelopmentWorkspace.ts" ] ||
+  fail "development workspace migration 0026 is missing"
+grep -Fq 'AddDevelopmentWorkspace1700000000026' \
+  "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+  fail "development workspace migration 0026 is not registered"
+grep -Fq 'chk_development_attachments_content_bytes' \
+  "$ROOT_DIR/packages/backend/src/database/migrations/1700000000026-AddDevelopmentWorkspace.ts" ||
+  fail "migration 0026 is missing attachment byte-length integrity"
 
 AUTH_COOKIE_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth-cookie.ts"
 AUTH_EMAIL_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/email-delivery.service.ts"
@@ -217,8 +225,8 @@ grep -Fq -- '-p webfish-community' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment commands must explicitly use webfish-community"
 grep -Fq -- '-p webfish-public' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community rollback must explicitly restore the independent webfish-public project"
-grep -Fq '1700000000025' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
-  fail "community deployment guide must identify migration 0025 as the release target"
+grep -Fq '1700000000026' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "community deployment guide must identify migration 0026 as the release target"
 
 grep -Eq 'target:[[:space:]]*community-api' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must build community-api"
@@ -521,7 +529,9 @@ grep -Fq 'DIRECT_MESSAGES_TIMESTAMP=1700000000024' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'ZHESI_ARCADE_TIMESTAMP=1700000000025' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000025' \
+grep -Fq 'DEVELOPMENT_TIMESTAMP=1700000000026' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000026' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -546,8 +556,10 @@ grep -Fq 'chat_direct_messages' \
 grep -Fq 'zhesi_arcade_constraint_count' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'assert_zhesi_arcade_reverted' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'assert_development_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014 through zhesi arcade 0025"
+  fail "migration rehearsal must verify chat 0014 through development workspace 0026"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
@@ -675,6 +687,10 @@ check_boolean FEATURE_COMMUNITY_CHAT_WRITES_ENABLED
 check_boolean CHAT_BUILTIN_MODERATION_ENABLED
 check_boolean FEATURE_COMMUNITY_NEWS_ENABLED
 check_boolean FEATURE_NEWS_ADMIN_ENABLED
+# Existing deployments default to disabled when this newly added key is absent.
+if grep -q '^FEATURE_DEVELOPMENT_WORKSPACE_ENABLED=' "$ENV_FILE"; then
+  check_boolean FEATURE_DEVELOPMENT_WORKSPACE_ENABLED
+fi
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
 
 [ "$(env_value FEATURE_COMMUNITY_BATTLE_ENABLED)" = false ] ||

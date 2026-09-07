@@ -27,6 +27,11 @@ import {
 import { CommunityCommandReceipt } from '../../database/entities/community-command-receipt.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
 import { ConsentRecord } from '../../database/entities/consent-record.entity';
+import {
+  DevelopmentEvent,
+  DevelopmentMember,
+  DevelopmentRequest,
+} from '../../database/entities/development.entity';
 import { EmailVerification } from '../../database/entities/email-verification.entity';
 import { FriendEncouragement } from '../../database/entities/friend-encouragement.entity';
 import { FriendRequest } from '../../database/entities/friend-request.entity';
@@ -548,6 +553,30 @@ export class AccountLifecycleService
         await manager.getRepository(AccountRestriction).delete({ userId: user.id });
         await manager.getRepository(EmailVerification).delete({ userId: user.id });
         await manager.getRepository(AuthSession).delete({ userId: user.id });
+        // Private development submissions and their binary attachments are not
+        // public community posts. Remove them on completed account deletion.
+        const developmentRequests = await manager.getRepository(DevelopmentRequest).find({
+          where: { authorId: user.id },
+          select: { id: true },
+        });
+        if (developmentRequests.length > 0) {
+          // System notifications deliberately have no actor; purge the private
+          // request title from recipients' inboxes by its resource identity.
+          await manager.getRepository(CommunityNotification).delete({
+            resourceType: 'development_request',
+            resourceId: In(developmentRequests.map((request) => request.id)),
+          });
+          await manager.getRepository(DevelopmentRequest).delete({ authorId: user.id });
+        }
+        await manager.getRepository(DevelopmentEvent).update(
+          { actorId: user.id },
+          { body: '账号已注销，内容已清理。' },
+        );
+        await manager.getRepository(DevelopmentMember).delete({ userId: user.id });
+        await manager.getRepository(DevelopmentMember).update(
+          { grantedByUserId: user.id },
+          { grantedByUserId: null },
+        );
         await manager
           .getRepository(FriendRequest)
           .createQueryBuilder()
@@ -663,6 +692,8 @@ export class AccountLifecycleService
         }
         user.email = anonymousEmail;
         user.emailNormalized = anonymousEmail;
+        user.username = null;
+        user.usernameNormalized = null;
         user.passwordHash = DUMMY_PASSWORD_HASH;
         user.displayName = null;
         user.accountStatus = 'deleted';

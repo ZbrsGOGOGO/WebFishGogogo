@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { newDb, type IMemoryDb } from 'pg-mem';
+import { DataType, newDb, type IMemoryDb } from 'pg-mem';
 import { DataSource } from 'typeorm';
 
 import { entities } from './entities';
@@ -40,6 +40,14 @@ export async function createLocalDevDataSource(): Promise<DataSource> {
     returns: 'text' as never,
     implementation: () => 'stealth_reader',
     impure: true,
+  });
+  // Production enforces bytea metadata integrity with octet_length(content).
+  // pg-mem does not ship that built-in, so register the equivalent for tests.
+  db.public.registerFunction({
+    name: 'octet_length',
+    args: [DataType.bytea],
+    returns: DataType.integer,
+    implementation: (value: Buffer | Uint8Array) => value.byteLength,
   });
   // pgcrypto / uuid-ossp 扩展在 pg-mem 下为 no-op（函数已手动注册）。
   db.registerExtension('pgcrypto', () => {});

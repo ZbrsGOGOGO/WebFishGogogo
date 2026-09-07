@@ -464,10 +464,7 @@ export class DirectMessageService {
         );
         for (const member of members) {
           member.updatedAt = now;
-          if (member.userId === userId) {
-            member.lastReadSequence = conversation.latestSequence;
-            member.unreadCount = 0;
-          } else {
+          if (member.userId !== userId) {
             member.unreadCount = Math.min(
               MAX_UNREAD_COUNT,
               member.unreadCount + 1,

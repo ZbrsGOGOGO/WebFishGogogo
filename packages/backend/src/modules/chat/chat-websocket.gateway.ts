@@ -35,6 +35,7 @@ const PRINCIPAL_RECHECK_BATCH_SIZE = 500;
 interface ConnectionState {
   id: string;
   authenticated: boolean;
+  authenticating: boolean;
   userId: string | null;
   sessionId: string | null;
   subscriptions: Map<ChatRoomSlug, number>;
@@ -131,6 +132,7 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     const state: ConnectionState = {
       id: randomUUID(),
       authenticated: false,
+      authenticating: false,
       userId: null,
       sessionId: null,
       subscriptions: new Map(),
@@ -184,6 +186,14 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       if (frame.type !== 'chat.authenticate') {
         this.sendError(socket, chatException('CHAT_AUTH_REQUIRED', '第一帧必须完成认证。', 401));
         socket.close(4401, 'Authentication required');
+        return;
+      }
+      if (state.authenticating) {
+        this.sendError(
+          socket,
+          chatException('CHAT_AUTH_IN_PROGRESS', '聊天室认证正在进行。', 409),
+          stringField(frame, 'requestId'),
+        );
         return;
       }
       await this.authenticate(socket, state, frame);
@@ -240,11 +250,23 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     state: ConnectionState,
     frame: ClientFrame,
   ): Promise<void> {
+    state.authenticating = true;
     try {
       if (frame.protocolVersion !== 1 || typeof frame.ticket !== 'string') {
         throw chatException('CHAT_TICKET_INVALID', '连接凭证无效。', 401);
       }
       const principal = await this.chat.consumeSocketTicket(frame.ticket);
+      // Ticket verification may outlive the authentication deadline or a
+      // client-initiated close. Never resurrect a connection that cleanup has
+      // already removed: doing so leaves a closed socket in userConnections
+      // and permanently consumes one of the user's connection slots.
+      if (
+        socket.readyState !== WebSocket.OPEN ||
+        this.states.get(socket) !== state ||
+        state.authenticated
+      ) {
+        return;
+      }
       const maxConnections = this.maxConnectionsPerUser();
       const existing = this.userConnections.get(principal.userId) ?? new Set<WebSocket>();
       if (existing.size >= maxConnections) {
@@ -265,6 +287,8 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       const exception = this.asChatException(error, 'CHAT_AUTH_FAILED', '聊天室认证失败。');
       this.sendError(socket, exception, stringField(frame, 'requestId'));
       socket.close(exception.getStatus() === 403 ? 4403 : 4401, 'Authentication failed');
+    } finally {
+      state.authenticating = false;
     }
   }
 
@@ -536,13 +560,26 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     );
   }
 
-  private broadcastDirectRead(event: ChatDirectReadRealtimeEvent): Promise<void> {
+  private async broadcastDirectRead(event: ChatDirectReadRealtimeEvent): Promise<void> {
     const participantIds = [...new Set(event.participantIds)];
     if (
       participantIds.length !== 2 ||
       !participantIds.includes(event.readerUserId)
     ) {
-      return Promise.resolve();
+      return;
+    }
+    // Redis payloads are routing hints, not an authorization source. Recheck
+    // the current conversation participants so a stale event queued across a
+    // block, or a malformed internal payload, cannot disclose read activity.
+    const currentParticipants = await this.directMessages.participants(
+      event.conversationId,
+    );
+    if (
+      currentParticipants.length !== 2 ||
+      !sameMembers(participantIds, currentParticipants) ||
+      !currentParticipants.includes(event.readerUserId)
+    ) {
+      return;
     }
     for (const userId of participantIds) {
       for (const socket of this.openUserSockets(userId)) {
@@ -554,7 +591,6 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
         });
       }
     }
-    return Promise.resolve();
   }
 
   private openUserSockets(userId: string): WebSocket[] {
@@ -848,6 +884,10 @@ function configuredSiteOrigin(): string | null {
   } catch {
     return null;
   }
+}
+
+function sameMembers(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value));
 }
 
 function rawDataText(data: RawData): string {

@@ -14,6 +14,10 @@ import {
   acquireCommunityChatConnection,
   releaseCommunityChatConnection,
 } from '../../features/community-chat/community-chat-connection';
+import {
+  DevelopmentAccessProvider,
+  useDevelopmentAccessState,
+} from '../../features/development/development-access';
 import { Button } from '../ui';
 import styles from './CommunitySiteLayout.module.css';
 
@@ -44,6 +48,7 @@ function isWorkspaceRoute(pathname: string): boolean {
     '/account',
     '/settings',
     '/moderation',
+    '/development',
   ].some((prefix) => pathname.startsWith(prefix));
 }
 
@@ -55,6 +60,7 @@ export function CommunitySiteLayout(): JSX.Element {
   const logout = useCommunityAuthStore((state) => state.logout);
   const currentSystem = communitySystemByPath(location.pathname);
   const [directUnreadCount, setDirectUnreadCount] = useState(0);
+  const developmentAccess = useDevelopmentAccessState();
 
   useEffect(() => {
     void restoreSession();
@@ -116,8 +122,11 @@ export function CommunitySiteLayout(): JSX.Element {
   const profession = user?.battleProfession
     ? PROFESSION_LABELS[user.battleProfession] ?? '办公室新人'
     : '办公室新人';
+  const developmentAllowed = developmentAccess.status === 'allowed';
+  const developmentCurrent = location.pathname.startsWith('/development');
 
   return (
+    <DevelopmentAccessProvider value={developmentAccess}>
     <div className={styles.shell}>
       <a className="skip-link" href="#community-main">跳到主要内容</a>
       <header className={styles.header}>
@@ -160,6 +169,7 @@ export function CommunitySiteLayout(): JSX.Element {
                 {phase === 'active' && COMMUNITY_FEATURE_FLAGS.news && COMMUNITY_FEATURE_FLAGS.newsAdmin && user?.roles?.some((role) => role === 'moderator' || role === 'admin') ? (
                   <Link className={styles.noticeLink} to="/news/admin" aria-label="热点资讯编辑发布台">资讯台</Link>
                 ) : null}
+                {developmentAllowed ? <Link className={styles.noticeLink} to="/development">开发协作</Link> : null}
                 <Link className={styles.noticeLink} to="/notifications" aria-label="通知中心">通知</Link>
                 <Link className={styles.accountLink} to={phase === 'active' ? '/me' : '/account/status'}>
                   {displayName}
@@ -209,6 +219,16 @@ export function CommunitySiteLayout(): JSX.Element {
                   ) : null}
                 </Link>
               ))}
+              {developmentAllowed ? (
+                <Link
+                  to="/development"
+                  data-current={developmentCurrent}
+                  aria-current={developmentCurrent ? 'page' : undefined}
+                >
+                  <span aria-hidden="true">研</span>
+                  <b>开发协作</b>
+                </Link>
+              ) : null}
             </nav>
 
             <div className={styles.railFoot}>
@@ -268,8 +288,19 @@ export function CommunitySiteLayout(): JSX.Element {
               ) : null}
             </Link>
           ))}
+          {developmentAllowed ? (
+            <Link
+              to="/development"
+              data-current={developmentCurrent}
+              aria-current={developmentCurrent ? 'page' : undefined}
+            >
+              <span aria-hidden="true">研</span>
+              <small>开发</small>
+            </Link>
+          ) : null}
         </nav>
       ) : null}
     </div>
+    </DevelopmentAccessProvider>
   );
 }

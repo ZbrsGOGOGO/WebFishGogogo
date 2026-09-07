@@ -238,7 +238,10 @@ export class ArcadeService {
 
   async startRun(userId: string, gameKey: ArcadeGameKey) {
     return this.dataSource.transaction(async (manager) => {
-      await this.activeUser(userId);
+      // The account row is the common lock for every run belonging to this
+      // user. Without it, two concurrent starts can both expire zero rows and
+      // then insert two active runs because there is no partial unique index.
+      await this.lockActiveUser(manager, userId);
       await manager
         .createQueryBuilder()
         .update(ArcadeGameRun)
@@ -273,10 +276,9 @@ export class ArcadeService {
 
   async finishRun(userId: string, runId: string, input: FinishRunInput) {
     return this.dataSource.transaction(async (manager) => {
-      const user = await manager.getRepository(User).findOne({ where: { id: userId } });
-      if (!user || user.accountStatus !== 'active') {
-        throw new UnauthorizedException({ code: 'ARCADE_ACCOUNT_INACTIVE' });
-      }
+      // A missing best-score row cannot itself be locked. Reusing the account
+      // lock serializes first-best creation as well as start/finish ordering.
+      const user = await this.lockActiveUser(manager, userId);
       const run = await manager.getRepository(ArcadeGameRun).findOne({
         where: { id: runId, userId },
         lock: { mode: 'pessimistic_write' },
@@ -348,8 +350,14 @@ export class ArcadeService {
     };
   }
 
-  private async activeUser(userId: string): Promise<User> {
-    const user = await this.dataSource.getRepository(User).findOne({ where: { id: userId } });
+  private async lockActiveUser(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<User> {
+    const user = await manager.getRepository(User).findOne({
+      where: { id: userId },
+      lock: { mode: 'pessimistic_write' },
+    });
     if (!user || user.accountStatus !== 'active') {
       throw new UnauthorizedException({ code: 'ARCADE_ACCOUNT_INACTIVE' });
     }

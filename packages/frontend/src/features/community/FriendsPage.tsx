@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type JSX,
@@ -61,6 +62,7 @@ export function CommunityFriendsPage(): JSX.Element {
   const [error, setError] = useState<string>();
   const [searchError, setSearchError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const searchGenerationRef = useRef(0);
 
   const load = useCallback(async (showLoading = true): Promise<void> => {
     if (showLoading) setLoading(true);
@@ -121,11 +123,14 @@ export function CommunityFriendsPage(): JSX.Element {
 
   useEffect(() => {
     void load();
+    return () => { searchGenerationRef.current += 1; };
   }, [load]);
 
   async function search(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
+    const searchGeneration = ++searchGenerationRef.current;
     const identifier = query.trim();
+    setSearching(false);
     setSearchResult(null);
     setSearchError(undefined);
     setNotice(undefined);
@@ -144,12 +149,15 @@ export function CommunityFriendsPage(): JSX.Element {
     setSearching(true);
     try {
       const result = await communityProfileApi.findUser(identifier);
+      if (searchGenerationRef.current !== searchGeneration) return;
       if (!result) throw new Error('没有找到该用户');
       setSearchResult(result);
     } catch (requestError) {
-      setSearchError(communityRequestErrorMessage(requestError, '没有找到该公开编号'));
+      if (searchGenerationRef.current === searchGeneration) {
+        setSearchError(communityRequestErrorMessage(requestError, '没有找到该公开编号'));
+      }
     } finally {
-      setSearching(false);
+      if (searchGenerationRef.current === searchGeneration) setSearching(false);
     }
   }
 
@@ -158,6 +166,7 @@ export function CommunityFriendsPage(): JSX.Element {
     operation: (idempotencyKey: string) => Promise<unknown>,
     successMessage: string,
   ): Promise<void> {
+    const searchGeneration = searchGenerationRef.current;
     setBusyKey(key);
     setError(undefined);
     setNotice(undefined);
@@ -166,8 +175,9 @@ export function CommunityFriendsPage(): JSX.Element {
       setNotice(successMessage);
       setConfirmKey(undefined);
       await load(false);
-      if (searchResult) {
-        setSearchResult(await communityProfileApi.getPublic(searchResult.publicId));
+      if (searchResult && searchGenerationRef.current === searchGeneration) {
+        const updatedProfile = await communityProfileApi.getPublic(searchResult.publicId);
+        if (searchGenerationRef.current === searchGeneration) setSearchResult(updatedProfile);
       }
     } catch (requestError) {
       setError(communityRequestErrorMessage(requestError, '操作失败，请重试'));
@@ -222,7 +232,13 @@ export function CommunityFriendsPage(): JSX.Element {
             value={query}
             autoComplete="off"
             placeholder="例如 @xiaoming"
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              searchGenerationRef.current += 1;
+              setQuery(event.target.value);
+              setSearching(false);
+              setSearchResult(null);
+              setSearchError(undefined);
+            }}
           />
           <Button type="submit" loading={searching}>查找</Button>
         </form>

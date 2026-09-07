@@ -8,6 +8,7 @@ import { CommunityModule } from './modules/community/community.module';
 import { CommunityContentModule } from './modules/community/community-content.module';
 import { NewsModule } from './modules/community/news/news.module';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
+import { DevelopmentModule } from './modules/development/development.module';
 
 /**
  * 正式社区的 API 白名单根模块。
@@ -25,6 +26,7 @@ import { ArcadeModule } from './modules/community/arcade/arcade.module';
     CommunityContentModule,
     NewsModule,
     ArcadeModule,
+    DevelopmentModule,
   ],
   controllers: [CommunityHealthController],
 })

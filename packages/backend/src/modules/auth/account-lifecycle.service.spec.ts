@@ -9,6 +9,12 @@ import { AdminAuditLog } from '../../database/entities/admin-audit-log.entity';
 import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.entity';
 import { AuthSession } from '../../database/entities/auth-session.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
+import {
+  DevelopmentAttachmentRecord,
+  DevelopmentEvent,
+  DevelopmentMember,
+  DevelopmentRequest,
+} from '../../database/entities/development.entity';
 import { FriendEncouragement } from '../../database/entities/friend-encouragement.entity';
 import { FriendRequest } from '../../database/entities/friend-request.entity';
 import { Friendship } from '../../database/entities/friendship.entity';
@@ -172,6 +178,78 @@ describe('AccountLifecycleService', () => {
     });
     expect(persisted).not.toContain('Private Person');
     expect(persisted).not.toContain(oldEmail);
+  });
+
+  it('removes private development files and clears authored review text when account deletion completes', async () => {
+    const user = await seedUser(dataSource, 'dev-delete@example.com');
+    const peer = await seedUser(dataSource, 'dev-peer@example.com');
+    await dataSource.getRepository(User).update(user.id, {
+      username: 'private_developer', usernameNormalized: 'private_developer',
+    });
+    const session = await seedSession(dataSource, user.id, '7');
+    const requests = dataSource.getRepository(DevelopmentRequest);
+    const [own, other] = await requests.save([user, peer].map((author) => requests.create({
+      authorId: author.id,
+      clientRequestId: randomUUID(),
+      requestHash: 'a'.repeat(64),
+      title: '私有协作提案',
+      category: 'feature',
+      description: '账号注销时不得留下自己的私有附件和讨论正文。',
+      status: 'submitted',
+      version: 1,
+      attachmentCount: author.id === user.id ? 1 : 0,
+      attachmentBytes: author.id === user.id ? 6 : 0,
+    })));
+    const notifications = dataSource.getRepository(CommunityNotification);
+    await notifications.save(notifications.create({
+      userId: peer.id,
+      actorUserId: null,
+      category: 'system',
+      eventType: 'development.request.created',
+      resourceType: 'development_request',
+      resourceId: own.id,
+      payload: { title: '待审核', summary: own.title },
+      dedupeKey: `development-request:${own.id}:created`,
+      readAt: null,
+      availableAt: new Date(),
+      expiresAt: null,
+    }));
+    const files = dataSource.getRepository(DevelopmentAttachmentRecord);
+    await files.save(files.create({
+      requestId: own.id,
+      filename: 'private.txt',
+      mediaType: 'text/plain',
+      bytes: 6,
+      sha256: 'b'.repeat(64),
+      content: Buffer.from('secret'),
+      extraction: 'text',
+      excerpt: 'secret',
+      warnings: [],
+    }));
+    const events = dataSource.getRepository(DevelopmentEvent);
+    const comments = await events.save([own, other].map((request) => events.create({
+      requestId: request.id, actorId: user.id, kind: 'comment', body: 'private review text', status: null,
+    })));
+    const members = dataSource.getRepository(DevelopmentMember);
+    await members.save([
+      members.create({ userId: user.id, grantedByUserId: peer.id, grantedAt: new Date(), revokedAt: null }),
+      members.create({ userId: peer.id, grantedByUserId: user.id, grantedAt: new Date(), revokedAt: null }),
+    ]);
+
+    await service.requestDeletion(user.id, session.id, 'development-delete-idempotency-key');
+    const deletion = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
+    await expect(service.processDueDeletions(10, new Date(deletion.scheduledFor.getTime() + 1000))).resolves.toBe(1);
+
+    expect(await requests.findOneBy({ id: own.id })).toBeNull();
+    expect(await requests.findOneBy({ id: other.id })).not.toBeNull();
+    expect(await files.count()).toBe(0);
+    expect(await notifications.count({ where: { resourceId: own.id } })).toBe(0);
+    expect(await events.findOneBy({ id: comments[0].id })).toBeNull();
+    expect(await events.findOneBy({ id: comments[1].id })).toMatchObject({ body: '账号已注销，内容已清理。' });
+    expect(await members.findOneBy({ userId: user.id })).toBeNull();
+    expect(await members.findOneBy({ userId: peer.id })).toMatchObject({ grantedByUserId: null });
+    expect(await dataSource.getRepository(User).findOneByOrFail({ id: user.id }))
+      .toMatchObject({ username: null, usernameNormalized: null });
   });
 
   it('encrypts appeal reasons and requires an active admin for an idempotent decision', async () => {
