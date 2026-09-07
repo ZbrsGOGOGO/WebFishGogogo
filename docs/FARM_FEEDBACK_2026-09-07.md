@@ -34,4 +34,4 @@
 - 全仓 `npm run typecheck`、`git diff --check`、共享包及后端生产构建通过。社区前端显式开启农场后构建通过：`VITE_SITE_MODE=community VITE_API_BASE_URL=/api VITE_COMMUNITY_FARM_ENABLED=true npm run build --workspace @stealth-reader/frontend`。
 - 独立无头 Firefox 配合本地模拟 API 验证：237/440/203 预算信息准确，手动切换会议番茄后浇水成功、只发送一次照料请求；390 像素手机视口无横向溢出。浏览器测试只使用合成数据，没有访问生产账号。截图与临时验收脚本保存在本机 `/tmp/momo-farm-browser.l63Aof/`，不是仓库交付依赖。
 
-上述为发布前验证记录。修复已在本地完成，站点所有者随后授权提交、推送及部署；实际发布结果另行记录，不能仅凭本文件视为线上已生效。线上提案仍保留原处理状态，发布后还需由两位反馈者各自验证原来的操作路径。
+上述为发布前验证记录。站点所有者随后授权提交、推送及部署；同日 `d8e814e` 已推送 GitHub 并上线，55 项公网检查和合成账号农场专项验收通过，详见 [实际发布记录](./RELEASE_2026-09-07_FARM.md)。线上提案仍保留原处理状态，两位反馈者可各自验证原来的操作路径。
