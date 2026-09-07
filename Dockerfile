@@ -269,4 +269,10 @@ FROM nginx:1.30.4-alpine AS community-web
 COPY deploy/community.nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=community-build /app/packages/frontend/dist /usr/share/nginx/html
 
+# Git checkouts made by a backup/release shell may use umask 077. Vite copies
+# public/ file modes, so normalize only the generated public web root before
+# nginx's unprivileged workers serve it. Private uploads are stored in the DB.
+RUN find /usr/share/nginx/html -type d -exec chmod 755 {} + \
+    && find /usr/share/nginx/html -type f -exec chmod 644 {} +
+
 EXPOSE 80

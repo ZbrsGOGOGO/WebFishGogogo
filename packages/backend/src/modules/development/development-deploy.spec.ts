@@ -5,6 +5,14 @@ const root = resolve(__dirname, '../../../../..');
 const source = (path: string): string => readFileSync(resolve(root, path), 'utf8');
 
 describe('private development deployment boundaries', () => {
+  it('normalizes copied public asset permissions independently of the release checkout umask', () => {
+    const webStage = source('Dockerfile').split(' AS community-web')[1];
+    expect(webStage).toContain('find /usr/share/nginx/html -type d -exec chmod 755 {} +');
+    expect(webStage).toContain('find /usr/share/nginx/html -type f -exec chmod 644 {} +');
+    expect(webStage.indexOf('COPY --from=community-build')).toBeLessThan(webStage.indexOf('RUN find'));
+    expect(webStage).not.toContain('chmod 777');
+  });
+
   it('opts in at runtime and keeps existing deployments disabled by default', () => {
     expect(source('deploy/docker-compose.community.yml')).toContain(
       'FEATURE_DEVELOPMENT_WORKSPACE_ENABLED: ${FEATURE_DEVELOPMENT_WORKSPACE_ENABLED:-false}',
