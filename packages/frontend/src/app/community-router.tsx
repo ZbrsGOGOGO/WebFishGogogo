@@ -59,6 +59,7 @@ import {
   CommunityNewsTrendingPage,
 } from '../features/community-news';
 import { CommunityArcadeGameLayout } from '../features/games/CommunityArcadeGameLayout';
+import { CommunityGameWorkspaceLayout } from '../features/games/rooms/CommunityGameWorkspaceLayout';
 import { PublicToolsPage } from '../features/tools/PublicToolsPage';
 import { DevelopmentAccessGate } from '../features/development/development-access';
 import { communityAvatarMark } from '../features/community/profile-options';
@@ -69,11 +70,11 @@ const WorkstationTowerDefensePage = lazy(() =>
     default: module.WorkstationTowerDefensePage,
   })),
 );
-const PublicGamesPage = lazy(() =>
-  import('../features/games/PublicGamesPage').then((module) => ({
-    default: module.PublicGamesPage,
-  })),
-);
+const CommunityGamesPage = lazy(() => import('../features/games/rooms/CommunityGamesPage').then((module) => ({ default: module.CommunityGamesPage })));
+const CommunityGameRoomsPage = lazy(() => import('../features/games/rooms/CommunityGameRoomsPage').then((module) => ({ default: module.CommunityGameRoomsPage })));
+const CommunityGameRoomPage = lazy(() => import('../features/games/rooms/CommunityGameRoomPage').then((module) => ({ default: module.CommunityGameRoomPage })));
+const CommunityGameLeaderboardPage = lazy(() => import('../features/games/rooms/CommunityGameLeaderboardPage').then((module) => ({ default: module.CommunityGameLeaderboardPage })));
+const CommunityLeaderboardsPage = lazy(() => import('../features/games/rooms/CommunityLeaderboardsPage').then((module) => ({ default: module.CommunityLeaderboardsPage })));
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({ default: module.TetrisGamePage })),
 );
@@ -180,6 +181,7 @@ export function CommunityModeRouter(): JSX.Element {
             <Route path="/settings/verification" element={<CommunitySocialVerificationPage />} />
           ) : null}
           <Route path="/notifications" element={<CommunityNotificationsPage />} />
+          <Route path="/leaderboards" element={loading(<CommunityLeaderboardsPage />)} />
         </Route>
         <Route element={<RequireCommunityAccount />}>
           <Route element={<DevelopmentAccessGate />}>
@@ -308,8 +310,15 @@ export function CommunityModeRouter(): JSX.Element {
 
       <Route path="/tools" element={<PublicToolsPage />} />
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
+      <Route path="/games" element={<CommunityGameWorkspaceLayout />}>
+        <Route index element={loading(<CommunityGamesPage />)} />
+        <Route element={<RequireCommunityAccount />}>
+          <Route path="rooms" element={loading(<CommunityGameRoomsPage />)} />
+          <Route path="rooms/:roomId" element={loading(<CommunityGameRoomPage />)} />
+        </Route>
+        <Route path="leaderboards/:gameKey" element={loading(<CommunityGameLeaderboardPage />)} />
+      </Route>
       <Route path="/games" element={<CommunityArcadeGameLayout />}>
-        <Route index element={loading(<PublicGamesPage />)} />
         <Route path="snake" element={loading(<SnakeGamePage />)} />
         <Route path="tetris" element={loading(<TetrisGamePage />)} />
         <Route path="tank" element={loading(<TankBattlePage />)} />

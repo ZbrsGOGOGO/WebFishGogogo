@@ -339,6 +339,19 @@ grep -Eq '"items"[[:space:]]*:[[:space:]]*\[' \
   fail "guest zhesi leaderboard response is missing items"
 pass "guest zhesi leaderboard contract"
 
+# New authoritative play APIs have an explicit proxy allowlist. Coin balances
+# and room state stay authenticated; the catalog and per-game daily board are public.
+request GET /api/v1/games/play/catalog 200 "$SMOKE_TMP/play-catalog.json" "$SMOKE_TMP/play-catalog.headers"
+for game_key in snake tetris tank zhesi draw undercover; do
+  grep -Eq "\"gameKey\"[[:space:]]*:[[:space:]]*\"$game_key\"" "$SMOKE_TMP/play-catalog.json" || fail "play catalog missing $game_key"
+done
+require_header "$SMOKE_TMP/play-catalog.headers" '^cache-control:[[:space:]]*no-store' 'play API no-store'
+request GET /api/v1/games/play/leaderboards/draw 200 "$SMOKE_TMP/play-daily.json" "$SMOKE_TMP/play-daily.headers"
+grep -Eq '"dailyChampionCoins"[[:space:]]*:[[:space:]]*100' "$SMOKE_TMP/play-daily.json" || fail 'daily game prize contract'
+request GET /api/v1/games/play/leaderboards/office-coins 401 "$SMOKE_TMP/play-coins-guest.json" "$SMOKE_TMP/play-coins-guest.headers"
+request GET /api/v1/games/play/rooms 401 "$SMOKE_TMP/play-rooms-guest.json" "$SMOKE_TMP/play-rooms-guest.headers"
+pass "authoritative game catalog, daily prize contract and private balances/rooms"
+
 # Cookie-creating endpoints must reject the request before parsing credentials. Empty bodies
 # ensure this contract check cannot log in, consume a Beta code or send verification mail.
 for auth_path_and_label in \

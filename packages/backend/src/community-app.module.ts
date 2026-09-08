@@ -8,6 +8,7 @@ import { CommunityModule } from './modules/community/community.module';
 import { CommunityContentModule } from './modules/community/community-content.module';
 import { NewsModule } from './modules/community/news/news.module';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
+import { PlayModule } from './modules/community/play/play.module';
 import { DevelopmentModule } from './modules/development/development.module';
 
 /**
@@ -26,6 +27,7 @@ import { DevelopmentModule } from './modules/development/development.module';
     CommunityContentModule,
     NewsModule,
     ArcadeModule,
+    PlayModule,
     DevelopmentModule,
   ],
   controllers: [CommunityHealthController],

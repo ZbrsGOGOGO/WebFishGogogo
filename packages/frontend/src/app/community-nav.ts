@@ -5,6 +5,7 @@ export type CommunitySystemId =
   | 'messages'
   | 'farm'
   | 'towerDefense'
+  | 'leaderboards'
   | 'feed'
   | 'invite'
   | 'profile'
@@ -103,6 +104,14 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: COMMUNITY_FEATURE_FLAGS.towerDefense,
     requiresAccount: true,
     description: '移动角色，布置防线守住核心工位',
+  },
+  {
+    id: 'leaderboards',
+    label: '排行榜',
+    path: '/leaderboards',
+    enabled: true,
+    requiresAccount: true,
+    description: '办公币余额榜与六款小游戏每日榜',
   },
   {
     id: 'feed',

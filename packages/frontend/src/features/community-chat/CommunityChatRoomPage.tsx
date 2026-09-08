@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -8,8 +9,9 @@ import {
   type JSX,
   type KeyboardEvent,
 } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
+import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
   communityChatApi,
@@ -22,7 +24,8 @@ import {
   type CommunityChatRoom,
   type CommunityChatRoomSlug,
 } from '../../api/community';
-import { Button, Card, EmptyState, PageHeader, Tag, Textarea } from '../../components/ui';
+import { Button, Card, EmptyState, PageHeader, Textarea } from '../../components/ui';
+import { communityAvatarMark } from '../community/profile-options';
 import {
   collectCommunityChatMentionCandidates,
   canWithdrawCommunityChatMessage,
@@ -45,7 +48,7 @@ import {
   type CommunityChatConnection,
   type CommunityChatConnectionSnapshot,
 } from './community-chat-connection';
-import { CHAT_PRESENCE_LABELS } from './CommunityChatLobbyPage';
+import { CHAT_PRESENCE_LABELS, CommunityChatRoomList } from './CommunityChatRoomList';
 import { CommunityExperienceNav } from './CommunityExperienceNav';
 import styles from './CommunityChat.module.css';
 
@@ -95,11 +98,18 @@ function visibleBody(message: CommunityChatMessage): string | null {
   return message.body;
 }
 
+function scrollerIsNearBottom(scroller: HTMLDivElement | null): boolean {
+  if (!scroller) return true;
+  return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 56;
+}
+
 export function CommunityChatRoomPage(): JSX.Element {
+  const navigate = useNavigate();
   const { roomSlug: rawRoomSlug = '' } = useParams();
   const user = useCommunityAuthStore((state) => state.user);
   const roomSlug = isCommunityChatRoomSlug(rawRoomSlug) ? rawRoomSlug : null;
   const [room, setRoom] = useState<CommunityChatRoom | null>(null);
+  const [availableRooms, setAvailableRooms] = useState<CommunityChatRoom[]>([]);
   const [messages, setMessages] = useState<CommunityChatMessage[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingChatMessage[]>([]);
   const [connectionSnapshot, setConnectionSnapshot] = useState<CommunityChatConnectionSnapshot>({
@@ -133,6 +143,8 @@ export function CommunityChatRoomPage(): JSX.Element {
   } | null>(null);
   const slowModeSecondsRef = useRef(0);
   const previousConnectionStatusRef = useRef<CommunityChatConnectionSnapshot['status']>('idle');
+  const messageScrollerRef = useRef<HTMLDivElement | null>(null);
+  const scrollToLatestRef = useRef(true);
 
   if (activeRoomSlugRef.current !== roomSlug) {
     activeRoomSlugRef.current = roomSlug;
@@ -153,6 +165,7 @@ export function CommunityChatRoomPage(): JSX.Element {
   const acceptMessages = useCallback((
     incoming: readonly CommunityChatMessage[],
     expectedGeneration = roomGenerationRef.current,
+    followLatest = true,
   ) => {
     if (
       !roomSlug ||
@@ -161,6 +174,9 @@ export function CommunityChatRoomPage(): JSX.Element {
     ) return;
     const matching = incoming.filter((message) => message.roomSlug === roomSlug);
     if (matching.length === 0) return;
+    if (followLatest && scrollerIsNearBottom(messageScrollerRef.current)) {
+      scrollToLatestRef.current = true;
+    }
     setMessages((current) => {
       if (
         activeRoomSlugRef.current !== roomSlug ||
@@ -287,6 +303,9 @@ export function CommunityChatRoomPage(): JSX.Element {
     if (readyRoom.mentionCandidates) setSocketMentionCandidates(readyRoom.mentionCandidates);
     if (readyRoom.presenceBand) {
       setRoom((current) => current ? { ...current, presenceBand: readyRoom.presenceBand! } : current);
+      setAvailableRooms((current) => current.map((item) => item.slug === roomSlug
+        ? { ...item, presenceBand: readyRoom.presenceBand! }
+        : item));
     }
     const localLatest = latestSequenceRef.current;
     const gapStart = communityChatGapStart(readyRoom, localLatest);
@@ -335,6 +354,9 @@ export function CommunityChatRoomPage(): JSX.Element {
       if (event.type === 'chat.presence' && event.roomSlug === roomSlug) {
         if (activeRoomSlugRef.current === roomSlug) {
           setRoom((current) => current ? { ...current, presenceBand: event.presenceBand } : current);
+          setAvailableRooms((current) => current.map((item) => item.slug === roomSlug
+            ? { ...item, presenceBand: event.presenceBand }
+            : item));
         }
       }
     });
@@ -371,6 +393,7 @@ export function CommunityChatRoomPage(): JSX.Element {
     setRetryUntil(0);
     setNotice(undefined);
     setReportMessageId(undefined);
+    scrollToLatestRef.current = true;
     try {
       const [roomPage, messagePage] = await Promise.all([
         communityChatApi.listRooms(),
@@ -384,6 +407,7 @@ export function CommunityChatRoomPage(): JSX.Element {
         return;
       }
       setRoom(selectedRoom);
+      setAvailableRooms(roomPage.items ?? []);
       setSocketMentionCandidates(selectedRoom.mentionCandidates ?? []);
       if (selectedRoom.retryAfterSeconds) {
         setRetryUntil(Date.now() + selectedRoom.retryAfterSeconds * 1000);
@@ -437,6 +461,13 @@ export function CommunityChatRoomPage(): JSX.Element {
     () => roomSlug ? messages.filter((message) => message.roomSlug === roomSlug) : [],
     [messages, roomSlug],
   );
+  useLayoutEffect(() => {
+    if (loading || !scrollToLatestRef.current) return;
+    const scroller = messageScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTop = scroller.scrollHeight;
+    scrollToLatestRef.current = false;
+  }, [loading, visibleMessages]);
   const mentionCandidates = useMemo(() => collectCommunityChatMentionCandidates(
     [
       ...(activeRoom?.mentionCandidates ?? []),
@@ -523,7 +554,7 @@ export function CommunityChatRoomPage(): JSX.Element {
         activeRoomSlugRef.current !== requestedRoomSlug ||
         roomGenerationRef.current !== requestedGeneration
       ) return;
-      acceptMessages(page.items ?? [], requestedGeneration);
+      acceptMessages(page.items ?? [], requestedGeneration, false);
       setHasMoreBefore(page.hasMoreBefore);
     } catch (requestError) {
       if (
@@ -599,23 +630,21 @@ export function CommunityChatRoomPage(): JSX.Element {
   if (!roomSlug) return <Navigate to="/community/chat" replace />;
 
   return (
-    <main className={styles.page}>
+    <main className={`${styles.page} ${styles.roomPage}`}>
       <CommunityExperienceNav />
+      <div className={styles.roomQuickBar}>
+      <Link className={styles.roomBackLink} to="/community/chat">
+        ← 返回聊天室大厅
+      </Link>
+      <label className={styles.roomQuickSwitch}>切换群聊<select aria-label="切换群聊" value={roomSlug} onChange={(event) => navigate(`/community/chat/${event.target.value}`)}>{availableRooms.filter((item) => !item.closed).map((item) => <option key={item.slug} value={item.slug}>{item.name}</option>)}</select></label>
+      </div>
       <PageHeader
+        className={styles.roomHeader}
         title={activeRoom?.name ?? '聊天室'}
         subtitle={activeRoom?.description ?? '正在进入聊天室'}
-        actions={<Link to="/community/chat">返回六房间大厅</Link>}
+        actions={COMMUNITY_FEATURE_FLAGS.friends ? <Link to="/messages">切换到私人消息</Link> : undefined}
       />
 
-      <div className={styles.roomStatusBar}>
-        <span data-status={connectionSnapshot.status}>{CONNECTION_LABELS[connectionSnapshot.status]}</span>
-        <span>活跃档位：{CHAT_PRESENCE_LABELS[activeRoom?.presenceBand ?? 'unavailable']}</span>
-        {activeRoom?.slowModeSeconds ? <span>慢速模式：{activeRoom.slowModeSeconds} 秒</span> : null}
-        {gapLoading ? <span role="status">正在同步新消息…</span> : null}
-        {connectionSnapshot.status === 'failed' ? (
-          <Button size="sm" variant="secondary" onClick={() => connectionRef.current?.reconnectNow()}>重新连接</Button>
-        ) : null}
-      </div>
       {connectionSnapshot.lastError ? <p className={styles.warning} role="status">{connectionSnapshot.lastError}</p> : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {!loading && !room && error ? (
@@ -626,74 +655,112 @@ export function CommunityChatRoomPage(): JSX.Element {
       {activeRoom?.readOnly && !activeRoom.closed ? <p className={styles.warning}>房间当前只读，可以查看消息但不能发言。</p> : null}
       {retrySeconds > 0 ? <p className={styles.warning}>请等待 {retrySeconds} 秒后再发言。</p> : null}
 
-      <section className={styles.chatLayout} aria-label="聊天室内容">
-        <div className={styles.messageColumn}>
-          {hasMoreBefore ? (
-            <Button variant="secondary" fullWidth loading={loadingOlder} onClick={() => void loadOlderMessages()}>
-              加载更早消息
-            </Button>
-          ) : null}
-          {loading ? <p role="status">正在加载消息…</p> : visibleMessages.length === 0 ? (
-            <EmptyState title="还没有消息" message="来和大家说第一句话吧。" />
-          ) : (
-            <ol className={styles.messageList} aria-label="聊天室消息" aria-live="polite">
-              {visibleMessages.map((message) => {
-                const bodyText = visibleBody(message);
-                const canWithdrawNow = canWithdrawCommunityChatMessage(message, clock);
-                return (
-                  <li key={`${message.roomSlug}:${message.sequence}:${message.id}`} id={`chat-message-${message.id}`} data-visibility={message.visibility}>
-                    <header>
-                      {message.visibility === 'blocked_placeholder' ? (
-                        <strong>已拉黑用户</strong>
-                      ) : (
-                        <Link to={`/users/${encodeURIComponent(message.author.publicId)}`}>
-                          <strong>{message.author.displayName}</strong>
-                        </Link>
-                      )}
-                      <span>#{message.sequence} · {formatMessageTime(message.createdAt)}</span>
-                    </header>
-                    {message.replyTo ? (
-                      <blockquote>
-                        回复 {message.replyTo.authorDisplayName}：{message.replyTo.bodyPreview ?? '原消息不可见'}
-                      </blockquote>
-                    ) : null}
-                    <p>{bodyText || '消息内容不可见'}</p>
-                    {message.visibility === 'visible' ? (
-                      <footer className={styles.messageActions}>
-                        <button type="button" onClick={() => setReplyTo(message)}>回复</button>
-                        <button type="button" onClick={() => void copyMessage(message)}>复制</button>
-                        {canWithdrawNow ? <button type="button" onClick={() => withdrawMessage(message)}>撤回</button> : null}
-                        {message.permissions.canReport ? <button type="button" onClick={() => setReportMessageId(message.id)}>举报</button> : null}
-                      </footer>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-          )}
+      <section className={styles.groupChatLayout} aria-label="聊天室内容">
+        <aside className={styles.groupRoomSidebar} aria-label="群聊会话列表">
+          <div className={styles.conversationSidebarHeader}>
+            <strong>群聊会话</strong>
+            {COMMUNITY_FEATURE_FLAGS.friends ? <Link to="/messages">私人消息</Link> : null}
+          </div>
+          <CommunityChatRoomList rooms={availableRooms} activeSlug={roomSlug} />
+        </aside>
 
-          {pendingMessages.some((pending) => pending.roomSlug === roomSlug) ? (
-            <section className={styles.outbox} aria-label="待发送消息">
-              <h2>发送状态</h2>
-              {pendingMessages.filter((pending) => pending.roomSlug === roomSlug).map((pending) => (
-                <article key={pending.clientMessageId} data-state={pending.state}>
-                  <p>{pending.body}</p>
-                  <span>
-                    {pending.state === 'pending' ? '发送中' : pending.state === 'acked' ? '已发送' : `发送失败：${pending.error ?? '未知原因'}`}
-                  </span>
-                  {pending.state === 'failed' ? (
-                    <Button size="sm" variant="secondary" disabled={connectionSnapshot.status !== 'ready'} onClick={() => transmitPending(pending)}>
-                      重新发送
-                    </Button>
-                  ) : null}
-                </article>
-              ))}
-            </section>
-          ) : null}
-        </div>
+        <section className={styles.groupConversation} aria-label={activeRoom?.name ?? '群聊消息'}>
+          <div className={styles.roomStatusBar}>
+            <span data-status={connectionSnapshot.status}>{CONNECTION_LABELS[connectionSnapshot.status]}</span>
+            <span>{CHAT_PRESENCE_LABELS[activeRoom?.presenceBand ?? 'unavailable']}</span>
+            {activeRoom?.slowModeSeconds ? <span>发言间隔 {activeRoom.slowModeSeconds} 秒</span> : null}
+            {gapLoading ? <span role="status">正在同步新消息…</span> : null}
+            {connectionSnapshot.status === 'failed' ? (
+              <Button size="sm" variant="secondary" onClick={() => connectionRef.current?.reconnectNow()}>重新连接</Button>
+            ) : null}
+          </div>
 
-        <aside className={styles.composerColumn}>
-          <Card title="发送纯文本消息">
+          <div ref={messageScrollerRef} className={styles.groupMessageScroller} aria-label="聊天室消息记录">
+            {hasMoreBefore ? (
+              <Button variant="ghost" size="sm" loading={loadingOlder} onClick={() => void loadOlderMessages()}>
+                加载更早消息
+              </Button>
+            ) : null}
+            {loading ? <p role="status">正在加载消息…</p> : visibleMessages.length === 0 ? (
+              <EmptyState title="还没有消息" message="来和大家说第一句话吧。" />
+            ) : (
+              <ol className={styles.messageList} aria-label="聊天室消息" aria-live="polite">
+                {visibleMessages.map((message) => {
+                  const bodyText = visibleBody(message);
+                  const canWithdrawNow = canWithdrawCommunityChatMessage(message, clock);
+                  const mine = message.visibility === 'visible' && message.author.publicId === user?.publicId;
+                  const authorName = message.visibility === 'blocked_placeholder'
+                    ? '已拉黑用户'
+                    : mine
+                      ? '我'
+                      : message.author.displayName;
+                  return (
+                    <li
+                      key={`${message.roomSlug}:${message.sequence}:${message.id}`}
+                      id={`chat-message-${message.id}`}
+                      data-mine={mine}
+                      data-visibility={message.visibility}
+                    >
+                      <span className={styles.groupMessageAvatar} aria-hidden="true">
+                        {message.visibility === 'blocked_placeholder'
+                          ? '隐'
+                          : communityAvatarMark(message.author.avatarKey ?? undefined)}
+                      </span>
+                      <article>
+                        <header>
+                          {message.visibility === 'blocked_placeholder' ? (
+                            <strong>{authorName}</strong>
+                          ) : (
+                            <Link to={`/users/${encodeURIComponent(message.author.publicId)}`}>
+                              <strong>{authorName}</strong>
+                            </Link>
+                          )}
+                          <span>{formatMessageTime(message.createdAt)} · #{message.sequence}</span>
+                        </header>
+                        <div className={styles.groupMessageBubble}>
+                          {message.replyTo ? (
+                            <blockquote>
+                              回复 {message.replyTo.authorDisplayName}：{message.replyTo.bodyPreview ?? '原消息不可见'}
+                            </blockquote>
+                          ) : null}
+                          <p>{bodyText || '消息内容不可见'}</p>
+                          {message.visibility === 'visible' ? (
+                            <footer className={styles.messageActions}>
+                              <button type="button" onClick={() => setReplyTo(message)}>回复</button>
+                              <button type="button" onClick={() => void copyMessage(message)}>复制</button>
+                              {canWithdrawNow ? <button type="button" onClick={() => withdrawMessage(message)}>撤回</button> : null}
+                              {message.permissions.canReport ? <button type="button" onClick={() => setReportMessageId(message.id)}>举报</button> : null}
+                            </footer>
+                          ) : null}
+                        </div>
+                      </article>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            {pendingMessages.some((pending) => pending.roomSlug === roomSlug) ? (
+              <section className={styles.outbox} aria-label="待发送消息">
+                <h2>发送状态</h2>
+                {pendingMessages.filter((pending) => pending.roomSlug === roomSlug).map((pending) => (
+                  <article key={pending.clientMessageId} data-state={pending.state}>
+                    <p>{pending.body}</p>
+                    <span>
+                      {pending.state === 'pending' ? '发送中' : pending.state === 'acked' ? '已发送' : `发送失败：${pending.error ?? '未知原因'}`}
+                    </span>
+                    {pending.state === 'failed' ? (
+                      <Button size="sm" variant="secondary" disabled={connectionSnapshot.status !== 'ready'} onClick={() => transmitPending(pending)}>
+                        重新发送
+                      </Button>
+                    ) : null}
+                  </article>
+                ))}
+              </section>
+            ) : null}
+          </div>
+
+          <div className={styles.groupComposerPanel}>
             {replyTo ? (
               <div className={styles.replyingTo}>
                 <span>回复 {replyTo.author.displayName}</span>
@@ -705,13 +772,14 @@ export function CommunityChatRoomPage(): JSX.Element {
                 label="消息内容"
                 value={body}
                 maxLength={500}
-                rows={6}
+                rows={2}
                 disabled={activeRoom?.closed || activeRoom?.readOnly}
+                placeholder="输入消息，Ctrl / Cmd + Enter 发送"
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={handleComposerKeys}
               />
               <div className={styles.composerMeta}><span>{[...body].length}/500</span><span>Ctrl/⌘ + Enter 发送</span></div>
-              <label className={styles.mentionSelect}>
+              <details className={styles.mentionDetails}><summary>@ 提醒成员{mentionPublicIds.length > 0 ? `（已选 ${mentionPublicIds.length} 人）` : ''}</summary><label className={styles.mentionSelect}>
                 添加 @ 候选（最多 5 人）
                 <select value="" disabled={mentionPublicIds.length >= 5 || mentionCandidates.length === 0} onChange={(event) => addMention(event.target.value)}>
                   <option value="">选择想提醒的人</option>
@@ -719,7 +787,7 @@ export function CommunityChatRoomPage(): JSX.Element {
                     <option key={candidate.publicId} value={candidate.publicId}>{candidate.displayName} · {candidate.publicId}</option>
                   ))}
                 </select>
-              </label>
+              </label></details>
               {mentionPublicIds.length > 0 ? (
                 <div className={styles.mentionChips} aria-label="已选择的提醒对象">
                   {mentionPublicIds.map((publicId) => {
@@ -733,8 +801,8 @@ export function CommunityChatRoomPage(): JSX.Element {
               </Button>
             </form>
             <p className={styles.safetyNote}>请勿发送手机号、邮箱、住址或其他敏感信息。</p>
-          </Card>
-        </aside>
+          </div>
+        </section>
       </section>
 
       {reportMessageId ? (

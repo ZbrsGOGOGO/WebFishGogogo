@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { communityNewsApi, type CommunityAuthUser, type CommunityDailyHotNews, type CommunityNewsPublishedItem } from '../../api/community';
+import { communityNewsApi, type CommunityAuthUser, type CommunityDailyHotNews, type CommunityNewsPublishedItem, type CommunityTrendingNewsSnapshot } from '../../api/community';
 import { resetCommunityAuthStoreForTests, useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { CommunityNewsDetailPage } from './CommunityNewsDetailPage';
 import { CommunityNewsPage } from './CommunityNewsPage';
@@ -51,6 +51,46 @@ const dailyHeadlines: CommunityDailyHotNews = {
   ],
 };
 
+const trendingSnapshot: CommunityTrendingNewsSnapshot = {
+  serviceDate: '2026-09-08',
+  updatedAt: '2026-09-08T00:10:00.000Z',
+  nextUpdateAt: '2026-09-09T00:10:00.000Z',
+  schedule: '每天 08:10（北京时间）',
+  boards: [
+    {
+      id: 'hacker_news', label: 'Hacker News 热门', group: 'technology', status: 'fresh',
+      sourceUrl: 'https://news.ycombinator.com/', snapshotDate: '2026-09-08', updatedAt: '2026-09-08T00:10:00.000Z',
+      note: '官方 API 快照', items: [{
+        id: 'hn-1', rank: 1, title: '<script>window.fakeRank=true</script>',
+        url: 'https://news.ycombinator.com/item?id=1', heatText: '88 分', publishedAt: '2026-09-08T00:00:00.000Z',
+      }],
+    },
+    {
+      id: 'stackoverflow', label: 'Stack Overflow 热门问题', group: 'technology', status: 'stale',
+      sourceUrl: 'https://stackoverflow.com/questions?tab=Hot', snapshotDate: '2026-09-07', updatedAt: '2026-09-07T00:10:00.000Z',
+      note: '今日同步未完成，仍显示上次快照。', items: [{
+        id: 'so-2', rank: 2, title: '类型系统问题', url: 'https://stackoverflow.com/questions/2/example', heatText: '12 票', publishedAt: null,
+      }],
+    },
+    {
+      id: 'github_rising', label: 'GitHub 本周新星项目', group: 'technology', status: 'unavailable',
+      sourceUrl: 'https://github.com/search?type=repositories', snapshotDate: null, updatedAt: null,
+      note: '暂未取得有效快照。', items: [],
+    },
+    ...([
+      ['weibo', '微博热搜', 'social', 'https://s.weibo.com/top/summary?cate=realtimehot'],
+      ['zhihu', '知乎热榜', 'social', 'https://www.zhihu.com/hot'],
+      ['baidu', '百度热搜', 'social', 'https://top.baidu.com/board?tab=realtime'],
+      ['bilibili', '哔哩哔哩排行榜', 'entertainment', 'https://www.bilibili.com/v/popular/rank/all'],
+      ['douyin', '抖音热点', 'entertainment', 'https://www.douyin.com/hot'],
+      ['douban', '豆瓣电影排行榜', 'entertainment', 'https://movie.douban.com/chart'],
+    ] as const).map(([id, label, group, sourceUrl]) => ({
+      id, label, group, sourceUrl, status: 'external_only' as const,
+      snapshotDate: null, updatedAt: null, note: '尚未安全接入，仅保留官方入口。', items: [],
+    })),
+  ],
+};
+
 function NavigationHistory(): React.JSX.Element {
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,6 +114,7 @@ describe('community news public pages', () => {
       schedule: '每天 08:00（北京时间）',
       items: [{ id: 'headline-1', headline: '今日官方热点标题', source: '新华网', originalUrl: 'https://www.xinhuanet.com/example', originalPublishedAt: null }],
     });
+    vi.spyOn(communityNewsApi, 'getTrendingNews').mockResolvedValue(trendingSnapshot);
   });
 
   it('shows only the source, dates, short summary and an HTTPS original link to guests', async () => {
@@ -209,26 +250,40 @@ describe('community news public pages', () => {
     expect(screen.getByRole('link', { name: '编辑导读' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('presents eight official external entrances without making leaderboard requests or fake ranks', () => {
+  it('shows real daily board items in place and keeps unavailable platforms honest', async () => {
     render(<MemoryRouter initialEntries={['/news/trending']}><NavigationHistory /><CommunityNewsTrendingPage /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: '前往官方榜单，站内未同步榜单条目' })).toBeInTheDocument();
-    const officialLinks = screen.getAllByRole('link', { name: /前往官方榜单（新窗口）/ });
-    expect(officialLinks).toHaveLength(8);
-    for (const link of officialLinks) {
-      expect(link.getAttribute('href')).toMatch(/^https:\/\//);
-      expect(link).toHaveAttribute('target', '_blank');
-      expect(link).toHaveAttribute('rel', 'noopener noreferrer nofollow');
-    }
+    expect(await screen.findByRole('heading', { name: '真实公开榜单，每天更新一次' })).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Hacker News 热门每日排名' })).toBeInTheDocument();
+    expect(screen.getByText('<script>window.fakeRank=true</script>')).toBeInTheDocument();
+    expect(document.querySelector('script')).toBeNull();
+    expect(screen.getByLabelText('第 2 名')).toHaveTextContent('2');
+    expect(screen.getByText('上次快照')).toBeInTheDocument();
+    expect(screen.getByText('该榜暂无可验证条目。')).toBeInTheDocument();
+    const source = screen.getByRole('link', { name: /window\.fakeRank=true.*查看来源/ });
+    expect(source).toHaveAttribute('href', 'https://news.ycombinator.com/item?id=1');
+    expect(source).toHaveAttribute('rel', 'noopener noreferrer nofollow');
     expect(screen.getByRole('link', { name: /微博热搜，前往/ })).toHaveAttribute('href', 'https://s.weibo.com/top/summary?cate=realtimehot');
     expect(screen.getByRole('link', { name: /知乎热榜，前往/ })).toHaveAttribute('href', 'https://www.zhihu.com/hot');
-    expect(screen.queryByText(/更新时间|万热度|排名第/)).not.toBeInTheDocument();
-    expect(communityNewsApi.getDailyHeadlines).not.toHaveBeenCalled();
-    expect(communityNewsApi.list).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '科技知识' }));
     expect(screen.getByLabelText('当前路径')).toHaveTextContent('/news/trending?group=technology');
-    expect(screen.getAllByRole('link', { name: /前往官方榜单（新窗口）/ })).toHaveLength(2);
     expect(screen.queryByRole('link', { name: /微博热搜，前往/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '后退' }));
-    expect(screen.getAllByRole('link', { name: /前往官方榜单（新窗口）/ })).toHaveLength(8);
+    expect(await screen.findByRole('link', { name: /微博热搜，前往/ })).toBeInTheDocument();
+    expect(communityNewsApi.getTrendingNews).toHaveBeenCalledOnce();
+    expect(communityNewsApi.getDailyHeadlines).not.toHaveBeenCalled();
+    expect(communityNewsApi.list).not.toHaveBeenCalled();
+  });
+
+  it('shows only official fallback links after a fetch error and retries without fake rows', async () => {
+    vi.mocked(communityNewsApi.getTrendingNews)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(trendingSnapshot);
+    render(<MemoryRouter initialEntries={['/news/trending']}><CommunityNewsTrendingPage /></MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('本次没有取得热榜快照');
+    expect(screen.queryByLabelText(/Hacker News 热门每日排名/)).not.toBeInTheDocument();
+    expect(screen.getAllByText('前往官方页面')).toHaveLength(9);
+    fireEvent.click(screen.getByRole('button', { name: '重试' }));
+    expect(await screen.findByRole('list', { name: 'Hacker News 热门每日排名' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

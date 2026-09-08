@@ -27,6 +27,14 @@ import {
 } from './news-gates';
 import { NewsService } from './news.service';
 import { HotNewsService } from './hot-news.service';
+import {
+  TRENDING_NEWS_FETCH,
+  TrendingNewsService,
+} from './trending-news.service';
+import {
+  TrendingNewsBoardRun,
+  TrendingNewsItemRecord,
+} from '../../../database/entities/trending-news.entity';
 
 /**
  * Editorial news is intentionally isolated from the daily official-RSS headline
@@ -39,6 +47,8 @@ import { HotNewsService } from './hot-news.service';
       CommunityCommandReceipt,
       HotNewsHeadline,
       HotNewsRefreshRun,
+      TrendingNewsBoardRun,
+      TrendingNewsItemRecord,
       NewsArticle,
       NewsArticleRevision,
       NewsNegativeFeedback,
@@ -57,11 +67,16 @@ import { HotNewsService } from './hot-news.service';
   providers: [
     NewsService,
     HotNewsService,
+    TrendingNewsService,
+    {
+      provide: TRENDING_NEWS_FETCH,
+      useFactory: () => globalThis.fetch.bind(globalThis),
+    },
     CommunityNewsFeatureGuard,
     NewsAdminFeatureGuard,
     CommunityRbacGuard,
     { provide: COMMUNITY_CLOCK, useValue: systemCommunityClock },
   ],
-  exports: [NewsService, HotNewsService],
+  exports: [NewsService, HotNewsService, TrendingNewsService],
 })
 export class NewsModule {}

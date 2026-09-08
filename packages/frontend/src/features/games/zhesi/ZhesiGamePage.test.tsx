@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ArcadeAdapterProvider, type ArcadeAdapter } from '../ArcadeAdapter';
+import { GamePrivacyProvider } from '../GamePrivacyContext';
 import { ZhesiGamePage } from './ZhesiGamePage';
 
 function adapter(): ArcadeAdapter & {
@@ -120,5 +121,37 @@ describe('ZhesiGamePage', () => {
       data: { type: 'momo.zhesi.run.started' },
     }));
     expect(community.startRun).not.toHaveBeenCalled();
+  });
+
+  it('binds Escape only to the exact same-origin game frame and removes it on unmount', () => {
+    const toggleCover = vi.fn();
+    const mounted = render(<MemoryRouter><GamePrivacyProvider value={{ covered: false, toggleCover }}><ZhesiGamePage /></GamePrivacyProvider></MemoryRouter>);
+    const frame = screen.getByTitle('遮司命格模拟游戏') as HTMLIFrameElement;
+    const embedded = frame.contentWindow!;
+    fireEvent.load(frame);
+    fireEvent.keyDown(embedded, { key: 'Escape' });
+    expect(toggleCover).toHaveBeenCalledOnce();
+    fireEvent.load(frame); fireEvent.keyDown(embedded, { key: 'Escape' });
+    expect(toggleCover).toHaveBeenCalledTimes(2);
+    const remove = vi.spyOn(embedded, 'removeEventListener');
+    mounted.unmount();
+    expect(remove).toHaveBeenCalledWith('keydown', expect.any(Function));
+  });
+
+  it('does not install a community iframe shortcut in the public local mode', () => {
+    render(<MemoryRouter><ZhesiGamePage /></MemoryRouter>);
+    const frame = screen.getByTitle('遮司命格模拟游戏') as HTMLIFrameElement;
+    const add = vi.spyOn(frame.contentWindow!, 'addEventListener');
+    fireEvent.load(frame);
+    expect(add.mock.calls.some(([event]) => event === 'keydown')).toBe(false);
+  });
+
+  it('does not bridge a frame after it leaves the exact same-origin boundary', () => {
+    const toggleCover = vi.fn();
+    render(<MemoryRouter><GamePrivacyProvider value={{ covered: false, toggleCover }}><ZhesiGamePage /></GamePrivacyProvider></MemoryRouter>);
+    const frame = screen.getByTitle('遮司命格模拟游戏') as HTMLIFrameElement;
+    frame.src = 'https://example.invalid/untrusted';
+    fireEvent.load(frame); fireEvent.keyDown(frame.contentWindow!, { key: 'Escape' });
+    expect(toggleCover).not.toHaveBeenCalled();
   });
 });

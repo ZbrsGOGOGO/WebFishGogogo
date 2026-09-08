@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
 import { Card, PageHeader, Tag } from '../../../components/ui';
 import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
 import { GameBackLink } from '../GameBackLink';
+import { useGamePrivacy } from '../GamePrivacyContext';
 import { useArcadeRun } from '../useArcadeRun';
 import styles from './ZhesiGamePage.module.css';
 
@@ -37,9 +38,38 @@ function finishedMessage(value: unknown): ZhesiFinishedMessage | null {
 
 export function ZhesiGamePage(): JSX.Element {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const { toggleCover } = useGamePrivacy();
+  const removeCoverBridge = useRef<(() => void) | null>(null);
   const arcade = useArcadeRun('zhesi');
   const [frameReady, setFrameReady] = useState(false);
   const [runState, setRunState] = useState<'idle' | 'running' | 'finished'>('idle');
+
+  const bindCoverShortcut = useCallback((): void => {
+    removeCoverBridge.current?.(); removeCoverBridge.current = null;
+    if (!toggleCover) return;
+    const frame = frameRef.current;
+    const embedded = frame?.contentWindow;
+    if (!frame || !embedded) return;
+    try {
+      // No cross-origin bridge or relaxed sandbox: bind only the exact owned
+      // frame document and remove this listener on reload or unmount.
+      if (new URL(frame.src, window.location.href).origin !== window.location.origin || embedded.location.origin !== window.location.origin) return;
+      const shortcut = (event: KeyboardEvent): void => {
+        if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing || frameRef.current !== frame || frame.contentWindow !== embedded) return;
+        event.preventDefault(); event.stopPropagation(); toggleCover();
+      };
+      embedded.addEventListener('keydown', shortcut);
+      removeCoverBridge.current = () => embedded.removeEventListener('keydown', shortcut);
+    } catch {
+      // If a document ever stops being same-origin, only the outer button is
+      // available. Never change origin checks or sandbox to restore a shortcut.
+    }
+  }, [toggleCover]);
+
+  useEffect(() => {
+    bindCoverShortcut();
+    return () => { removeCoverBridge.current?.(); removeCoverBridge.current = null; };
+  }, [bindCoverShortcut]);
 
   useEffect(() => {
     const receive = (event: MessageEvent<unknown>): void => {
@@ -90,6 +120,7 @@ export function ZhesiGamePage(): JSX.Element {
             sandbox="allow-scripts allow-same-origin"
             referrerPolicy="same-origin"
             onLoad={() => {
+              bindCoverShortcut();
               setFrameReady(false);
               frameRef.current?.contentWindow?.postMessage(
                 { type: READY_REQUEST_EVENT },

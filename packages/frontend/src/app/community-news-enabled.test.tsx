@@ -106,11 +106,11 @@ describe('community news release flag', () => {
     render(<MemoryRouter><CommunityHomePage /></MemoryRouter>);
     expect(screen.getByRole('heading', { name: '摸鱼间隙，看看新闻' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '分类新闻' })).toHaveAttribute('href', '/news');
-    expect(screen.getByRole('link', { name: '平台榜单' })).toHaveAttribute('href', '/news/trending');
+    expect(screen.getByRole('link', { name: '每日热榜' })).toHaveAttribute('href', '/news/trending');
   });
 
   it.each([
-    { path: '/news/trending', title: '平台榜单', endpoint: null },
+    { path: '/news/trending', title: '每日热榜', endpoint: '/v1/news/trending/today' },
     { path: '/news/editorial', title: '编辑导读', endpoint: '/v1/news?feed=latest' },
     { path: '/news/article-1', title: '资讯导读', endpoint: '/v1/news/article-1' },
   ])('resolves $path without treating a static column as an article ID', async ({ path, title, endpoint }) => {
@@ -122,6 +122,10 @@ describe('community news release flag', () => {
       if (url.endsWith('/v1/farm')) body = { serverTime: '2026-09-08T00:00:00.000Z', growth: { officeCoins: 620 } };
       else if (url.endsWith('/v1/development/access')) body = { enabled: false, role: null, reviewMode: 'manual', limits: DEVELOPMENT_LIMITS };
       else if (url.endsWith('/v1/me/news-preferences')) body = { personalizationEnabled: false, topicPreferences: [], selectedProfession: null, version: null };
+      else if (url.endsWith('/v1/news/trending/today')) body = {
+        serviceDate: null, updatedAt: null, nextUpdateAt: '2026-09-09T00:10:00.000Z',
+        schedule: '每天 08:10（北京时间）', boards: [],
+      };
       else if (url.endsWith('/v1/news?feed=latest')) body = { feed: 'latest', personalized: false, items: [], nextCursor: null };
       else if (url.endsWith('/v1/news/article-1')) body = { id: 'article-1', status: 'withdrawn', notice: '该导读已下线。', withdrawnAt: null };
       else throw new Error(`unexpected request: ${url}`);
@@ -138,8 +142,7 @@ describe('community news release flag', () => {
     } });
     render(<MemoryRouter initialEntries={[path]}><CommunityModeRouter /></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
-    if (endpoint) expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith(endpoint))).toBe(true);
-    else expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith(endpoint))).toBe(true);
     expect(fetchMock.mock.calls.some(([url]) => /\/v1\/news\/(trending|editorial)$/.test(String(url)))).toBe(false);
   });
 

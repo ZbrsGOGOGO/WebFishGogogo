@@ -9,6 +9,7 @@ import {
 
 import { Button, Card, PageHeader } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
+import { useGamePrivacy } from '../GamePrivacyContext';
 import { shouldIgnoreGameKeyboard } from '../game-input';
 import {
   GRID_SIZE,
@@ -117,10 +118,17 @@ function overlayCopy(
 }
 
 export function SnakeGamePage(): JSX.Element {
+  const { covered } = useGamePrivacy();
   const [game, setGame] = useState(createInitialGame);
   const [highScore, setHighScore] = useState(readHighScore);
   const [autoPaused, setAutoPaused] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!covered) return;
+    setAutoPaused(true);
+    setGame((current) => current.status === 'running' ? { ...current, status: 'paused' } : current);
+  }, [covered]);
 
   const focusBoard = useCallback((): void => {
     boardRef.current?.focus({ preventScroll: true });
@@ -198,7 +206,7 @@ export function SnakeGamePage(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (shouldIgnoreGameKeyboard(event.target)) {
+      if (covered || shouldIgnoreGameKeyboard(event.target)) {
         return;
       }
 
@@ -219,7 +227,7 @@ export function SnakeGamePage(): JSX.Element {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [changeDirection, togglePause]);
+  }, [changeDirection, covered, togglePause]);
 
   const startGame = (): void => {
     setAutoPaused(false);

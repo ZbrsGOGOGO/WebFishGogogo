@@ -149,7 +149,7 @@ export function CommunityHomePage(): JSX.Element {
           <div><span>NEWS BREAK</span><h2 id="home-news-title">摸鱼间隙，看看新闻</h2><p>分类新闻看原文，微博知乎等榜单直达官方。</p></div>
           <div className={styles.newsEntryActions}>
             <Link to="/news">分类新闻 <span aria-hidden="true">→</span></Link>
-            <Link to="/news/trending">平台榜单 <span aria-hidden="true">↗</span></Link>
+            <Link to="/news/trending">每日热榜 <span aria-hidden="true">↗</span></Link>
           </div>
         </section>
       ) : null}

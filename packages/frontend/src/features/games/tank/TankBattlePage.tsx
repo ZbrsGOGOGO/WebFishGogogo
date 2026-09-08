@@ -9,6 +9,7 @@ import {
 
 import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
+import { useGamePrivacy } from '../GamePrivacyContext';
 import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
 import { shouldIgnoreGameKeyboard } from '../game-input';
 import { useArcadeRun } from '../useArcadeRun';
@@ -46,12 +47,19 @@ function pointKey(x: number, y: number): string {
 }
 
 export function TankBattlePage(): JSX.Element {
+  const { covered } = useGamePrivacy();
   const [game, setGame] = useState<TankGameState>(() =>
     createTankGameState(),
   );
   const [autoPaused, setAutoPaused] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const arcade = useArcadeRun('tank');
+
+  useEffect(() => {
+    if (!covered) return;
+    setAutoPaused(true);
+    setGame((current) => current.status === 'running' ? { ...current, status: 'paused' } : current);
+  }, [covered]);
 
   const focusBoard = useCallback((): void => {
     boardRef.current?.focus({ preventScroll: true });
@@ -114,7 +122,7 @@ export function TankBattlePage(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (shouldIgnoreGameKeyboard(event.target)) {
+      if (covered || shouldIgnoreGameKeyboard(event.target)) {
         return;
       }
 
@@ -144,7 +152,7 @@ export function TankBattlePage(): JSX.Element {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [fire, move]);
+  }, [covered, fire, move]);
 
   const cells = useMemo(
     () =>

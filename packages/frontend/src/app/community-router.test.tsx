@@ -64,7 +64,7 @@ describe('community mode routes', () => {
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
   });
 
-  it.each(['/community', '/farm', '/tower-defense', '/ledou', '/news', '/users/member-1'])(
+  it.each(['/community', '/farm', '/tower-defense', '/ledou', '/news', '/users/member-1', '/leaderboards', '/games/rooms'])(
     'redirects a guest from member system %s to login',
     async (path) => {
       renderAt(path);
@@ -78,7 +78,7 @@ describe('community mode routes', () => {
     unmount();
 
     renderAt('/games');
-    expect(await screen.findByRole('heading', { name: '随时开始，也能随时停下' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '小游戏专区' })).toBeInTheDocument();
   });
 
   it('does not present password reset as available while its backend gate is closed', async () => {

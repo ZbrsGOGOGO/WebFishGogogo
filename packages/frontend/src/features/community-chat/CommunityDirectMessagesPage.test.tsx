@@ -162,6 +162,12 @@ describe('CommunityDirectMessagesPage', () => {
     );
 
     expect((await screen.findAllByText('小李')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('消息')).toHaveAttribute('rows', '2');
+    expect(screen.getByRole('link', { name: /返回会话列表/ })).toHaveAttribute('href', '/messages');
+    expect(screen.getByRole('region', { name: '消息内容' }).parentElement).toHaveAttribute(
+      'data-conversation-open',
+      'true',
+    );
     await waitFor(() => expect(DirectFakeSocket.instances).toHaveLength(1));
     const socket = DirectFakeSocket.instances[0];
     act(() => {
@@ -355,6 +361,11 @@ describe('CommunityDirectMessagesPage', () => {
     );
 
     expect(await screen.findByText('一号最近消息')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('textbox', { name: '消息' }), {
+      target: { value: '只能发给一号的草稿' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '回复' }));
+    expect(screen.getByText('回复 我：一号最近消息')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '加载更早消息' }));
     await waitFor(() => expect(communityDirectMessagesApi.listMessages).toHaveBeenCalledWith(
       firstConversation.id,
@@ -376,6 +387,8 @@ describe('CommunityDirectMessagesPage', () => {
 
     fireEvent.click(screen.getByRole('link', { name: /二号同事/ }));
     expect(await screen.findByText('二号会话消息')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '消息' })).toHaveValue('');
+    expect(screen.queryByText('回复 我：一号最近消息')).not.toBeInTheDocument();
 
     await act(async () => {
       olderRequest.resolve(directMessagePage([

@@ -31,66 +31,165 @@
   background: var(--color-brand-soft);
 }
 
-.roomGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+.chatDirectory,
+.chatRules {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
-.roomCard {
-  min-width: 0;
-}
-
-.roomCard p {
-  color: var(--color-text-secondary);
-}
-
-.roomCard dl {
-  display: grid;
-  gap: 7px;
-}
-
-.roomCard dl > div {
+.chatDirectoryHeader {
+  padding: 18px 20px;
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.roomCard dt {
-  color: var(--color-text-secondary);
-}
-
-.roomCard dd {
-  margin: 0;
-  text-align: right;
-}
-
-.primaryLink,
-.disabledAction {
-  width: 100%;
-  min-height: 40px;
-  margin-top: 14px;
-  padding: 9px 13px;
-  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 10px;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.chatDirectoryHeader h2,
+.chatRules h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.chatDirectoryHeader p {
+  margin: 5px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.chatDirectoryHeader > span {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  color: var(--color-brand-strong);
+  background: var(--color-brand-soft);
+  font-size: 12px;
   font-weight: 750;
 }
 
-.primaryLink {
-  color: #fff;
-  background: var(--color-brand);
+.roomConversationList {
+  display: grid;
 }
 
-.primaryLink:hover {
-  color: #fff;
-  background: var(--color-brand-hover);
+.roomConversationList > a,
+.roomConversationList > div {
+  min-width: 0;
+  min-height: 76px;
+  padding: 11px 14px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
 }
 
-.disabledAction {
-  color: var(--color-text-muted);
+.roomConversationList > :last-child {
+  border-bottom: 0;
+}
+
+.roomConversationList > a:hover,
+.roomConversationList > a[aria-current='page'] {
+  color: var(--color-text);
+  background: var(--color-brand-soft);
+}
+
+.roomConversationList > div[aria-disabled='true'] {
+  opacity: 0.64;
+}
+
+.roomConversationMark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: var(--color-brand-strong);
   background: var(--color-surface-2);
+  font-size: 18px;
+  font-weight: 850;
+}
+
+.roomConversationCopy,
+.roomConversationMeta {
+  min-width: 0;
+  display: grid;
+}
+
+.roomConversationCopy small {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roomConversationMeta {
+  justify-items: end;
+  gap: 4px;
+}
+
+.roomConversationMeta b {
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, transparent);
+  font-size: 10px;
+}
+
+.roomConversationMeta b[data-state='readonly'] {
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
+}
+
+.roomConversationMeta b[data-state='closed'] {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+}
+
+.roomConversationMeta small {
+  color: var(--color-text-muted);
+  font-size: 10px;
+}
+
+.chatShortcuts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chatShortcuts a {
+  min-width: 0;
+  min-height: 64px;
+  padding: 13px 15px;
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.chatShortcuts a:hover {
+  border-color: var(--color-brand);
+  color: var(--color-brand-strong);
+}
+
+.chatShortcuts span {
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.chatRules {
+  padding: 18px 20px;
+}
+
+.chatRules h2 {
+  margin-bottom: 12px;
 }
 
 .rulesList {
@@ -150,8 +249,7 @@ div.error p {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-bottom: 1px solid var(--color-border);
   color: var(--color-text-secondary);
   background: var(--color-surface);
   font-size: 12px;
@@ -170,88 +268,184 @@ div.error p {
   color: var(--color-warning);
 }
 
-.chatLayout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 350px);
-  gap: 16px;
-  align-items: start;
+.roomBackLink {
+  width: fit-content;
+  min-height: 38px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 10px;
+  color: var(--color-brand-strong);
+  font-size: 13px;
+  font-weight: 750;
 }
 
-.messageColumn {
-  min-width: 0;
-  min-height: 650px;
+.roomBackLink:hover {
+  background: var(--color-brand-soft);
+}
+
+.groupChatLayout {
+  min-height: 680px;
   display: grid;
-  align-content: start;
-  gap: 12px;
-  padding: 16px;
+  grid-template-columns: minmax(230px, 280px) minmax(0, 1fr);
+  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 18px;
-  background: var(--color-surface-2);
-}
-
-.composerColumn {
-  position: sticky;
-  top: 64px;
-  min-width: 0;
-}
-
-.messageList {
-  max-height: min(70vh, 760px);
-  min-height: 520px;
-  margin: 0;
-  padding: 0 5px 0 0;
-  display: grid;
-  align-content: start;
-  gap: 9px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  list-style: none;
-  scrollbar-gutter: stable;
-}
-
-.messageList > li {
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 15px;
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
-.messageList > li[data-visibility='blocked_placeholder'],
-.messageList > li[data-visibility='withdrawn_placeholder'],
-.messageList > li[data-visibility='moderated_placeholder'] {
-  color: var(--color-text-muted);
+.groupRoomSidebar {
+  min-width: 0;
+  padding: 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
   background: var(--color-surface-2);
 }
 
+.groupRoomSidebar .roomConversationList > a,
+.groupRoomSidebar .roomConversationList > div {
+  min-height: 68px;
+  padding: 9px 8px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  border: 0;
+  border-radius: 11px;
+}
+
+.groupRoomSidebar .roomConversationMark {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  font-size: 15px;
+}
+
+.groupRoomSidebar .roomConversationMeta {
+  display: none;
+}
+
+.groupConversation {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.groupMessageScroller {
+  min-height: 500px;
+  max-height: 64vh;
+  padding: 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: linear-gradient(180deg, var(--color-surface-2), var(--color-surface));
+  scrollbar-gutter: stable;
+}
+
+.messageList {
+  margin: 0;
+  padding: 10px 0;
+  display: grid;
+  align-content: start;
+  gap: 13px;
+  list-style: none;
+}
+
+.messageList > li {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.groupMessageAvatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  font-size: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.messageList > li > article {
+  width: min(78%, 660px);
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+}
+
+.messageList > li[data-mine='true'] {
+  grid-template-columns: minmax(0, 1fr) 40px;
+}
+
+.messageList > li[data-mine='true'] > .groupMessageAvatar {
+  grid-column: 2;
+  grid-row: 1;
+  background: var(--color-brand-soft);
+}
+
+.messageList > li[data-mine='true'] > article {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  justify-items: end;
+}
+
 .messageList header {
+  width: 100%;
+  margin-bottom: 4px;
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.messageList > li[data-mine='true'] header {
+  justify-content: flex-end;
 }
 
 .messageList header span {
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 10px;
+}
+
+.groupMessageBubble {
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px 15px 15px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.messageList > li[data-mine='true'] .groupMessageBubble {
+  border-color: color-mix(in srgb, var(--color-brand) 20%, var(--color-border));
+  border-radius: 15px 5px 15px 15px;
+  background: var(--color-brand-soft);
+}
+
+.messageList > li[data-visibility]:not([data-visibility='visible']) .groupMessageBubble {
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
 }
 
 .messageList blockquote {
-  margin: 10px 0;
-  padding: 8px 10px;
+  margin: 0 0 7px;
+  padding: 6px 8px;
   overflow-wrap: anywhere;
-  border-left: 3px solid var(--color-border);
+  border-left: 2px solid var(--color-border);
   color: var(--color-text-secondary);
-  background: var(--color-surface-2);
-  font-size: 12px;
+  background: color-mix(in srgb, var(--color-surface) 68%, transparent);
+  font-size: 11px;
 }
 
-.messageList > li > p {
-  margin: 10px 0;
+.groupMessageBubble > p {
+  margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.65;
+  line-height: 1.55;
 }
 
 .messageActions {
@@ -280,12 +474,14 @@ div.error p {
 }
 
 .outbox {
-  padding: 14px;
+  width: min(78%, 620px);
+  margin: 10px 0 0 auto;
+  padding: 10px;
   display: grid;
   gap: 8px;
   border: 1px dashed var(--color-border);
-  border-radius: 15px;
-  background: var(--color-surface-2);
+  border-radius: 14px 5px 14px 14px;
+  background: color-mix(in srgb, var(--color-brand-soft) 55%, var(--color-surface));
 }
 
 .outbox h2 {
@@ -294,7 +490,7 @@ div.error p {
 }
 
 .outbox article {
-  padding: 10px;
+  padding: 8px;
   display: grid;
   gap: 6px;
   border-radius: 10px;
@@ -313,6 +509,25 @@ div.error p {
 
 .outbox span {
   color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.groupComposerPanel {
+  padding: 12px 16px 14px;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.roomQuickBar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.roomQuickSwitch { display: none; }
+.mentionDetails { color: var(--color-text-muted); font-size: 12px; }
+.mentionDetails summary { cursor: pointer; }
+.mentionDetails[open] summary { margin-bottom: 8px; }
+
+.groupComposerPanel .safetyNote {
+  margin-top: 8px;
+  padding: 6px 9px;
+  background: transparent;
   font-size: 11px;
 }
 
@@ -421,6 +636,13 @@ div.error p {
   margin-bottom: 8px;
 }
 
+.conversationSidebarActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 10px;
+}
+
 .conversationSidebarHeader a,
 .directConversationHeader a {
   color: var(--color-brand-strong);
@@ -499,6 +721,10 @@ div.error p {
   min-height: 70px;
   padding: 13px 18px;
   border-bottom: 1px solid var(--color-border);
+}
+
+.directConversationBack {
+  display: none;
 }
 
 .directConversationHeader > div {
@@ -643,7 +869,10 @@ div.error p {
 }
 
 .experienceNav a:focus-visible,
-.primaryLink:focus-visible,
+.roomConversationList > a:focus-visible,
+.chatShortcuts a:focus-visible,
+.roomBackLink:focus-visible,
+.directConversationBack:focus-visible,
 .messageActions button:focus-visible,
 .replyingTo button:focus-visible,
 .mentionSelect select:focus-visible,
@@ -655,30 +884,28 @@ div.error p {
 }
 
 @media (max-width: 900px) {
-  .roomGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .chatLayout {
-    grid-template-columns: 1fr;
-  }
-
-  .composerColumn {
-    position: static;
-    grid-row: 1;
-  }
-
-  .messageColumn {
-    min-height: 560px;
-  }
-
-  .messageList {
-    min-height: 440px;
-    max-height: 62vh;
+  .groupChatLayout {
+    grid-template-columns: 220px minmax(0, 1fr);
   }
 
   .directLayout {
     grid-template-columns: 220px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .groupChatLayout {
+    min-height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .groupRoomSidebar {
+    display: none;
+  }
+
+  .groupMessageScroller {
+    min-height: 200px;
+    max-height: 50dvh;
   }
 }
 
@@ -689,25 +916,71 @@ div.error p {
     gap: 16px;
   }
 
-  .roomGrid {
+  .chatDirectoryHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 15px;
+  }
+
+  .roomConversationList > a,
+  .roomConversationList > div {
+    min-height: 72px;
+    padding: 10px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 9px;
+  }
+
+  .roomConversationMark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .roomConversationMeta small {
+    display: none;
+  }
+
+  .chatShortcuts {
     grid-template-columns: 1fr;
   }
 
-  div.error,
-  .messageList header,
-  .roomCard dl > div {
+  div.error {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
   }
 
-  .roomCard dd {
-    text-align: left;
-  }
-
   .roomStatusBar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .groupMessageScroller {
+    padding: 13px 10px;
+  }
+
+  .messageList > li {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .messageList > li[data-mine='true'] {
+    grid-template-columns: minmax(0, 1fr) 36px;
+  }
+
+  .groupMessageAvatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 16px;
+  }
+
+  .messageList > li > article,
+  .outbox {
+    width: 88%;
+  }
+
+  .messageList header {
+    flex-wrap: wrap;
   }
 
   .messageActions button {
@@ -721,27 +994,102 @@ div.error p {
 
   .conversationSidebar {
     border-right: 0;
-    border-bottom: 1px solid var(--color-border);
   }
 
-  .conversationList {
-    display: flex;
-    overflow-x: auto;
+  .directLayout[data-conversation-open='true'] > .conversationSidebar,
+  .directLayout[data-conversation-open='false'] > .directConversation {
+    display: none;
   }
 
-  .conversationList > a {
-    min-width: 190px;
+  .directConversationBack {
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    flex-basis: 100%;
+  }
+
+  .directConversationHeader {
+    min-height: 88px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    padding: 11px 14px;
   }
 
   .directMessageScroller {
-    min-height: 52vh;
-    max-height: none;
+    min-height: 180px;
+    max-height: 48dvh;
   }
 
   .directMessageList > li,
   .directOutbox article {
     width: 88%;
   }
+
+  .directComposer,
+  .groupComposerPanel {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  /* The message list scrolls inside the conversation. The composer stays in
+     normal layout, clear of the global bottom dock and mobile keyboard. */
+  .roomPage,
+  .directPage[data-conversation-open='true'] {
+    height: calc(100dvh - 60px);
+    min-height: 520px;
+    padding: 8px 0 88px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .roomPage > :not(.groupChatLayout),
+  .directPage[data-conversation-open='true'] > :not(.directLayout) { flex-shrink: 0; }
+
+  .roomPage .experienceNav,
+  .directPage[data-conversation-open='true'] .experienceNav { display: none; }
+
+  .roomQuickBar { min-height: 32px; }
+  .roomQuickBar .roomBackLink { min-height: 30px; padding: 3px 0; font-size: 11px; }
+  .roomQuickSwitch { display: flex; align-items: center; gap: 5px; color: var(--color-text-muted); font-size: 10px; }
+  .roomQuickSwitch select { max-width: 126px; min-height: 30px; padding: 3px 5px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text); background: var(--color-surface); font: inherit; font-size: 11px; }
+  .roomHeader { gap: 8px; flex-wrap: nowrap; align-items: center; margin: 0; }
+  .roomHeader h1 { font-size: 18px; line-height: 1.3; margin: 0; }
+  .roomHeader p { display: none; }
+  .roomHeader a { font-size: 11px; white-space: nowrap; }
+
+  .roomPage .warning,
+  .roomPage .error,
+  .roomPage .notice,
+  .directPage[data-conversation-open='true'] .warning,
+  .directPage[data-conversation-open='true'] .error,
+  .directPage[data-conversation-open='true'] .notice { margin: 0; padding: 6px 9px; font-size: 11px; }
+
+  .roomPage .groupChatLayout,
+  .directPage[data-conversation-open='true'] .directLayout { flex: 1; min-height: 0; border-radius: 12px; }
+  .roomPage .groupConversation,
+  .directPage[data-conversation-open='true'] .directConversation { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+  .roomPage .roomStatusBar { flex: 0 0 auto; min-height: 30px; flex-direction: row; align-items: center; flex-wrap: wrap; padding: 6px 10px; font-size: 10px; gap: 4px 12px; }
+  .roomPage .groupMessageScroller,
+  .directPage[data-conversation-open='true'] .directMessageScroller { flex: 1; min-height: 110px; max-height: none; padding: 10px; overflow-y: auto; overscroll-behavior: contain; }
+  .roomPage .messageList { padding: 4px 0; gap: 10px; }
+  .roomPage .messageActions button { min-height: 28px; padding: 3px 5px; font-size: 10px; }
+  .roomPage .groupComposerPanel,
+  .directPage[data-conversation-open='true'] .directComposer { flex: 0 0 auto; padding: 8px 10px; gap: 6px; }
+  .roomPage .composer { gap: 6px; }
+  .roomPage .composer textarea,
+  .directPage[data-conversation-open='true'] .directComposer textarea { min-height: 52px; height: 52px; max-height: 110px; padding: 6px 9px; resize: vertical; font-size: 13px; }
+  .roomPage .composerMeta { margin: 0; flex-direction: row; font-size: 10px; }
+  .roomPage .composer button[type='submit'] { min-height: 32px; padding: 5px 10px; }
+  .roomPage .safetyNote { display: none; }
+  .roomPage .mentionDetails { font-size: 10px; }
+  .roomPage .mentionDetails select { min-height: 32px; }
+  .directPage[data-conversation-open='true'] .directConversationHeader { flex: 0 0 auto; min-height: 50px; padding: 7px 10px; flex-wrap: nowrap; align-items: center; gap: 8px; }
+  .directPage[data-conversation-open='true'] .directConversationBack { min-height: 28px; flex-basis: auto; font-size: 10px; }
+  .directPage[data-conversation-open='true'] .directConversationHeader strong { font-size: 12px; }
+  .directPage[data-conversation-open='true'] .directConversationHeader small { font-size: 10px; }
+  .directPage[data-conversation-open='true'] .directComposerActions { font-size: 10px; gap: 8px; }
+  .directPage[data-conversation-open='true'] .directComposerActions button { min-height: 32px; padding: 5px 12px; }
 }
 
 @media (max-width: 380px) {

@@ -10,6 +10,7 @@ import {
 
 import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
+import { useGamePrivacy } from '../GamePrivacyContext';
 import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
 import { shouldIgnoreGameKeyboard } from '../game-input';
 import { useArcadeRun } from '../useArcadeRun';
@@ -76,6 +77,7 @@ function ScreenControl({
 }
 
 export function TetrisGamePage(): JSX.Element {
+  const { covered, toggleCover } = useGamePrivacy();
   const [state, dispatch] = useReducer(
     tetrisGameReducer,
     undefined,
@@ -84,6 +86,12 @@ export function TetrisGamePage(): JSX.Element {
   const [autoPaused, setAutoPaused] = useState(false);
   const boardRef = useRef<HTMLDivElement>(null);
   const arcade = useArcadeRun('tetris');
+
+  useEffect(() => {
+    if (!covered) return;
+    setAutoPaused(true);
+    dispatch({ type: 'pause' });
+  }, [covered]);
 
   const focusBoard = useCallback((): void => {
     boardRef.current?.focus({ preventScroll: true });
@@ -158,9 +166,10 @@ export function TetrisGamePage(): JSX.Element {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (shouldIgnoreGameKeyboard(event.target)) {
+      if (covered || shouldIgnoreGameKeyboard(event.target)) {
         return;
       }
+      if (event.key === 'Escape' && toggleCover) return;
 
       const key = event.key.toLowerCase();
       let handled = true;
@@ -213,7 +222,7 @@ export function TetrisGamePage(): JSX.Element {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [resetGame, startGame, state.status]);
+  }, [covered, resetGame, startGame, state.status, toggleCover]);
 
   const activeCells = useMemo(
     () =>

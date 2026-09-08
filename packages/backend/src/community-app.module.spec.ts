@@ -30,6 +30,8 @@ import { OfficeBattleController } from './modules/community/office-battle/office
 import { OfficeBattleModule } from './modules/community/office-battle/office-battle.module';
 import { ArcadeController } from './modules/community/arcade/arcade.controller';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
+import { PlayController } from './modules/community/play/play.controller';
+import { PlayModule } from './modules/community/play/play.module';
 import {
   NewsAdminController,
   NewsPreferenceController,
@@ -60,6 +62,7 @@ describe('CommunityAppModule route allowlist', () => {
         ContentController,
         ModerationController,
         ArcadeController,
+        PlayController,
         NewsPublicController,
         NewsPreferenceController,
         NewsAdminController,
@@ -72,6 +75,7 @@ describe('CommunityAppModule route allowlist', () => {
     const modules = collectModules(CommunityAppModule);
     expect(modules).not.toContain(OfficeBattleModule);
     expect(modules).toContain(ArcadeModule);
+    expect(modules).toContain(PlayModule);
     expect(modules).toContain(NewsModule);
     expect(modules).not.toContain(OutboxModule);
     expect(modules).not.toContain(WorkerModule);

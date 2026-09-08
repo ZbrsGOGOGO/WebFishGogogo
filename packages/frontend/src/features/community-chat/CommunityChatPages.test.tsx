@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import {
   createMemoryRouter,
   MemoryRouter,
@@ -14,6 +14,10 @@ import {
   type CommunityChatMessage,
   type CommunityChatRoom,
 } from '../../api/community';
+import {
+  resetCommunityAuthStoreForTests,
+  useCommunityAuthStore,
+} from '../../app/store/community-auth-store';
 import { resetCommunityChatConnectionForTests } from './community-chat-connection';
 import { CommunityChatLobbyPage } from './CommunityChatLobbyPage';
 import { CommunityChatRoomPage } from './CommunityChatRoomPage';
@@ -107,6 +111,21 @@ describe('community fixed chat pages', () => {
   beforeEach(() => {
     BrowserFakeSocket.instances = [];
     resetCommunityChatConnectionForTests();
+    resetCommunityAuthStoreForTests();
+    useCommunityAuthStore.setState({
+      phase: 'active',
+      sessionReady: true,
+      user: {
+        id: 'internal-user-id',
+        publicId: 'public-1',
+        username: 'me',
+        email: 'account@users.invalid',
+        displayName: '当前用户',
+        accountStatus: 'active',
+        onboardingCompleted: true,
+        socialVerificationStatus: 'unverified',
+      },
+    });
     vi.spyOn(communityChatApi, 'listRooms').mockResolvedValue({
       items: rooms,
       serverTime: '2026-08-22T10:00:00.000Z',
@@ -131,6 +150,61 @@ describe('community fixed chat pages', () => {
     expect(screen.queryByText(/937/)).not.toBeInTheDocument();
     expect(screen.getByText('已关闭')).toBeInTheDocument();
     expect(screen.getByText('只读')).toBeInTheDocument();
+    const roomList = screen.getByRole('navigation', { name: '六个固定聊天室' });
+    expect(within(roomList).getByRole('link', { name: /综合茶水间/ })).toHaveAttribute(
+      'href',
+      '/community/chat/general',
+    );
+  });
+
+  it('keeps the compact composer available and switches groups from the room header', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    vi.spyOn(communityChatApi, 'listMessages').mockResolvedValue({ items: [], latestSequence: 0, oldestSequence: null, hasMoreBefore: false });
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({ ticket: 'visual-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1 });
+    render(<MemoryRouter initialEntries={['/community/chat/general']}><Routes><Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} /></Routes></MemoryRouter>);
+    await waitFor(() => expect(communityChatApi.listMessages).toHaveBeenCalledWith('general', { limit: 50 }));
+    expect(screen.getByLabelText('消息内容')).toHaveAttribute('rows', '2');
+    expect(screen.getByText('@ 提醒成员').closest('details')).not.toHaveAttribute('open');
+    const switcher = screen.getByLabelText('切换群聊');
+    expect(within(switcher).queryByRole('option', { name: '组织支持室' })).not.toBeInTheDocument();
+    fireEvent.change(switcher, { target: { value: 'product' } });
+    await waitFor(() => expect(communityChatApi.listMessages).toHaveBeenCalledWith('product', { limit: 50 }));
+    expect(screen.getByRole('heading', { name: '产品会议室' })).toBeInTheDocument();
+  });
+
+  it('opens a room on the newest part of the recent window without removing older history', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    const initialMessages = deferred<Awaited<ReturnType<typeof communityChatApi.listMessages>>>();
+    vi.spyOn(communityChatApi, 'listMessages').mockReturnValue(initialMessages.promise);
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({
+      ticket: 'single-use-ticket', expiresAt: '2099-08-22T10:01:00.000Z', protocolVersion: 1,
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/community/chat/general']}>
+        <Routes>
+          <Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const scroller = screen.getByLabelText('聊天室消息记录');
+    Object.defineProperties(scroller, {
+      clientHeight: { configurable: true, value: 200 },
+      scrollHeight: { configurable: true, value: 900 },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+    initialMessages.resolve({
+      items: [serverMessage('recent-message')],
+      latestSequence: 1,
+      oldestSequence: 1,
+      hasMoreBefore: true,
+    });
+
+    expect(await screen.findByText('这是一条真实服务端消息')).toBeInTheDocument();
+    await waitFor(() => expect(scroller.scrollTop).toBe(900));
+    expect(screen.getByRole('button', { name: '加载更早消息' })).toBeInTheDocument();
+    expect(communityChatApi.listMessages).toHaveBeenCalledWith('general', { limit: 50 });
   });
 
   it('keeps pending, failed and acknowledged delivery distinct and retries with one clientMessageId', async () => {
@@ -206,6 +280,15 @@ describe('community fixed chat pages', () => {
     });
     expect(await screen.findByText('这是一条真实服务端消息')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('region', { name: '待发送消息' })).not.toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /返回聊天室大厅/ })).toHaveAttribute('href', '/community/chat');
+    const roomNavigation = screen.getByRole('navigation', { name: '群聊会话' });
+    expect(within(roomNavigation).getByRole('link', { name: /综合茶水间/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    const committedMessage = screen.getByText('这是一条真实服务端消息').closest('li');
+    expect(committedMessage).toHaveAttribute('data-mine', 'true');
+    expect(within(committedMessage!).getByText('我')).toBeInTheDocument();
   });
 
   it('merges the initial REST snapshot without overwriting a WebSocket message that arrived first', async () => {

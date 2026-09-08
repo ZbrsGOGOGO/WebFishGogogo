@@ -58,6 +58,24 @@ describe('community news REST contract', () => {
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/news\/headlines\/today$/);
   });
 
+  it('loads the separate per-board trending snapshot without editorial filters', async () => {
+    const response = {
+      serviceDate: '2026-09-08', updatedAt: '2026-09-08T00:10:00.000Z',
+      nextUpdateAt: '2026-09-09T00:10:00.000Z', schedule: '每天 08:10（北京时间）',
+      boards: [{
+        id: 'hacker_news', label: 'Hacker News 热门', group: 'technology', status: 'fresh',
+        sourceUrl: 'https://news.ycombinator.com/', snapshotDate: '2026-09-08',
+        updatedAt: '2026-09-08T00:10:00.000Z', note: '官方 API 快照',
+        items: [{ id: 'hn-1', rank: 1, title: '测试标题', url: 'https://news.ycombinator.com/item?id=1', heatText: '10 分', publishedAt: null }],
+      }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(response));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await communityNewsApi.getTrendingNews()).toEqual(response);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/news\/trending\/today$/);
+  });
+
   it('sends negative feedback once with an idempotency key and never refreshes a 401 write', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ code: 'UNAUTHORIZED' }, 401));
     vi.stubGlobal('fetch', fetchMock);

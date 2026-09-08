@@ -33,6 +33,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   messages: '信',
   farm: '种',
   towerDefense: '守',
+  leaderboards: '榜',
   feed: '喂',
   invite: '邀',
   profile: '我',

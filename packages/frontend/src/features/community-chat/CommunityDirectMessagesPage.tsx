@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -139,7 +140,20 @@ export function CommunityDirectMessagesPage(): JSX.Element {
   const autoScrollToBottomRef = useRef(false);
   const autoReadSequenceRef = useRef(0);
   const recoveryRequestedRef = useRef(false);
+  const draftConversationIdRef = useRef(conversationId);
   activeConversationIdRef.current = conversationId;
+
+  useLayoutEffect(() => {
+    if (draftConversationIdRef.current === conversationId) return;
+    draftConversationIdRef.current = conversationId;
+    setBody('');
+    setReplyTo(null);
+    setReportMessageId(undefined);
+    setReportDetail('');
+    setReporting(false);
+    setNotice(undefined);
+    setError(undefined);
+  }, [conversationId]);
 
   const selected = useMemo(
     () => conversations.find((item) => item.id === conversationId) ?? null,
@@ -652,7 +666,8 @@ export function CommunityDirectMessagesPage(): JSX.Element {
 
   async function reportMessage(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (!reportMessageId) return;
+    if (!reportMessageId || !conversationId) return;
+    const requestedConversationId = conversationId;
     setReporting(true);
     setError(undefined);
     try {
@@ -661,20 +676,26 @@ export function CommunityDirectMessagesPage(): JSX.Element {
         { reason: reportReason, detail: reportDetail.trim() || undefined },
         createCommunityIdempotencyKey('direct-report'),
       );
+      if (activeConversationIdRef.current !== requestedConversationId) return;
       setNotice('举报已提交');
       setReportMessageId(undefined);
       setReportDetail('');
     } catch (requestError) {
-      setError(communityChatErrorMessage(requestError));
+      if (activeConversationIdRef.current === requestedConversationId) {
+        setError(communityChatErrorMessage(requestError));
+      }
     } finally {
-      setReporting(false);
+      if (activeConversationIdRef.current === requestedConversationId) {
+        setReporting(false);
+      }
     }
   }
 
   return (
-    <main className={styles.page}>
+    <main className={`${styles.page} ${styles.directPage}`} data-conversation-open={Boolean(conversationId)}>
       <CommunityExperienceNav />
       <PageHeader
+        className={styles.roomHeader}
         title="私人消息"
         subtitle="好友之间实时私聊；删除好友后保留历史，但不能继续发送。"
         actions={<Tag color={connection.status === 'ready' ? 'success' : 'neutral'}>{CONNECTION_LABELS[connection.status]}</Tag>}
@@ -684,11 +705,14 @@ export function CommunityDirectMessagesPage(): JSX.Element {
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
 
-      <section className={styles.directLayout}>
+      <section className={styles.directLayout} data-conversation-open={Boolean(conversationId)}>
         <aside className={styles.conversationSidebar} aria-label="私聊会话">
           <div className={styles.conversationSidebarHeader}>
             <strong>最近会话</strong>
-            <Link to="/friends">发起私聊</Link>
+            <span className={styles.conversationSidebarActions}>
+              <Link to="/community/chat">群聊</Link>
+              <Link to="/friends">发起私聊</Link>
+            </span>
           </div>
           {loading || opening ? <p role="status">正在加载会话…</p> : null}
           {!loading && conversations.length === 0 ? (
@@ -726,6 +750,9 @@ export function CommunityDirectMessagesPage(): JSX.Element {
           ) : (
             <>
               <header className={styles.directConversationHeader}>
+                <Link className={styles.directConversationBack} to="/messages">
+                  ← 返回会话列表
+                </Link>
                 <div>
                   <strong>{selected?.friend.displayName ?? '好友私聊'}</strong>
                   <small>{selected?.friend.username ? `@${selected.friend.username}` : '只有你和对方可见'}</small>
@@ -801,7 +828,7 @@ export function CommunityDirectMessagesPage(): JSX.Element {
                   label="消息"
                   value={body}
                   maxLength={500}
-                  rows={3}
+                  rows={2}
                   disabled={!selected?.canSend}
                   placeholder="输入消息，Ctrl / Cmd + Enter 发送"
                   onChange={(event) => setBody(event.target.value)}

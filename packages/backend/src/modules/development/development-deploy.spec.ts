@@ -48,14 +48,16 @@ describe('private development deployment boundaries', () => {
     expect(matcher.test('/api/v1/development-elsewhere')).toBe(false);
   });
 
-  it('pins migration rehearsal at 0026 and reverts 0026 before testing 0025', () => {
+  it('preserves targeted 0026/0025 rollback checks after the newer additive migrations', () => {
     const rehearsal = source('deploy/community-migration-rehearsal.sh');
     const migration = source(
       'packages/backend/src/database/migrations/1700000000026-AddDevelopmentWorkspace.ts',
     );
 
     expect(rehearsal).toContain('DEVELOPMENT_TIMESTAMP=1700000000026');
-    expect(rehearsal).toContain('LATEST_TIMESTAMP=1700000000026');
+    expect(rehearsal).toContain('LATEST_TIMESTAMP=1700000000028');
+    expect(rehearsal.indexOf('assert_trending_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_play_reverted rehearsal_clean'));
+    expect(rehearsal.indexOf('assert_play_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_development_reverted rehearsal_clean'));
     expect(rehearsal).toContain(
       "conname = 'chk_development_attachments_content_bytes'",
     );

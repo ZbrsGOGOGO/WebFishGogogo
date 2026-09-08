@@ -25,6 +25,7 @@ import {
 } from './news-gates';
 import { NewsService } from './news.service';
 import { HotNewsService } from './hot-news.service';
+import { TrendingNewsService } from './trending-news.service';
 import {
   NEWS_PROFESSION_TAGS,
   boundedReason,
@@ -42,11 +43,17 @@ export class NewsPublicController {
   constructor(
     private readonly news: NewsService,
     private readonly hotNews: HotNewsService,
+    private readonly trendingNews: TrendingNewsService,
   ) {}
 
   @Get('headlines/today')
   headlines() {
     return this.hotNews.listDaily();
+  }
+
+  @Get('trending/today')
+  trending() {
+    return this.trendingNews.listDaily();
   }
 
   @Get()

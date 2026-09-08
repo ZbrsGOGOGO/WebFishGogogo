@@ -531,7 +531,11 @@ grep -Fq 'ZHESI_ARCADE_TIMESTAMP=1700000000025' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'DEVELOPMENT_TIMESTAMP=1700000000026' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000026' \
+grep -Fq 'PLAY_TIMESTAMP=1700000000027' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'TRENDING_TIMESTAMP=1700000000028' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000028' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&

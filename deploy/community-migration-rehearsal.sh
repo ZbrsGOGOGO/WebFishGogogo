@@ -15,7 +15,9 @@ ARCADE_TIMESTAMP=1700000000023
 DIRECT_MESSAGES_TIMESTAMP=1700000000024
 ZHESI_ARCADE_TIMESTAMP=1700000000025
 DEVELOPMENT_TIMESTAMP=1700000000026
-LATEST_TIMESTAMP=1700000000026
+PLAY_TIMESTAMP=1700000000027
+TRENDING_TIMESTAMP=1700000000028
+LATEST_TIMESTAMP=1700000000028
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -135,6 +137,12 @@ assert_target_applied() {
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
   [ "$latest_applied" = "$LATEST_TIMESTAMP" ] ||
     fail "$database latest migration is $latest_applied, expected exactly $LATEST_TIMESTAMP"
+  for new_table in play_rooms play_room_members play_commands play_daily_scores play_daily_awards trending_news_board_runs trending_news_items; do
+    table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$new_table';")
+    [ "$table_count" = 1 ] || fail "$database is missing $new_table after migration"
+  done
+  play_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('uq_play_room_client', 'uq_play_room_code', 'uq_play_member_active', 'uq_play_command_sequence', 'idx_play_daily_ranking');")
+  [ "$play_index_count" = 5 ] || fail "$database is missing game isolation/score indexes"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
   [ "$column_count" = 1 ] || fail "$database is missing users.email_normalized after migration"
   for security_table in password_reset_tokens social_verification_sessions social_verification_callback_receipts account_restrictions account_appeals account_deletion_requests; do
@@ -201,6 +209,8 @@ assert_target_applied() {
 
 assert_target_absent() {
   database=$1
+  new_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('play_rooms', 'play_room_members', 'play_commands', 'play_daily_scores', 'play_daily_awards', 'trending_news_board_runs', 'trending_news_items');")
+  [ "$new_table_count" = 0 ] || fail "$database retained 0027/0028 tables after rollback/failure"
   hardening_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $HARDENING_TIMESTAMP;")
   [ "$hardening_count" = 0 ] || fail "$database still records migration $HARDENING_TIMESTAMP"
   security_count=$(pg_scalar "$database" "SELECT count(*)::text FROM \"migrations\" WHERE \"timestamp\" = $ACCOUNT_SECURITY_TIMESTAMP;")
@@ -255,6 +265,22 @@ assert_target_absent() {
   [ "$guild_boss_table_count" = 0 ] || fail "$database retained 0021 guild-boss tables after rollback/failure"
   hot_news_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('hot_news_headlines', 'hot_news_refresh_runs');")
   [ "$hot_news_table_count" = 0 ] || fail "$database retained 0022 daily-hot-news tables after rollback/failure"
+}
+
+assert_trending_reverted() {
+  database=$1
+  latest=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
+  [ "$latest" = "$PLAY_TIMESTAMP" ] || fail "$database did not return to 0027"
+  count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('trending_news_board_runs', 'trending_news_items');")
+  [ "$count" = 0 ] || fail "$database retained 0028 tables after targeted revert"
+}
+
+assert_play_reverted() {
+  database=$1
+  latest=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
+  [ "$latest" = "$DEVELOPMENT_TIMESTAMP" ] || fail "$database did not return to 0026"
+  count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('play_rooms', 'play_room_members', 'play_commands', 'play_daily_scores', 'play_daily_awards');")
+  [ "$count" = 0 ] || fail "$database retained 0027 tables after targeted revert"
 }
 
 assert_development_reverted() {
@@ -366,6 +392,14 @@ assert_target_applied rehearsal_clean
 pass "clean snapshot migrated up through $LATEST_TIMESTAMP"
 
 # Exercise the newest migration's down path in this disposable database only.
+run_migration_cli rehearsal_clean 5000 migration:revert \
+  >"$REHEARSAL_TMP/trending-revert.log" 2>&1 || fail "migration 0028 revert failed"
+assert_trending_reverted rehearsal_clean
+pass "trending snapshots reverted to $PLAY_TIMESTAMP"
+run_migration_cli rehearsal_clean 5000 migration:revert \
+  >"$REHEARSAL_TMP/play-revert.log" 2>&1 || fail "migration 0027 revert failed"
+assert_play_reverted rehearsal_clean
+pass "game rooms reverted to $DEVELOPMENT_TIMESTAMP"
 run_migration_cli rehearsal_clean 5000 migration:revert \
   >"$REHEARSAL_TMP/development-revert.log" 2>&1 ||
   fail "migration 0026 revert failed"
@@ -487,4 +521,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through private development workspace 0026 (including account-security 0013, chat 0014, news 0015, indexes 0016, username accounts 0017, game growth 0018, unified economy 0019, guild foundation/boss 0020-0021, daily hot news/invite coin 0022, arcade leaderboards/chat retention 0023, friend direct messages 0024, and zhesi arcade 0025), targeted 0026 then 0025 revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through game rooms 0027 and trending snapshots 0028 (preserving earlier 0013-0026 contracts), targeted 0028/0027/0026/0025 revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."

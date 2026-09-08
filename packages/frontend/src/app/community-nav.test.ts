@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { COMMUNITY_FEATURE_FLAGS } from './community-nav';
+import { COMMUNITY_FEATURE_FLAGS, COMMUNITY_SYSTEM_NAV, communitySystemByPath } from './community-nav';
 
 describe('community relationship and growth release gates', () => {
   it('keeps API-dependent second-batch features disabled by default', () => {
@@ -21,5 +21,9 @@ describe('community relationship and growth release gates', () => {
       towerDefense: true,
       battleServer: false,
     });
+  });
+  it('exposes a dedicated account-only leaderboard sidebar entry', () => {
+    expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'leaderboards')).toMatchObject({ path: '/leaderboards', label: '排行榜', enabled: true, requiresAccount: true });
+    expect(communitySystemByPath('/leaderboards')?.id).toBe('leaderboards');
   });
 });

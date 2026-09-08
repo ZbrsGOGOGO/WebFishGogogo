@@ -1,3 +1,5 @@
+import type { TrendingNewsSnapshot } from '@stealth-reader/shared';
+
 import { communityHttp } from './community-http';
 import { communityIdempotencyHeaders } from './community-idempotency';
 
@@ -71,6 +73,8 @@ export interface CommunityDailyHotNews {
   categories?: Array<{ id: CommunityNewsCategory; label: string; count: number }>;
   items: CommunityHotNewsHeadline[];
 }
+
+export type CommunityTrendingNewsSnapshot = TrendingNewsSnapshot;
 
 export interface CommunityNewsListFilters {
   feed?: CommunityNewsFeed;
@@ -193,6 +197,10 @@ export function getCommunityNews(
 
 export function getCommunityDailyHotNews(): Promise<CommunityDailyHotNews> {
   return communityHttp.get('/v1/news/headlines/today');
+}
+
+export function getCommunityTrendingNews(): Promise<CommunityTrendingNewsSnapshot> {
+  return communityHttp.get('/v1/news/trending/today');
 }
 
 export function getCommunityNewsDetail(id: string): Promise<CommunityNewsDetail> {
@@ -388,6 +396,7 @@ export function withdrawCommunityNewsAdminArticle(
 export const communityNewsApi = {
   list: getCommunityNews,
   getDailyHeadlines: getCommunityDailyHotNews,
+  getTrendingNews: getCommunityTrendingNews,
   get: getCommunityNewsDetail,
   giveNegativeFeedback: putCommunityNewsNegativeFeedback,
   getPreferences: getCommunityNewsPreferences,

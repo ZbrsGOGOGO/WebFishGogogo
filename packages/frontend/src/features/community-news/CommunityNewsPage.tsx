@@ -105,7 +105,7 @@ export function CommunityNewsPage(): JSX.Element {
         ) : null}
         {!loading && !error && visibleItems.length === 0 ? (
           <EmptyState icon="报" title={items.length ? '这个分类暂无新闻' : '暂无已同步的新闻'}
-            message={items.length ? '可以切换其他分类，或稍后重新读取。' : '当前没有已同步的标题，稍后可以重新读取；也可以前往平台榜单查看。'} />
+            message={items.length ? '可以切换其他分类，或稍后重新读取。' : '当前没有已同步的标题，稍后可以重新读取；也可以前往每日热榜查看。'} />
         ) : null}
         {!loading && !error && visibleItems.length > 0 ? (
           <ul className={styles.dailyNewsList} aria-label={`${selectedLabel}新闻列表`}>
@@ -130,7 +130,7 @@ export function CommunityNewsPage(): JSX.Element {
         ) : null}
         {updatedAt ? <p className={styles.snapshotNote}>新闻快照更新：{updatedAt}（北京时间）{error ? '；本次重新读取失败，上次快照未更新。' : ''}</p> : null}
       </section>
-      <p className={styles.disclosure}>点击新闻标题会在新窗口打开来源网站。事实细节与完整上下文请以原文为准；各平台实时热榜请在“平台榜单”查看官方入口。</p>
+      <p className={styles.disclosure}>点击新闻标题会在新窗口打开来源网站。事实细节与完整上下文请以原文为准；每日热榜在站内展示可验证的公开 API 快照。</p>
     </main>
   );
 }
