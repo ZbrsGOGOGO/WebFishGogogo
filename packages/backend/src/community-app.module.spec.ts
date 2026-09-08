@@ -32,6 +32,8 @@ import { ArcadeController } from './modules/community/arcade/arcade.controller';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
 import { PlayController } from './modules/community/play/play.controller';
 import { PlayModule } from './modules/community/play/play.module';
+import { RailController } from './modules/community/rail/rail.controller';
+import { RailModule } from './modules/community/rail/rail.module';
 import {
   NewsAdminController,
   NewsPreferenceController,
@@ -63,6 +65,7 @@ describe('CommunityAppModule route allowlist', () => {
         ModerationController,
         ArcadeController,
         PlayController,
+        RailController,
         NewsPublicController,
         NewsPreferenceController,
         NewsAdminController,
@@ -76,6 +79,7 @@ describe('CommunityAppModule route allowlist', () => {
     expect(modules).not.toContain(OfficeBattleModule);
     expect(modules).toContain(ArcadeModule);
     expect(modules).toContain(PlayModule);
+    expect(modules).toContain(RailModule);
     expect(modules).toContain(NewsModule);
     expect(modules).not.toContain(OutboxModule);
     expect(modules).not.toContain(WorkerModule);

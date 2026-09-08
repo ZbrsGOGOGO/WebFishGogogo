@@ -126,6 +126,17 @@ grep -Fq 'chk_development_attachments_content_bytes' \
   fail "migration 0026 is missing attachment byte-length integrity"
 
 AUTH_COOKIE_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth-cookie.ts"
+for contract in \
+  packages/backend/src/database/migrations/1700000000029-AddRailRoomsAndPasswords.ts \
+  packages/backend/src/modules/community/rail/rail.module.ts \
+  packages/backend/src/modules/community/room-password.ts \
+  deploy/community-rail-rehearsal.cjs; do
+  [ -f "$ROOT_DIR/$contract" ] || fail "missing rail/password release contract: $contract"
+done
+grep -Fq 'AddRailRoomsAndPasswords1700000000029' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+  fail "rail/password migration 0029 is not registered"
+grep -Fq 'zone=community_rail_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "rail proxy needs its separate bounded request budget"
 AUTH_EMAIL_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/email-delivery.service.ts"
 AUTH_CRYPTO_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth-crypto.ts"
 AUTH_SERVICE_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth.service.ts"

@@ -38,6 +38,7 @@ export function CommunityGamesPage(): JSX.Element {
   return <section aria-label="小游戏专区">
     <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>LIGHTWEIGHT WORKSPACE</span><h1>小游戏专区</h1><p>一个人随时练习，也可以邀请同事加入同一场挑战。收起画面不丢进度，线上房间仍正常计时。</p></div><span className={styles.muted}>默认静音</span></div>
     <nav className={styles.tabs} aria-label="小游戏模式"><Link to="/games" aria-current="page">单机挑战</Link><Link to="/games/rooms">玩家建房</Link></nav>
+    <section className={styles.panel} aria-label="轨道难题派对协作"><div className={styles.panelHeading}><h2>轨道难题 · 新协作项目</h2><span className={styles.muted}>3–9 席 · 可观战</span></div><div className={styles.panelBody}><p className={styles.muted}>轮流担任列车长，出牌、加特性，再讨论两条轨道的取舍。可用人机补位练习，也可以设置密码邀请同事一起玩。</p><div className={styles.rowActions} style={{ justifyContent: 'flex-start' }}><Link className={styles.quietButton} to="/games/rail">练习 / 玩家建房 →</Link><Link className={styles.textLink} to="/games/rail/leaderboard">查看生存率日榜</Link></div><p className={styles.muted}>至少 3 位真人、无机器人且完整手动操作的建房对局才可参榜；每日冠军 100 办公币，恶魔值仅作趣味展示。</p></div></section>
     {error ? <div className={styles.error} role="alert">{error} <Link to="/games/rooms">查看进行中的房间</Link></div> : null}
     {catalogError ? <div className={styles.error} role="alert">{catalogError} <button type="button" className={styles.quietButton} onClick={retry}>重试目录</button></div> : null}
     {!catalog && !catalogError ? <p role="status" className={styles.empty}>正在读取小游戏目录…</p> : null}

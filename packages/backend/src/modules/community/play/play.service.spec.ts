@@ -48,7 +48,7 @@ describe('PlayService entity integration', () => {
   }
 
   it('guards all room and office-balance operations with JWT at the controller boundary', () => {
-    for (const name of ['list', 'create', 'join', 'get', 'ready', 'start', 'action', 'leave', 'officeCoins']) {
+    for (const name of ['list', 'create', 'join', 'get', 'ready', 'start', 'action', 'leave', 'setPassword', 'officeCoins']) {
       const method = PlayController.prototype[name as keyof PlayController];
       expect(Reflect.getMetadata(GUARDS_METADATA, method)).toContain(JwtAuthGuard);
     }
@@ -80,21 +80,27 @@ describe('PlayService entity integration', () => {
     }
     await expect(service.create(a.id, { ...input(), title: '字'.repeat(41) })).rejects.toMatchObject({ response: { code: 'PLAY_TITLE_INVALID' } });
     await expect(service.create(a.id, { ...input(), visibility: 'secret-admin' })).rejects.toMatchObject({ response: { code: 'PLAY_VISIBILITY_INVALID' } });
+    await expect(service.create(a.id, { ...input('draw', 'room'), visibility: 'invite' })).rejects.toMatchObject({ response: { code: 'PLAY_VISIBILITY_INVALID' } });
     await expect(service.create(a.id, { ...input(), gameKey: 'client-executable' })).rejects.toMatchObject({ response: { code: 'PLAY_GAME_INVALID' } });
   });
 
   it('lists only public waiting rooms and never leaks invitation codes, engine state or private account fields', async () => {
     const a = await user('alice'); const b = await user('bob'); const c = await user('carol');
     const publicRoom = await service.create(a.id, input('draw', 'room'));
-    const privateRoom = await service.create(b.id, { ...input('draw', 'room'), visibility: 'invite' });
+    const privateRoom = await service.create(b.id, input('draw', 'room'));
+    // Historical private rooms keep their original visibility/code; no new
+    // client can create them or receive the old invitation secret.
+    const oldCode = 'A1B2C3D4E5F6';
+    await db.getRepository(PlayRoom).update(privateRoom.id, { visibility: 'invite', joinCode: oldCode });
     const lobby = await service.list(c.id);
     expect(lobby.items.map((room) => room.id)).toEqual([publicRoom.id]);
     expect(JSON.stringify(lobby)).not.toMatch(/joinCode|engineState|passwordHash|email|requestHash/);
     expect(JSON.stringify(lobby)).not.toContain(a.id);
-    expect(JSON.stringify(lobby)).not.toContain(privateRoom.joinCode);
+    expect(JSON.stringify(lobby)).not.toContain(oldCode);
     await expect(service.join(c.id, { roomId: privateRoom.id })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_NOT_FOUND' } });
-    const joined = await service.join(c.id, { code: privateRoom.joinCode.toLowerCase() });
+    const joined = await service.join(c.id, { code: oldCode.toLowerCase() });
     expect(joined.id).toBe(privateRoom.id);
+    expect(joined.visibility).toBe('invite'); expect(joined.joinCode).toBeNull();
     expect(await db.getRepository(PlayRoomMember).count({ where: { roomId: privateRoom.id } })).toBe(2);
   });
 
@@ -134,7 +140,8 @@ describe('PlayService entity integration', () => {
     await service.join(b.id, { roomId: waiting.id });
     await db.getRepository(UserBlock).insert({ blockerId: blocked.id, blockedId: a.id });
     await expect(service.join(blocked.id, { roomId: waiting.id })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_NOT_FOUND' } });
-    await expect(service.join(blocked.id, { code: waiting.joinCode })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_NOT_FOUND' } });
+    const oldCode = 'F6E5D4C3B2A1'; await db.getRepository(PlayRoom).update(waiting.id, { joinCode: oldCode });
+    await expect(service.join(blocked.id, { code: oldCode })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_NOT_FOUND' } });
     await service.ready(a.id, waiting.id, { ready: true }); await service.ready(b.id, waiting.id, { ready: true });
     await service.start(a.id, waiting.id);
     await expect(service.join(blocked.id, { roomId: waiting.id })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_NOT_FOUND' } });
@@ -195,7 +202,7 @@ describe('PlayService entity integration', () => {
     const a = await user('alice'); const b = await user('bob');
     const waiting = await service.create(a.id, input('draw', 'room')); await service.join(b.id, { roomId: waiting.id });
     const left = await service.leave(a.id, waiting.id);
-    expect(left.me.left).toBe(true); expect(left.joinCode).toBe(''); expect(left.game).toBeNull();
+    expect(left.me.left).toBe(true); expect(left.joinCode).toBeNull(); expect(left.game).toBeNull();
     expect((await service.get(b.id, waiting.id)).me.isHost).toBe(true);
     await expect(service.join(a.id, { roomId: waiting.id })).rejects.toMatchObject({ response: { code: 'PLAY_ROOM_LEFT' } });
     expect((await service.leave(b.id, waiting.id)).status).toBe('closed');

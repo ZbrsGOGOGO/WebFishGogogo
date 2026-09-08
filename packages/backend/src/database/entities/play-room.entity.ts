@@ -19,6 +19,7 @@ export class PlayRoom {
   @Column({ type: 'varchar', length: 12 }) status!: PlayRoomStatus;
   @Column({ type: 'integer', default: 1 }) version!: number;
   @Column({ name: 'join_code', type: 'varchar', length: 12, select: false }) joinCode!: string;
+  @Column({ name: 'password_hash', type: 'varchar', length: 255, nullable: true, select: false }) passwordHash!: string | null;
   @Column({ name: 'max_players', type: 'integer' }) maxPlayers!: number;
   @Column({ name: 'engine_state', type: 'jsonb', nullable: true, select: false }) engineState!: Record<string, unknown> | null;
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' }) createdAt!: Date;

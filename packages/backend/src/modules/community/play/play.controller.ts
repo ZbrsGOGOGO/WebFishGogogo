@@ -22,6 +22,8 @@ export class PlayController {
   get(@CurrentUserId() userId: string, @Param('roomId') roomId: string) { return this.play.get(userId, roomId); }
   @Post('rooms/:roomId/ready') @UseGuards(JwtAuthGuard)
   ready(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Body() body: unknown) { return this.play.ready(userId, roomId, body); }
+  @Post('rooms/:roomId/password') @UseGuards(JwtAuthGuard)
+  setPassword(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Body() body: unknown) { return this.play.setPassword(userId, roomId, body); }
   @Post('rooms/:roomId/start') @UseGuards(JwtAuthGuard)
   start(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Body() body: unknown) { object(body, []); return this.play.start(userId, roomId); }
   @Post('rooms/:roomId/actions') @UseGuards(JwtAuthGuard)

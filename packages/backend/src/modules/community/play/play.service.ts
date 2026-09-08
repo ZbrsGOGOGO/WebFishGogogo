@@ -2,9 +2,10 @@ import { BadRequestException, ConflictException, ForbiddenException, HttpExcepti
 import { randomBytes } from 'node:crypto';
 import { DataSource, EntityManager, In, LessThan, MoreThan } from 'typeorm';
 import type { ArcadeGameKey, PlayRoomList, PlayRoomSummary, PlayRoomView } from '@stealth-reader/shared';
-import { PlayCommand, PlayRoom, PlayRoomMember, User, UserBlock } from '../../../database/entities';
+import { PlayCommand, PlayRoom, PlayRoomMember, RailRoomMember, User, UserBlock } from '../../../database/entities';
 import { toBusinessLocalDate } from '../../platform/platform-time';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
+import { consumeRoomPasswordAttempt, consumeRoomPasswordMutation, hashRoomPassword, normalizeRoomPassword, roomPasswordFingerprint, verifyRoomPassword } from '../room-password';
 import * as engine from './engines';
 import { boundedPayload, gameKey, hash, object, person, PLAY_CATALOG, RANKING_RULES, uuid } from './play.rules';
 
@@ -28,10 +29,10 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
     await this.activeUser(this.db.manager, userId);
     const now = new Date();
     const blocked = await this.blockedIds(this.db.manager, userId);
-    const rows = await this.db.getRepository(PlayRoom).find({
+    const rows = await this.db.getRepository(PlayRoom).createQueryBuilder('room').setFindOptions({
       where: { visibility: 'public', mode: 'room', status: 'waiting', expiresAt: MoreThan(now), ...(filter ? { gameKey: filter } : {}) },
       relations: ['host'], order: { createdAt: 'DESC' }, take: 60,
-    });
+    }).addSelect('room.passwordHash').getMany();
     const allMembers = rows.length ? await this.db.getRepository(PlayRoomMember).find({ where: { roomId: In(rows.map((room) => room.id)) }, relations: ['user'] }) : [];
     const visible: PlayRoomSummary[] = [];
     for (const room of rows) {
@@ -40,24 +41,26 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
       visible.push(this.summary(room, members));
     }
     const active = await this.db.getRepository(PlayRoomMember).findOne({ where: { userId, active: true } });
-    const activeRoom = active ? await this.db.getRepository(PlayRoom).findOne({ where: { id: active.roomId }, relations: ['host'] }) : null;
+    const activeRoom = active ? await this.db.getRepository(PlayRoom).createQueryBuilder('room').setFindOptions({ where: { id: active.roomId }, relations: ['host'] }).addSelect('room.passwordHash').getOne() : null;
     return { items: visible, activeRoom: activeRoom ? this.summary(activeRoom, await this.members(this.db.manager, activeRoom.id)) : null };
   }
 
   async create(userId: string, raw: unknown): Promise<PlayRoomView> {
     assertCommunityWritesEnabled();
-    const input = object(raw, ['clientRequestId', 'gameKey', 'mode', 'visibility', 'maxPlayers', 'title']);
+    const input = object(raw, ['clientRequestId', 'gameKey', 'mode', 'visibility', 'maxPlayers', 'title', 'password']);
     const key = gameKey(input.gameKey);
     const clientRequestId = uuid(input.clientRequestId);
     if (input.mode !== 'solo' && input.mode !== 'room') throw new BadRequestException({ code: 'PLAY_MODE_INVALID' });
-    if (input.visibility !== undefined && input.visibility !== 'public' && input.visibility !== 'invite') throw new BadRequestException({ code: 'PLAY_VISIBILITY_INVALID' });
+    if (input.visibility !== undefined && input.visibility !== 'public') throw new BadRequestException({ code: 'PLAY_VISIBILITY_INVALID' });
     const mode = input.mode;
+    const password = normalizeRoomPassword(input.password);
+    if (mode === 'solo' && password !== null) throw new BadRequestException({ code: 'PLAY_REQUEST_INVALID' });
     const maxPlayers = input.maxPlayers ?? (mode === 'solo' ? 1 : 8);
     if (!Number.isSafeInteger(maxPlayers) || Number(maxPlayers) < (mode === 'solo' ? 1 : key === 'undercover' ? 3 : 2) || Number(maxPlayers) > (mode === 'solo' ? 1 : 8)) throw new BadRequestException({ code: 'PLAY_CAPACITY_INVALID' });
     if (input.title !== undefined && (typeof input.title !== 'string' || input.title.length > 40 || /[\u0000-\u001f\u007f]/.test(input.title))) throw new BadRequestException({ code: 'PLAY_TITLE_INVALID' });
     const title = typeof input.title === 'string' && input.title.trim() ? input.title.trim() : `${PLAY_CATALOG.games.find((game) => game.gameKey === key)!.name} · ${mode === 'solo' ? '个人挑战' : '协作房间'}`;
-    const visibility = mode === 'solo' ? 'invite' : input.visibility ?? 'public';
-    const requestHash = hash({ key, mode, maxPlayers, title, visibility });
+    const visibility = mode === 'solo' ? 'invite' : 'public';
+    const requestHash = hash({ key, mode, maxPlayers, title, visibility, password: roomPasswordFingerprint(password) });
     return this.db.transaction(async (manager) => {
       const user = await this.activeUser(manager, userId, true);
       const previous = await manager.getRepository(PlayRoom).findOne({ where: { creatorId: userId, clientRequestId } });
@@ -73,10 +76,13 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
       if (createdToday >= 60) throw new HttpException({ code: 'PLAY_CREATE_LIMIT', message: '24 小时最多新建 60 局，请稍后再试。' }, 429);
       const openCount = await manager.getRepository(PlayRoom).count({ where: { status: In(['waiting', 'running']) } });
       if (openCount >= 100) throw new HttpException({ code: 'PLAY_SERVER_BUSY' }, 429);
+      // Bcrypt only after durable account serialization, replay, active-game
+      // and creation-quota checks. No room row lock exists yet.
+      const passwordHash = await hashRoomPassword(password);
       const state = mode === 'solo' ? engine.create(key, [{ id: user.publicId, displayName: person(user).displayName }], mode, now.getTime(), randomBytes(32).toString('hex')) : null;
       const room = manager.getRepository(PlayRoom).create({
         creatorId: userId, hostUserId: userId, clientRequestId, requestHash, gameKey: key, mode, visibility,
-        title, status: state ? 'running' : 'waiting', version: 1, joinCode: randomBytes(6).toString('hex').toUpperCase(), maxPlayers: Number(maxPlayers),
+        title, status: state ? 'running' : 'waiting', version: 1, joinCode: randomBytes(6).toString('hex').toUpperCase(), passwordHash, maxPlayers: Number(maxPlayers),
         engineState: state as unknown as Record<string, unknown> | null, createdAt: now, startedAt: state ? now : null,
         expiresAt: new Date(state ? state.endsAt : now.getTime() + 3_600_000), finishedAt: null, leaderboardDate: null,
       });
@@ -88,15 +94,28 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
 
   async join(userId: string, raw: unknown): Promise<PlayRoomView> {
     assertCommunityWritesEnabled();
-    const input = object(raw, ['roomId', 'code']);
+    const input = object(raw, ['roomId', 'code', 'password']);
     if ((input.roomId === undefined) === (input.code === undefined)) throw new BadRequestException({ code: 'PLAY_JOIN_INVALID' });
     const roomId = input.roomId === undefined ? undefined : uuid(input.roomId);
     const code = typeof input.code === 'string' ? input.code.trim().toUpperCase() : undefined;
     if (input.code !== undefined && (!code || !/^[A-F0-9]{12}$/.test(code))) throw new BadRequestException({ code: 'PLAY_JOIN_INVALID' });
+    const password = normalizeRoomPassword(input.password);
+    await this.activeUser(this.db.manager, userId);
+    const found = await this.db.getRepository(PlayRoom).createQueryBuilder('room')
+      .addSelect('room.passwordHash').where(roomId ? { id: roomId, visibility: 'public', mode: 'room' } : { joinCode: code!, mode: 'room' }).getOne();
+    if (!found) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
+    const priorMembers = await this.members(this.db.manager, found.id);
+    const priorBlocked = await this.blockedIds(this.db.manager, userId);
+    if (priorMembers.some((member) => member.active && priorBlocked.has(member.userId))) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
+    const prior = priorMembers.find((member) => member.userId === userId && !member.leftAt);
+    const checkedHash = found.passwordHash ?? null;
+    if (!prior && checkedHash !== null) {
+      // Hash checks must not hold a room lock or roll back the abuse budget.
+      await consumeRoomPasswordAttempt(this.db, 'play', userId, found.id);
+      if (!await verifyRoomPassword(password, checkedHash)) throw new ForbiddenException({ code: 'PLAY_ROOM_ACCESS_DENIED' });
+    }
     return this.db.transaction(async (manager) => {
       const user = await this.activeUser(manager, userId, true);
-      const found = await manager.getRepository(PlayRoom).findOne({ where: roomId ? { id: roomId, visibility: 'public', mode: 'room' } : { joinCode: code!, mode: 'room' } });
-      if (!found) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
       // Resolve any old expired participation before locking the target room.
       await this.ensureNoActiveRoom(manager, userId, found.id);
       const room = await this.lockRoom(manager, found.id);
@@ -108,11 +127,38 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
       if (activeMembers.some((member) => blocked.has(member.userId))) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
       const existing = members.find((member) => member.userId === userId);
       if (existing && !existing.leftAt) return this.project(manager, room, user);
+      if ((room.passwordHash ?? null) !== checkedHash) throw new ForbiddenException({ code: 'PLAY_ROOM_ACCESS_DENIED' });
       if (room.status !== 'waiting') throw new ConflictException({ code: 'PLAY_ROOM_NOT_WAITING' });
       if (existing) throw new ConflictException({ code: 'PLAY_ROOM_LEFT', message: '已退出的房间不能重新加入，请创建或加入下一局。' });
       if (activeMembers.length >= room.maxPlayers) throw new ConflictException({ code: 'PLAY_ROOM_FULL' });
       await manager.getRepository(PlayRoomMember).insert({ roomId: room.id, userId, ready: false, active: true, lastSequence: 0, actionWindowAt: null, actionWindowCount: 0, score: null, joinedAt: now, leftAt: null });
       room.version += 1;
+      await manager.getRepository(PlayRoom).save(room);
+      return this.project(manager, room, user);
+    });
+  }
+
+  async setPassword(userId: string, rawId: string, raw: unknown): Promise<PlayRoomView> {
+    assertCommunityWritesEnabled();
+    const roomId = uuid(rawId);
+    const input = object(raw, ['password', 'expectedVersion']);
+    if (typeof input.password !== 'string' || !Number.isSafeInteger(input.expectedVersion) || Number(input.expectedVersion) < 1) throw new BadRequestException({ code: 'PLAY_REQUEST_INVALID' });
+    const password = normalizeRoomPassword(input.password);
+    await this.activeUser(this.db.manager, userId);
+    const membership = await this.db.getRepository(PlayRoomMember).findOneBy({ roomId, userId, active: true });
+    if (!membership) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
+    const before = await this.db.getRepository(PlayRoom).findOneBy({ id: roomId });
+    if (!before || before.hostUserId !== userId) throw new ForbiddenException({ code: 'PLAY_HOST_REQUIRED' });
+    if (before.status !== 'waiting' || before.mode !== 'room') throw new ConflictException({ code: 'PLAY_ROOM_NOT_WAITING' });
+    if (before.version !== input.expectedVersion) throw new ConflictException({ code: 'PLAY_VERSION_CONFLICT' });
+    await consumeRoomPasswordMutation(this.db, 'play', userId, roomId);
+    const passwordHash = await hashRoomPassword(password);
+    return this.inRoom(userId, roomId, true, async (manager, room, user, member) => {
+      await this.advance(manager, room, new Date());
+      if (room.hostUserId !== userId || !member.active) throw new ForbiddenException({ code: 'PLAY_HOST_REQUIRED' });
+      if (room.status !== 'waiting' || room.mode !== 'room') throw new ConflictException({ code: 'PLAY_ROOM_NOT_WAITING' });
+      if (room.version !== input.expectedVersion) throw new ConflictException({ code: 'PLAY_VERSION_CONFLICT' });
+      room.passwordHash = passwordHash; room.version += 1;
       await manager.getRepository(PlayRoom).save(room);
       return this.project(manager, room, user);
     });
@@ -222,7 +268,9 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
     if (write) assertCommunityWritesEnabled();
     const roomId = uuid(rawId);
     return this.db.transaction(async (manager) => {
-      const user = await this.activeUser(manager, userId);
+      // Match account mutation and create/join lock ordering. Even GET can
+      // advance/settle a game, so a stale pre-lock account read is insufficient.
+      const user = await this.activeUser(manager, userId, true);
       // Membership before loading private JSON, then rechecked under the room lock.
       if (!await manager.getRepository(PlayRoomMember).exist({ where: { roomId, userId } })) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
       const room = await this.lockRoom(manager, roomId);
@@ -239,7 +287,7 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
     return user;
   }
   private async lockRoom(manager: EntityManager, roomId: string): Promise<PlayRoom> {
-    const room = await manager.getRepository(PlayRoom).createQueryBuilder('room').addSelect(['room.engineState', 'room.joinCode']).where('room.id = :roomId', { roomId }).setLock('pessimistic_write').getOne();
+    const room = await manager.getRepository(PlayRoom).createQueryBuilder('room').addSelect(['room.engineState', 'room.passwordHash']).where('room.id = :roomId', { roomId }).setLock('pessimistic_write').getOne();
     if (!room) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
     return room;
   }
@@ -251,6 +299,10 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
     return new Set(rows.map((row) => row.blockerId === userId ? row.blockedId : row.blockerId));
   }
   private async ensureNoActiveRoom(manager: EntityManager, userId: string, exceptId?: string): Promise<void> {
+    // Both games acquire the same user row lock before this cross-module check.
+    // Never advance the other module here: its own sweep owns expiry processing.
+    const rail = await manager.getRepository(RailRoomMember).findOneBy({ userId, role: 'participant', active: true });
+    if (rail) throw new ConflictException({ code: 'PLAY_ACTIVE_RAIL_ROOM', roomId: rail.roomId, message: '请先返回或退出当前轨道难题赛局。' });
     const current = await manager.getRepository(PlayRoomMember).findOneBy({ userId, active: true });
     if (!current || current.roomId === exceptId) return;
     const room = await this.lockRoom(manager, current.roomId);
@@ -292,14 +344,14 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
   }
   private summary(room: PlayRoom, members: PlayRoomMember[]): PlayRoomSummary {
     const host = room.host ?? members.find((member) => member.userId === room.hostUserId)?.user;
-    return { id: room.id, title: room.title, gameKey: room.gameKey, mode: room.mode, visibility: room.visibility, status: room.status, host: host ? person(host) : null, memberCount: members.filter((member) => !member.leftAt).length, maxPlayers: room.maxPlayers, createdAt: room.createdAt.toISOString() };
+    return { id: room.id, title: room.title, gameKey: room.gameKey, mode: room.mode, visibility: room.visibility, status: room.status, host: host ? person(host) : null, memberCount: members.filter((member) => !member.leftAt).length, maxPlayers: room.maxPlayers, createdAt: room.createdAt.toISOString(), hasPassword: Boolean(room.passwordHash) };
   }
   private async project(manager: EntityManager, room: PlayRoom, user: User): Promise<PlayRoomView> {
     const members = await this.members(manager, room.id);
     const me = members.find((member) => member.userId === user.id);
     if (!me) throw new NotFoundException({ code: 'PLAY_ROOM_NOT_FOUND' });
     const now = new Date();
-    return { ...this.summary(room, members), version: room.version, joinCode: me.leftAt ? '' : room.joinCode,
+    return { ...this.summary(room, members), version: room.version, joinCode: null,
       members: members.map((member) => ({ ...person(member.user), ready: member.ready, left: Boolean(member.leftAt), score: member.score, joinedAt: member.joinedAt.toISOString() })),
       me: { publicId: user.publicId, isHost: room.hostUserId === user.id, ready: me.ready, left: Boolean(me.leftAt), nextSequence: me.lastSequence + 1 },
       game: room.engineState && !me.leftAt ? engine.view(room.engineState as unknown as engine.ArcadeEngineState, user.publicId, now.getTime()) : null,

@@ -27,6 +27,7 @@ import { AddZhesiArcadeGame1700000000025 } from './1700000000025-AddZhesiArcadeG
 import { AddDevelopmentWorkspace1700000000026 } from './1700000000026-AddDevelopmentWorkspace';
 import { AddAuthoritativeGameRooms1700000000027 } from './1700000000027-AddAuthoritativeGameRooms';
 import { AddTrendingBoardSnapshots1700000000028 } from './1700000000028-AddTrendingBoardSnapshots';
+import { AddRailRoomsAndPasswords1700000000029 } from './1700000000029-AddRailRoomsAndPasswords';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -59,4 +60,5 @@ export const migrations = [
   AddDevelopmentWorkspace1700000000026,
   AddAuthoritativeGameRooms1700000000027,
   AddTrendingBoardSnapshots1700000000028,
+  AddRailRoomsAndPasswords1700000000029,
 ];

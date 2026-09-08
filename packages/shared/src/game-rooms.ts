@@ -34,6 +34,7 @@ export interface PlayRoomSummary {
   memberCount: number;
   maxPlayers: number;
   createdAt: string;
+  hasPassword: boolean;
 }
 export interface PlayRoomMember extends PlayPerson {
   ready: boolean;
@@ -43,7 +44,8 @@ export interface PlayRoomMember extends PlayPerson {
 }
 export interface PlayRoomView extends PlayRoomSummary {
   version: number;
-  joinCode: string;
+  /** Retired invitation secret is never projected to clients. */
+  joinCode: null;
   members: PlayRoomMember[];
   me: { publicId: string; isHost: boolean; ready: boolean; left: boolean; nextSequence: number };
   game: ArcadeGameView | null;
@@ -60,11 +62,13 @@ export interface PlayCreateInput {
   clientRequestId: string;
   gameKey: ArcadeGameKey;
   mode: ArcadeGameMode;
-  visibility?: 'public' | 'invite';
+  visibility?: 'public';
   maxPlayers?: number;
   title?: string;
+  password?: string;
 }
-export interface PlayJoinInput { roomId?: string; code?: string }
+export interface PlayJoinInput { roomId: string; password?: string }
+export interface PlayPasswordInput { password: string; expectedVersion: number }
 export type PlayActionInput = ArcadeGameAction & { actionId: string; sequence: number };
 export interface PlayLeaderboardEntry extends PlayPerson {
   rank: number;

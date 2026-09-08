@@ -57,6 +57,7 @@ import { DirectMessageService } from './direct-message.service';
     ChatWebSocketGateway,
   ],
   exports: [
+    ChatModerationService,
     ChatService,
     DirectMessageService,
     ChatRealtimeService,

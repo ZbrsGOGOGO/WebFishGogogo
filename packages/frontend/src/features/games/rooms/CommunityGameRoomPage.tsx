@@ -13,13 +13,15 @@ export function CommunityGameRoomPage(): JSX.Element {
   const { room } = state;
   const { catalog } = usePlayCatalog();
   const active = useCommunityAuthStore((auth) => auth.phase === 'active');
+  const accountId = useCommunityAuthStore((auth) => auth.user?.publicId ?? null);
   const navigate = useNavigate();
   const [clock, setClock] = useState(Date.now());
   const [observed, setObserved] = useState({ server: Date.now(), local: Date.now() });
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 500); return () => clearInterval(timer); }, []);
   useEffect(() => { if (room) setObserved({ server: Date.parse(room.serverNow), local: Date.now() }); }, [room?.serverNow]);
-  useEffect(() => { setCopyNotice(null); }, [roomId]);
+  useEffect(() => { setNewPassword(''); setPasswordNotice(null); }, [roomId, accountId]);
   if (!active) return <p className={styles.info}><Link to="/login">登录账号</Link>后继续查看玩家房间。</p>;
   if (!room) return <section><Link className={styles.textLink} to="/games/rooms">← 返回玩家建房</Link>{state.error ? <p className={styles.error} role="alert">{state.error}</p> : <p className={styles.empty} role="status">正在连接游戏房间…</p>}</section>;
   const game = room.game;
@@ -40,7 +42,17 @@ export function CommunityGameRoomPage(): JSX.Element {
     {room.me.left ? <p className={styles.info}>你已离开这个房间。<Link to="/games/rooms">返回大厅</Link></p> : null}
     <div className={styles.roomLayout}>
       <aside className={styles.stack} aria-label="房间成员与信息"><section className={styles.panel}><div className={styles.panelHeading}><h2>{room.mode === 'solo' ? '本局玩家' : `成员 ${members.length} / ${room.maxPlayers}`}</h2></div><ul className={styles.members}>{room.members.map((member) => <li key={member.publicId}><span className={styles.memberName}>{member.displayName}{member.publicId === room.me.publicId ? '（我）' : ''}<small>{member.publicId === room.host?.publicId ? '房主 · ' : ''}{member.left ? '已离开' : room.status === 'waiting' ? member.ready ? '已准备' : '未准备' : game?.players.find((player) => player.id === member.publicId)?.finished ? '已完成' : '参与中'}</small></span><span className={styles.memberScore}>{game?.players.find((player) => player.id === member.publicId)?.score ?? member.score ?? '—'}{member.score !== null || game ? ' 分' : ''}</span></li>)}</ul></section>
-        {room.mode === 'room' && !room.me.left ? <details className={styles.panel}><summary className={styles.panelHeading} style={{ cursor: 'pointer' }}>房间邀请<span className={styles.muted}>查看邀请码</span></summary><div className={styles.panelBody}><p className={styles.muted}>{room.visibility === 'invite' ? '仅邀请码可加入，不显示在公开列表。' : '公开房间，也可分享邀请码加入。'}</p><code style={{ display: 'block', fontSize: 19, letterSpacing: '.1em', margin: '12px 0', overflowWrap: 'anywhere' }}>{room.joinCode}</code><button className={styles.quietButton} type="button" onClick={() => { if (!navigator.clipboard) { setCopyNotice('请选中上方邀请码复制。'); return; } void navigator.clipboard.writeText(room.joinCode).then(() => setCopyNotice('邀请码已复制。')).catch(() => setCopyNotice('未能自动复制，请选中上方邀请码复制。')); }}>复制邀请码</button>{copyNotice ? <p role="status" className={styles.muted}>{copyNotice}</p> : null}</div></details> : null}
+        {room.mode === 'room' && !room.me.left ? <section className={styles.panel}>
+          <div className={styles.panelHeading}><h2>房间访问</h2><span className={styles.muted}>{room.hasPassword ? '需要密码' : '无需密码'}</span></div>
+          <div className={styles.panelBody}><p className={styles.muted}>{room.visibility === 'invite' ? '这是旧版私密房间，仍不会出现在公开列表中。' : '同事可在玩家建房列表找到本房间；有密码时请由房主私下告知。'}</p>
+            {room.status === 'waiting' && room.me.isHost ? <form onSubmit={(event) => { event.preventDefault(); setPasswordNotice(null); void state.setPassword(newPassword).then((changed) => { if (changed) { setNewPassword(''); setPasswordNotice('访问设置已更新；已在房间的成员无需重新加入。'); } }); }}>
+              <label className={styles.field}>新房间密码<input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} maxLength={256} aria-describedby="room-password-help" disabled={state.pending} /></label>
+              <p id="room-password-help" className={styles.muted}>仅房主可在开局前修改。4–64 个字符，留空后保存即可取消密码；不会显示已有密码。</p>
+              <button className={styles.quietButton} type="submit" disabled={state.pending}>保存访问设置</button>
+            </form> : null}
+            {passwordNotice ? <p role="status" className={styles.muted}>{passwordNotice}</p> : null}
+          </div>
+        </section> : null}
       </aside>
       <div className={styles.stack}>
         {room.status === 'waiting' ? <section className={styles.panel}><div className={styles.panelHeading}><h2>等待成员准备</h2></div><div className={styles.panelBody}><p className={styles.muted}>本款需要至少 {definition?.minPlayers ?? 2} 名玩家，所有成员准备后由房主开始。不会自动加入机器人。</p><div className={styles.rowActions} style={{ justifyContent: 'flex-start' }}><button type="button" className={styles.quietButton} disabled={state.pending || room.me.left} onClick={() => { void state.change('ready', !room.me.ready); }}>{room.me.ready ? '取消准备' : '我已准备'}</button>{room.me.isHost ? <button type="button" className={styles.quietButton} disabled={state.pending || !canStart} onClick={() => { void state.change('start'); }}>开始本局</button> : null}</div></div></section> : null}

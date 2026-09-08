@@ -6,6 +6,7 @@ import { ArenaOpponentOffer } from './arena-opponent-offer.entity';
 import { ArenaProfile } from './arena-profile.entity';
 import { ArcadeBestScore, ArcadeGameRun } from './arcade-score.entity';
 import { PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward } from './play-room.entity';
+import { RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats } from './rail-room.entity';
 import { TrendingNewsBoardRun, TrendingNewsItemRecord } from './trending-news.entity';
 import { AccountAppeal } from './account-appeal.entity';
 import { AccountDeletionRequest } from './account-deletion-request.entity';
@@ -129,6 +130,7 @@ import { UserFarm } from './user-farm.entity';
 import { UserBlock } from './user-block.entity';
 
 export {
+  RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,
   TrendingNewsBoardRun, TrendingNewsItemRecord,
   AccountAppeal,
@@ -246,6 +248,7 @@ export {
 
 /** 所有实体的集合，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const entities = [
+  RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,
   TrendingNewsBoardRun, TrendingNewsItemRecord,
   User,

@@ -75,6 +75,9 @@ const CommunityGameRoomsPage = lazy(() => import('../features/games/rooms/Commun
 const CommunityGameRoomPage = lazy(() => import('../features/games/rooms/CommunityGameRoomPage').then((module) => ({ default: module.CommunityGameRoomPage })));
 const CommunityGameLeaderboardPage = lazy(() => import('../features/games/rooms/CommunityGameLeaderboardPage').then((module) => ({ default: module.CommunityGameLeaderboardPage })));
 const CommunityLeaderboardsPage = lazy(() => import('../features/games/rooms/CommunityLeaderboardsPage').then((module) => ({ default: module.CommunityLeaderboardsPage })));
+const RailLobbyPage = lazy(() => import('../features/games/rail/RailLobbyPage').then((module) => ({ default: module.RailLobbyPage })));
+const RailRoomPage = lazy(() => import('../features/games/rail/RailRoomPage').then((module) => ({ default: module.RailRoomPage })));
+const RailLeaderboardPage = lazy(() => import('../features/games/rail/RailLeaderboardPage').then((module) => ({ default: module.RailLeaderboardPage })));
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({ default: module.TetrisGamePage })),
 );
@@ -315,8 +318,11 @@ export function CommunityModeRouter(): JSX.Element {
         <Route element={<RequireCommunityAccount />}>
           <Route path="rooms" element={loading(<CommunityGameRoomsPage />)} />
           <Route path="rooms/:roomId" element={loading(<CommunityGameRoomPage />)} />
+          <Route path="rail" element={loading(<RailLobbyPage />)} />
+          <Route path="rail/rooms/:roomId" element={loading(<RailRoomPage />)} />
         </Route>
         <Route path="leaderboards/:gameKey" element={loading(<CommunityGameLeaderboardPage />)} />
+        <Route path="rail/leaderboard" element={loading(<RailLeaderboardPage />)} />
       </Route>
       <Route path="/games" element={<CommunityArcadeGameLayout />}>
         <Route path="snake" element={loading(<SnakeGamePage />)} />

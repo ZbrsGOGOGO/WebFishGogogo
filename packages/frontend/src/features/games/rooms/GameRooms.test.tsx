@@ -31,7 +31,7 @@ const snake: ArcadeGameView = { ...baseGame, gameKey: 'snake', board: { snake: [
 const draw: Extract<ArcadeGameView, { gameKey: 'draw' }> = { ...baseGame, gameKey: 'draw', board: { round: 2, totalRounds: 4, drawerId: 'player-2', roundEndsAt: Date.now() + 30000, strokes: [], wordLength: 2, word: null, guessedPlayerIds: [], messages: [], practicePartner: false } };
 const undercover: Extract<ArcadeGameView, { gameKey: 'undercover' }> = { ...baseGame, gameKey: 'undercover', board: { round: 2, phase: 'describe', phaseEndsAt: Date.now() + 30000, word: '咖啡', alivePlayerIds: ['player-1', 'player-2'], descriptions: [], votedPlayerIds: [], myVote: null, eliminatedPlayerIds: [], outcome: null, reveals: [], practicePartner: false } };
 function room(overrides: Partial<PlayRoomView> = {}): PlayRoomView {
-  return { id: 'room-1', title: '午间协作组', gameKey: 'snake', mode: 'room', visibility: 'public', status: 'running', host: { publicId: 'player-1', username: null, displayName: '当前玩家' }, memberCount: 2, maxPlayers: 6, createdAt: '2026-09-08T00:00:00.000Z', version: 1, joinCode: 'TESTCODE', members: baseGame.players.map((player) => ({ publicId: player.id, displayName: player.displayName, username: null, ready: true, left: false, score: null, joinedAt: '2026-09-08T00:00:00.000Z' })), me: { publicId: 'player-1', isHost: true, ready: true, left: false, nextSequence: 1 }, game: snake, serverNow: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString(), leaderboardDate: null, rankingNotice: '已验证成绩参与当日日榜。', ...overrides };
+  return { id: 'room-1', title: '午间协作组', gameKey: 'snake', mode: 'room', visibility: 'public', status: 'running', host: { publicId: 'player-1', username: null, displayName: '当前玩家' }, memberCount: 2, maxPlayers: 6, createdAt: '2026-09-08T00:00:00.000Z', version: 1, hasPassword: false, joinCode: null, members: baseGame.players.map((player) => ({ publicId: player.id, displayName: player.displayName, username: null, ready: true, left: false, score: null, joinedAt: '2026-09-08T00:00:00.000Z' })), me: { publicId: 'player-1', isHost: true, ready: true, left: false, nextSequence: 1 }, game: snake, serverNow: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString(), leaderboardDate: null, rankingNotice: '已验证成绩参与当日日榜。', ...overrides };
 }
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (reason: unknown) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 function CurrentPath(): JSX.Element { const location = useLocation(); return <output aria-label="当前路径">{location.pathname}{location.search}</output>; }
@@ -75,14 +75,57 @@ describe('community game workspace', () => {
     expect(communityGameRoomsApi.list).not.toHaveBeenCalled();
   });
 
-  it('uses an invitation code to join without inventing public player counts', async () => {
+  it('uses an accessible password prompt for protected listed rooms without an invitation-code entry', async () => {
     const join = vi.spyOn(communityGameRoomsApi, 'join').mockResolvedValue(room());
+    vi.mocked(communityGameRoomsApi.list).mockResolvedValue({ items: [room({ status: 'waiting', hasPassword: true })], activeRoom: null });
     render(<MemoryRouter><CurrentPath /><CommunityGameRoomsPage /></MemoryRouter>);
-    expect(await screen.findByText(/暂时没有公开房间/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('房间邀请码'), { target: { value: ' testcode ' } });
-    fireEvent.click(screen.getByRole('button', { name: '加入房间' }));
-    await waitFor(() => expect(join).toHaveBeenCalledWith({ code: 'TESTCODE' }));
+    fireEvent.click(await screen.findByRole('button', { name: '加入 午间协作组' }));
+    const secret = screen.getByLabelText('请输入房间密码'); expect(secret).toHaveAttribute('type', 'password'); expect(secret).toHaveFocus();
+    expect(join).not.toHaveBeenCalled(); expect(screen.queryByLabelText('房间邀请码')).not.toBeInTheDocument();
+    fireEvent.change(secret, { target: { value: ' spaced secret ' } });
+    fireEvent.click(screen.getByRole('button', { name: '确认加入' }));
+    await waitFor(() => expect(join).toHaveBeenCalledWith({ roomId: 'room-1', password: ' spaced secret ' }));
     expect(screen.getByLabelText('当前路径')).toHaveTextContent('/games/rooms/room-1');
+    expect(screen.getByRole('link', { name: /轨道难题 · 3–9 人/ })).toHaveAttribute('href', '/games/rail');
+  });
+
+  it('joins open rooms directly and creates public rooms with optional secrets and a stable retry ID', async () => {
+    const join = vi.spyOn(communityGameRoomsApi, 'join').mockResolvedValue(room());
+    const create = vi.spyOn(communityGameRoomsApi, 'create').mockRejectedValueOnce(new Error('网络波动')).mockResolvedValue(room());
+    vi.mocked(communityGameRoomsApi.list).mockResolvedValue({ items: [room({ status: 'waiting' })], activeRoom: null });
+    render(<MemoryRouter><CommunityGameRoomsPage /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: '加入 午间协作组' }));
+    await waitFor(() => expect(join).toHaveBeenCalledWith({ roomId: 'room-1' }));
+    fireEvent.change(screen.getByLabelText('房间密码（可选）'), { target: { value: '四字密码' } });
+    fireEvent.click(screen.getByRole('button', { name: '创建房间' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('网络波动');
+    fireEvent.click(screen.getByRole('button', { name: '创建房间' }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+    expect(create.mock.calls[1][0]).toEqual(create.mock.calls[0][0]);
+    expect(create.mock.calls[0][0]).toMatchObject({ password: '四字密码', mode: 'room' });
+    expect(create.mock.calls[0][0].visibility).not.toBe('invite');
+  });
+
+  it('lets the waiting host set and clear a password without displaying any current secret', async () => {
+    vi.mocked(communityGameRoomsApi.get).mockResolvedValue(room({ status: 'waiting', game: null }));
+    const update = vi.spyOn(communityGameRoomsApi, 'setPassword').mockResolvedValueOnce(room({ status: 'waiting', game: null, version: 2, hasPassword: true })).mockResolvedValue(room({ status: 'waiting', game: null, version: 3, hasPassword: false }));
+    render(<MemoryRouter initialEntries={['/games/rooms/room-1']}><Routes><Route path="/games/rooms/:roomId" element={<CommunityGameRoomPage />} /></Routes></MemoryRouter>);
+    const secret = await screen.findByLabelText('新房间密码'); expect(secret).toHaveValue(''); expect(secret).toHaveAttribute('type', 'password');
+    fireEvent.change(secret, { target: { value: '新密码内容' } }); fireEvent.click(screen.getByRole('button', { name: '保存访问设置' }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith('room-1', { password: '新密码内容', expectedVersion: 1 }));
+    await waitFor(() => expect(secret).toHaveValue(''));
+    fireEvent.click(screen.getByRole('button', { name: '保存访问设置' }));
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith('room-1', { password: '', expectedVersion: 2 }));
+    expect(screen.queryByRole('button', { name: '复制邀请码' })).not.toBeInTheDocument();
+  });
+
+  it('does not show password management to a guest member or after a game starts', async () => {
+    vi.mocked(communityGameRoomsApi.get).mockResolvedValue(room({ status: 'waiting', hasPassword: true, game: null, me: { ...room().me, isHost: false } }));
+    const mounted = render(<MemoryRouter initialEntries={['/games/rooms/room-1']}><Routes><Route path="/games/rooms/:roomId" element={<CommunityGameRoomPage />} /></Routes></MemoryRouter>);
+    await screen.findByText('房间访问'); expect(screen.queryByLabelText('新房间密码')).not.toBeInTheDocument(); mounted.unmount();
+    vi.mocked(communityGameRoomsApi.get).mockResolvedValue(room());
+    render(<MemoryRouter initialEntries={['/games/rooms/room-1']}><Routes><Route path="/games/rooms/:roomId" element={<CommunityGameRoomPage />} /></Routes></MemoryRouter>);
+    await screen.findByText('房间访问'); expect(screen.queryByLabelText('新房间密码')).not.toBeInTheDocument();
   });
 
   it('keeps an active room accessible and prevents accidentally creating a second one', async () => {
@@ -264,7 +307,7 @@ describe('community game workspace', () => {
     expect(await screen.findByText('1,280 办公币')).toBeInTheDocument();
     expect(screen.getByText(/余额榜只展示积累，不额外发奖/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: '小游戏每日榜' }));
-    expect(screen.getAllByRole('link', { name: /查看.*日榜/ })).toHaveLength(6);
+    expect(screen.getAllByRole('link', { name: /查看.*日榜/ }).filter((link) => link.getAttribute('href')?.startsWith('/games/leaderboards/'))).toHaveLength(6);
     expect(screen.getByRole('link', { name: '查看谁是卧底日榜 →' })).toHaveAttribute('href', '/games/leaderboards/undercover');
   });
 

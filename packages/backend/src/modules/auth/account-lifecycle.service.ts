@@ -39,6 +39,7 @@ import { Friendship } from '../../database/entities/friendship.entity';
 import { OutboxEvent } from '../../database/entities/outbox-event.entity';
 import { PasswordResetToken } from '../../database/entities/password-reset-token.entity';
 import { PlayerProfile } from '../../database/entities/player-profile.entity';
+import { RailChatMessageRecord, RailDailyAward, RailDailyScore, RailPlayerStats, RailRoom, RailRoomMember } from '../../database/entities/rail-room.entity';
 import { PostBookmark } from '../../database/entities/post-bookmark.entity';
 import { PostFollow } from '../../database/entities/post-follow.entity';
 import { PostUsefulReaction } from '../../database/entities/post-useful-reaction.entity';
@@ -577,6 +578,7 @@ export class AccountLifecycleService
           { grantedByUserId: user.id },
           { grantedByUserId: null },
         );
+        await this.anonymizeRail(manager, user, now);
         await manager
           .getRepository(FriendRequest)
           .createQueryBuilder()
@@ -720,6 +722,39 @@ export class AccountLifecycleService
         nextState: { accountStatus: 'deleted' },
       });
     });
+  }
+
+  private async anonymizeRail(manager: EntityManager, user: User, now: Date): Promise<void> {
+    // Soft account deletion does not trigger ON DELETE CASCADE. Scrub this module explicitly.
+    const memberships = await manager.getRepository(RailRoomMember).findBy({ userId: user.id });
+    for (const membership of memberships.sort((a, b) => a.roomId.localeCompare(b.roomId))) {
+      const room = await manager.getRepository(RailRoom).createQueryBuilder('room').addSelect('room.engineState')
+        .where('room.id = :id', { id: membership.roomId }).setLock('pessimistic_write').getOne();
+      if (!room) continue;
+      if (room.engineState && Array.isArray(room.engineState.players)) {
+        for (const value of room.engineState.players) {
+          if (value && typeof value === 'object' && value.id === user.publicId) {
+            value.displayName = '已注销同事'; value.left = true; value.missedRequired = true;
+          }
+        }
+      }
+      await manager.getRepository(RailRoomMember).update({ roomId: room.id, userId: user.id }, { active: false, ready: false, leftAt: membership.leftAt ?? now });
+      if (room.hostUserId === user.id) {
+        const others = await manager.getRepository(RailRoomMember).find({ where: { roomId: room.id, role: 'participant', active: true }, relations: ['user'], order: { joinedAt: 'ASC', userId: 'ASC' } });
+        room.hostUserId = others.find((member) => member.user.accountStatus === 'active')?.userId ?? null;
+        if (!room.hostUserId && ['waiting', 'running'].includes(room.status)) {
+          room.status = 'closed'; room.finishedAt = now;
+          await manager.getRepository(RailRoomMember).update({ roomId: room.id, active: true }, { active: false });
+        }
+      }
+      if (room.creatorId === user.id) { room.creatorId = null; room.title = '轨道协作组'; }
+      room.version += 1;
+      await manager.getRepository(RailRoom).save(room);
+    }
+    await manager.getRepository(RailChatMessageRecord).update({ authorId: user.id }, { body: '', status: 'withdrawn', withdrawnAt: now });
+    await manager.getRepository(RailPlayerStats).delete({ userId: user.id });
+    await manager.getRepository(RailDailyScore).delete({ userId: user.id });
+    await manager.getRepository(RailDailyAward).update({ winnerUserId: user.id }, { winnerUserId: null });
   }
 
   private async recordDeletionFailure(

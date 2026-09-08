@@ -4,3 +4,5 @@ export * from './development';
 export * from './arcade-game-state';
 export * from './game-rooms';
 export * from './news-trending';
+export * from './rail-game';
+export * from './rail-rooms';

@@ -113,5 +113,17 @@ export function usePlayRoom(roomId: string) {
     finally { if (isCurrent(sessionKey)) setPending(false); }
   }, [accept, isCurrent, pending, roomId, sessionKey]);
 
-  return { room: snapshot?.key === sessionKey ? snapshot.room : null, loading, error: error ?? readError, pending, uncertain: Boolean(uncertain), action, retryAction, change };
+  const setPassword = useCallback(async (password: string): Promise<boolean> => {
+    if (pending || !isCurrent(sessionKey) || !roomRef.current) return false;
+    const expectedVersion = roomRef.current.version;
+    setPending(true); setError(null);
+    try {
+      const result = await communityGameRoomsApi.setPassword(roomId, { password, expectedVersion });
+      if (!isCurrent(sessionKey)) return false;
+      accept(result, sessionKey); return true;
+    } catch (reason) { if (isCurrent(sessionKey)) setError(communityGameErrorMessage(reason)); return false; }
+    finally { if (isCurrent(sessionKey)) setPending(false); }
+  }, [accept, isCurrent, pending, roomId, sessionKey]);
+
+  return { room: snapshot?.key === sessionKey ? snapshot.room : null, loading, error: error ?? readError, pending, uncertain: Boolean(uncertain), action, retryAction, change, setPassword };
 }

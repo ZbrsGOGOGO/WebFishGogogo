@@ -19,6 +19,7 @@ import { FriendEncouragement } from '../../database/entities/friend-encouragemen
 import { FriendRequest } from '../../database/entities/friend-request.entity';
 import { Friendship } from '../../database/entities/friendship.entity';
 import { PlayerProfile } from '../../database/entities/player-profile.entity';
+import { RailChatMessageRecord, RailDailyAward, RailDailyScore, RailPlayerStats, RailRoom, RailRoomMember } from '../../database/entities/rail-room.entity';
 import { User } from '../../database/entities/user.entity';
 import { UserBlock } from '../../database/entities/user-block.entity';
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
@@ -250,6 +251,34 @@ describe('AccountLifecycleService', () => {
     expect(await members.findOneBy({ userId: peer.id })).toMatchObject({ grantedByUserId: null });
     expect(await dataSource.getRepository(User).findOneByOrFail({ id: user.id }))
       .toMatchObject({ username: null, usernameNormalized: null });
+  });
+
+  it('scrubs rail snapshots and chat without exposing a password room or erasing another member', async () => {
+    const user = await seedUser(dataSource, 'rail-delete@example.com', 'Private Rail Name');
+    const peer = await seedUser(dataSource, 'rail-peer@example.com', 'Remaining Peer');
+    const session = await seedSession(dataSource, user.id, '8');
+    const room = await dataSource.getRepository(RailRoom).save(dataSource.getRepository(RailRoom).create({ creatorId: user.id, hostUserId: user.id, clientRequestId: randomUUID(), requestHash: 'a'.repeat(64), mode: 'room', title: 'Private Rail Name 的房间', status: 'running', passwordHash: 'opaque-test-password-hash', maxPlayers: 3, botCount: 1, version: 1, rankingEligible: false, latestChatSequence: 2, createdAt: new Date(), startedAt: new Date(), expiresAt: new Date(Date.now() + 3600000), finishedAt: null, leaderboardDate: null, engineState: { players: [{ id: user.publicId, displayName: user.displayName, left: false, missedRequired: false }, { id: peer.publicId, displayName: peer.displayName, left: false, missedRequired: false }] } }));
+    for (const [index, person] of [user, peer].entries()) {
+      await dataSource.getRepository(RailRoomMember).insert({ roomId: room.id, userId: person.id, role: 'participant', ready: true, active: true, lastSequence: 0, joinedAt: new Date(), leftAt: null });
+      await dataSource.getRepository(RailChatMessageRecord).insert({ roomId: room.id, authorId: person.id, clientMessageId: randomUUID(), requestHash: 'a'.repeat(64), sequence: index + 1, channel: 'player', body: person.id === user.id ? 'my private rail message' : 'keep peer message', status: 'visible', createdAt: new Date(), withdrawnAt: null });
+    }
+    await dataSource.getRepository(RailPlayerStats).insert({ userId: user.id, completedGames: 1, survived: 1, eligibleRounds: 2, demonTotal: 3, demonMvpCount: 0, rankedGames: 1 });
+    await dataSource.getRepository(RailDailyScore).insert({ userId: user.id, serviceDate: '2026-09-07', rateBasisPoints: 5000, survived: 1, eligibleRounds: 2, demonTotal: 3, roomId: room.id, achievedAt: new Date() });
+    await dataSource.getRepository(RailDailyAward).insert({ serviceDate: '2026-09-07', winnerUserId: user.id, rateBasisPoints: 5000, coins: 100, awardedAt: new Date() });
+    await service.requestDeletion(user.id, session.id, 'rail-delete-idempotency-key');
+    const deletion = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
+    expect(await service.processDueDeletions(10, new Date(deletion.scheduledFor.getTime() + 1000))).toBe(1);
+    const stored = await dataSource.getRepository(RailRoom).createQueryBuilder('room').addSelect(['room.engineState', 'room.passwordHash']).where('room.id = :id', { id: room.id }).getOneOrFail();
+    expect(stored).toMatchObject({ creatorId: null, hostUserId: peer.id, title: '轨道协作组', passwordHash: 'opaque-test-password-hash' });
+    expect(JSON.stringify(stored.engineState)).not.toContain('Private Rail Name');
+    expect(stored.engineState?.players).toEqual([{ id: user.publicId, displayName: '已注销同事', left: true, missedRequired: true }, { id: peer.publicId, displayName: peer.displayName, left: false, missedRequired: false }]);
+    expect(await dataSource.getRepository(RailRoomMember).findOneBy({ roomId: room.id, userId: user.id })).toMatchObject({ active: false, ready: false, leftAt: expect.any(Date) });
+    expect(await dataSource.getRepository(RailRoomMember).findOneBy({ roomId: room.id, userId: peer.id })).toMatchObject({ active: true, leftAt: null });
+    expect(await dataSource.getRepository(RailChatMessageRecord).findOneBy({ authorId: user.id })).toMatchObject({ body: '', status: 'withdrawn' });
+    expect(await dataSource.getRepository(RailChatMessageRecord).findOneBy({ authorId: peer.id })).toMatchObject({ body: 'keep peer message', status: 'visible' });
+    expect(await dataSource.getRepository(RailPlayerStats).count({ where: { userId: user.id } })).toBe(0);
+    expect(await dataSource.getRepository(RailDailyScore).count({ where: { userId: user.id } })).toBe(0);
+    expect(await dataSource.getRepository(RailDailyAward).findOneBy({ serviceDate: '2026-09-07' })).toMatchObject({ winnerUserId: null, coins: 100 });
   });
 
   it('encrypts appeal reasons and requires an active admin for an idempotent decision', async () => {

@@ -1,4 +1,4 @@
-import type { ArcadeGameKey, PlayActionInput, PlayCatalog, PlayCreateInput, PlayJoinInput, PlayLeaderboard, PlayOfficeCoinLeaderboard, PlayRoomList, PlayRoomView } from '@stealth-reader/shared';
+import type { ArcadeGameKey, PlayActionInput, PlayCatalog, PlayCreateInput, PlayJoinInput, PlayLeaderboard, PlayOfficeCoinLeaderboard, PlayPasswordInput, PlayRoomList, PlayRoomView } from '@stealth-reader/shared';
 
 import { CommunityApiError, communityHttp } from './community-http';
 
@@ -13,6 +13,7 @@ export const communityGameRoomsApi = {
   join: (input: PlayJoinInput): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/join`, input, writeOptions),
   get: (roomId: string, signal?: AbortSignal): Promise<PlayRoomView> => communityHttp.get(`${ROOT}/rooms/${segment(roomId)}`, { signal }),
   ready: (roomId: string, ready: boolean): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/ready`, { ready }, writeOptions),
+  setPassword: (roomId: string, input: PlayPasswordInput): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/password`, input, writeOptions),
   start: (roomId: string): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/start`, {}, writeOptions),
   action: (roomId: string, input: PlayActionInput): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/actions`, input, writeOptions),
   leave: (roomId: string): Promise<PlayRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/leave`, {}, writeOptions),
@@ -27,6 +28,7 @@ export function createPlayRequestId(): string {
 const PLAY_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PLAY_ACTIVE_ACCOUNT_REQUIRED: '登录状态已变化，请重新登录有效账号。',
   PLAY_ACTIVE_ROOM: '你还有一个进行中的赛局，请先返回当前房间，或退出后再开新局。',
+  PLAY_ACTIVE_RAIL_ROOM: '你还有一局进行中的轨道难题，请先返回或退出该赛局。',
   PLAY_CREATE_LIMIT: '24 小时最多新建 60 局，今天已经玩了不少，稍后再来吧。',
   PLAY_SERVER_BUSY: '当前游戏房间较多，请稍后再试。',
   PLAY_ROOM_NOT_FOUND: '房间不存在，或你当前无法访问这个房间。',
@@ -34,9 +36,12 @@ const PLAY_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   PLAY_ROOM_NOT_RUNNING: '本局尚未开始或已经结束，不能继续操作。',
   PLAY_ROOM_LEFT: '你已退出这个房间，不能重新加入，请参加下一局。',
   PLAY_ROOM_FULL: '房间人数已满，请选择其他房间。',
-  PLAY_HOST_REQUIRED: '只有房主可以开始这场游戏。',
+  PLAY_HOST_REQUIRED: '只有当前房主可以执行这项房间操作。',
   PLAY_PLAYERS_NOT_READY: '人数还不够，或有成员尚未准备。',
-  PLAY_JOIN_INVALID: '请输入房主提供的 12 位邀请码。',
+  PLAY_JOIN_INVALID: '请选择有效房间，并按提示输入房间密码。',
+  ROOM_PASSWORD_INVALID: '房间密码须为 4–64 个字符，不含控制字符；留空表示无需密码。',
+  PLAY_ROOM_ACCESS_DENIED: '无法加入，请核对房间密码后重试。',
+  PLAY_VERSION_CONFLICT: '房间信息刚刚发生变化，请查看最新状态后再修改密码。',
   PLAY_TITLE_INVALID: '房间名称请使用 1～40 个正常文字字符。',
   PLAY_CAPACITY_INVALID: '这个游戏的房间人数设置不符合规则。',
   PLAY_DATE_INVALID: '请选择有效的今天或历史日期。',

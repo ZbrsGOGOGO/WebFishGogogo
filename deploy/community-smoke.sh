@@ -352,6 +352,16 @@ request GET /api/v1/games/play/leaderboards/office-coins 401 "$SMOKE_TMP/play-co
 request GET /api/v1/games/play/rooms 401 "$SMOKE_TMP/play-rooms-guest.json" "$SMOKE_TMP/play-rooms-guest.headers"
 pass "authoritative game catalog, daily prize contract and private balances/rooms"
 
+request GET /api/v1/games/rail/catalog 200 "$SMOKE_TMP/rail-catalog.json" "$SMOKE_TMP/rail-catalog.headers"
+grep -Eq '"gameKey"[[:space:]]*:[[:space:]]*"rail"' "$SMOKE_TMP/rail-catalog.json" || fail 'rail catalog game contract'
+require_header "$SMOKE_TMP/rail-catalog.headers" '^cache-control:[[:space:]]*no-store' 'rail API no-store'
+request GET /api/v1/games/rail/leaderboard 200 "$SMOKE_TMP/rail-daily.json" "$SMOKE_TMP/rail-daily.headers"
+grep -Eq '"dailyChampionCoins"[[:space:]]*:[[:space:]]*100' "$SMOKE_TMP/rail-daily.json" || fail 'rail daily prize contract'
+request GET /api/v1/games/rail/rooms 401 "$SMOKE_TMP/rail-rooms-guest.json" "$SMOKE_TMP/rail-rooms-guest.headers"
+request GET /api/v1/games/rail/me 401 "$SMOKE_TMP/rail-me-guest.json" "$SMOKE_TMP/rail-me-guest.headers"
+request GET /api/v1/games/rail-admin 404 "$SMOKE_TMP/rail-adjacent.json" "$SMOKE_TMP/rail-adjacent.headers"
+pass "rail catalog, separate daily prize and authenticated membership boundaries"
+
 # Cookie-creating endpoints must reject the request before parsing credentials. Empty bodies
 # ensure this contract check cannot log in, consume a Beta code or send verification mail.
 for auth_path_and_label in \

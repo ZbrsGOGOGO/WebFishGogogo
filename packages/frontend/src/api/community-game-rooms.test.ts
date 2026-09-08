@@ -33,11 +33,19 @@ describe('community game rooms REST contract', () => {
     await expect(communityGameRoomsApi.ready('room-1', true)).rejects.toMatchObject({ status: 401 });
     expect(fetcher).toHaveBeenCalledOnce();
   });
-  it('separates public-room joining from invitation-code joining', async () => {
+  it('joins listed rooms with optional passwords only in authenticated POST bodies', async () => {
     const fetcher = vi.fn().mockImplementation(() => Promise.resolve(json({ id: 'room-1' }))); vi.stubGlobal('fetch', fetcher);
-    await communityGameRoomsApi.join({ roomId: 'room-1' }); await communityGameRoomsApi.join({ code: 'ABCDEFGH' });
+    await communityGameRoomsApi.join({ roomId: 'room-1' }); await communityGameRoomsApi.join({ roomId: 'room-2', password: '秘密密码' });
     expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ roomId: 'room-1' });
-    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ code: 'ABCDEFGH' });
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual({ roomId: 'room-2', password: '秘密密码' });
+    expect(fetcher.mock.calls[1][0]).not.toContain('秘密密码');
+    expect(new Headers(fetcher.mock.calls[1][1].headers).get('Authorization')).toBe('Bearer memory-game-token');
+  });
+  it('sets or clears a room password with compare-and-swap version and no automatic 401 replay', async () => {
+    const fetcher = vi.fn().mockResolvedValue(json({ code: 'INVALID_SESSION' }, 401)); vi.stubGlobal('fetch', fetcher);
+    await expect(communityGameRoomsApi.setPassword('room/1', { password: '', expectedVersion: 8 })).rejects.toMatchObject({ status: 401 });
+    expect(fetcher).toHaveBeenCalledOnce(); expect(fetcher.mock.calls[0][0]).toMatch(/\/rooms\/room%2F1\/password$/);
+    expect(JSON.parse(fetcher.mock.calls[0][1].body)).toEqual({ password: '', expectedVersion: 8 });
   });
   it('loads a per-game dated board without mixing games or modes', async () => {
     const fetcher = vi.fn().mockResolvedValue(json({ items: [] })); vi.stubGlobal('fetch', fetcher);
