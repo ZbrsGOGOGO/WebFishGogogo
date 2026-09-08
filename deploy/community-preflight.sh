@@ -546,7 +546,7 @@ grep -Fq 'PLAY_TIMESTAMP=1700000000027' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'TRENDING_TIMESTAMP=1700000000028' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000028' \
+grep -Fq 'LATEST_TIMESTAMP=1700000000029' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -573,8 +573,10 @@ grep -Fq 'zhesi_arcade_constraint_count' \
 grep -Fq 'assert_zhesi_arcade_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'assert_development_reverted' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'assert_rail_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014 through development workspace 0026"
+  fail "migration rehearsal must verify chat 0014 through rail rooms/passwords 0029"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||

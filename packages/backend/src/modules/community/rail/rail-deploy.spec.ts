@@ -27,5 +27,9 @@ describe('rail release boundaries', () => {
     expect(source('deploy/community-migration-rehearsal.sh')).toContain('LATEST_TIMESTAMP=1700000000029');
     expect(source('deploy/community-migration-rehearsal.sh')).toContain('assert_rail_reverted rehearsal_clean');
     expect(source('deploy/community-preflight.sh')).toContain('AddRailRoomsAndPasswords1700000000029');
+    const target = source('deploy/community-migration-rehearsal.sh').match(/^LATEST_TIMESTAMP=\d+$/m)?.[0];
+    expect(target).toBeDefined();
+    expect(source('deploy/community-preflight.sh')).toContain(`grep -Fq '${target}'`);
+    expect(source('deploy/community-preflight.sh')).toContain("grep -Fq 'assert_rail_reverted'");
   });
 });
