@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 
-import type { DataSource } from 'typeorm';
+import { Repository, type DataSource, type FindOneOptions, type ObjectLiteral } from 'typeorm';
 
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
 import { SocialVerificationCallbackReceipt } from '../../database/entities/social-verification-callback-receipt.entity';
@@ -171,6 +171,55 @@ describe('SocialVerificationService', () => {
         legalName: 'must-not-enter-backend',
       }),
     ).toThrow();
+  });
+
+  it('locks account before capability and rejects a callback after account deletion starts', async () => {
+    const providerReference = 'provider-lock-order-reference';
+    jest.spyOn(provider, 'createSession').mockResolvedValue({
+      provider: 'local-test', providerReference,
+      launchUrl: 'https://verification.local.test/start/lock-order',
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+    });
+    const created = await service.create(user.id);
+    const body = { sessionId: created.sessionId, providerReference, status: 'verified', occurredAt: new Date().toISOString() } as const;
+    const raw = Buffer.from(JSON.stringify(body));
+    const locks: string[] = [];
+    const original = Repository.prototype.findOne;
+    jest.spyOn(Repository.prototype, 'findOne').mockImplementation(async function (
+      this: Repository<ObjectLiteral>, options: FindOneOptions<ObjectLiteral>,
+    ) {
+      if (options.lock && ['User', 'SocialVerificationSession'].includes(this.metadata.name)) locks.push(this.metadata.name);
+      return original.call(this, options);
+    });
+    await service.callback(parseSocialVerificationCallback(body), signedHeaders(raw, 'lock-event', 'lock-nonce-0000001'), raw);
+    expect(locks).toEqual(['User', 'SocialVerificationSession']);
+    await dataSource.getRepository(User).update({ id: user.id }, { accountStatus: 'deleting' });
+    await expect(service.callback(parseSocialVerificationCallback(body), signedHeaders(raw, 'delete-event', 'delete-nonce-0001'), raw))
+      .rejects.toMatchObject({ response: { code: 'VERIFICATION_CALLBACK_INVALID' } });
+    expect(await dataSource.getRepository(SocialVerificationCallbackReceipt).count()).toBe(1);
+  });
+
+  it('uses the same account-first order for expiry and provider-failure cleanup', async () => {
+    jest.spyOn(provider, 'createSession').mockResolvedValueOnce({
+      provider: 'local-test', providerReference: 'expired-provider-reference',
+      launchUrl: 'https://verification.local.test/start/expiry',
+      expiresAt: new Date(Date.now() - 1),
+    }).mockRejectedValueOnce(new Error('synthetic-provider-failure'));
+    await service.create(user.id);
+    const locks: string[] = [];
+    const original = Repository.prototype.findOne;
+    jest.spyOn(Repository.prototype, 'findOne').mockImplementation(async function (
+      this: Repository<ObjectLiteral>, options: FindOneOptions<ObjectLiteral>,
+    ) {
+      if (options.lock && ['User', 'SocialVerificationSession'].includes(this.metadata.name)) locks.push(this.metadata.name);
+      return original.call(this, options);
+    });
+    await expect(service.get(user.id)).resolves.toMatchObject({ status: 'expired' });
+    expect(locks).toEqual(['User', 'SocialVerificationSession']);
+    locks.length = 0;
+    await expect(service.create(user.id)).rejects.toThrow('synthetic-provider-failure');
+    expect(locks).toEqual(['User', 'SocialVerificationSession', 'User', 'SocialVerificationSession']);
+    expect((await dataSource.getRepository(User).findOneByOrFail({ id: user.id })).socialVerificationStatus).toBe('rejected');
   });
 
   it('fails closed when the feature or explicit provider adapter is absent', async () => {

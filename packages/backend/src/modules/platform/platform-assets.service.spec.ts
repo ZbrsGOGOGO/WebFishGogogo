@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import {
   EntityManager,
   EntityTarget,
@@ -162,6 +162,7 @@ function fixture(): {
   user.id = 'user-1';
   user.email = 'user@example.com';
   user.passwordHash = 'hash';
+  user.accountStatus = 'active';
   user.displayName = null;
   user.createdAt = new Date();
   user.updatedAt = new Date();
@@ -193,6 +194,44 @@ function context(
 }
 
 describe('PlatformAssetsService', () => {
+  it.each(['suspended', 'deleting', 'deleted'] as const)('rejects %s before initializing or changing assets', async (accountStatus) => {
+    const { assets, manager, store, userId } = fixture();
+    store.all(User)[0].accountStatus = accountStatus;
+    for (const work of [
+      () => assets.ensurePlatformState(manager, userId),
+      () => assets.creditWallet(manager, userId, 'office_coin', 50, context('inactive-credit')),
+      () => assets.creditInventory(manager, userId, 'seed_wheat', 1, context('inactive-item')),
+      () => assets.readInventoryQuantities(manager, userId, ['seed_wheat']),
+      () => assets.addExperience(manager, userId, 10),
+      () => assets.changeEnergy(manager, userId, -1),
+    ]) await expect(work()).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(store.all(WalletLedger)).toHaveLength(0);
+    expect(store.all(WalletBalance)).toHaveLength(0);
+    expect(store.all(InventoryStack)).toHaveLength(0);
+    expect(store.all(PlayerProgression)).toHaveLength(0);
+  });
+
+  it.each(['sourceType', 'sourceId', 'reason'] as const)('rejects same-amount wallet replay with changed %s', async (field) => {
+    const { assets, manager, store, userId } = fixture();
+    await assets.creditWallet(manager, userId, 'office_coin', 100, context('funds'));
+    const first = { sourceType: 'farm_tool', sourceId: 'watering_can', reason: 'farm-tool-upgrade-1', idempotencyKey: 'shared:office-coin' };
+    await assets.debitWallet(manager, userId, 'office_coin', 20, first);
+    await expect(assets.debitWallet(manager, userId, 'office_coin', 20, { ...first, [field]: 'different-operation' }))
+      .rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(store.all(WalletLedger)).toHaveLength(2);
+    expect(store.all(WalletBalance)[0].balance).toBe('80');
+  });
+
+  it.each(['sourceType', 'sourceId', 'reason'] as const)('rejects same-quantity inventory replay with changed %s', async (field) => {
+    const { assets, manager, store, userId } = fixture();
+    const first = context('inventory-context-collision');
+    await assets.creditInventory(manager, userId, 'seed_wheat', 2, first);
+    await expect(assets.creditInventory(manager, userId, 'seed_wheat', 2, { ...first, [field]: 'different-operation' }))
+      .rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_KEY_REUSED' } });
+    expect(store.all(InventoryLedger)).toHaveLength(1);
+    expect(store.all(InventoryStack)[0].quantity).toBe('2');
+  });
+
   it('credits/debits wallet with immutable, idempotent ledger entries', async () => {
     const { assets, manager, store, userId } = fixture();
 

@@ -87,7 +87,7 @@ function crc32(buffer: Buffer): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function validDocx(documentXml: string, extra: ZipEntryInput[] = []): Buffer {
+function validDocx(documentXml: string, extra: ZipEntryInput[] = [], compress = true): Buffer {
   return createZip([
     {
       name: '[Content_Types].xml',
@@ -103,7 +103,7 @@ function validDocx(documentXml: string, extra: ZipEntryInput[] = []): Buffer {
       data:
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
     },
-    { name: 'word/document.xml', data: documentXml },
+    { name: 'word/document.xml', data: documentXml, compress },
     ...extra,
   ]);
 }
@@ -263,6 +263,22 @@ describe('inspectDevelopmentAttachment', () => {
     ).rejects.toMatchObject({
       response: { code: 'DEVELOPMENT_ATTACHMENT_INVALID' },
     });
+  });
+
+  it('rejects unclosed/nested DOCX text nodes without repeated suffix scanning', async () => {
+    // Stored entry deliberately bypasses the compression-ratio guard: this is
+    // malformed XML, not a ZIP bomb. The old parser accepted the 80KiB case.
+    const malformed = '<w:document>' + '<w:t>'.repeat(16_000) + '</w:document>';
+    await expect(inspectDevelopmentAttachment(upload('unclosed.docx', validDocx(malformed, [], false))))
+      .rejects.toMatchObject({ response: { code: 'DEVELOPMENT_ATTACHMENT_INVALID', message: expect.stringContaining('文本节点') } });
+    await expect(inspectDevelopmentAttachment(upload('truncated.docx', validDocx('<w:document><w:t>unfinished', [], false))))
+      .rejects.toMatchObject({ response: { code: 'DEVELOPMENT_ATTACHMENT_INVALID', message: expect.stringContaining('未闭合') } });
+  });
+
+  it('preserves escaped plain text, attributes, self-closing tabs and line breaks', async () => {
+    const xml = '<w:document><w:p><w:t xml:space="preserve"> a &lt; b </w:t><w:tab/><w:t>b</w:t><w:br/><w:t>c</w:t><w:t/></w:p></w:document>';
+    const result = await inspectDevelopmentAttachment(upload('formatted.docx', validDocx(xml)));
+    expect(result.excerpt).toBe('a < b \tb\nc');
   });
 
   it('streams ZIP entries but returns only a safe plain-text directory listing', async () => {

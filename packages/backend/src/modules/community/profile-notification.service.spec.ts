@@ -183,6 +183,41 @@ describe('Public profile privacy and persistent notifications', () => {
     delete process.env.FEATURE_COMMUNITY_WRITES_ENABLED;
   });
 
+  it.each([undefined, 'farm'] as const)(
+    'marks only delivered, unexpired, unblocked notifications read for category %s',
+    async (category) => {
+      const recipient = await activeUser('scheduled@example.com', 'Recipient');
+      const actor = await activeUser('scheduled-blocked@example.com', 'Blocked actor');
+      const now = Date.now();
+      const rows = await dataSource.transaction(async (manager) => {
+        const create = (key: string, extra: { availableAt?: Date; expiresAt?: Date; actorUserId?: string } = {}) =>
+          notifications.create(manager, {
+            userId: recipient.id, category: 'farm', eventType: 'farm.ready',
+            title: key, summary: 'Synthetic scheduled notification', dedupeKey: key,
+            availableAt: new Date(now - 60_000), ...extra,
+          });
+        return {
+          delivered: await create('delivered'),
+          future: await create('future', { availableAt: new Date(now + 3_600_000) }),
+          expired: await create('expired', { expiresAt: new Date(now - 1_000) }),
+          blocked: await create('blocked', { actorUserId: actor.id }),
+        };
+      });
+      await dataSource.getRepository(UserBlock).save({ blockerId: actor.id, blockedId: recipient.id, reason: null });
+      expect((await notifications.list(recipient.id)).items.map((item) => item.id)).toEqual([rows.delivered.id]);
+
+      await notifications.markAllRead(recipient.id, category);
+
+      const repo = dataSource.getRepository(CommunityNotification);
+      expect((await repo.findOneByOrFail({ id: rows.delivered.id })).readAt).toBeInstanceOf(Date);
+      for (const row of [rows.future, rows.expired, rows.blocked]) {
+        expect((await repo.findOneByOrFail({ id: row.id })).readAt).toBeNull();
+      }
+      await repo.update(rows.future.id, { availableAt: new Date(now - 1_000) });
+      expect((await notifications.list(recipient.id)).unreadCount).toBe(1);
+    },
+  );
+
   async function activeUser(email: string, displayName: string): Promise<User> {
     const user = await dataSource.getRepository(User).save(
       dataSource.getRepository(User).create({

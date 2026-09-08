@@ -209,6 +209,7 @@ async function createUser(
     dataSource.getRepository(User).create({
       email,
       passwordHash: 'not-used-in-this-test',
+      accountStatus: 'active',
       displayName: email.split('@')[0],
     }),
   );

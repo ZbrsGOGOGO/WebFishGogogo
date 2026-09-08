@@ -5,13 +5,14 @@ import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Input } from '../../components/ui';
 import { CommunityAuthShell } from './CommunityAuthShell';
+import { loginDestination } from './login-destination';
 import {
   normalizeCommunityUsername,
   validateCommunityUsername,
 } from './validation';
 
 interface LoginLocationState {
-  from?: { pathname?: string };
+  from?: { pathname?: string; search?: string; hash?: string };
   passwordChanged?: boolean;
 }
 
@@ -46,9 +47,9 @@ export function CommunityLoginPage(): JSX.Element {
         password,
       });
       if (phase === 'active') {
-        const from = (location.state as LoginLocationState | null)?.from?.pathname;
+        const from = loginDestination((location.state as LoginLocationState | null)?.from);
         const currentUser = useCommunityAuthStore.getState().user;
-        navigate(currentUser?.onboardingCompleted ? (from ?? '/') : '/onboarding', {
+        navigate(currentUser?.onboardingCompleted ? from : '/onboarding', {
           replace: true,
         });
       } else {

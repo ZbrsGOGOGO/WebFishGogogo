@@ -144,6 +144,7 @@ async function createUser(
   const user = await dataSource.getRepository(User).save(
     dataSource.getRepository(User).create({
       email,
+      accountStatus: 'active',
       passwordHash: 'not-used-in-this-test',
       displayName: email.split('@')[0],
     }),

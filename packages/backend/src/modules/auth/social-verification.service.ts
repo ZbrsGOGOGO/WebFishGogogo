@@ -220,8 +220,21 @@ export class SocialVerificationService {
         }
 
         const sessions = manager.getRepository(SocialVerificationSession);
+        // Discover ownership without holding a capability lock, then use the
+        // same account → capability order as create and account deletion.
+        const snapshot = await sessions.findOne({ where: { id: input.sessionId } });
+        if (!snapshot) {
+          throw new BadRequestException({ code: 'VERIFICATION_CALLBACK_INVALID' });
+        }
+        const user = await manager.getRepository(User).findOne({
+          where: { id: snapshot.userId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!user || user.accountStatus !== 'active') {
+          throw new BadRequestException({ code: 'VERIFICATION_CALLBACK_INVALID' });
+        }
         const session = await sessions.findOne({
-          where: { id: input.sessionId },
+          where: { id: input.sessionId, userId: user.id },
           lock: { mode: 'pessimistic_write' },
         });
         if (
@@ -237,13 +250,6 @@ export class SocialVerificationService {
         ) {
           throw new BadRequestException({ code: 'VERIFICATION_CALLBACK_INVALID' });
         }
-        const user = await manager.getRepository(User).findOne({
-          where: { id: session.userId },
-          lock: { mode: 'pessimistic_write' },
-        });
-        if (!user) {
-          throw new BadRequestException({ code: 'VERIFICATION_CALLBACK_INVALID' });
-        }
         await receiptRepository.save(
           receiptRepository.create({
             sessionId: session.id,
@@ -257,7 +263,7 @@ export class SocialVerificationService {
         if (session.status === 'pending') {
           if (
             session.expiresAt.getTime() < input.occurredAt.getTime() ||
-            now.getTime() > session.expiresAt.getTime() + 5 * 60_000
+            Date.now() > session.expiresAt.getTime() + 5 * 60_000
           ) {
             session.status = 'expired';
             session.failureCode = 'SESSION_EXPIRED';
@@ -309,8 +315,14 @@ export class SocialVerificationService {
   ): Promise<SocialVerificationView> {
     return this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(SocialVerificationSession);
+      const snapshot = await repository.findOne({ where: { id: sessionId } });
+      if (!snapshot) return { status: 'not_started' };
+      const user = await manager.getRepository(User).findOne({
+        where: { id: snapshot.userId }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!user || user.accountStatus !== 'active') return { status: 'not_started' };
       const session = await repository.findOne({
-        where: { id: sessionId },
+        where: { id: sessionId, userId: user.id },
         lock: { mode: 'pessimistic_write' },
       });
       if (!session) return { status: 'not_started' };
@@ -330,8 +342,14 @@ export class SocialVerificationService {
   private async failProvisioning(sessionId: string, now: Date): Promise<void> {
     await this.dataSource.transaction(async (manager) => {
       const repository = manager.getRepository(SocialVerificationSession);
+      const snapshot = await repository.findOne({ where: { id: sessionId } });
+      if (!snapshot) return;
+      const user = await manager.getRepository(User).findOne({
+        where: { id: snapshot.userId }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!user || user.accountStatus !== 'active') return;
       const session = await repository.findOne({
-        where: { id: sessionId },
+        where: { id: sessionId, userId: user.id },
         lock: { mode: 'pessimistic_write' },
       });
       if (!session || session.status !== 'pending') return;

@@ -12,6 +12,7 @@ import {
   User,
 } from '../../../database/entities';
 import type { ArcadeGameKey } from '../../../database/entities/arcade-score.entity';
+import { assertCommunityWritesEnabled } from '../community-write-gate';
 
 const RUN_TTL_MS: Record<ArcadeGameKey, number> = {
   tetris: 2 * 60 * 60 * 1_000,
@@ -237,11 +238,13 @@ export class ArcadeService {
   constructor(private readonly dataSource: DataSource) {}
 
   async startRun(userId: string, gameKey: ArcadeGameKey) {
+    this.assertWritesEnabled();
     return this.dataSource.transaction(async (manager) => {
       // The account row is the common lock for every run belonging to this
       // user. Without it, two concurrent starts can both expire zero rows and
       // then insert two active runs because there is no partial unique index.
       await this.lockActiveUser(manager, userId);
+      this.assertWritesEnabled();
       await manager
         .createQueryBuilder()
         .update(ArcadeGameRun)
@@ -275,10 +278,12 @@ export class ArcadeService {
   }
 
   async finishRun(userId: string, runId: string, input: FinishRunInput) {
+    this.assertWritesEnabled();
     return this.dataSource.transaction(async (manager) => {
       // A missing best-score row cannot itself be locked. Reusing the account
       // lock serializes first-best creation as well as start/finish ordering.
       const user = await this.lockActiveUser(manager, userId);
+      this.assertWritesEnabled();
       const run = await manager.getRepository(ArcadeGameRun).findOne({
         where: { id: runId, userId },
         lock: { mode: 'pessimistic_write' },
@@ -348,6 +353,12 @@ export class ArcadeService {
         achievedAt: row.achievedAt.toISOString(),
       })),
     };
+  }
+
+  private assertWritesEnabled(): void {
+    // Arcade is also used by the original full application. Only the explicit
+    // community deployment participates in this maintenance/write gate.
+    if (process.env.APP_MODE === 'community') assertCommunityWritesEnabled();
   }
 
   private async lockActiveUser(

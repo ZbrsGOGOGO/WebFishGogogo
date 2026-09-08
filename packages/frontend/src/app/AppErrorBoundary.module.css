@@ -1,0 +1,8 @@
+.page { min-height: 100dvh; display: grid; place-items: center; padding: 24px; color: #253244; background: #f4f6f8; }
+.panel { width: min(100%, 560px); padding: clamp(20px, 5vw, 36px); border: 1px solid #d8e0e8; border-radius: 16px; background: #fff; overflow-wrap: anywhere; }
+.panel h1 { margin: 0 0 16px; font-size: 24px; }
+.panel p { line-height: 1.8; color: #566273; }
+.actions { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-top: 24px; }
+.actions button { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 8px; background: #344d67; color: #fff; font: inherit; cursor: pointer; }
+.actions a { color: #344d67; padding: 10px 0; }
+.actions :focus-visible { outline: 3px solid #8bb7de; outline-offset: 3px; }

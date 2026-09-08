@@ -1,4 +1,4 @@
-import type { DataSource } from 'typeorm';
+import { Repository, type DataSource, type FindOneOptions, type ObjectLiteral } from 'typeorm';
 
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
 import { AuthEmailOutbox } from '../../database/entities/auth-email-outbox.entity';
@@ -131,6 +131,36 @@ describe('PasswordResetService', () => {
       .getRepository(PasswordResetToken)
       .findOneByOrFail({ userId: user.id });
     expect(stored.usedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not consume a reset token that expires while waiting for the account lock', async () => {
+    const user = await seedUser(dataSource, 'reset-lock-expiry@example.com');
+    const session = await seedSession(dataSource, user.id);
+    await service.request(user.email);
+    const token = capturedToken!;
+    const initialTime = Date.now();
+    await dataSource.getRepository(PasswordResetToken).update(
+      { userId: user.id }, { expiresAt: new Date(initialTime + 1_000) },
+    );
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'clearTimeout', 'performance', 'hrtime'] });
+    jest.setSystemTime(initialTime);
+    const original = Repository.prototype.findOne;
+    jest.spyOn(Repository.prototype, 'findOne').mockImplementation(async function (
+      this: Repository<ObjectLiteral>, options: FindOneOptions<ObjectLiteral>,
+    ) {
+      const result = await original.call(this, options);
+      if (this.metadata.name === 'User' && options.lock) jest.setSystemTime(initialTime + 1_001);
+      return result;
+    });
+    try {
+      await expect(service.reset(token, 'Expired-must-not-replace#2026'))
+        .rejects.toMatchObject({ response: { code: 'PASSWORD_RESET_TOKEN_INVALID' } });
+      expect((await dataSource.getRepository(User).findOneByOrFail({ id: user.id })).passwordHash).toBe(user.passwordHash);
+      expect((await dataSource.getRepository(AuthSession).findOneByOrFail({ id: session.id })).revokedAt).toBeNull();
+      expect((await dataSource.getRepository(PasswordResetToken).findOneByOrFail({ userId: user.id })).usedAt).toBeNull();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('fails closed when the release gate is disabled', async () => {

@@ -150,13 +150,24 @@ export class NotificationService {
     userId: string,
     category?: CommunityNotificationCategory,
   ): Promise<void> {
+    const now = new Date();
+    const blocked = await this.blockedUserIds(userId);
     const query = this.dataSource
       .getRepository(CommunityNotification)
       .createQueryBuilder()
       .update(CommunityNotification)
-      .set({ readAt: new Date() })
+      .set({ readAt: now })
       .where('user_id = :userId', { userId })
-      .andWhere('read_at IS NULL');
+      .andWhere('read_at IS NULL')
+      // Scheduled farm reminders are persisted before delivery. Reading the
+      // inbox must not consume notifications the recipient cannot see yet.
+      .andWhere('available_at <= :now', { now })
+      .andWhere('(expires_at IS NULL OR expires_at > :now)', { now });
+    if (blocked.size > 0) {
+      query.andWhere('(actor_user_id IS NULL OR actor_user_id NOT IN (:...blocked))', {
+        blocked: [...blocked],
+      });
+    }
     if (category) query.andWhere('category = :category', { category });
     await query.execute();
   }

@@ -58,6 +58,19 @@ describe('rail workspace', () => {
     fireEvent.change(screen.getByLabelText('加入房间密码'), { target: { value: 'synthetic-lock' } }); fireEvent.click(screen.getByRole('button', { name: '确认旁观' }));
     await waitFor(() => expect(join).toHaveBeenCalledWith({ roomId: 'rail-room-1', role: 'spectator', password: 'synthetic-lock' }));
   });
+  it('allows all 64 Unicode password characters without a 64 UTF-16-unit browser cutoff', async () => {
+    vi.mocked(communityRailApi.list).mockResolvedValue({ items: [room({ hasPassword: true })], activeRoom: null });
+    const join = vi.spyOn(communityRailApi, 'join').mockResolvedValue(room());
+    render(<MemoryRouter><RailLobbyPage /></MemoryRouter>);
+    expect(Number(screen.getByLabelText('房间密码（可选）').getAttribute('maxlength'))).toBeGreaterThanOrEqual(128);
+    fireEvent.click(await screen.findByRole('button', { name: '旁观' }));
+    const input = screen.getByLabelText('加入房间密码');
+    expect(Number(input.getAttribute('maxlength'))).toBeGreaterThanOrEqual(128);
+    const password = '🌱'.repeat(64);
+    fireEvent.change(input, { target: { value: password } });
+    fireEvent.click(screen.getByRole('button', { name: '确认旁观' }));
+    await waitFor(() => expect(join).toHaveBeenCalledWith({ roomId: 'rail-room-1', role: 'spectator', password }));
+  });
   it('sends only a server-issued hand card and current round token', async () => {
     const action = vi.fn().mockResolvedValue(true); render(<RailGameSurface view={game()} onAction={action} />);
     fireEvent.click(screen.getByRole('button', { name: /热心的维修员/ })); fireEvent.click(screen.getByRole('button', { name: '放置善牌' }));

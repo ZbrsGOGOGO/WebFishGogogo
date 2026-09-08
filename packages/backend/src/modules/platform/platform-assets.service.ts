@@ -460,7 +460,7 @@ export class PlatformAssetsService {
       where: { idempotencyKey: context.idempotencyKey },
     });
     if (existing) {
-      this.assertWalletLedgerReplay(existing, balance, delta);
+      this.assertWalletLedgerReplay(existing, balance, delta, context);
       return { applied: false, ledger: existing, balanceEntity: balance };
     }
 
@@ -548,7 +548,7 @@ export class PlatformAssetsService {
       where: { idempotencyKey: context.idempotencyKey },
     });
     if (existing) {
-      this.assertInventoryLedgerReplay(existing, stack, delta);
+      this.assertInventoryLedgerReplay(existing, stack, delta, context);
       return {
         applied: false,
         quantity: this.toSafeInteger(
@@ -641,7 +641,7 @@ export class PlatformAssetsService {
       where: { id: userId },
       lock: { mode: 'pessimistic_write' },
     });
-    if (!user) {
+    if (!user || user.accountStatus !== 'active') {
       throw new UnauthorizedException('账号不存在或已停用');
     }
   }
@@ -653,7 +653,7 @@ export class PlatformAssetsService {
     const user = await manager.getRepository(User).findOne({
       where: { id: userId },
     });
-    if (!user) {
+    if (!user || user.accountStatus !== 'active') {
       throw new UnauthorizedException('账号不存在或已停用');
     }
   }
@@ -808,11 +808,15 @@ export class PlatformAssetsService {
     ledger: WalletLedger,
     balance: WalletBalance,
     expectedDelta: number,
+    context: AssetMutationContext,
   ): void {
     if (
       ledger.userId !== balance.userId ||
       ledger.currency !== balance.currency ||
-      String(ledger.delta) !== String(expectedDelta)
+      String(ledger.delta) !== String(expectedDelta) ||
+      ledger.sourceType !== context.sourceType ||
+      ledger.sourceId !== context.sourceId ||
+      ledger.reason !== context.reason
     ) {
       throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
     }
@@ -822,11 +826,15 @@ export class PlatformAssetsService {
     ledger: InventoryLedger,
     stack: InventoryStack,
     expectedDelta: number,
+    context: AssetMutationContext,
   ): void {
     if (
       ledger.userId !== stack.userId ||
       ledger.itemId !== stack.itemId ||
-      String(ledger.delta) !== String(expectedDelta)
+      String(ledger.delta) !== String(expectedDelta) ||
+      ledger.sourceType !== context.sourceType ||
+      ledger.sourceId !== context.sourceId ||
+      ledger.reason !== context.reason
     ) {
       throw new ConflictException({ code: 'IDEMPOTENCY_KEY_REUSED' });
     }

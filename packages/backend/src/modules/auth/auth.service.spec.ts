@@ -6,7 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import type { DataSource } from 'typeorm';
+import { Repository, type DataSource, type FindOneOptions, type ObjectLiteral } from 'typeorm';
 
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
 import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.entity';
@@ -347,6 +347,49 @@ describe('AuthService community account flow', () => {
     await expect(service.refresh(second.refreshToken)).rejects.toMatchObject({
       response: { code: 'INVALID_REFRESH_TOKEN' },
     });
+  });
+
+  it('uses account → session → refresh-token locks consistently for rotation and logout', async () => {
+    const first = await service.registerAccount(accountRegistration('lock_order_user'));
+    const user = await dataSource.getRepository(User).findOneByOrFail({ usernameNormalized: 'lock_order_user' });
+    const locks: string[] = [];
+    const findOne = Repository.prototype.findOne;
+    jest.spyOn(Repository.prototype, 'findOne').mockImplementation(function (
+      this: Repository<ObjectLiteral>, options: FindOneOptions<ObjectLiteral>,
+    ) {
+      if (options.lock && ['User', 'AuthSession', 'AuthRefreshToken'].includes(this.metadata.name)) locks.push(this.metadata.name);
+      return findOne.call(this, options);
+    });
+    const rotated = await service.refresh(first.refreshToken);
+    expect(locks).toEqual(['User', 'AuthSession', 'AuthRefreshToken']);
+    locks.length = 0;
+    await service.logout(rotated.refreshToken);
+    expect(locks).toEqual(['User', 'AuthSession', 'AuthRefreshToken']);
+    locks.length = 0;
+    await service.logoutAll(user.id);
+    expect(locks[0]).toBe('User');
+  });
+
+  it('rejects a refresh that expires while waiting for database locks instead of extending its old deadline', async () => {
+    const first = await service.registerAccount(accountRegistration('expiry_lock_user'));
+    const issued = Date.now();
+    const tokenId = first.refreshToken.split('.')[0];
+    const sessionId = jwtService.decode<{ sid: string }>(first.accessToken).sid;
+    await dataSource.getRepository(AuthRefreshToken).update(tokenId, { expiresAt: new Date(issued + 1000) });
+    await dataSource.getRepository(AuthSession).update(sessionId, { expiresAt: new Date(issued + 1000) });
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'hrtime'] }).setSystemTime(issued);
+    try {
+      const findOne = Repository.prototype.findOne;
+      jest.spyOn(Repository.prototype, 'findOne').mockImplementation(function (
+        this: Repository<ObjectLiteral>, options: FindOneOptions<ObjectLiteral>,
+      ) {
+        if (options.lock && this.metadata.name === 'AuthRefreshToken') jest.setSystemTime(issued + 1001);
+        return findOne.call(this, options);
+      });
+      await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({ response: { code: 'INVALID_REFRESH_TOKEN' } });
+      expect((await dataSource.getRepository(AuthSession).findOneByOrFail({ id: sessionId })).revokeReason).toBe('expired');
+      expect(await dataSource.getRepository(AuthRefreshToken).count({ where: { sessionId } })).toBe(1);
+    } finally { jest.useRealTimers(); }
   });
 
   it('changes a verified current password and atomically revokes every device', async () => {

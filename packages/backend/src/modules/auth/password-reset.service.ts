@@ -143,6 +143,9 @@ export class PasswordResetService {
       if (!user || !RESETTABLE_STATUSES.includes(user.accountStatus)) {
         return false;
       }
+      // A credential may expire while this transaction waits for the account
+      // lock. Only the post-lock clock can authorize its atomic consumption.
+      const now = new Date();
 
       const claimed = await repository.update(
         {

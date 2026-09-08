@@ -280,6 +280,11 @@ export class GuildService {
       const member = await this.requireMember(manager, userId);
       const guild = await this.requireGuild(manager, member.guildId);
       const serviceDate = toCommunityServiceDate(this.clock.now());
+      // The account is already locked by ensurePlatformState. A guild change
+      // must not reset this account's one rewarded attempt per service day.
+      if (await this.dailyBossContribution(manager, userId, serviceDate)) {
+        throw new ConflictException({ code: 'GUILD_BOSS_DAILY_ATTEMPT_USED' });
+      }
       const run = await this.ensureBossRun(manager, guild, serviceDate);
       if (run.status === 'defeated' || this.safeAmount(run.remainingHp) === 0) {
         throw new ConflictException({ code: 'GUILD_BOSS_ALREADY_DEFEATED' });
@@ -499,7 +504,12 @@ export class GuildService {
         })
       : [];
     const userById = new Map(users.map((user) => [user.id, user]));
-    const mine = contributions.find((entry) => entry.userId === current.userId) ?? null;
+    // The public top twenty is presentation only, never the source of a
+    // member's attempt/quota state (guilds support up to thirty members).
+    const mine = run
+      ? await manager.getRepository(GuildBossContribution).findOne({ where: { runId: run.id, userId: current.userId } })
+      : null;
+    const attempted = Boolean(mine || await this.dailyBossContribution(manager, current.userId, serviceDate));
     const status = run?.status ?? 'ready';
     return {
       serviceDate,
@@ -509,12 +519,12 @@ export class GuildService {
       remainingHp: run ? this.safeAmount(run.remainingHp) : expectedMaxHp,
       endsAt: run?.endsAt.toISOString() ?? this.bossEndsAt(serviceDate).toISOString(),
       version: run?.version ?? 0,
-      attempted: Boolean(mine),
-      attemptsRemaining: mine ? 0 : GUILD_BOSS_DAILY_ATTEMPTS,
+      attempted,
+      attemptsRemaining: attempted ? 0 : GUILD_BOSS_DAILY_ATTEMPTS,
       canAttack:
         state.progression.level >= GUILD_BOSS_UNLOCK_LEVEL
         && state.energy.balance >= GUILD_BOSS_ENERGY_COST
-        && !mine
+        && !attempted
         && status !== 'defeated',
       myContribution: mine
         ? { damage: this.safeAmount(mine.damage), criticalHit: mine.criticalHit }
@@ -527,6 +537,14 @@ export class GuildService {
         criticalHit: entry.criticalHit,
       })),
     };
+  }
+
+  private async dailyBossContribution(manager: EntityManager, userId: string, serviceDate: string): Promise<GuildBossContribution | null> {
+    return manager.getRepository(GuildBossContribution).createQueryBuilder('contribution')
+      .innerJoin('contribution.run', 'run')
+      .where('contribution.user_id = :userId', { userId })
+      .andWhere('run.service_date = :serviceDate', { serviceDate })
+      .getOne();
   }
 
   private async ensureBossRun(

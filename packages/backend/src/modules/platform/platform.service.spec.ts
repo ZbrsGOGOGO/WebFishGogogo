@@ -33,6 +33,7 @@ type EntityConstructor<T extends ObjectLiteral> = new () => T;
  * 所有实体写入都必须经 FakeDataSource.transaction 提供的 manager。
  */
 class InMemoryEntityStore {
+  beforeUserLock?: () => Promise<void>;
   private readonly rows = new Map<Function, ObjectLiteral[]>();
   private idSequence = 0;
 
@@ -54,6 +55,7 @@ class InMemoryEntityStore {
       },
 
       async findOne(options: FindOneOptions<T>): Promise<T | null> {
+        if (target === (User as unknown as EntityConstructor<T>) && options.lock) await store.beforeUserLock?.();
         const where = (options.where ?? {}) as Record<string, unknown>;
         return (
           (store
@@ -182,6 +184,7 @@ function createFixture(now = '2026-07-23T16:30:00.000Z'): {
   user.id = 'user-1';
   user.email = 'user@example.com';
   user.passwordHash = 'hash';
+  user.accountStatus = 'active';
   user.displayName = '测试用户';
   user.createdAt = new Date();
   user.updatedAt = new Date();
@@ -204,6 +207,25 @@ function createFixture(now = '2026-07-23T16:30:00.000Z'): {
 }
 
 describe('PlatformService', () => {
+  it('rechecks a user suspended while the check-in is waiting for its user lock', async () => {
+    const { service, store, userId } = createFixture();
+    let release!: () => void;
+    let reached!: () => void;
+    const reachedLock = new Promise<void>((resolve) => { reached = resolve; });
+    const waitForLock = new Promise<void>((resolve) => { release = resolve; });
+    store.beforeUserLock = async () => { reached(); await waitForLock; };
+    const result = service.checkinToday(userId);
+    await reachedLock;
+    // Simulates the committed row returned after waiting behind a lifecycle TX.
+    store.all(User)[0].accountStatus = 'suspended';
+    release();
+    await expect(result).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(store.all(Checkin)).toHaveLength(0);
+    expect(store.all(RewardGrant)).toHaveLength(0);
+    expect(store.all(WalletLedger)).toHaveLength(0);
+    expect(store.all(WalletBalance)).toHaveLength(0);
+  });
+
   it('initializes and returns the exact overview contract', async () => {
     const { service, dataSource, userId } = createFixture();
 

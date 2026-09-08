@@ -306,6 +306,7 @@ async function createUser(
   const user = await repo.save(
     repo.create({
       email,
+      accountStatus: 'active',
       passwordHash: 'not-used-in-this-test',
       displayName: null,
     }),

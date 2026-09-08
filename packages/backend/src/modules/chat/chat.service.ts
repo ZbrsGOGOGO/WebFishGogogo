@@ -282,7 +282,10 @@ export class ChatService implements OnModuleInit {
     let created: ChatMessage;
     try {
       created = await this.dataSource.transaction(async (manager) => {
-        await this.activeUser(manager, userId);
+        // Keep the author valid until the send commits, including time queued
+        // behind another sender's room lock. Restriction/deletion also locks
+        // the user first, so it cannot finish cleanup before a late insertion.
+        await this.activeUser(manager, userId, true);
         const room = await this.requireRoom(manager, normalized.roomSlug, true);
         const replay = await manager.getRepository(ChatMessage).findOne({
           where: { authorId: userId, clientMessageId: normalized.clientMessageId },
@@ -839,8 +842,11 @@ export class ChatService implements OnModuleInit {
     };
   }
 
-  private async activeUser(manager: EntityManager, userId: string): Promise<User> {
-    const user = await manager.getRepository(User).findOne({ where: { id: userId } });
+  private async activeUser(manager: EntityManager, userId: string, lock = false): Promise<User> {
+    const user = await manager.getRepository(User).findOne({
+      where: { id: userId },
+      ...(lock ? { lock: { mode: 'for_no_key_update' as const } } : {}),
+    });
     if (!user || user.accountStatus !== 'active') {
       throw chatException('CHAT_ACCOUNT_RESTRICTED', '账号当前不能使用聊天室。', 403);
     }

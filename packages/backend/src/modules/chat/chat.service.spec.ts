@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { DataSource } from 'typeorm';
+import { Repository, type DataSource } from 'typeorm';
 
 import {
   AuthSession,
@@ -153,6 +153,20 @@ describe('ChatService safety and persistence invariants', () => {
         body: 'A conflicting body.',
       }),
     ).rejects.toMatchObject({ response: { code: 'CHAT_IDEMPOTENCY_CONFLICT' } });
+  });
+
+  it('locks the active author before the room so account restriction cannot overtake a queued send', async () => {
+    const author = await activeUser('queued-author@example.com', 'Queued author');
+    const reads = jest.spyOn(Repository.prototype, 'findOne');
+    await service.send(author.id, { clientMessageId: randomUUID(), roomSlug: 'general', body: 'Synthetic queued send' });
+    const authorLock = reads.mock.calls.findIndex(([options]) =>
+      (options.where as { id?: string })?.id === author.id && options.lock?.mode === 'for_no_key_update',
+    );
+    const roomLock = reads.mock.calls.findIndex(([options]) =>
+      (options.where as { slug?: string })?.slug === 'general' && options.lock?.mode === 'pessimistic_write',
+    );
+    expect(authorLock).toBeGreaterThanOrEqual(0);
+    expect(roomLock).toBeGreaterThan(authorLock);
   });
 
   it('returns a body-free placeholder across either direction of a block', async () => {

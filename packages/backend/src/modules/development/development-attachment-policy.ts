@@ -597,18 +597,35 @@ function extractDocxText(xml: string): string {
     rejectInvalid('DOCX 正文 XML 缺少 document 根元素');
   }
   const pieces: string[] = [];
-  const tokenPattern =
-    /<(?:[A-Za-z_][\w.-]*:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t\s*>|<(?:[A-Za-z_][\w.-]*:)?(?:tab|br)(?:\s[^>]*)?\/\s*>|<\/(?:[A-Za-z_][\w.-]*:)?p\s*>/giu;
-  let match: RegExpExecArray | null;
-  while ((match = tokenPattern.exec(xml))) {
-    if (match[1] !== undefined) {
-      pieces.push(decodeXmlText(match[1]));
-    } else if (/\btab\b/iu.test(match[0])) {
+  let cursor = 0;
+  let textStart: number | null = null;
+  // A global "<t>...?</t>" regex repeatedly scans the whole remaining XML
+  // when a closing tag is absent. A malformed small DOCX can consequently
+  // block the event loop, beyond the reach of the async archive timeout.
+  // Consume every tag once; nested or unterminated text is rejected directly.
+  while (cursor < xml.length) {
+    const start = xml.indexOf('<', cursor);
+    if (start < 0) break;
+    const end = xml.indexOf('>', start + 1);
+    if (end < 0) rejectInvalid('DOCX 正文 XML 标记未闭合');
+    const tag = xml.slice(start + 1, end).trim();
+    const token = /^(\/)?(?:[A-Za-z_][\w.-]*:)?(t|tab|br|p)(?=\s|\/|$)/iu.exec(tag);
+    const name = token?.[2]?.toLowerCase();
+    const closing = token?.[1] === '/';
+    if (textStart !== null) {
+      if (name !== 't' || !closing) rejectInvalid('DOCX 正文文本节点含未预期标记');
+      pieces.push(decodeXmlText(xml.slice(textStart, start)));
+      textStart = null;
+    } else if (name === 't' && !closing && !tag.endsWith('/')) {
+      textStart = end + 1;
+    } else if (name === 'tab' && !closing && tag.endsWith('/')) {
       pieces.push('\t');
-    } else {
+    } else if ((name === 'br' && !closing && tag.endsWith('/')) || (name === 'p' && closing)) {
       pieces.push('\n');
     }
+    cursor = end + 1;
   }
+  if (textStart !== null) rejectInvalid('DOCX 正文文本节点未闭合');
   return pieces.join('').replace(/\n{3,}/gu, '\n\n').trim();
 }
 

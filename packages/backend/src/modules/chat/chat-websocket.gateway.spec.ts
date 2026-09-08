@@ -384,6 +384,67 @@ describe('ChatWebSocketGateway real socket protocol', () => {
     await expect(closed).resolves.toBe(4401);
   });
 
+  it.each(['room', 'direct-message', 'direct-read'] as const)(
+    'does not deliver a %s broadcast to a revoked idle session before the next heartbeat',
+    async (kind) => {
+      const viewer = await activeUser(`broadcast-${kind}@example.com`, 'Broadcast viewer');
+      const author = await activeUser(`broadcast-author-${kind}@example.com`, 'Broadcast author');
+      const staleSession = await authSession(viewer.id);
+      const activeSession = await authSession(viewer.id);
+      const stale = await authenticatedSocket(viewer.id, staleSession.id, 'stale');
+      const current = await authenticatedSocket(viewer.id, activeSession.id, 'current');
+      if (kind === 'room') {
+        for (const client of [stale, current]) {
+          client.socket.send(JSON.stringify({ type: 'chat.subscribe', protocolVersion: 1,
+            requestId: 'subscribe', roomSlug: 'general', afterSequence: 0 }));
+          await client.events.next('chat.ready');
+        }
+      }
+      const message = await chat.send(author.id, { clientMessageId: randomUUID(), roomSlug: 'general', body: 'Synthetic broadcast privacy check' });
+      const conversationId = randomUUID();
+      directMessages.messageForViewer.mockResolvedValue({ id: message.id, conversationId, body: 'Synthetic private message' });
+      directMessages.participants.mockResolvedValue([viewer.id, author.id]);
+      await dataSource.getRepository(AuthSession).update(staleSession.id, { revokedAt: new Date(), revokeReason: 'device_revoked' });
+
+      const eventType = kind === 'room' ? 'chat.message.created'
+        : kind === 'direct-message' ? 'chat.direct.message.created' : 'chat.direct.read.updated';
+      if (kind === 'room') {
+        await chat.publishMessageEvent('created', 'general', message.id);
+      } else if (kind === 'direct-message') {
+        await realtime.publish({ scope: 'direct', kind: 'created', conversationId,
+          messageId: message.id, participantIds: [viewer.id, author.id] });
+      } else {
+        await realtime.publish({ scope: 'direct', kind: 'read', conversationId,
+          readerUserId: author.id, lastReadSequence: 1, participantIds: [viewer.id, author.id] });
+      }
+      await current.events.next(eventType);
+      // Flush the loopback socket turn without waiting for the 30-second heartbeat.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(stale.events.types()).not.toContain(eventType);
+      expect(await stale.events.next('chat.error')).toMatchObject({ code: 'INVALID_SESSION' });
+      expect(await closeCode(stale.socket)).toBe(4401);
+    },
+  );
+
+  it('fails closed without broadcasting content when session revalidation is unavailable', async () => {
+    const user = await activeUser('broadcast-db-failure@example.com', 'Broadcast failure');
+    const session = await authSession(user.id);
+    const client = await authenticatedSocket(user.id, session.id, 'broadcast-db-failure');
+    const find = jest.spyOn(dataSource.getRepository(AuthSession), 'find')
+      .mockRejectedValueOnce(new Error('synthetic session store outage'));
+    const closed = closeCode(client.socket);
+    try {
+      await realtime.publish({ scope: 'direct', kind: 'created', conversationId: randomUUID(),
+        messageId: randomUUID(), participantIds: [user.id, randomUUID()] });
+      expect(await client.events.next('chat.error')).toMatchObject({ code: 'CHAT_INTERNAL_ERROR' });
+      expect(await closed).toBe(1011);
+      expect(client.events.types()).not.toContain('chat.direct.message.created');
+      expect(directMessages.messageForViewer).not.toHaveBeenCalled();
+    } finally {
+      find.mockRestore();
+    }
+  });
+
   it('routes private message, withdrawal and read events only to both participants', async () => {
     const [author, recipient, outsider] = await Promise.all([
       activeUser('direct-author@example.com', 'Direct Author'),

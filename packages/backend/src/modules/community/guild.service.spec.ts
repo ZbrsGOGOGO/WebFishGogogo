@@ -135,6 +135,46 @@ describe('GuildService unified economy', () => {
     expect(await dataSource.getRepository(GuildBossRun).count()).toBe(2);
   });
 
+  it('does not reset the daily boss reward after moving to another guild', async () => {
+    const firstOwner = await activeUser('first-guild@example.com', '甲负责人');
+    const secondOwner = await activeUser('second-guild@example.com', '乙负责人');
+    const member = await activeUser('travelling-member@example.com', '成员');
+    await prepare(firstOwner.id, 20_000); await prepare(secondOwner.id, 20_000); await prepare(member.id, 0);
+    const first = await service.create(firstOwner.id, '甲项目组', 'guild-first-create') as any;
+    const second = await service.create(secondOwner.id, '乙项目组', 'guild-second-create') as any;
+    await service.join(member.id, first.membership.guild.id, 'guild-first-join');
+    await service.attackBoss(member.id, 'guild-first-boss');
+    await service.leave(member.id);
+    await service.join(member.id, second.membership.guild.id, 'guild-second-join');
+    const before = await officeCoins(member.id);
+    const view = await service.overview(member.id) as any;
+    await expect(service.attackBoss(member.id, 'guild-second-boss')).rejects.toMatchObject({ response: { code: 'GUILD_BOSS_DAILY_ATTEMPT_USED' } });
+    expect(view.membership.boss).toMatchObject({ attempted: true, attemptsRemaining: 0, canAttack: false, myContribution: null });
+    expect(await officeCoins(member.id)).toBe(before);
+    expect(await dataSource.getRepository(GuildBossContribution).countBy({ userId: member.id })).toBe(1);
+    now = new Date('2026-08-24T08:00:00.000Z');
+    await expect(service.attackBoss(member.id, 'guild-next-service-day')).resolves.toBeDefined();
+    expect(await officeCoins(member.id)).toBe(before + 120);
+  });
+
+  it('shows the actual personal attempt even when it is below the top twenty contributors', async () => {
+    const owner = await activeUser('low-ranked-owner@example.com', '负责人');
+    await prepare(owner.id, 20_000);
+    const created = await service.create(owner.id, '排行完整性', 'guild-create-rank-0001') as any;
+    await service.attackBoss(owner.id, 'guild-low-rank-attack-0001');
+    const run = await dataSource.getRepository(GuildBossRun).findOneByOrFail({ guildId: created.membership.guild.id });
+    await dataSource.getRepository(GuildBossContribution).update({ runId: run.id, userId: owner.id }, { damage: '1' });
+    for (let index = 0; index < 20; index += 1) {
+      const user = await activeUser(`rank-${index}@example.com`, `成员 ${index}`);
+      await dataSource.getRepository(GuildMember).save({ userId: user.id, guildId: run.guildId, role: 'member', activity: 0, donatedToday: 0 });
+      await dataSource.getRepository(GuildBossContribution).save({ runId: run.id, guildId: run.guildId, userId: user.id, damage: '100', criticalHit: false, rewardSnapshot: {} });
+    }
+    const view = await service.overview(owner.id) as any;
+    expect(view.membership.boss.leaderboard).toHaveLength(20);
+    expect(view.membership.boss.leaderboard.every((entry: any) => entry.publicId !== owner.publicId)).toBe(true);
+    expect(view.membership.boss).toMatchObject({ attempted: true, attemptsRemaining: 0, canAttack: false, myContribution: { damage: 1 } });
+  });
+
   async function prepare(userId: string, extraCoins: number): Promise<void> {
     await dataSource.transaction(async (manager) => {
       await assets.ensurePlatformState(manager, userId);

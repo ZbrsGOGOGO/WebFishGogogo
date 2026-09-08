@@ -507,15 +507,12 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
 
   private async broadcastRoomMessage(event: ChatRoomRealtimeEvent): Promise<void> {
     const socketsByUser = new Map<string, WebSocket[]>();
-    for (const [socket, state] of this.states) {
-      if (
-        socket.readyState !== WebSocket.OPEN ||
-        !state.authenticated ||
-        !state.userId ||
-        !state.subscriptions.has(event.roomSlug)
-      ) {
-        continue;
-      }
+    const candidates = [...this.states.keys()].filter((socket) =>
+      this.states.get(socket)?.subscriptions.has(event.roomSlug),
+    );
+    for (const socket of await this.activeBroadcastSockets(candidates)) {
+      const state = this.states.get(socket);
+      if (!state?.userId || !state.subscriptions.has(event.roomSlug)) continue;
       const sockets = socketsByUser.get(state.userId) ?? [];
       sockets.push(socket);
       socketsByUser.set(state.userId, sockets);
@@ -538,9 +535,12 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
   ): Promise<void> {
     const participantIds = [...new Set(event.participantIds)];
     if (participantIds.length !== 2) return;
+    const activeSockets = await this.activeBroadcastSockets(
+      participantIds.flatMap((userId) => this.openUserSockets(userId)),
+    );
     await Promise.allSettled(
       participantIds.map(async (userId) => {
-        const sockets = this.openUserSockets(userId);
+        const sockets = activeSockets.filter((socket) => this.states.get(socket)?.userId === userId);
         if (sockets.length === 0) return;
         // 一个用户即使打开多个标签页，也只生成一次个性化消息视图。
         const message = await this.directMessages.messageForViewer(
@@ -581,8 +581,11 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
     ) {
       return;
     }
+    const activeSockets = await this.activeBroadcastSockets(
+      participantIds.flatMap((userId) => this.openUserSockets(userId)),
+    );
     for (const userId of participantIds) {
-      for (const socket of this.openUserSockets(userId)) {
+      for (const socket of activeSockets.filter((candidate) => this.states.get(candidate)?.userId === userId)) {
         this.send(socket, {
           type: 'chat.direct.read.updated',
           conversationId: event.conversationId,
@@ -603,6 +606,39 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
         state?.authenticated === true &&
         state.userId === userId
       );
+    });
+  }
+
+  private async activeBroadcastSockets(sockets: readonly WebSocket[]): Promise<WebSocket[]> {
+    const candidates = sockets.flatMap((socket) => {
+      const state = this.states.get(socket);
+      return socket.readyState === WebSocket.OPEN && state?.authenticated && state.userId
+        ? [{ socket, state }]
+        : [];
+    });
+    if (candidates.length === 0) return [];
+    let activeSessions: Map<string, string>;
+    try {
+      // A revoked idle socket sends no frames. The heartbeat alone leaves a
+      // receive-only privacy window, so every broadcast checks its recipients.
+      // Batch by session, including when one account has several open tabs.
+      activeSessions = await this.activeSessionUsers(candidates.map(({ state }) => state));
+    } catch {
+      this.logger.error('Chat connection session broadcast recheck failed.');
+      for (const { socket, state } of candidates) {
+        if (this.states.get(socket) === state && socket.readyState === WebSocket.OPEN) {
+          this.closeForSessionCheckFailure(socket, state);
+        }
+      }
+      return [];
+    }
+    return candidates.flatMap(({ socket, state }) => {
+      if (this.states.get(socket) !== state || !state.authenticated || socket.readyState !== WebSocket.OPEN) return [];
+      if (!state.sessionId || activeSessions.get(state.sessionId) !== state.userId) {
+        this.closeForInvalidSession(socket, state);
+        return [];
+      }
+      return [socket];
     });
   }
 

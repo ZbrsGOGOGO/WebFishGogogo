@@ -39,6 +39,7 @@ describe('FarmService integration', () => {
     const user = await dataSource.getRepository(User).save(
       dataSource.getRepository(User).create({
         email: 'farm-test@example.com',
+        accountStatus: 'active',
         passwordHash: 'not-used-in-this-test',
         displayName: '农场测试用户',
       }),
@@ -170,6 +171,7 @@ describe('FarmService integration', () => {
     const other = await dataSource.getRepository(User).save(
       dataSource.getRepository(User).create({
         email: 'other-farm-test@example.com',
+        accountStatus: 'active',
         passwordHash: 'not-used',
         displayName: null,
       }),

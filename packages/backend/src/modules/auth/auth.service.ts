@@ -703,25 +703,15 @@ export class AuthService {
     await this.rateLimits.assertRefreshAllowed(metadata.ipAddress);
     const parsed = this.parseRefreshToken(rawRefreshToken);
     if (!parsed) throw this.invalidRefresh();
-    const now = new Date();
     const tokenHash = hashRefreshToken(parsed.raw);
 
     const outcome = await this.dataSource.transaction(async (manager) => {
       const tokenRepo = manager.getRepository(AuthRefreshToken);
-      const token = await tokenRepo.findOne({
-        where: { id: parsed.id },
-        lock: { mode: 'pessimistic_write' },
-      });
-      // 知道 token id 但不知道 secret 不能借此撤销别人的会话。
-      if (!token || token.tokenHash !== tokenHash) {
-        return { kind: 'invalid' } as RefreshOutcome;
-      }
-
-      const session = await manager.getRepository(AuthSession).findOne({
-        where: { id: token.sessionId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!session) return { kind: 'invalid' } as RefreshOutcome;
+      const context = await this.lockRefreshContext(manager, parsed.id, tokenHash);
+      if (!context) return { kind: 'invalid' } as RefreshOutcome;
+      const { token, session, user } = context;
+      // Waiting for a lock must not extend an expired token/session using a stale arrival time.
+      const now = new Date();
 
       if (token.status === 'consumed') {
         if (
@@ -753,11 +743,7 @@ export class AuthService {
         return { kind: 'invalid' } as RefreshOutcome;
       }
 
-      const user = await manager.getRepository(User).findOne({
-        where: { id: session.userId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!user || !this.isSessionEligibleStatus(user.accountStatus)) {
+      if (!this.isSessionEligibleStatus(user.accountStatus)) {
         await this.revokeSession(manager, session, 'account_unavailable', now);
         return { kind: 'account_unavailable' } as RefreshOutcome;
       }
@@ -820,24 +806,19 @@ export class AuthService {
     if (!parsed) return;
     const tokenHash = hashRefreshToken(parsed.raw);
     await this.dataSource.transaction(async (manager) => {
-      const token = await manager.getRepository(AuthRefreshToken).findOne({
-        where: { id: parsed.id },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!token || token.tokenHash !== tokenHash) return;
-      const session = await manager.getRepository(AuthSession).findOne({
-        where: { id: token.sessionId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (session) {
-        await this.revokeSession(manager, session, 'logout', new Date());
-      }
+      const context = await this.lockRefreshContext(manager, parsed.id, tokenHash);
+      if (!context) return;
+      await this.revokeSession(manager, context.session, 'logout', new Date());
     });
   }
 
   async logoutAll(userId: string): Promise<void> {
-    const now = new Date();
     await this.dataSource.transaction(async (manager) => {
+      const user = await manager.getRepository(User).findOne({
+        where: { id: userId }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!user) return;
+      const now = new Date();
       const sessions = await manager.getRepository(AuthSession).find({
         where: { userId, revokedAt: IsNull() },
       });
@@ -929,6 +910,10 @@ export class AuthService {
     sessionId: string,
   ): Promise<{ current: boolean }> {
     return this.dataSource.transaction(async (manager) => {
+      const user = await manager.getRepository(User).findOne({
+        where: { id: userId }, lock: { mode: 'pessimistic_write' },
+      });
+      if (!user) throw new NotFoundException({ code: 'SESSION_NOT_FOUND' });
       const session = await manager.getRepository(AuthSession).findOne({
         where: { id: sessionId, userId },
         lock: { mode: 'pessimistic_write' },
@@ -1050,6 +1035,39 @@ export class AuthService {
       refreshExpiresAt,
       user: this.toUserView(user, profile),
     };
+  }
+
+  /**
+   * All session mutators serialize on the account first, then session, then token.
+   * Password reset/change and account deletion already use that order. Starting
+   * at a token instead can deadlock with their session/token revocation UPDATEs.
+   * Unlocked snapshots only resolve ownership; the actual rows and token hash
+   * are rechecked after locking, and a guessed token ID acquires no account lock.
+   */
+  private async lockRefreshContext(
+    manager: EntityManager,
+    tokenId: string,
+    tokenHash: string,
+  ): Promise<{ token: AuthRefreshToken; session: AuthSession; user: User } | null> {
+    const tokens = manager.getRepository(AuthRefreshToken);
+    const snapshot = await tokens.findOne({ where: { id: tokenId } });
+    if (!snapshot || snapshot.tokenHash !== tokenHash) return null;
+    const sessions = manager.getRepository(AuthSession);
+    const sessionSnapshot = await sessions.findOne({ where: { id: snapshot.sessionId } });
+    if (!sessionSnapshot) return null;
+    const user = await manager.getRepository(User).findOne({
+      where: { id: sessionSnapshot.userId }, lock: { mode: 'pessimistic_write' },
+    });
+    if (!user) return null;
+    const session = await sessions.findOne({
+      where: { id: sessionSnapshot.id, userId: user.id }, lock: { mode: 'pessimistic_write' },
+    });
+    if (!session) return null;
+    const token = await tokens.findOne({
+      where: { id: tokenId, sessionId: session.id }, lock: { mode: 'pessimistic_write' },
+    });
+    if (!token || token.tokenHash !== tokenHash) return null;
+    return { token, session, user };
   }
 
   private async revokeSession(
