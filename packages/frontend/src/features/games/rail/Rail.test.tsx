@@ -93,6 +93,25 @@ describe('rail workspace', () => {
     expect(screen.getByRole('button', { name: '提交评分' })).toBeDisabled(); fireEvent.click(screen.getByRole('button', { name: '7' })); fireEvent.click(screen.getByRole('button', { name: '提交评分' }));
     await waitFor(() => expect(action).toHaveBeenCalledWith({ kind: 'rate', payload: { roundToken: 'round-token-1', value: 7 } })); expect(screen.getByText(/这项评分不发放办公币/)).toBeInTheDocument();
   });
+  it.each([true, false])('distinguishes robot automation from human timeout (robot=%s)', (robot) => {
+    const base = game();
+    render(<RailGameSurface view={game({
+      phase: 'round_end',
+      players: base.players.map((player) => ({ ...player, isBot: robot })),
+      tracks: { A: [{ id: 'automatic-card', card: good, ownerId: 'person1', track: 'A', automatic: true, buff: { card: buff, ownerId: 'person2', automatic: true } }], B: [] },
+      roundResult: { round: 1, conductorId: 'person3', chosenTrack: 'A', automaticDecision: true, survivedPlayerIds: ['person2'], passedPlayerIds: ['person1'], ratings: [{ playerId: 'person1', value: robot ? 5 : null, automatic: true }], demonScore: robot ? 5 : 0 },
+    })} onAction={vi.fn()} />);
+    if (robot) {
+      expect(screen.getAllByText(/机器人自动操作/)).toHaveLength(2);
+      expect(screen.getByText(/机器人自动选择/)).toBeInTheDocument();
+      expect(screen.queryByText(/超时/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/弃评/)).not.toBeInTheDocument();
+    } else {
+      expect(screen.getAllByText(/超时托管/)).toHaveLength(2);
+      expect(screen.getByText(/超时自动选择/)).toBeInTheDocument();
+      expect(screen.getByText(/超时未评分按弃评处理/)).toBeInTheDocument();
+    }
+  });
   it('ignores game actions while the existing workplace cover is active', () => {
     const action = vi.fn(); render(<GamePrivacyProvider value={{ covered: true, toggleCover: vi.fn() }}><RailGameSurface view={game()} onAction={action} /></GamePrivacyProvider>);
     expect(screen.getByRole('button', { name: /热心的维修员/ })).toBeDisabled(); fireEvent.click(screen.getByRole('button', { name: '放置善牌' })); expect(action).not.toHaveBeenCalled();

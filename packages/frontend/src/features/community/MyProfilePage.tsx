@@ -158,7 +158,7 @@ export function CommunityMyProfilePage(): JSX.Element {
                 {COMMUNITY_PROFESSIONS.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
-            <small className={styles.muted}>昵称默认每 7 天可以修改一次。</small>
+            <small className={styles.muted}>昵称用于聊天、好友列表和公开主页，不会改变登录账号。</small>
             <Button type="submit" loading={saving}>保存资料</Button>
           </form>
         </Card>

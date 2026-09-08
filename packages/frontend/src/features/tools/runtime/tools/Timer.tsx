@@ -67,6 +67,7 @@ export default function Timer(): JSX.Element {
 
   function applyCountdown(minutes: number): void {
     setMode('down');
+    setMinutesInput(String(Math.max(0, minutes)));
     setDurationMs(Math.max(0, minutes) * 60 * 1000);
     setElapsedMs(0);
     setRunning(false);

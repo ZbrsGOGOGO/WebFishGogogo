@@ -105,4 +105,12 @@ describe('CommunityMyProfilePage workstation tower defense entry', () => {
     expect(await screen.findByText(/工位新芽 · Lv\.2/)).toBeInTheDocument();
     expect(screen.queryByText('尚未领养工位绿植')).not.toBeInTheDocument();
   });
+
+  it('describes the display name without promising an unimplemented cooldown', async () => {
+    renderPage();
+
+    expect(await screen.findByText('社区职业 · 程序员')).toBeInTheDocument();
+    expect(screen.getByText('昵称用于聊天、好友列表和公开主页，不会改变登录账号。')).toBeInTheDocument();
+    expect(screen.queryByText(/昵称.*每\s*7\s*天/)).not.toBeInTheDocument();
+  });
 });
