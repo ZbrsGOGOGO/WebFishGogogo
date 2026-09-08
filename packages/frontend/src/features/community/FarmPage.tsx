@@ -4,10 +4,20 @@ import {
   communityFarmApi,
   createCommunityIdempotencyKey,
   type CommunityFarmOverview,
+  type CommunityFarmCrop,
   type CommunityFarmSkill,
   type CommunityFarmTool,
 } from '../../api/community';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import {
+  beginCommunityWalletObservation,
+  finishCommunityWalletObservation,
+  markCommunityWalletObservationFailed,
+  publishCommunityWalletOverview,
+  useCommunityWalletStore,
+  type CommunityWalletObservation,
+} from '../../app/store/community-wallet-store';
+import { getCommunitySessionGeneration } from '../../api/community-http';
 import { Button } from '../../components/ui';
 import { communityFarmRemainingSeconds, formatCommunityFarmDuration } from './farm-countdown';
 import { communityRequestErrorMessage } from './request-error';
@@ -17,6 +27,8 @@ const GUEST_FARM_KEY = 'zbrs.guest-farm.v1';
 const GUEST_FIRST_CYCLE_SECONDS = 30;
 const GUEST_STANDARD_CYCLE_SECONDS = 5 * 60;
 const MATURITY_REFRESH_LIMIT = 3;
+const GUEST_BASE_HARVEST_COINS = 20;
+type FarmRequest = { version: number; wallet: CommunityWalletObservation | null };
 
 const GUEST_CROPS: CommunityFarmOverview['crops'] = [
   { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 300, experience: 12, seedCost: 10, seedCostPerPlot: 10, coins: 100, description: '成熟最快，适合刚开始经营。', unlocked: true, selected: true, growing: false },
@@ -58,7 +70,7 @@ function createGuestFarm(): CommunityFarmOverview {
     },
     growth: {
       farmCoins: 0,
-      officeCoins: 500,
+      officeCoins: 0,
       totalHarvests: 0,
       farmVersion: 1,
       skillPointsEarned: 0,
@@ -126,11 +138,37 @@ function growthProgress(overview: CommunityFarmOverview, remainingSeconds: numbe
   return Math.min(99, Math.max(5, Math.round(((cycleSeconds - remaining) / cycleSeconds) * 100)));
 }
 
+function hasRevenueQuote(crop: CommunityFarmCrop | undefined): crop is CommunityFarmCrop & Required<Pick<CommunityFarmCrop,
+  'baseHarvestCoins' | 'nextOrderBonusCoins' | 'totalHarvestCoins' | 'estimatedNetCoins'>> {
+  return Boolean(crop && [crop.baseHarvestCoins, crop.nextOrderBonusCoins, crop.totalHarvestCoins].every(
+    (value) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0,
+  ) && Number.isSafeInteger(crop.estimatedNetCoins));
+}
+
+function signedCoins(value: number): string { return `${value >= 0 ? '+' : '−'}${Math.abs(value)}`; }
+
+function FarmRevenueQuote({ crop, freeFirstCycle = false, current = false }: {
+  crop: CommunityFarmCrop | undefined;
+  freeFirstCycle?: boolean;
+  current?: boolean;
+}): JSX.Element {
+  if (!hasRevenueQuote(crop)) return <p className={styles.quotePending}>收益报价待同步，刷新后查看基础收益与订单奖励；不以旧版数据估算。</p>;
+  return <dl className={styles.revenueRows} aria-label={current ? '本轮预计收获收益' : '下一轮收益预算'}>
+    <div><dt>每轮基础收益</dt><dd>+{crop.baseHarvestCoins} 办公币</dd></div>
+    <div><dt>下次订单额外</dt><dd>+{crop.nextOrderBonusCoins} 办公币</dd></div>
+    <div><dt>预计收获入账</dt><dd>+{crop.totalHarvestCoins} 办公币</dd></div>
+    {!current ? <div className={styles.netRevenue}><dt>{freeFirstCycle ? '首轮免费预计净收益' : '扣种子后预计净收益'}</dt><dd>{signedCoins(freeFirstCycle ? crop.totalHarvestCoins : crop.estimatedNetCoins)} 办公币</dd></div> : null}
+  </dl>;
+}
+
 export function CommunityFarmPage(): JSX.Element {
   const phase = useCommunityAuthStore((state) => state.phase);
   const userId = useCommunityAuthStore((state) => state.user?.publicId);
   const authenticated = phase !== 'bootstrapping' && phase !== 'guest';
+  const walletState = useCommunityWalletStore();
   const [overview, setOverview] = useState<CommunityFarmOverview | null>(null);
+  const [overviewOwner, setOverviewOwner] = useState('');
+  const ownerKey = `${phase}:${userId ?? ''}:${getCommunitySessionGeneration()}`;
   const [serverOffsetMs, setServerOffsetMs] = useState(0);
   const [clientNowMs, setClientNowMs] = useState(Date.now());
   const [loading, setLoading] = useState(true);
@@ -144,26 +182,44 @@ export function CommunityFarmPage(): JSX.Element {
   const mounted = useRef(true);
   const requestInFlight = useRef(false);
   const requestVersion = useRef(0);
+  const lastServerTime = useRef(Number.NEGATIVE_INFINITY);
+  const resyncAfterMutation = useRef(false);
 
-  const beginRequest = useCallback((): number | undefined => {
+  const beginRequest = useCallback((kind: 'read' | 'mutation' = 'read'): FarmRequest | undefined => {
     if (!mounted.current || requestInFlight.current) return undefined;
     requestInFlight.current = true;
     requestVersion.current += 1;
-    return requestVersion.current;
+    return { version: requestVersion.current, wallet: beginCommunityWalletObservation(kind) };
   }, []);
 
-  const isCurrentRequest = useCallback((version: number): boolean => {
+  const isCurrentRequest = useCallback((request: FarmRequest): boolean => {
     const auth = useCommunityAuthStore.getState();
-    return mounted.current && version === requestVersion.current &&
+    return mounted.current && request.version === requestVersion.current &&
       auth.phase === phase && auth.user?.publicId === userId;
   }, [phase, userId]);
 
-  const applyOverview = useCallback((next: CommunityFarmOverview): void => {
+  const applyOverview = useCallback((next: CommunityFarmOverview, wallet: CommunityWalletObservation | null = null): boolean => {
     const serverNow = Date.parse(next.serverTime);
+    const cached = useCommunityWalletStore.getState();
+    const walletTime = wallet && cached.ownerId === wallet.ownerId && cached.sessionGeneration === wallet.sessionGeneration && cached.serverTime
+      ? Date.parse(cached.serverTime) : Number.NEGATIVE_INFINITY;
+    // The header and the first farm read can race. Keep the first farm structure;
+    // its displayed balance already comes from the newer shared wallet snapshot.
+    const knownFarmTime = wallet?.kind === 'mutation' ? Math.max(lastServerTime.current, walletTime) : lastServerTime.current;
+    if (wallet && serverNow < knownFarmTime) {
+      markCommunityWalletObservationFailed(wallet);
+      setError('收到较早的农场快照，已保留较新余额，请刷新状态重试。');
+      if (wallet.kind === 'mutation') resyncAfterMutation.current = true;
+      return false;
+    }
+    lastServerTime.current = serverNow;
     setOverview(next);
+    setOverviewOwner(ownerKey);
     setServerOffsetMs(Number.isFinite(serverNow) ? serverNow - Date.now() : 0);
     setClientNowMs(Date.now());
-  }, []);
+    publishCommunityWalletOverview(wallet, next);
+    return true;
+  }, [ownerKey]);
 
   const load = useCallback(async (showLoading = true): Promise<void> => {
     const version = beginRequest();
@@ -173,9 +229,10 @@ export function CommunityFarmPage(): JSX.Element {
     setError(undefined);
     try {
       const next = authenticated ? await communityFarmApi.getOverview() : loadGuestFarm();
-      if (isCurrentRequest(version)) applyOverview(next);
+      if (isCurrentRequest(version)) applyOverview(next, version.wallet);
     } catch (requestError) {
       if (isCurrentRequest(version)) {
+        markCommunityWalletObservationFailed(version.wallet);
         setError(communityRequestErrorMessage(requestError, '绿植暂时没有连接上，请稍后再试'));
       }
     } finally {
@@ -190,6 +247,8 @@ export function CommunityFarmPage(): JSX.Element {
   useEffect(() => {
     mounted.current = true;
     setOverview(null);
+    lastServerTime.current = Number.NEGATIVE_INFINITY;
+    resyncAfterMutation.current = false;
     setBusy(false);
     setGrowthBusy(undefined);
     setNotice(undefined);
@@ -242,7 +301,7 @@ export function CommunityFarmPage(): JSX.Element {
 
   async function mainAction(): Promise<void> {
     if (!overview || overview.state === 'growing') return;
-    const version = beginRequest();
+    const version = beginRequest('mutation');
     if (version === undefined) return;
     setBusy(true);
     setError(undefined);
@@ -281,7 +340,7 @@ export function CommunityFarmPage(): JSX.Element {
             ...overview.growth,
             farmCoins: 0,
             officeCoins:
-              overview.growth.officeCoins + (harvesting ? orderReward : 0),
+              overview.growth.officeCoins + (harvesting ? GUEST_BASE_HARVEST_COINS + orderReward : 0),
             ordersCompleted: nextOrdersCompleted,
             totalHarvests: overview.growth.totalHarvests + (harvesting ? 1 : 0),
             farmVersion: overview.growth.farmVersion + 1,
@@ -289,40 +348,47 @@ export function CommunityFarmPage(): JSX.Element {
         };
         persistGuestFarm(next);
         applyOverview(next);
-        setNotice(harvesting ? '收获了 20 点成长经验，新一轮已开始。' : '浇水完成！第一轮 30 秒后成熟。');
+        setNotice(harvesting ? `试玩收获：成长经验 +20，基础试玩币 +${GUEST_BASE_HARVEST_COINS}${orderReward > 0 ? `，订单额外 +${orderReward}` : '，今日额外订单已完成'}。新一轮已开始，试玩余额不属于账号资产。` : '浇水完成！第一轮 30 秒后成熟。');
         return;
       }
       const key = createCommunityIdempotencyKey(`farm:${overview.state}`);
       const result = overview.state === 'idle'
         ? await communityFarmApi.care(key)
         : await communityFarmApi.harvestAndCare(key);
-      if (!isCurrentRequest(version)) return;
-      applyOverview(result.farm);
+      if (!isCurrentRequest(version)) { publishCommunityWalletOverview(version.wallet, result.farm); return; }
+      if (!applyOverview(result.farm, version.wallet)) return;
       if (overview.state === 'idle') {
         setNotice(result.farm.state === 'growing'
           ? '照料完成！绿植已经开始成长。'
           : '农场状态已同步，请查看当前成长状态。');
       } else {
-        const harvestSummary = result.reward?.summary ?? '收获成功！';
+        const reward = result.reward;
+        const detailed = reward && [reward.baseCoins, reward.orderBonusCoins, reward.officeCoins].every((value) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0);
+        const harvestSummary = reward?.summary?.trim() || (detailed
+          ? `收获成功：基础收益 +${reward.baseCoins}，订单额外 +${reward.orderBonusCoins}，本次入账 +${reward.officeCoins} 办公币。${reward.farmExperience > 0 ? `农场经验 +${reward.farmExperience}。` : ''}续种处理后余额 ${result.farm.growth.officeCoins} 办公币。`
+          : '收获成功！收益明细待同步，以实际余额为准。');
         setNotice(result.farm.state === 'idle'
           ? `${harvestSummary} 本次收获已保存，办公币不足以购买下一轮种子，尚未续种。请选择低成本作物或补充办公币后浇水。`
           : `${harvestSummary} 下一轮成长已经开始。`);
       }
     } catch (requestError) {
+      markCommunityWalletObservationFailed(version.wallet);
       if (isCurrentRequest(version)) {
         setError(communityRequestErrorMessage(requestError, '这次操作没有成功，请再试一次'));
       }
     } finally {
+      finishCommunityWalletObservation(version.wallet);
       if (isCurrentRequest(version)) {
         requestInFlight.current = false;
         setBusy(false);
+        if (resyncAfterMutation.current) { resyncAfterMutation.current = false; void load(false); }
       }
     }
   }
 
   async function selectCrop(cropKey: string, cropName: string): Promise<void> {
     if (!authenticated || !overview) return;
-    const version = beginRequest();
+    const version = beginRequest('mutation');
     if (version === undefined) return;
     setGrowthBusy(`crop:${cropKey}`);
     setError(undefined);
@@ -332,22 +398,25 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-crop'),
       );
-      if (!isCurrentRequest(version)) return;
-      applyOverview(result.farm);
+      if (!isCurrentRequest(version)) { publishCommunityWalletOverview(version.wallet, result.farm); return; }
+      if (!applyOverview(result.farm, version.wallet)) return;
       setNotice(`${cropName}已设为下一轮作物，当前成长不会被打断。`);
     } catch (requestError) {
+      markCommunityWalletObservationFailed(version.wallet);
       if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '作物选择没有保存，请刷新后再试'));
     } finally {
+      finishCommunityWalletObservation(version.wallet);
       if (isCurrentRequest(version)) {
         requestInFlight.current = false;
         setGrowthBusy(undefined);
+        if (resyncAfterMutation.current) { resyncAfterMutation.current = false; void load(false); }
       }
     }
   }
 
   async function upgradeTool(tool: CommunityFarmTool): Promise<void> {
     if (!authenticated || !overview) return;
-    const version = beginRequest();
+    const version = beginRequest('mutation');
     if (version === undefined) return;
     setGrowthBusy(`tool:${tool.id}`);
     setError(undefined);
@@ -357,22 +426,25 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-tool'),
       );
-      if (!isCurrentRequest(version)) return;
-      applyOverview(result.farm);
+      if (!isCurrentRequest(version)) { publishCommunityWalletOverview(version.wallet, result.farm); return; }
+      if (!applyOverview(result.farm, version.wallet)) return;
       setNotice(`${tool.name}已升到 Lv.${result.farm.tools.find((item) => item.id === tool.id)?.level ?? tool.level + 1}，消耗 ${result.cost} 办公币。`);
     } catch (requestError) {
+      markCommunityWalletObservationFailed(version.wallet);
       if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '工具升级没有成功，请确认办公币余额和档案状态'));
     } finally {
+      finishCommunityWalletObservation(version.wallet);
       if (isCurrentRequest(version)) {
         requestInFlight.current = false;
         setGrowthBusy(undefined);
+        if (resyncAfterMutation.current) { resyncAfterMutation.current = false; void load(false); }
       }
     }
   }
 
   async function upgradeSkill(skill: CommunityFarmSkill): Promise<void> {
     if (!authenticated || !overview) return;
-    const version = beginRequest();
+    const version = beginRequest('mutation');
     if (version === undefined) return;
     setGrowthBusy(`skill:${skill.id}`);
     setError(undefined);
@@ -382,20 +454,23 @@ export function CommunityFarmPage(): JSX.Element {
         overview.growth.farmVersion,
         createCommunityIdempotencyKey('farm-skill'),
       );
-      if (!isCurrentRequest(version)) return;
-      applyOverview(result.farm);
+      if (!isCurrentRequest(version)) { publishCommunityWalletOverview(version.wallet, result.farm); return; }
+      if (!applyOverview(result.farm, version.wallet)) return;
       setNotice(`${skill.name}已升到 Lv.${result.farm.skills.find((item) => item.id === skill.id)?.level ?? skill.level + 1}。`);
     } catch (requestError) {
+      markCommunityWalletObservationFailed(version.wallet);
       if (isCurrentRequest(version)) setError(communityRequestErrorMessage(requestError, '技能升级没有成功，请确认技能点和解锁等级'));
     } finally {
+      finishCommunityWalletObservation(version.wallet);
       if (isCurrentRequest(version)) {
         requestInFlight.current = false;
         setGrowthBusy(undefined);
+        if (resyncAfterMutation.current) { resyncAfterMutation.current = false; void load(false); }
       }
     }
   }
 
-  if (loading) {
+  if (loading || (overview && overviewOwner !== ownerKey)) {
     return <main className={styles.page}><div className={styles.loading} role="status"><span>☘</span><p>正在打开你的工位绿植…</p></div></main>;
   }
 
@@ -408,12 +483,18 @@ export function CommunityFarmPage(): JSX.Element {
   const idle = overview.state === 'idle';
   const operationBusy = busy || Boolean(growthBusy) || refreshing;
   const selectedCrop = overview.crops.find((crop) => crop.selected);
+  const currentCrop = overview.crops.find((crop) => crop.growing) ?? overview.crops.find(
+    (crop) => crop.key === overview.plant.appearanceKey || crop.name === overview.plant.name,
+  );
   // Older servers reported firstCycle=true whenever there was no active cycle.
   const freeFirstCycle = idle && overview.plant.firstCycle && overview.growth.totalHarvests === 0;
   const seedCost = !authenticated || freeFirstCycle ? 0 : selectedCrop?.seedCost ?? 0;
-  const insufficientSeeds = authenticated && seedCost > overview.growth.officeCoins;
+  const walletMatches = authenticated && Boolean(userId) && walletState.ownerId === userId && walletState.sessionGeneration === getCommunitySessionGeneration();
+  const visibleBalance = walletMatches && walletState.officeCoins !== null ? walletState.officeCoins : overview.growth.officeCoins;
+  const balanceUnsynced = walletMatches && (walletState.status === 'stale' || walletState.status === 'error');
+  const insufficientSeeds = authenticated && seedCost > visibleBalance;
   const affordableCrops = overview.crops.filter((crop) =>
-    crop.unlocked && !crop.selected && crop.seedCost < seedCost && crop.seedCost <= overview.growth.officeCoins,
+    crop.unlocked && !crop.selected && crop.seedCost < seedCost && crop.seedCost <= visibleBalance,
   );
   const actionLabel = idle
     ? insufficientSeeds ? '办公币不足，请先选择低成本作物' : '浇水，开始成长'
@@ -433,9 +514,14 @@ export function CommunityFarmPage(): JSX.Element {
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <div className={styles.rewardToast} role="status"><span>✓</span><div><strong>操作成功</strong><p>{notice}</p></div></div> : null}
 
+      <section className={styles.walletCard} aria-label={authenticated ? '农场办公币余额' : '本机试玩余额'} data-guest={!authenticated}>
+        <div><span>{authenticated ? '我的办公币余额' : '游客 · 本机试玩币'}</span><strong>{visibleBalance.toLocaleString('zh-CN')}<small>{authenticated ? '办公币' : '试玩币'}</small></strong>{balanceUnsynced ? <small className={styles.balanceUnsynced}>余额待同步 · 当前显示上次确认值</small> : null}<p>{authenticated ? '与全站共用同一余额，用于种子和工具；操作后以服务器余额为准。' : '仅供当前浏览器体验，不是账号资产，登录不会转入真实余额。'}</p></div>
+        <div className={styles.incomeRule}><strong>{authenticated ? '每次收获都有基础收益' : `每次试玩收获 +${GUEST_BASE_HARVEST_COINS} 基础试玩币`}</strong><span>今日额外订单 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}</span><small>{overview.growth.ordersCompleted >= overview.growth.ordersTotal ? '今日额外订单已完成，后续收获仍有基础收益。' : `每天前 ${overview.growth.ordersTotal} 次收获，另加订单奖励。`}</small></div>
+      </section>
+
       <section className={styles.growthSummary} aria-label="农场成长摘要">
         <article><span>农场等级</span><strong>Lv.{overview.plant.level}</strong><small>{overview.plant.experience} 总经验</small></article>
-        <article><span>办公币</span><strong>{overview.growth.officeCoins}</strong><small>社区历史成长资产</small></article>
+        <article><span>已解锁地块</span><strong>{overview.growth.plotCount} 块</strong><small>统一种植与收获</small></article>
         <article><span>技能点</span><strong>{overview.growth.skillPointsAvailable}</strong><small>累计获得 {overview.growth.skillPointsEarned}</small></article>
         <article><span>下一解锁</span><strong>{overview.growth.nextUnlock ? `Lv.${overview.growth.nextUnlock.level}` : '已完成'}</strong><small>{overview.growth.nextUnlock?.name ?? '全部内容已开放'}</small></article>
         <div className={styles.farmLevelProgress}><span style={{ width: `${levelProgress}%` }} /></div>
@@ -474,6 +560,8 @@ export function CommunityFarmPage(): JSX.Element {
             </p>
           </div>
 
+          {!idle && authenticated ? <section className={styles.currentRevenue} aria-label="本轮收获预估"><strong>本轮作物：{currentCrop?.name ?? overview.plant.name}</strong><FarmRevenueQuote crop={currentCrop} current /><p>按当前等级和地块估算，不代表历史实际种子费；订单按实际收获当天结算。</p></section> : null}
+
           <div className={styles.seedBudget} data-insufficient={insufficientSeeds} aria-label="下一轮种植预算">
             <strong>下一轮作物：{selectedCrop?.name ?? overview.plant.name}</strong>
             <p>{!authenticated
@@ -481,19 +569,20 @@ export function CommunityFarmPage(): JSX.Element {
               : freeFirstCycle
                 ? '首次种植免费；后续每轮会按已解锁地块购买种子。'
                 : `${selectedCrop?.seedCostPerPlot ?? 0} 办公币/块 × ${overview.growth.plotCount} 块 = ${seedCost} 办公币`}</p>
-            {authenticated ? <p>当前余额：{overview.growth.officeCoins} 办公币{insufficientSeeds ? `，还差 ${seedCost - overview.growth.officeCoins}。` : '。'}</p> : null}
+            {authenticated ? <p>当前余额：{visibleBalance} 办公币{insufficientSeeds ? `，还差 ${seedCost - visibleBalance}。` : '。'}{balanceUnsynced ? '余额待同步，请刷新状态确认。' : ''}</p> : null}
+            {authenticated ? <><FarmRevenueQuote crop={selectedCrop} freeFirstCycle={freeFirstCycle} /><p className={styles.quoteNote}>报价按当前等级、工具、技能、地块及今日剩余订单计算；跨日或升级后会更新。</p></> : null}
             {insufficientSeeds ? <p>
               {ready ? '仍可收获，收益会先到账；余额足够才会续种。' : '种子办公币不足，刷新不会增加余额。'}
               {affordableCrops.length
                 ? ` 可在下方手动选择：${affordableCrops.map((crop) => `${crop.name}（${crop.seedCost} 办公币）`).join('、')}。`
-                : ' 当前没有买得起的已解锁作物，请补充办公币后再种植。'}
+                : ready ? ' 可先收获，到账后再按新余额判断是否续种。' : ' 当前没有买得起的已解锁作物，请补充办公币后再种植。'}
             </p> : ready && authenticated ? <p>收获后如解锁更多地块，续种费用会按新地块数计算；余额不足时仅收获、不续种。</p> : null}
           </div>
           <Button className={styles.mainAction} fullWidth loading={busy} disabled={operationBusy || (!idle && !ready) || (idle && insufficientSeeds)} onClick={() => void mainAction()}>
             {actionLabel}
           </Button>
           <Button className={styles.refreshAction} variant="secondary" fullWidth loading={refreshing} disabled={operationBusy} onClick={refreshState}>刷新状态</Button>
-          <small className={styles.actionHint}>今日订单 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}；前三次收获会获得办公币。</small>
+          <small className={styles.actionHint}>每轮都有基础收益；每日前 {overview.growth.ordersTotal} 次收获再领额外订单奖励。</small>
         </div>
       </section>
 
@@ -519,7 +608,7 @@ export function CommunityFarmPage(): JSX.Element {
             ? ` Lv.${overview.growth.nextPlotUnlock.level} 解锁第 ${overview.growth.nextPlotUnlock.count} 块。`
             : ' 所有地块已经解锁。'}
         </p>
-        <p className={styles.plotHint}>当前农场等级提供订单办公币 +{overview.growth.officeCoinLevelBonusPercent}% 加成。</p>
+        <p className={styles.plotHint}>当前农场等级为基础收获和额外订单提供办公币 +{overview.growth.officeCoinLevelBonusPercent}% 加成。</p>
       </section>
 
       <section className={styles.growthSection} aria-labelledby="farm-crops-title">
@@ -530,6 +619,7 @@ export function CommunityFarmPage(): JSX.Element {
               <b>{crop.mark}</b>
               <div><strong>{crop.name}</strong><small>{crop.description}</small></div>
               <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>总成本</dt><dd>{crop.seedCost} 办公币</dd></div><div><dt>总经验</dt><dd>{crop.experience}</dd></div></dl>
+              {authenticated ? <div className={styles.cropRevenue}><FarmRevenueQuote crop={crop} /></div> : <p className={styles.guestCropHint}>登录后读取真实账号的成本与收益报价。</p>}
               <Button
                 variant={crop.selected ? 'secondary' : 'primary'}
                 loading={growthBusy === `crop:${crop.key}`}
@@ -549,7 +639,7 @@ export function CommunityFarmPage(): JSX.Element {
           <div className={styles.upgradeList}>
             {overview.tools.map((tool) => {
               const maxed = tool.level >= tool.maxLevel;
-              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || overview.growth.officeCoins < tool.nextCost || operationBusy} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 办公币升级`}</Button></article>;
+              return <article key={tool.id}><div><span>{tool.slot}</span><strong>{tool.name}</strong><small>{tool.description}</small></div><b>Lv.{tool.level}</b><Button variant="secondary" loading={growthBusy === `tool:${tool.id}`} disabled={!authenticated || maxed || visibleBalance < tool.nextCost || operationBusy} onClick={() => void upgradeTool(tool)}>{!authenticated ? '登录后升级' : maxed ? '已满级' : `${tool.nextCost} 办公币升级`}</Button></article>;
             })}
           </div>
         </div>
@@ -568,7 +658,7 @@ export function CommunityFarmPage(): JSX.Element {
         <div className={styles.sectionHeading}><div><span>TODAY</span><h2 id="farm-today-title">今天只做这些</h2></div><small>养成是可选深度</small></div>
         <div className={styles.taskGrid}>
           <article data-done={!idle}><span>{!idle ? '✓' : '1'}</span><div><strong>照料一次</strong><p>{!idle ? '今天已经照料过了' : '点上面的绿色按钮完成'}</p></div></article>
-          <article data-done={overview.growth.ordersCompleted > 0}><span>{overview.growth.ordersCompleted > 0 ? '✓' : '2'}</span><div><strong>完成农场订单</strong><p>今日 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}，前三份订单产出办公币</p></div></article>
+          <article data-done={overview.growth.ordersCompleted > 0}><span>{overview.growth.ordersCompleted > 0 ? '✓' : '2'}</span><div><strong>完成农场订单</strong><p>今日 {overview.growth.ordersCompleted}/{overview.growth.ordersTotal}，额外奖励之外，每轮仍有基础收益</p></div></article>
           <article data-done={overview.pendingEncouragements > 0}><span>{overview.pendingEncouragements > 0 ? '✓' : '3'}</span><div><strong>看看好友鼓励</strong><p>{overview.pendingEncouragements > 0 ? `收到 ${overview.pendingEncouragements} 份鼓励` : '有好友鼓励时叶子会闪光'}</p></div></article>
         </div>
       </section>

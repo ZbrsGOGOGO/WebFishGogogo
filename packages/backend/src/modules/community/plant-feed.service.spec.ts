@@ -69,7 +69,15 @@ describe('DeskPlantService and FeedService integration', () => {
 
   it('uses a 30-second first cycle and replays harvest without duplicate rewards', async () => {
     const user = await activeUser('plant@example.com', 'Plant');
-    expect((await plants.overview(user.id)).plant.firstCycle).toBe(true);
+    const initial = await plants.overview(user.id);
+    expect(initial.plant.firstCycle).toBe(true);
+    expect(initial.crops[0]).toMatchObject({
+      baseHarvestCoins: 20,
+      nextOrderBonusCoins: 100,
+      totalHarvestCoins: 120,
+      estimatedNetCoins: 110,
+      seedCost: 10,
+    });
     const cared = await plants.care(user.id, 'plant-care-first-key');
     const caredReplay = await plants.care(user.id, 'plant-care-first-key');
     expect(caredReplay).toEqual(cared);
@@ -92,6 +100,10 @@ describe('DeskPlantService and FeedService integration', () => {
       expect.objectContaining({
         standardRewardGranted: true,
         onboardingRewardGranted: true,
+        baseCoins: 20,
+        orderBonusCoins: 100,
+        officeCoins: 120,
+        summary: expect.stringContaining('当前余额 610'),
       }),
     );
     expect((harvested as any).farm.plant.cycleSeconds).toBe(5 * 60);
@@ -99,7 +111,7 @@ describe('DeskPlantService and FeedService integration', () => {
     expect((harvested as any).farm.plant.level).toBe(2);
     expect((harvested as any).farm.growth).toMatchObject({
       farmCoins: 0,
-      officeCoins: 590,
+      officeCoins: 610,
       totalHarvests: 1,
       skillPointsAvailable: 1,
     });
@@ -107,7 +119,19 @@ describe('DeskPlantService and FeedService integration', () => {
     expect((harvested as any).farm.tools).toHaveLength(3);
     expect((harvested as any).farm.skills).toHaveLength(3);
     expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(2);
-    expect(await dataSource.getRepository(RewardGrant).count()).toBe(1);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(2);
+    expect(await dataSource.getRepository(RewardGrant).countBy({
+      sourceType: 'farm_harvest',
+      sourceId: (await dataSource.getRepository(DeskPlantCycle).findOneByOrFail({
+        userId: user.id,
+        sequence: 1,
+      })).id,
+      ruleKey: 'farm-harvest-v1',
+    })).toBe(1);
+    expect(await dataSource.getRepository(WalletLedger).findOneByOrFail({
+      userId: user.id,
+      sourceType: 'farm_harvest',
+    })).toMatchObject({ delta: 20, reason: 'farm-harvest-v1' });
     expect(await dataSource.getRepository(DeskPlantRewardClaim).count()).toBe(2);
     expect(
       (await dataSource.getRepository(DeskPlant).findOneByOrFail({ userId: user.id }))
@@ -124,8 +148,56 @@ describe('DeskPlantService and FeedService integration', () => {
         userId: user.id,
         currency: 'office_coin',
       })).balance,
-    ).toBe(590);
+    ).toBe(610);
     expect(await dataSource.getRepository(OutboxEvent).count()).toBe(0);
+  });
+
+  it('keeps paying the base harvest after all three daily extra orders are used', async () => {
+    const user = await activeUser('daily-base@example.com', 'Daily Base');
+    await plants.care(user.id, 'daily-base-care');
+
+    const harvests: any[] = [];
+    now = new Date(now.getTime() + 31_000);
+    harvests.push(await plants.harvestAndCare(user.id, 'daily-base-harvest-1'));
+    for (let index = 2; index <= 4; index += 1) {
+      now = new Date(now.getTime() + 5 * 60 * 1_000 + 1_000);
+      harvests.push(await plants.harvestAndCare(user.id, `daily-base-harvest-${index}`));
+    }
+
+    expect(harvests.map((result) => result.reward.orderBonusCoins))
+      .toEqual([100, 120, 140, 0]);
+    expect(harvests.map((result) => result.reward.baseCoins))
+      .toEqual([20, 20, 20, 20]);
+    expect(harvests[3]).toMatchObject({
+      farm: {
+        state: 'growing',
+        growth: { officeCoins: 900, totalHarvests: 4, ordersCompleted: 3 },
+        crops: expect.arrayContaining([expect.objectContaining({
+          nextOrderBonusCoins: 0,
+          totalHarvestCoins: 20,
+          estimatedNetCoins: 10,
+        })]),
+      },
+      reward: {
+        orderRewardGranted: false,
+        baseCoins: 20,
+        orderBonusCoins: 0,
+        officeCoins: 20,
+        summary: expect.stringContaining('本次仍已获得基础收益'),
+      },
+    });
+    expect(await dataSource.getRepository(RewardGrant).countBy({
+      sourceType: 'farm_harvest',
+    })).toBe(4);
+    expect(await dataSource.getRepository(RewardGrant).countBy({
+      sourceType: 'farm_order',
+    })).toBe(3);
+    expect(await dataSource.getRepository(DeskPlantRewardClaim).countBy({
+      rewardType: 'standard',
+    })).toBe(3);
+    expect((await dataSource.getRepository(PlayerProgression).findOneByOrFail({
+      userId: user.id,
+    })).experience).toBe(24);
   });
 
   it('reports the full batch seed cost without spending and allows an idempotent cheaper restart', async () => {
@@ -202,7 +274,7 @@ describe('DeskPlantService and FeedService integration', () => {
     });
     await dataSource.getRepository(WalletBalance).update(
       { userId: user.id, currency: 'office_coin' },
-      { balance: '100' },
+      { balance: '0' },
     );
 
     const harvested = await plants.harvestAndCare(user.id, 'harvest-balance-preserved');
@@ -210,13 +282,15 @@ describe('DeskPlantService and FeedService integration', () => {
       farm: {
         state: 'idle',
         plant: { firstCycle: false, experience: 1285, maturesAt: null },
-        growth: { officeCoins: 232, totalHarvests: 2 },
+        growth: { officeCoins: 396, totalHarvests: 2 },
       },
       reward: {
         orderRewardGranted: true,
         onboardingRewardGranted: false,
         farmExperience: 128,
-        officeCoins: 132,
+        baseCoins: 264,
+        orderBonusCoins: 132,
+        officeCoins: 396,
         summary: expect.stringContaining('未开始下一轮'),
       },
     });
@@ -224,7 +298,7 @@ describe('DeskPlantService and FeedService integration', () => {
     expect(await plants.overview(user.id)).toMatchObject({
       state: 'idle',
       plant: { experience: 1285, firstCycle: false },
-      growth: { officeCoins: 232, totalHarvests: 2 },
+      growth: { officeCoins: 396, totalHarvests: 2 },
     });
     expect((await dataSource.getRepository(DeskPlantCycle).findOneByOrFail({
       id: matureCycle.id,
@@ -232,7 +306,7 @@ describe('DeskPlantService and FeedService integration', () => {
     expect(await dataSource.getRepository(DeskPlantCycle).count()).toBe(2);
     expect(await dataSource.getRepository(DeskPlantCycle).countBy({ harvestedAt: IsNull() })).toBe(0);
     expect(await dataSource.getRepository(WalletLedger).countBy({ sourceType: 'farm_seed' })).toBe(1);
-    expect(await dataSource.getRepository(RewardGrant).count()).toBe(2);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(4);
     expect(await dataSource.getRepository(DeskPlantRewardClaim).count()).toBe(3);
   });
 
@@ -335,7 +409,7 @@ describe('DeskPlantService and FeedService integration', () => {
     ) as any;
     expect(tool.cost).toBe(200);
     expect(tool.farm.growth.farmCoins).toBe(0);
-    expect(tool.farm.growth.officeCoins).toBe(390);
+    expect(tool.farm.growth.officeCoins).toBe(410);
     expect(tool.farm.tools.find((item: any) => item.id === 'watering_can').level).toBe(1);
     await expect(plants.upgradeTool(user.id, 'planter_box', 2, 'growth-stale-tool'))
       .rejects.toMatchObject({ response: { code: 'FARM_VERSION_CONFLICT' } });
@@ -379,7 +453,7 @@ describe('DeskPlantService and FeedService integration', () => {
       'boundary-next-day-harvest',
     );
     expect((nextServiceDay as any).reward.standardRewardGranted).toBe(true);
-    expect(await dataSource.getRepository(RewardGrant).count()).toBe(3);
+    expect(await dataSource.getRepository(RewardGrant).count()).toBe(6);
     expect(
       await dataSource.getRepository(DeskPlantRewardClaim).countBy({
         rewardType: 'standard',

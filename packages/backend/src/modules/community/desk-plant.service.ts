@@ -38,6 +38,7 @@ import {
   FARM_SKILL_MAX_LEVEL,
   FARM_TOOLS,
   FARM_TOOL_MAX_LEVEL,
+  farmBaseHarvestReward,
   farmCrop,
   farmLevelSnapshot,
   farmOfficeCoinLevelBonusPercent,
@@ -63,6 +64,8 @@ export interface FarmRewardView {
   ordersCompleted: number;
   ordersTotal: number;
   farmExperience: number;
+  baseCoins: number;
+  orderBonusCoins: number;
   officeCoins: number;
   levelUp: boolean;
   summary: string | null;
@@ -175,6 +178,8 @@ export class DeskPlantService {
         normalizeFarmToolLevels(plant.toolLevels),
         normalizeFarmSkillLevels(plant.skillLevels),
       );
+      const toolLevels = normalizeFarmToolLevels(plant.toolLevels);
+      const skillLevels = normalizeFarmSkillLevels(plant.skillLevels);
       plant.plantExperience += harvest.experience * plotCount;
       plant.totalHarvests = Math.max(0, Number(plant.totalHarvests ?? 0)) + 1;
       plant.state = 'idle';
@@ -187,7 +192,21 @@ export class DeskPlantService {
             rewardKey: Like(`ORDER:${serviceDate}:%`),
           },
         });
-      let officeCoins = 0;
+      const baseCoins = farmBaseHarvestReward(
+        crop,
+        plotCount,
+        toolLevels,
+        skillLevels,
+        previousLevel,
+      );
+      await this.assets.grantReward(manager, {
+        userId,
+        sourceType: 'farm_harvest',
+        sourceId: cycle.id,
+        ruleKey: 'farm-harvest-v1',
+        reward: { currencies: { office_coin: baseCoins } },
+      });
+      let orderBonusCoins = 0;
       let orderRewardGranted = false;
       if (completedBefore < FARM_DAILY_ORDER_LIMIT) {
         orderRewardGranted = await this.claimReward(
@@ -200,10 +219,10 @@ export class DeskPlantService {
         );
       }
       if (orderRewardGranted) {
-        officeCoins = farmOrderReward(
+        orderBonusCoins = farmOrderReward(
           completedBefore,
-          normalizeFarmToolLevels(plant.toolLevels),
-          normalizeFarmSkillLevels(plant.skillLevels),
+          toolLevels,
+          skillLevels,
           previousLevel,
         );
         await this.assets.grantReward(manager, {
@@ -213,7 +232,7 @@ export class DeskPlantService {
           ruleKey: 'farm-order-v1',
           reward: {
             experience: 8,
-            currencies: { office_coin: officeCoins },
+            currencies: { office_coin: orderBonusCoins },
           },
         });
         if (completedBefore === 0) {
@@ -253,6 +272,7 @@ export class DeskPlantService {
 
       const farmExperience = harvest.experience * plotCount +
         (onboardingRewardGranted ? ONBOARDING_PLANT_EXPERIENCE : 0);
+      const officeCoins = baseCoins + orderBonusCoins;
       const reward: FarmRewardView = {
         standardRewardGranted: orderRewardGranted,
         onboardingRewardGranted,
@@ -263,19 +283,31 @@ export class DeskPlantService {
         ),
         ordersTotal: FARM_DAILY_ORDER_LIMIT,
         farmExperience,
+        baseCoins,
+        orderBonusCoins,
         officeCoins,
         levelUp: plant.level > previousLevel,
-        summary: [
-          `${plotCount} 块地的${crop.name}收获：农场经验 +${farmExperience}`,
-          orderRewardGranted
-            ? `今日订单 ${completedBefore + 1}/${FARM_DAILY_ORDER_LIMIT}：职场经验 +8、办公币 +${officeCoins}`
-            : '今日三份办公币订单已完成，作物继续进入仓库进度',
-          plant.level > previousLevel ? `农场升到 Lv.${plant.level}` : null,
-          nextCycle ? null : '本轮收获已保留；办公币不足，未开始下一轮，可切换低成本作物后再浇水',
-        ].filter(Boolean).join('；'),
+        summary: null,
       };
+      const farm = await this.view(manager, userId, plant, now, reward);
+      const nextCrop = farmCrop(plant.selectedCropKey) ?? FARM_CROPS[0];
+      const nextSeedCost = nextCycle
+        ? nextCrop.seedCost * farmPlotCount(plant.level)
+        : null;
+      reward.summary = [
+        `${plotCount} 块地的${crop.name}收获：农场经验 +${farmExperience}`,
+        `本轮基础收益：办公币 +${baseCoins}`,
+        orderRewardGranted
+          ? `今日额外订单 ${completedBefore + 1}/${FARM_DAILY_ORDER_LIMIT}：职场经验 +8、办公币 +${orderBonusCoins}`
+          : '今日三份额外订单已完成，本次仍已获得基础收益',
+        `本轮办公币总到账 +${officeCoins}`,
+        plant.level > previousLevel ? `农场升到 Lv.${plant.level}` : null,
+        nextCycle
+          ? `下一轮${nextCrop.name}已扣种子费 ${nextSeedCost} 办公币，当前余额 ${farm.growth.officeCoins}`
+          : `本轮收获已保留，当前余额 ${farm.growth.officeCoins}；办公币不足，未开始下一轮，可切换低成本作物后再浇水`,
+      ].filter(Boolean).join('；');
       const result = {
-        farm: await this.view(manager, userId, plant, now, reward),
+        farm,
         reward,
       };
       return this.record(
@@ -593,13 +625,29 @@ export class DeskPlantService {
       },
       crops: FARM_CROPS.map((crop) => {
         const reward = calculateFarmCycle(crop, toolLevels, skillLevels);
+        const seedCost = crop.seedCost * plotCount;
+        const baseHarvestCoins = farmBaseHarvestReward(
+          crop,
+          plotCount,
+          toolLevels,
+          skillLevels,
+          level.level,
+        );
+        const nextOrderBonusCoins = ordersCompleted < FARM_DAILY_ORDER_LIMIT
+          ? farmOrderReward(ordersCompleted, toolLevels, skillLevels, level.level)
+          : 0;
+        const totalHarvestCoins = baseHarvestCoins + nextOrderBonusCoins;
         return {
           ...crop,
           durationSeconds: reward.durationSeconds,
           experience: reward.experience * plotCount,
           coins: reward.coins,
+          baseHarvestCoins,
+          nextOrderBonusCoins,
+          totalHarvestCoins,
+          estimatedNetCoins: totalHarvestCoins - seedCost,
           seedCostPerPlot: crop.seedCost,
-          seedCost: crop.seedCost * plotCount,
+          seedCost,
           unlocked: level.level >= crop.unlockLevel,
           selected: selectedCrop.key === crop.key,
           growing: currentCrop.key === crop.key && state !== 'idle',

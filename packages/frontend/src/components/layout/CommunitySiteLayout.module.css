@@ -13,6 +13,9 @@
 .unreadBadge { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; color: #fff; background: #df514c; font-size: 10px; font-style: normal; font-weight: 900; line-height: 1; }
 .topNav .unreadBadge { margin-left: 6px; }
 .accountActions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.walletLink { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 7px; max-width: 175px; min-height: 42px; padding: 7px 10px; border: 1px solid #9a844757; border-radius: 10px; color: #f1d48d; background: #705d222e; }
+.walletLink > span { font-size: 11px; }.walletLink strong { overflow: hidden; color: #ffe5a0; font-size: 15px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }.walletLink small { grid-column: 1/-1; color: #d3b777; font-size: 10px; text-align: right; }
+.walletLink:hover { border-color: #dbc06a; background: #8b743d40; }.walletLink:focus-visible { outline: 3px solid #d4c070; outline-offset: 3px; }.walletLink[data-stale='true'] { border-style: dashed; }
 .sessionState, .accountLink, .loginLink, .noticeLink { max-width: 144px; padding: 7px 9px; overflow: hidden; color: #d4dae4; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .registerLink { padding: 8px 12px; border-radius: 9px; color: #173122; background: #a7e975; font-size: 12px; font-weight: 800; }
 .registerLink:hover { color: #173122; background: #bbf18f; }
@@ -68,6 +71,7 @@
   .headerInner { min-height: 58px; }
   .topNav, .brand small, .noticeLink, .accountLink, .accountActions button { display: none; }
   .brand { min-width: 0; flex: 1; }
+  .walletLink { max-width: 160px; padding: 6px 9px; }.walletLink strong { font-size: 14px; }
   .workspace, .workspace[data-home='true'] { min-height: calc(100dvh - 58px); display: block; }
   .leftRail, .rightRail { display: none; }
   .main { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }

@@ -17,6 +17,11 @@ describe('community moderation release flag', () => {
     vi.resetModules();
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
+      if (url.endsWith('/v1/farm')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          serverTime: '2026-09-08T00:00:00.000Z', growth: { officeCoins: 620 },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
       if (url.includes('/v1/development/access')) {
         return Promise.resolve(new Response(JSON.stringify({
           enabled: false,
@@ -52,7 +57,7 @@ describe('community moderation release flag', () => {
 
     expect(await screen.findByRole('heading', { name: '内容审核台尚未开放' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '内容审核台' })).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.every(([url]) => String(url).includes('/v1/development/access'))).toBe(true);
+    expect(fetchMock.mock.calls.every(([url]) => String(url).includes('/v1/development/access') || String(url).endsWith('/v1/farm'))).toBe(true);
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/moderation'))).toBe(false);
   });
 });

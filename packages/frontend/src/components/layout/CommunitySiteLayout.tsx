@@ -11,6 +11,11 @@ import {
 import { SITE_NAME } from '../../app/site-config';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
+  refreshCommunityWallet,
+  synchronizeCommunityWalletSession,
+  useCommunityWalletStore,
+} from '../../app/store/community-wallet-store';
+import {
   acquireCommunityChatConnection,
   releaseCommunityChatConnection,
 } from '../../features/community-chat/community-chat-connection';
@@ -61,10 +66,24 @@ export function CommunitySiteLayout(): JSX.Element {
   const currentSystem = communitySystemByPath(location.pathname);
   const [directUnreadCount, setDirectUnreadCount] = useState(0);
   const developmentAccess = useDevelopmentAccessState();
+  const wallet = useCommunityWalletStore();
 
   useEffect(() => {
     void restoreSession();
   }, [restoreSession]);
+
+  useEffect(() => {
+    synchronizeCommunityWalletSession();
+    if (phase !== 'active' || !user?.publicId) return;
+    void refreshCommunityWallet();
+    const refresh = (): void => { if (!document.hidden) void refreshCommunityWallet(); };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [phase, user?.publicId, location.pathname]);
 
   useEffect(() => {
     if (
@@ -124,6 +143,11 @@ export function CommunitySiteLayout(): JSX.Element {
     : '办公室新人';
   const developmentAllowed = developmentAccess.status === 'allowed';
   const developmentCurrent = location.pathname.startsWith('/development');
+  const walletBalance = wallet.ownerId === user?.publicId ? wallet.officeCoins : null;
+  const walletUnsynced = wallet.status === 'stale' || wallet.status === 'error';
+  const walletLabel = walletBalance === null
+    ? walletUnsynced ? '余额未同步' : '余额同步中'
+    : walletBalance.toLocaleString('zh-CN');
 
   return (
     <DevelopmentAccessProvider value={developmentAccess}>
@@ -163,6 +187,7 @@ export function CommunitySiteLayout(): JSX.Element {
               <span className={styles.sessionState}>连接中…</span>
             ) : signedIn ? (
               <>
+                {phase === 'active' ? <Link className={styles.walletLink} to="/farm" aria-label={`办公币 ${walletLabel}${walletUnsynced && walletBalance !== null ? '，待同步' : ''}，查看农场余额与收益`} title="查看农场余额与收益" data-stale={walletUnsynced}><span>办公币</span><strong>{walletLabel}</strong>{walletUnsynced && walletBalance !== null ? <small>待同步</small> : null}</Link> : null}
                 {phase === 'active' && COMMUNITY_FEATURE_FLAGS.community && COMMUNITY_FEATURE_FLAGS.moderation && user?.roles?.some((role) => role === 'moderator' || role === 'admin') ? (
                   <Link className={styles.noticeLink} to="/moderation">审核台</Link>
                 ) : null}

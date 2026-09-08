@@ -30,18 +30,20 @@ export interface FarmCropDefinition {
   durationSeconds: number;
   experience: number;
   seedCost: number;
+  /** 每块地的常规收获毛收入；工具、技能和农场等级加成在结算时叠加。 */
+  baseHarvestCoinsPerPlot: number;
   /** 首份订单的预览值；实际奖励取决于当天订单序号。 */
   coins: number;
   description: string;
 }
 
 export const FARM_CROPS: readonly FarmCropDefinition[] = [
-  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 5 * 60, experience: 12, seedCost: 10, coins: 100, description: '成熟最快，适合刚开始经营。' },
-  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 20 * 60, experience: 32, seedCost: 25, coins: 100, description: '稳定产出，适合短时回来收获。' },
-  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 60 * 60, experience: 70, seedCost: 60, coins: 100, description: '经验与订单效率均衡。' },
-  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 2 * 60 * 60, experience: 125, seedCost: 110, coins: 100, description: '适合离线两小时后回来收获。' },
-  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 4 * 60 * 60, experience: 230, seedCost: 180, coins: 100, description: '中后期主力作物。' },
-  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 8 * 60 * 60, experience: 420, seedCost: 300, coins: 100, description: '适合完整工作日的长周期作物。' },
+  { key: 'desk_mint', name: '工位薄荷', mark: '薄', unlockLevel: 1, durationSeconds: 5 * 60, experience: 12, seedCost: 10, baseHarvestCoinsPerPlot: 20, coins: 100, description: '成熟最快，适合刚开始经营。' },
+  { key: 'meeting_tomato', name: '会议番茄', mark: '茄', unlockLevel: 3, durationSeconds: 20 * 60, experience: 32, seedCost: 25, baseHarvestCoinsPerPlot: 60, coins: 100, description: '稳定产出，适合短时回来收获。' },
+  { key: 'deadline_strawberry', name: '截止日草莓', mark: '莓', unlockLevel: 6, durationSeconds: 60 * 60, experience: 70, seedCost: 60, baseHarvestCoinsPerPlot: 180, coins: 100, description: '经验与订单效率均衡。' },
+  { key: 'overtime_coffee', name: '加班咖啡果', mark: '咖', unlockLevel: 10, durationSeconds: 2 * 60 * 60, experience: 125, seedCost: 110, baseHarvestCoinsPerPlot: 360, coins: 100, description: '适合离线两小时后回来收获。' },
+  { key: 'promotion_sunflower', name: '晋升向日葵', mark: '升', unlockLevel: 15, durationSeconds: 4 * 60 * 60, experience: 230, seedCost: 180, baseHarvestCoinsPerPlot: 720, coins: 100, description: '中后期主力作物。' },
+  { key: 'annual_moonflower', name: '年终月光花', mark: '年', unlockLevel: 22, durationSeconds: 8 * 60 * 60, experience: 420, seedCost: 300, baseHarvestCoinsPerPlot: 1500, coins: 100, description: '适合完整工作日的长周期作物。' },
 ] as const;
 
 export interface FarmToolDefinition {
@@ -54,7 +56,7 @@ export interface FarmToolDefinition {
 export const FARM_TOOLS: readonly FarmToolDefinition[] = [
   { id: 'watering_can', name: '定时浇水壶', slot: '浇水工具', description: '每级让成熟时间缩短 4%。' },
   { id: 'planter_box', name: '透气种植箱', slot: '种植容器', description: '每级让农场经验增加 8%。' },
-  { id: 'harvest_basket', name: '分类收获篮', slot: '收获工具', description: '每级让每日订单办公币增加 10%。' },
+  { id: 'harvest_basket', name: '分类收获篮', slot: '收获工具', description: '每级让基础收获和每日额外订单办公币增加 10%。' },
 ] as const;
 
 export interface FarmSkillDefinition {
@@ -67,7 +69,7 @@ export interface FarmSkillDefinition {
 export const FARM_SKILLS: readonly FarmSkillDefinition[] = [
   { id: 'quick_care', name: '快速照料', unlockLevel: 2, description: '每级让成熟时间额外缩短 3%。' },
   { id: 'green_thumb', name: '绿手指', unlockLevel: 5, description: '每级让农场经验额外增加 5%。' },
-  { id: 'abundant_harvest', name: '丰收心得', unlockLevel: 8, description: '每级让每日订单办公币额外增加 6%。' },
+  { id: 'abundant_harvest', name: '丰收心得', unlockLevel: 8, description: '每级让基础收获和每日额外订单办公币增加 6%。' },
 ] as const;
 
 export const EMPTY_FARM_TOOL_LEVELS: DeskPlantToolLevels = {
@@ -139,7 +141,7 @@ export function calculateFarmCycle(
 ): { durationSeconds: number; experience: number; coins: number } {
   const durationPercent = Math.max(55, 100 - tools.watering_can * 4 - skills.quick_care * 3);
   const experiencePercent = 100 + tools.planter_box * 8 + skills.green_thumb * 5;
-  const coinPercent = 100 + tools.harvest_basket * 10 + skills.abundant_harvest * 6;
+  const coinPercent = farmOfficeCoinRewardPercent(tools, skills);
   return {
     durationSeconds: Math.max(30, Math.round(crop.durationSeconds * durationPercent / 100)),
     experience: Math.max(1, Math.round(crop.experience * experiencePercent / 100)),
@@ -157,9 +159,34 @@ export function farmOrderReward(
     0,
     Math.min(FARM_DAILY_ORDER_LIMIT - 1, Math.trunc(completedBefore)),
   );
-  const percent = 100 + tools.harvest_basket * 10 +
-    skills.abundant_harvest * 6 + farmOfficeCoinLevelBonusPercent(farmLevel);
+  const percent = farmOfficeCoinRewardPercent(tools, skills, farmLevel);
   return Math.round(FARM_ORDER_BASE_REWARDS[index] * percent / 100);
+}
+
+export function farmBaseHarvestReward(
+  crop: FarmCropDefinition,
+  plotCount: number,
+  tools: DeskPlantToolLevels,
+  skills: DeskPlantSkillLevels,
+  farmLevel = 1,
+): number {
+  const plots = Math.max(
+    1,
+    Math.min(FARM_MAX_PLOTS, Math.trunc(Number(plotCount) || 1)),
+  );
+  return Math.max(1, Math.round(
+    crop.baseHarvestCoinsPerPlot * plots *
+      farmOfficeCoinRewardPercent(tools, skills, farmLevel) / 100,
+  ));
+}
+
+export function farmOfficeCoinRewardPercent(
+  tools: DeskPlantToolLevels,
+  skills: DeskPlantSkillLevels,
+  farmLevel = 1,
+): number {
+  return 100 + tools.harvest_basket * 10 +
+    skills.abundant_harvest * 6 + farmOfficeCoinLevelBonusPercent(farmLevel);
 }
 
 export function farmPlotCount(level: number): number {
@@ -173,7 +200,7 @@ export function nextFarmPlotUnlock(level: number): { level: number; count: numbe
   return FARM_PLOT_UNLOCKS.find((unlock) => unlock.level > level) ?? null;
 }
 
-/** Keeps the office-coin faucet predictable: +5% per five farm levels, capped at +30%. */
+/** Keeps all farm office-coin rewards predictable: +5% per five farm levels, capped at +30%. */
 export function farmOfficeCoinLevelBonusPercent(level: number): number {
   return Math.min(30, Math.floor(Math.max(1, Math.trunc(level)) / 5) * 5);
 }

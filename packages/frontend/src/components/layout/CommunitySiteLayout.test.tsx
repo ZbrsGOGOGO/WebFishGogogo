@@ -62,6 +62,8 @@ vi.mock('../../app/community-nav', async (importOriginal) => {
 
 import {
   communityDirectMessagesApi,
+  communityFarmApi,
+  type CommunityFarmOverview,
   type CommunityAuthUser,
   type CommunityDirectConversationPage,
 } from '../../api/community';
@@ -70,6 +72,7 @@ import {
   useCommunityAuthStore,
 } from '../../app/store/community-auth-store';
 import { CommunitySiteLayout } from './CommunitySiteLayout';
+import { beginCommunityWalletObservation, finishCommunityWalletObservation, publishCommunityWalletOverview, resetCommunityWalletStoreForTests } from '../../app/store/community-wallet-store';
 
 const ACTIVE_USER: CommunityAuthUser = {
   id: 'user-1',
@@ -84,6 +87,10 @@ const ACTIVE_USER: CommunityAuthUser = {
 
 function conversationPage(totalUnread: number): CommunityDirectConversationPage {
   return { items: [], totalUnread, nextCursor: null };
+}
+
+function farmBalance(officeCoins: number, second = 10): CommunityFarmOverview {
+  return { serverTime: `2026-09-08T01:00:${second}.000Z`, growth: { officeCoins } } as CommunityFarmOverview;
 }
 
 function deferred<T>(): {
@@ -115,6 +122,7 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     vi.restoreAllMocks();
     chatConnectionHarness.reset();
     resetCommunityAuthStoreForTests();
+    resetCommunityWalletStoreForTests();
     useCommunityAuthStore.setState({
       phase: 'active',
       sessionReady: true,
@@ -123,6 +131,7 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     vi.spyOn(communityDirectMessagesApi, 'listConversations').mockResolvedValue(
       conversationPage(3),
     );
+    vi.spyOn(communityFarmApi, 'getOverview').mockResolvedValue(farmBalance(620));
   });
 
   afterEach(() => {
@@ -232,5 +241,50 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
 
     expect(chatConnectionHarness.acquire).not.toHaveBeenCalled();
     expect(communityDirectMessagesApi.listConversations).not.toHaveBeenCalled();
+    expect(communityFarmApi.getOverview).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: /办公币/ })).not.toBeInTheDocument();
+  });
+
+  it('shows a prominent real-balance link to the farm and synchronizes a farm mutation', async () => {
+    renderLayout();
+    expect(await screen.findByRole('link', { name: '办公币 620，查看农场余额与收益' })).toHaveAttribute('href', '/farm');
+    act(() => {
+      const mutation = beginCommunityWalletObservation('mutation');
+      publishCommunityWalletOverview(mutation, farmBalance(420, 20));
+      finishCommunityWalletObservation(mutation);
+    });
+    expect(screen.getByRole('link', { name: '办公币 420，查看农场余额与收益' })).toBeInTheDocument();
+  });
+
+  it('refreshes the server balance on focus without scheduled polling', async () => {
+    vi.mocked(communityFarmApi.getOverview).mockResolvedValueOnce(farmBalance(620)).mockResolvedValue(farmBalance(710, 20));
+    renderLayout();
+    await screen.findByRole('link', { name: '办公币 620，查看农场余额与收益' });
+    fireEvent.focus(window);
+    expect(await screen.findByRole('link', { name: '办公币 710，查看农场余额与收益' })).toBeInTheDocument();
+    expect(communityFarmApi.getOverview).toHaveBeenCalledTimes(2);
+  });
+
+  it('labels an unavailable balance without showing a fabricated zero or default 500', async () => {
+    vi.mocked(communityFarmApi.getOverview).mockRejectedValue(new Error('offline'));
+    renderLayout();
+    const wallet = await screen.findByRole('link', { name: '办公币 余额未同步，查看农场余额与收益' });
+    expect(wallet).not.toHaveTextContent('500');
+    expect(wallet).not.toHaveTextContent('0');
+  });
+
+  it('retains the last trusted amount with an unsynced label when refreshing fails', async () => {
+    vi.mocked(communityFarmApi.getOverview).mockResolvedValueOnce(farmBalance(620)).mockRejectedValue(new Error('offline'));
+    renderLayout();
+    await screen.findByRole('link', { name: '办公币 620，查看农场余额与收益' });
+    fireEvent.focus(window);
+    expect(await screen.findByRole('link', { name: '办公币 620，待同步，查看农场余额与收益' })).toBeInTheDocument();
+  });
+
+  it('removes the wallet immediately when the active session becomes restricted', async () => {
+    renderLayout();
+    await screen.findByRole('link', { name: '办公币 620，查看农场余额与收益' });
+    act(() => useCommunityAuthStore.setState({ phase: 'suspended' }));
+    expect(screen.queryByRole('link', { name: /办公币/ })).not.toBeInTheDocument();
   });
 });

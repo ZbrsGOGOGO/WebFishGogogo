@@ -11,6 +11,9 @@ export interface CommunityFarmReward {
   ordersTotal: number;
   farmExperience: number;
   officeCoins: number;
+  /** Optional while an older API release is still serving cached clients. */
+  baseCoins?: number;
+  orderBonusCoins?: number;
   levelUp: boolean;
   summary: string | null;
 }
@@ -26,6 +29,11 @@ export interface CommunityFarmCrop {
   durationSeconds: number;
   experience: number;
   coins: number;
+  /** Server-calculated normal-cycle estimates; never inferred from legacy coins. */
+  baseHarvestCoins?: number;
+  nextOrderBonusCoins?: number;
+  totalHarvestCoins?: number;
+  estimatedNetCoins?: number;
   seedCost: number;
   seedCostPerPlot: number;
   description: string;

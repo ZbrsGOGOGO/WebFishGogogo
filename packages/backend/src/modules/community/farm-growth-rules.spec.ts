@@ -3,6 +3,7 @@ import {
   FARM_CROPS,
   FARM_SKILL_MAX_LEVEL,
   FARM_TOOL_MAX_LEVEL,
+  farmBaseHarvestReward,
   farmLevelSnapshot,
   farmOfficeCoinLevelBonusPercent,
   farmOrderReward,
@@ -56,5 +57,20 @@ describe('farm growth rules', () => {
     expect(farmOfficeCoinLevelBonusPercent(10)).toBe(10);
     expect(farmOfficeCoinLevelBonusPercent(999)).toBe(30);
     expect(farmOrderReward(0, normalizeFarmToolLevels(null), normalizeFarmSkillLevels(null), 10)).toBe(110);
+  });
+
+  it('scales an always-on harvest reward by crop, plots, and growth bonuses', () => {
+    const tools = normalizeFarmToolLevels(null);
+    const skills = normalizeFarmSkillLevels(null);
+    expect(FARM_CROPS.map((crop) => farmBaseHarvestReward(crop, 1, tools, skills)))
+      .toEqual([20, 60, 180, 360, 720, 1500]);
+    expect(farmBaseHarvestReward(FARM_CROPS[2], 3, tools, skills, 9)).toBe(567);
+    expect(farmBaseHarvestReward(
+      FARM_CROPS[5],
+      6,
+      normalizeFarmToolLevels({ harvest_basket: 5 }),
+      normalizeFarmSkillLevels({ abundant_harvest: 5 }),
+      30,
+    )).toBe(18_900);
   });
 });
