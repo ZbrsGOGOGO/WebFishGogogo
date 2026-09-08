@@ -53,6 +53,12 @@ describe('community news release flag', () => {
           version: null,
         }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       }
+      if (url.includes('/v1/news/headlines/today')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          serviceDate: null, updatedAt: null, nextUpdateAt: '2026-09-09T00:00:00.000Z',
+          schedule: '每天 08:00（北京时间）', categories: [], items: [],
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+      }
       if (url.includes('/v1/news')) {
         return Promise.resolve(new Response(JSON.stringify({
           feed: 'latest',
@@ -86,8 +92,69 @@ describe('community news release flag', () => {
     render(<MemoryRouter initialEntries={['/news']}><CommunityModeRouter /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: '热点新闻' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: '当前没有可展示的资讯' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: '暂无已同步的新闻' })).toBeInTheDocument();
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(true);
+  });
+
+  it('adds news and official-board entrances to the responsive workbench homepage', async () => {
+    vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
+    vi.resetModules();
+    const [{ CommunityHomePage }, { resetCommunityAuthStoreForTests }] = await Promise.all([
+      import('../features/community/CommunityHomePage'), import('./store/community-auth-store'),
+    ]);
+    resetCommunityAuthStoreForTests();
+    render(<MemoryRouter><CommunityHomePage /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: '摸鱼间隙，看看新闻' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '分类新闻' })).toHaveAttribute('href', '/news');
+    expect(screen.getByRole('link', { name: '平台榜单' })).toHaveAttribute('href', '/news/trending');
+  });
+
+  it.each([
+    { path: '/news/trending', title: '平台榜单', endpoint: null },
+    { path: '/news/editorial', title: '编辑导读', endpoint: '/v1/news?feed=latest' },
+    { path: '/news/article-1', title: '资讯导读', endpoint: '/v1/news/article-1' },
+  ])('resolves $path without treating a static column as an article ID', async ({ path, title, endpoint }) => {
+    vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
+    vi.resetModules();
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      let body: unknown;
+      if (url.endsWith('/v1/farm')) body = { serverTime: '2026-09-08T00:00:00.000Z', growth: { officeCoins: 620 } };
+      else if (url.endsWith('/v1/development/access')) body = { enabled: false, role: null, reviewMode: 'manual', limits: DEVELOPMENT_LIMITS };
+      else if (url.endsWith('/v1/me/news-preferences')) body = { personalizationEnabled: false, topicPreferences: [], selectedProfession: null, version: null };
+      else if (url.endsWith('/v1/news?feed=latest')) body = { feed: 'latest', personalized: false, items: [], nextCursor: null };
+      else if (url.endsWith('/v1/news/article-1')) body = { id: 'article-1', status: 'withdrawn', notice: '该导读已下线。', withdrawnAt: null };
+      else throw new Error(`unexpected request: ${url}`);
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests, useCommunityAuthStore }] = await Promise.all([
+      import('./community-router'), import('./store/community-auth-store'),
+    ]);
+    resetCommunityAuthStoreForTests();
+    useCommunityAuthStore.setState({ phase: 'active', sessionReady: true, user: {
+      id: 'news-route-member', publicId: 'news-route-member', email: 'member@example.com', displayName: '新闻读者',
+      accountStatus: 'active', onboardingCompleted: true, socialVerificationStatus: 'unverified',
+    } });
+    render(<MemoryRouter initialEntries={[path]}><CommunityModeRouter /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: title })).toBeInTheDocument();
+    if (endpoint) expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith(endpoint))).toBe(true);
+    else expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/v1/news'))).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => /\/v1\/news\/(trending|editorial)$/.test(String(url)))).toBe(false);
+  });
+
+  it.each(['/news/trending', '/news/editorial'])('keeps enabled %s private to members', async (path) => {
+    vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
+    vi.resetModules();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const [{ CommunityModeRouter }, { resetCommunityAuthStoreForTests }] = await Promise.all([
+      import('./community-router'), import('./store/community-auth-store'),
+    ]);
+    resetCommunityAuthStoreForTests();
+    render(<MemoryRouter initialEntries={[path]}><CommunityModeRouter /></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('keeps /news member-only and makes /news/admin unavailable without the independent admin flag', async () => {

@@ -46,6 +46,18 @@ describe('community news REST contract', () => {
     );
   });
 
+  it('retains the daily snapshot category contract without adding editorial filters', async () => {
+    const response = {
+      serviceDate: '2026-09-08', updatedAt: '2026-09-08T00:00:00.000Z', nextUpdateAt: '2026-09-09T00:00:00.000Z',
+      schedule: '每天 08:00（北京时间）', categories: [{ id: 'finance', label: '财经', count: 1 }],
+      items: [{ id: 'headline-1', category: 'finance', headline: '财经标题', source: '中国新闻网', originalUrl: 'https://www.chinanews.com.cn/example', originalPublishedAt: null }],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(response));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await communityNewsApi.getDailyHeadlines()).toEqual(response);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/v1\/news\/headlines\/today$/);
+  });
+
   it('sends negative feedback once with an idempotency key and never refreshes a 401 write', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ code: 'UNAUTHORIZED' }, 401));
     vi.stubGlobal('fetch', fetchMock);

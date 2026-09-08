@@ -54,7 +54,9 @@ import {
 import {
   CommunityNewsAdminPage,
   CommunityNewsDetailPage,
+  CommunityNewsEditorialPage,
   CommunityNewsPage,
+  CommunityNewsTrendingPage,
 } from '../features/community-news';
 import { CommunityArcadeGameLayout } from '../features/games/CommunityArcadeGameLayout';
 import { PublicToolsPage } from '../features/tools/PublicToolsPage';
@@ -215,6 +217,8 @@ export function CommunityModeRouter(): JSX.Element {
           {COMMUNITY_FEATURE_FLAGS.news ? (
             <>
               <Route path="/news" element={<CommunityNewsPage />} />
+              <Route path="/news/trending" element={<CommunityNewsTrendingPage />} />
+              <Route path="/news/editorial" element={<CommunityNewsEditorialPage />} />
               <Route path="/news/:id" element={<CommunityNewsDetailPage />} />
             </>
           ) : (

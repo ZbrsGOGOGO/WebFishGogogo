@@ -106,10 +106,10 @@ describe('community mode routes', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('requires login before showing a closed news system', async () => {
+  it.each(['/news/unreleased-article', '/news/trending', '/news/editorial'])('requires login before showing a closed news system at %s', async (path) => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    renderAt('/news/unreleased-article');
+    renderAt(path);
 
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();

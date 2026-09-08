@@ -144,6 +144,16 @@ export function CommunityHomePage(): JSX.Element {
         </div>
       </section>
 
+      {COMMUNITY_FEATURE_FLAGS.news ? (
+        <section className={styles.newsEntry} aria-labelledby="home-news-title">
+          <div><span>NEWS BREAK</span><h2 id="home-news-title">摸鱼间隙，看看新闻</h2><p>分类新闻看原文，微博知乎等榜单直达官方。</p></div>
+          <div className={styles.newsEntryActions}>
+            <Link to="/news">分类新闻 <span aria-hidden="true">→</span></Link>
+            <Link to="/news/trending">平台榜单 <span aria-hidden="true">↗</span></Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className={styles.section} aria-labelledby="desk-title">
         <div className={styles.sectionTitle}>
           <div><span>MY DESK</span><h2 id="desk-title">{signedIn ? '我的今日工位' : '登录后可以做这些'}</h2></div>

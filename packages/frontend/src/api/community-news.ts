@@ -51,12 +51,16 @@ export interface CommunityNewsPage {
   nextCursor: string | null;
 }
 
+export type CommunityNewsCategory = 'general' | 'domestic' | 'world' | 'society' | 'finance' | 'culture' | 'sports';
+
 export interface CommunityHotNewsHeadline {
   id: string;
   headline: string;
   source: string;
   originalUrl: string;
   originalPublishedAt: string | null;
+  /** Optional during rollout: older snapshots belong to general. */
+  category?: CommunityNewsCategory;
 }
 
 export interface CommunityDailyHotNews {
@@ -64,6 +68,7 @@ export interface CommunityDailyHotNews {
   updatedAt: string | null;
   nextUpdateAt: string;
   schedule: string;
+  categories?: Array<{ id: CommunityNewsCategory; label: string; count: number }>;
   items: CommunityHotNewsHeadline[];
 }
 

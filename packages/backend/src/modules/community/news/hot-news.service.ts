@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   Injectable,
@@ -6,7 +6,7 @@ import {
   OnApplicationBootstrap,
   OnApplicationShutdown,
 } from '@nestjs/common';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, In } from 'typeorm';
 
 import {
   HotNewsHeadline,
@@ -17,11 +17,37 @@ const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1_000;
 const REFRESH_HOUR = 8;
 const REFRESH_INTERVAL_MS = 5 * 60 * 1_000;
 const REFRESH_LEASE_MS = 10 * 60 * 1_000;
-const MAX_DAILY_HEADLINES = 18;
+const MAX_FEED_BYTES = 2_000_000;
+const MAX_HEADLINES_PER_CATEGORY = 8;
+const MAX_DAILY_HEADLINES = 60;
+const FEED_FETCH_CONCURRENCY = 3;
+
+export const HOT_NEWS_CATEGORIES = [
+  { id: 'general', label: '综合' },
+  { id: 'domestic', label: '国内' },
+  { id: 'world', label: '国际' },
+  { id: 'society', label: '社会' },
+  { id: 'finance', label: '财经' },
+  { id: 'culture', label: '文娱' },
+  { id: 'sports', label: '体育' },
+] as const;
+
+export type HotNewsCategoryId = (typeof HOT_NEWS_CATEGORIES)[number]['id'];
+
+const CATEGORY_SELECTION_ORDER: readonly HotNewsCategoryId[] = [
+  'domestic',
+  'world',
+  'society',
+  'finance',
+  'culture',
+  'sports',
+  'general',
+];
 
 interface HotNewsFeed {
   key: string;
   name: string;
+  category: HotNewsCategoryId;
   url: string;
   allowedDomains: readonly string[];
 }
@@ -32,26 +58,86 @@ interface ParsedHeadline {
   originalPublishedAt: Date;
 }
 
+type CollectedHeadline = ParsedHeadline & Pick<
+  HotNewsFeed,
+  'key' | 'name' | 'category'
+>;
+
+interface RefreshClaim {
+  token: string;
+  startedAt: Date;
+  preserveCompletedOnFailure: boolean;
+  previousItemCount: number;
+  previousCompletedAt: Date | null;
+}
+
+/**
+ * All feeds below are published in China News Service's official RSS directory:
+ * https://www.chinanews.com.cn/rss/index.shtml
+ *
+ * Specific sections are selected before the general feed so a duplicated title
+ * keeps its more useful category. Source keys are versioned so a completed
+ * legacy snapshot can be upgraded once after deployment without a migration.
+ */
 const DEFAULT_FEEDS: readonly HotNewsFeed[] = [
   {
-    key: 'xinhua-politics',
-    name: '新华网',
-    url: 'http://www.xinhuanet.com/politics/news_politics.xml',
-    allowedDomains: ['xinhuanet.com', 'news.cn'],
+    key: 'chinanews-v2-domestic',
+    name: '中国新闻网',
+    category: 'domestic',
+    url: 'https://www.chinanews.com.cn/rss/china.xml',
+    allowedDomains: ['chinanews.com.cn'],
   },
   {
-    key: 'chinanews-important',
+    key: 'chinanews-v2-world',
     name: '中国新闻网',
+    category: 'world',
+    url: 'https://www.chinanews.com.cn/rss/world.xml',
+    allowedDomains: ['chinanews.com.cn'],
+  },
+  {
+    key: 'chinanews-v2-society',
+    name: '中国新闻网',
+    category: 'society',
+    url: 'https://www.chinanews.com.cn/rss/society.xml',
+    allowedDomains: ['chinanews.com.cn'],
+  },
+  {
+    key: 'chinanews-v2-finance',
+    name: '中国新闻网',
+    category: 'finance',
+    url: 'https://www.chinanews.com.cn/rss/finance.xml',
+    allowedDomains: ['chinanews.com.cn'],
+  },
+  {
+    key: 'chinanews-v2-culture',
+    name: '中国新闻网',
+    category: 'culture',
+    url: 'https://www.chinanews.com.cn/rss/culture.xml',
+    allowedDomains: ['chinanews.com.cn'],
+  },
+  {
+    key: 'chinanews-v2-sports',
+    name: '中国新闻网',
+    category: 'sports',
+    url: 'https://www.chinanews.com.cn/rss/sports.xml',
+    allowedDomains: ['chinanews.com.cn'],
+  },
+  {
+    key: 'chinanews-v2-general',
+    name: '中国新闻网',
+    category: 'general',
     url: 'https://www.chinanews.com.cn/rss/importnews.xml',
     allowedDomains: ['chinanews.com.cn'],
   },
-  {
-    key: 'chinanews-scroll',
-    name: '中国新闻网',
-    url: 'https://www.chinanews.com.cn/rss/scroll-news.xml',
-    allowedDomains: ['chinanews.com.cn'],
-  },
 ] as const;
+
+const CURRENT_SOURCE_KEYS = DEFAULT_FEEDS.map((feed) => feed.key);
+const CATEGORY_BY_SOURCE_KEY = new Map<string, HotNewsCategoryId>([
+  ...DEFAULT_FEEDS.map((feed) => [feed.key, feed.category] as const),
+  ['chinanews-important', 'general'],
+  ['chinanews-scroll', 'general'],
+  ['xinhua-politics', 'domestic'],
+]);
 
 export function shanghaiServiceDate(now: Date): string {
   return new Date(now.getTime() + SHANGHAI_OFFSET_MS)
@@ -120,82 +206,130 @@ export class HotNewsService
   }
 
   async listDaily(now = new Date()) {
-    const run = await this.dataSource.getRepository(HotNewsRefreshRun).findOne({
-      where: { status: 'completed' },
+    const runRepo = this.dataSource.getRepository(HotNewsRefreshRun);
+    const headlineRepo = this.dataSource.getRepository(HotNewsHeadline);
+    const candidates = await runRepo.find({
       order: { serviceDate: 'DESC' },
+      take: 4,
     });
-    const items = run
-      ? await this.dataSource.getRepository(HotNewsHeadline).find({
-          where: { serviceDate: run.serviceDate },
-          order: { rank: 'ASC' },
-        })
-      : [];
+    let run: HotNewsRefreshRun | null = null;
+    let items: HotNewsHeadline[] = [];
+    for (const candidate of candidates) {
+      // An in-place category upgrade keeps its previous completedAt. Continue
+      // serving those rows while the replacement is fetched outside the swap.
+      if (candidate.status !== 'completed' && candidate.completedAt === null) continue;
+      const candidateItems = await headlineRepo.find({
+        where: { serviceDate: candidate.serviceDate },
+        order: { rank: 'ASC' },
+      });
+      if (candidateItems.length === 0) continue;
+      run = candidate;
+      items = candidateItems;
+      break;
+    }
     const freshnessCutoff = now.getTime() - 72 * 60 * 60 * 1_000;
+    const visibleItems = items
+      .filter((item): item is HotNewsHeadline & { originalPublishedAt: Date } =>
+        item.originalPublishedAt !== null &&
+        item.originalPublishedAt.getTime() >= freshnessCutoff,
+      )
+      .map((item) => ({
+        id: item.id,
+        headline: item.headline,
+        source: item.sourceName,
+        category: categoryForSourceKey(item.sourceKey),
+        originalUrl: item.originalUrl,
+        originalPublishedAt: item.originalPublishedAt.toISOString(),
+      }));
     return {
       serviceDate: run?.serviceDate ?? null,
       updatedAt: run?.completedAt?.toISOString() ?? null,
       nextUpdateAt: nextDailyHotNewsRefresh(now).toISOString(),
       schedule: '每天 08:00（北京时间）',
-      items: items
-        .filter((item): item is HotNewsHeadline & { originalPublishedAt: Date } =>
-          item.originalPublishedAt !== null &&
-          item.originalPublishedAt.getTime() >= freshnessCutoff,
-        )
-        .map((item) => ({
-          id: item.id,
-          headline: item.headline,
-          source: item.sourceName,
-          originalUrl: item.originalUrl,
-          originalPublishedAt: item.originalPublishedAt.toISOString(),
-        })),
+      categories: HOT_NEWS_CATEGORIES.map((category) => ({
+        ...category,
+        count: visibleItems.filter((item) => item.category === category.id).length,
+      })),
+      items: visibleItems,
     };
   }
 
   /** Public for deterministic operational tests; normal callers use the timer. */
   async refresh(now = new Date()): Promise<{ refreshed: boolean; itemCount: number }> {
     const serviceDate = shanghaiServiceDate(now);
-    if (!(await this.claimRun(serviceDate, now))) {
+    let claim: RefreshClaim | null;
+    try {
+      claim = await this.claimRun(serviceDate, now);
+    } catch (error) {
+      // Another replica can win the first insert for a new service date. The
+      // winner owns the refresh; the loser must not surface an unhandled tick.
+      this.logger.warn(`headline refresh claim failed: ${safeError(error)}`);
+      const existing = await this.dataSource.getRepository(HotNewsRefreshRun).findOneBy({ serviceDate });
+      return { refreshed: false, itemCount: existing?.itemCount ?? 0 };
+    }
+    if (!claim) {
       const existing = await this.dataSource.getRepository(HotNewsRefreshRun).findOneBy({ serviceDate });
       return { refreshed: false, itemCount: existing?.itemCount ?? 0 };
     }
 
     try {
-      const collected: Array<ParsedHeadline & Pick<HotNewsFeed, 'key' | 'name'>> = [];
-      for (const feed of DEFAULT_FEEDS) {
-        try {
-          const response = await fetch(feed.url, {
-            headers: { 'User-Agent': 'MomoCompany-HotNews/1.0 (+https://zbrshyyzxx.top)' },
-            signal: AbortSignal.timeout(8_000),
-          });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const xml = await response.text();
-          collected.push(
-            ...parseHotNewsRss(xml.slice(0, 2_000_000), feed.allowedDomains)
-              .slice(0, 8)
-              .map((item) => ({ ...item, key: feed.key, name: feed.name })),
-          );
-        } catch (error) {
-          this.logger.warn(`headline feed ${feed.key} failed: ${safeError(error)}`);
-        }
-      }
+      const results = await mapWithConcurrency(
+        DEFAULT_FEEDS,
+        FEED_FETCH_CONCURRENCY,
+        async (feed): Promise<CollectedHeadline[]> => {
+          try {
+            const response = await fetch(feed.url, {
+              headers: { 'User-Agent': 'MomoCompany-HotNews/1.0 (+https://zbrshyyzxx.top)' },
+              redirect: 'manual',
+              signal: AbortSignal.timeout(8_000),
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const contentType = response.headers.get('content-type') ?? '';
+            if (!/^(?:application|text)\/(?:[\w.+-]*\+)?xml(?:\s*;|$)/i.test(contentType)) {
+              throw new Error('feed response is not XML');
+            }
+            const xml = await readLimitedText(response, MAX_FEED_BYTES);
+            return parseHotNewsRss(xml, feed.allowedDomains).map((item) => ({
+              ...item,
+              key: feed.key,
+              name: feed.name,
+              category: feed.category,
+            }));
+          } catch (error) {
+            this.logger.warn(`headline feed ${feed.key} failed: ${safeError(error)}`);
+            return [];
+          }
+        },
+      );
 
       const freshnessCutoff = now.getTime() - 72 * 60 * 60 * 1_000;
-      const deduplicated = [...new Map(
-        collected
-          .filter((item) => item.originalPublishedAt.getTime() >= freshnessCutoff)
-          .map((item) => [normalizeHeadline(item.headline), item]),
-      ).values()]
-        .sort((left, right) =>
-          right.originalPublishedAt.getTime() - left.originalPublishedAt.getTime(),
-        )
-        .slice(0, MAX_DAILY_HEADLINES);
+      const futureCutoff = now.getTime() + 5 * 60 * 1_000;
+      const freshResults = results.map((items) =>
+        items.filter((item) => {
+          const publishedAt = item.originalPublishedAt.getTime();
+          return publishedAt >= freshnessCutoff && publishedAt <= futureCutoff;
+        }),
+      );
+      // A daily snapshot is advertised as seven categories. Never replace a
+      // complete prior snapshot with a silently partial one; the timer retries.
+      if (freshResults.some((items) => items.length === 0)) {
+        throw new Error('one or more official headline feeds returned no usable items');
+      }
+      const deduplicated = selectCategorizedHeadlines(freshResults.flat());
       if (deduplicated.length === 0) throw new Error('all official headline feeds returned no usable items');
 
-      await this.dataSource.transaction(async (manager) => {
-        await manager.getRepository(HotNewsHeadline).delete({ serviceDate });
-        await manager.getRepository(HotNewsHeadline).save(
+      const committed = await this.dataSource.transaction(async (manager) => {
+        const runRepo = manager.getRepository(HotNewsRefreshRun);
+        const run = await runRepo.findOne({
+          where: { serviceDate },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!run || !ownsRefreshLease(run, claim)) return false;
+        const headlineRepo = manager.getRepository(HotNewsHeadline);
+        await headlineRepo.delete({ serviceDate });
+        await headlineRepo.save(
           deduplicated.map((item, index) =>
-            manager.getRepository(HotNewsHeadline).create({
+            headlineRepo.create({
               serviceDate,
               sourceKey: item.key,
               sourceName: item.name,
@@ -209,18 +343,27 @@ export class HotNewsService
             }),
           ),
         );
-        const run = await manager.getRepository(HotNewsRefreshRun).findOneByOrFail({ serviceDate });
         run.status = 'completed';
         run.itemCount = deduplicated.length;
         run.lastError = null;
         run.completedAt = new Date();
-        await manager.getRepository(HotNewsRefreshRun).save(run);
+        await runRepo.save(run);
+        return true;
       });
+      if (!committed) {
+        const existing = await this.dataSource.getRepository(HotNewsRefreshRun).findOneBy({ serviceDate });
+        return { refreshed: false, itemCount: existing?.itemCount ?? 0 };
+      }
       return { refreshed: true, itemCount: deduplicated.length };
     } catch (error) {
-      await this.failRun(serviceDate, error);
+      await this.failRun(serviceDate, claim, error);
       this.logger.error(`daily headline refresh failed: ${safeError(error)}`);
-      return { refreshed: false, itemCount: 0 };
+      return {
+        refreshed: false,
+        itemCount: claim.preserveCompletedOnFailure
+          ? claim.previousItemCount
+          : 0,
+      };
     }
   }
 
@@ -231,40 +374,72 @@ export class HotNewsService
     this.tickRunning = true;
     try {
       await this.refresh(now);
+    } catch (error) {
+      this.logger.error(`daily headline tick failed: ${safeError(error)}`);
     } finally {
       this.tickRunning = false;
     }
   }
 
-  private async claimRun(serviceDate: string, now: Date): Promise<boolean> {
+  private async claimRun(
+    serviceDate: string,
+    now: Date,
+  ): Promise<RefreshClaim | null> {
     return this.dataSource.transaction(async (manager) => {
       const repo = manager.getRepository(HotNewsRefreshRun);
       const existing = await repo.findOne({
         where: { serviceDate },
         lock: { mode: 'pessimistic_write' },
       });
-      if (existing?.status === 'completed') return false;
-      if (existing?.status === 'running' && existing.leaseExpiresAt > now) return false;
+      const headlineRepo = manager.getRepository(HotNewsHeadline);
+      const existingItemCount = existing
+        ? await headlineRepo.count({ where: { serviceDate } })
+        : 0;
+      if (existing?.status === 'completed') {
+        const upgraded = await headlineRepo.exist({
+          where: { serviceDate, sourceKey: In(CURRENT_SOURCE_KEYS) },
+        });
+        if (upgraded) return null;
+      }
+      if (existing?.status === 'running' && existing.leaseExpiresAt > now) return null;
       const run = existing ?? repo.create({ serviceDate });
+      const token = randomUUID();
+      const claim: RefreshClaim = {
+        token,
+        startedAt: now,
+        preserveCompletedOnFailure: existingItemCount > 0,
+        previousItemCount: existingItemCount,
+        previousCompletedAt: existing?.completedAt ?? null,
+      };
       run.status = 'running';
       run.itemCount = 0;
-      run.lastError = null;
+      run.lastError = `lease:${token}`;
       run.startedAt = now;
-      run.completedAt = null;
+      if (!claim.preserveCompletedOnFailure) run.completedAt = null;
       run.leaseExpiresAt = new Date(now.getTime() + REFRESH_LEASE_MS);
       await repo.save(run);
-      return true;
+      return claim;
     });
   }
 
-  private async failRun(serviceDate: string, error: unknown): Promise<void> {
+  private async failRun(
+    serviceDate: string,
+    claim: RefreshClaim,
+    error: unknown,
+  ): Promise<void> {
     await this.dataSource.transaction(async (manager: EntityManager) => {
       const repo = manager.getRepository(HotNewsRefreshRun);
-      const run = await repo.findOneBy({ serviceDate });
-      if (!run) return;
-      run.status = 'failed';
+      const run = await repo.findOne({
+        where: { serviceDate },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!run || !ownsRefreshLease(run, claim)) return;
+      run.status = claim.preserveCompletedOnFailure ? 'completed' : 'failed';
+      run.itemCount = claim.previousItemCount;
       run.lastError = safeError(error).slice(0, 200);
-      run.completedAt = new Date();
+      run.completedAt = claim.preserveCompletedOnFailure
+        ? claim.previousCompletedAt
+        : new Date();
       await repo.save(run);
     });
   }
@@ -283,7 +458,15 @@ function cleanXmlText(value: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
-    .replace(/&#(\d+);/g, (_, code: string) => String.fromCodePoint(Number(code)))
+    .replace(/&#(?:x([0-9a-f]+)|(\d+));/gi, (_, hex: string | undefined, decimal: string | undefined) => {
+      const codePoint = Number.parseInt(hex ?? decimal ?? '', hex ? 16 : 10);
+      return Number.isInteger(codePoint) &&
+        codePoint >= 0 &&
+        codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : ' ';
+    })
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -307,6 +490,95 @@ function safePublisherUrl(raw: string, allowedDomains: readonly string[]): strin
 
 function normalizeHeadline(value: string): string {
   return value.replace(/[\s，。！？、：“”‘’]+/g, '').toLocaleLowerCase('zh-CN');
+}
+
+function categoryForSourceKey(sourceKey: string): HotNewsCategoryId {
+  return CATEGORY_BY_SOURCE_KEY.get(sourceKey) ?? 'general';
+}
+
+function selectCategorizedHeadlines(
+  collected: readonly CollectedHeadline[],
+): CollectedHeadline[] {
+  const selected = new Map<HotNewsCategoryId, CollectedHeadline[]>();
+  const seenHeadlines = new Set<string>();
+  const seenUrls = new Set<string>();
+  for (const category of CATEGORY_SELECTION_ORDER) {
+    const categoryItems = collected
+      .filter((item) => item.category === category)
+      .sort((left, right) =>
+        right.originalPublishedAt.getTime() - left.originalPublishedAt.getTime() ||
+        left.originalUrl.localeCompare(right.originalUrl),
+      );
+    const page: CollectedHeadline[] = [];
+    for (const item of categoryItems) {
+      const normalized = normalizeHeadline(item.headline);
+      if (seenHeadlines.has(normalized) || seenUrls.has(item.originalUrl)) continue;
+      seenHeadlines.add(normalized);
+      seenUrls.add(item.originalUrl);
+      page.push(item);
+      if (page.length === MAX_HEADLINES_PER_CATEGORY) break;
+    }
+    selected.set(category, page);
+  }
+  return HOT_NEWS_CATEGORIES
+    .flatMap((category) => selected.get(category.id) ?? [])
+    .slice(0, MAX_DAILY_HEADLINES);
+}
+
+async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  transform: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  async function worker(): Promise<void> {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await transform(items[index]);
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(items.length, Math.max(1, concurrency)) },
+      () => worker(),
+    ),
+  );
+  return results;
+}
+
+async function readLimitedText(response: Response, maxBytes: number): Promise<string> {
+  const declaredLength = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error('feed response is too large');
+  }
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let result = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      if (received > maxBytes) {
+        await reader.cancel();
+        throw new Error('feed response is too large');
+      }
+      result += decoder.decode(value, { stream: true });
+    }
+    return result + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function ownsRefreshLease(run: HotNewsRefreshRun, claim: RefreshClaim): boolean {
+  return run.status === 'running' &&
+    run.startedAt.getTime() === claim.startedAt.getTime() &&
+    run.lastError === `lease:${claim.token}`;
 }
 
 function safeError(error: unknown): string {

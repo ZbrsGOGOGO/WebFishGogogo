@@ -70,7 +70,7 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     path: '/news',
     enabled: COMMUNITY_FEATURE_FLAGS.news,
     requiresAccount: false,
-    description: '可靠来源的行业速览',
+    description: '分类新闻、官方榜单入口与编辑导读',
   },
   {
     id: 'community',

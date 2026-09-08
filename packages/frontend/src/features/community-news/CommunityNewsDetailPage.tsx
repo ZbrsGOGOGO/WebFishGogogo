@@ -38,7 +38,7 @@ export function CommunityNewsDetailPage(): JSX.Element {
 
   return (
     <main className={styles.page}>
-      <PageHeader title="资讯导读" subtitle="站内仅保留必要摘要与来源指引。" actions={<Link to="/news">返回热点新闻</Link>} />
+      <PageHeader title="资讯导读" subtitle="站内仅保留必要摘要与来源指引。" actions={<Link to="/news/editorial">返回编辑导读</Link>} />
       {loading ? <p role="status">正在加载资讯导读…</p> : null}
       {error ? <div className={styles.error} role="alert"><p>{error}</p><Button size="sm" variant="secondary" onClick={() => void load()}>重试</Button></div> : null}
       {!loading && item?.status === 'published' ? (
@@ -48,7 +48,7 @@ export function CommunityNewsDetailPage(): JSX.Element {
         <Card title="该资讯当前不可阅读">
           <p>{item.notice}</p>
           {item.withdrawnAt ? <p>下线时间：{new Date(item.withdrawnAt).toLocaleString('zh-CN')}</p> : null}
-          <p><Link to="/news">浏览其他已发布资讯</Link></p>
+          <p><Link to="/news/editorial">浏览其他已发布资讯</Link></p>
         </Card>
       ) : null}
     </main>

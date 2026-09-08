@@ -19,6 +19,15 @@
 .plant i { position: absolute; right: 5px; bottom: 0; left: 5px; height: 32px; border-radius: 5px 5px 15px 15px; background: #e2955e; }
 .desk { position: absolute; right: 0; bottom: 17px; left: 2%; height: 18px; border-radius: 5px; background: #a77556; box-shadow: 0 16px 0 -5px #805d48; }
 .section { display: grid; gap: 12px; }
+.newsEntry { padding: 19px; display: flex; justify-content: space-between; align-items: center; gap: 18px; border: 1px solid #dce2ea; border-radius: 16px; background: linear-gradient(120deg, #fff8ed, #fff); }
+.newsEntry > div > span { color: #97623b; font-size: 9px; font-weight: 850; letter-spacing: .12em; }
+.newsEntry h2 { margin: 5px 0; font-size: 18px; }
+.newsEntry p { margin: 0; color: #6f7a8d; font-size: 12px; }
+.newsEntryActions { display: flex; gap: 8px; flex-shrink: 0; }
+.newsEntryActions a { min-height: 44px; padding: 10px 13px; display: flex; align-items: center; justify-content: center; gap: 10px; border: 1px solid #e4d8c7; border-radius: 10px; color: #754829; background: #fff; font-size: 12px; font-weight: 800; }
+.newsEntryActions a:hover { background: #fff1db; }
+.newsEntryActions a:focus-visible { outline: 3px solid #97623b; outline-offset: 3px; }
+@media (max-width: 900px) { .newsEntry { align-items: stretch; flex-direction: column; }.newsEntryActions a { flex: 1; } }
 .sectionTitle { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
 .sectionTitle span { color: #799151; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
 .sectionTitle h2 { margin: 3px 0 0; font-size: 19px; }
