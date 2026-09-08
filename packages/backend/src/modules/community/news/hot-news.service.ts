@@ -417,7 +417,15 @@ export class HotNewsService
       run.startedAt = now;
       if (!claim.preserveCompletedOnFailure) run.completedAt = null;
       run.leaseExpiresAt = new Date(now.getTime() + REFRESH_LEASE_MS);
-      await repo.save(run);
+      if (existing) {
+        // Existing rows are protected by the pessimistic lock acquired above.
+        await repo.save(run);
+      } else {
+        // `save` re-checks an entity with an assigned primary key and may turn
+        // a concurrent first insert into an UPDATE. A strict INSERT guarantees
+        // that only the unique-key winner can publish a refresh lease.
+        await repo.insert(run);
+      }
       return claim;
     });
   }

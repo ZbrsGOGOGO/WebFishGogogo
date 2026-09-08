@@ -1,4 +1,4 @@
-import type { DataSource } from 'typeorm';
+import { Repository, type DataSource } from 'typeorm';
 
 import {
   HotNewsHeadline,
@@ -109,6 +109,68 @@ describe('daily hot-news rules', () => {
     } finally {
       fetchMock.mockRestore();
       await dataSource.destroy();
+    }
+  });
+
+  it('strictly inserts an absent refresh run before fetching any feeds', async () => {
+    const dataSource: DataSource = await createLocalDevDataSource();
+    let releaseFetches!: () => void;
+    const fetchGate = new Promise<void>((resolve) => {
+      releaseFetches = resolve;
+    });
+    const insertSpy = jest.spyOn(Repository.prototype, 'insert');
+    const saveSpy = jest.spyOn(Repository.prototype, 'save');
+    const fetchMock = jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      await fetchGate;
+      return rssResponse(feedCategory(input));
+    });
+    let pending: ReturnType<HotNewsService['refresh']> | undefined;
+    try {
+      const service = new HotNewsService(dataSource);
+      pending = service.refresh(new Date('2026-08-23T00:00:00.000Z'));
+      for (let attempt = 0; attempt < 20 && fetchMock.mock.calls.length < 3; attempt += 1) {
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      expect(insertSpy).toHaveBeenCalledTimes(1);
+      expect(insertSpy.mock.calls[0]?.[0]).toMatchObject({
+        serviceDate: '2026-08-23',
+        status: 'running',
+      });
+      expect(saveSpy).not.toHaveBeenCalled();
+
+      releaseFetches();
+      await expect(pending).resolves.toEqual({ refreshed: true, itemCount: 7 });
+    } finally {
+      releaseFetches();
+      await pending?.catch(() => undefined);
+      fetchMock.mockRestore();
+      saveSpy.mockRestore();
+      insertSpy.mockRestore();
+      await dataSource.destroy();
+    }
+  });
+
+  it('returns safely without fetching when another process wins the first insert', async () => {
+    const duplicateKey = Object.assign(
+      new Error('duplicate key value violates unique constraint'),
+      { code: '23505' },
+    );
+    const findOneBy = jest.fn().mockResolvedValue({ itemCount: 0 });
+    const dataSource = {
+      transaction: jest.fn().mockRejectedValue(duplicateKey),
+      getRepository: jest.fn().mockReturnValue({ findOneBy }),
+    } as unknown as DataSource;
+    const fetchMock = jest.spyOn(global, 'fetch');
+    try {
+      const service = new HotNewsService(dataSource);
+      await expect(service.refresh(new Date('2026-08-23T00:00:00.000Z')))
+        .resolves.toEqual({ refreshed: false, itemCount: 0 });
+      expect(findOneBy).toHaveBeenCalledWith({ serviceDate: '2026-08-23' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      fetchMock.mockRestore();
     }
   });
 
