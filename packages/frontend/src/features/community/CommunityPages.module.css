@@ -156,6 +156,12 @@ a.systemCard:hover {
   gap: 18px;
 }
 
+.profileSummary > div {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
 .avatar {
   width: 68px;
   height: 68px;
@@ -514,6 +520,11 @@ a.systemCard:hover {
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 20px;
   align-items: center;
+}
+
+.publicProfileHero > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .publicProfileHero h2,
