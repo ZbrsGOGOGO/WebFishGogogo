@@ -4,6 +4,8 @@ export type CommunitySystemId =
   | 'community'
   | 'messages'
   | 'farm'
+  | 'games'
+  | 'tools'
   | 'towerDefense'
   | 'demonTower'
   | 'leaderboards'
@@ -103,6 +105,22 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     description: '一键照料工位绿植',
   },
   {
+    id: 'games',
+    label: '小游戏',
+    path: '/games',
+    enabled: true,
+    requiresAccount: false,
+    description: '单机小游戏与玩家房间',
+  },
+  {
+    id: 'tools',
+    label: '工具',
+    path: '/tools',
+    enabled: true,
+    requiresAccount: false,
+    description: '文本、时间和数据处理工具',
+  },
+  {
     id: 'demonTower',
     label: '九层妖塔',
     path: '/games/demon-tower',
@@ -166,7 +184,10 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
 ] as const;
 
 export function communitySystemByPath(pathname: string): CommunitySystemNavItem | undefined {
-  return COMMUNITY_SYSTEM_NAV.find((item) =>
-    item.path === '/' ? pathname === '/' : pathname.startsWith(item.path),
-  );
+  // 子系统优先于目录入口，例如九层妖塔不能被 /games 的选中态覆盖。
+  return COMMUNITY_SYSTEM_NAV.reduce<CommunitySystemNavItem | undefined>((match, item) => {
+    const matches = pathname === item.path ||
+      (item.path !== '/' && pathname.startsWith(`${item.path}/`));
+    return matches && (!match || item.path.length > match.path.length) ? item : match;
+  }, undefined);
 }

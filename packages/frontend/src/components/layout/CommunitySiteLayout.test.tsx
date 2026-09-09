@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -104,12 +104,12 @@ function deferred<T>(): {
   return { promise, resolve };
 }
 
-function renderLayout() {
+function renderLayout(path = '/') {
   return render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<CommunitySiteLayout />}>
-          <Route path="/" element={<p>工作台内容</p>} />
+          <Route path="*" element={<p>工作台内容</p>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -140,6 +140,17 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     resetCommunityAuthStoreForTests();
     chatConnectionHarness.reset();
   });
+
+  it.each(['/community/chat/office', '/messages/friend-1'])(
+    'keeps the compact conversation header at %s while preserving desktop shortcuts',
+    (path) => {
+      renderLayout(path);
+      expect(screen.queryByRole('navigation', { name: '小游戏与工具快捷入口' })).not.toBeInTheDocument();
+      const sidebar = within(screen.getByRole('navigation', { name: '全部系统' }));
+      expect(sidebar.getByRole('link', { name: '小游戏' })).toHaveAttribute('href', '/games');
+      expect(sidebar.getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
+    },
+  );
 
   it('acquires one persistent connection and renders the initial total unread count', async () => {
     renderLayout();

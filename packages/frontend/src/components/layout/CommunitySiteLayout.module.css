@@ -59,6 +59,7 @@
 .tipWidget { background: #f5f7fa; box-shadow: none; }
 .tipWidget p { margin-bottom: 0; }
 .mobileDock { display: none; }
+.mobileUtilities { display: none; }
 
 @media (max-width: 1180px) {
   .workspace[data-home='true'] { grid-template-columns: 210px minmax(0, 1fr); }
@@ -74,6 +75,13 @@
   .walletLink { max-width: 160px; padding: 6px 9px; }.walletLink strong { font-size: 14px; }
   .workspace, .workspace[data-home='true'] { min-height: calc(100dvh - 58px); display: block; }
   .leftRail, .rightRail { display: none; }
+  .mobileUtilities { padding: 6px 14px 10px; display: flex; gap: 10px; border-top: 1px solid #ffffff12; }
+  .mobileUtilities a { min-width: 0; min-height: 44px; padding: 8px 12px; display: flex; flex: 1; align-items: center; gap: 9px; border: 1px solid #ffffff1f; border-radius: 10px; color: #e1e7f0; background: #ffffff08; }
+  .mobileUtilities a > span:first-child { color: #b7d9a1; font-size: 12px; }
+  .mobileUtilities b { flex: 1; font-size: 12px; font-weight: 650; }
+  .mobileUtilities a > span:last-child { color: #9eabc0; }
+  .mobileUtilities a:hover, .mobileUtilities a[aria-current='page'] { color: #fff; background: #ffffff14; }
+  .mobileUtilities a:focus-visible { outline: 2px solid #a7e975; outline-offset: 2px; }
   .main { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
   .mobileDock { position: fixed; z-index: var(--z-nav); right: 10px; bottom: calc(9px + env(safe-area-inset-bottom)); left: 10px; min-height: 58px; padding: 5px; display: flex; align-items: stretch; justify-content: space-around; border: 1px solid rgba(255, 255, 255, .12); border-radius: 17px; background: rgba(32, 40, 58, .96); box-shadow: 0 14px 36px rgba(20, 26, 39, .32); backdrop-filter: blur(18px); }
   .mobileDock a { position: relative; min-width: 52px; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 12px; color: #9eabc0; }

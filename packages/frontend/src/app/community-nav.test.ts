@@ -27,6 +27,26 @@ describe('community relationship and growth release gates', () => {
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'leaderboards')).toMatchObject({ path: '/leaderboards', label: '排行榜', enabled: true, requiresAccount: true });
     expect(communitySystemByPath('/leaderboards')?.id).toBe('leaderboards');
   });
+  it.each([
+    ['games', '小游戏', '/games'],
+    ['tools', '工具', '/tools'],
+  ])('exposes %s as a public sidebar destination', (id, label, path) => {
+    expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === id)).toMatchObject({
+      path, label, enabled: true, requiresAccount: false,
+    });
+    expect(communitySystemByPath(path)?.id).toBe(id);
+  });
+  it.each([
+    ['/games/', 'games'], ['/games/rooms', 'games'], ['/games/ballpoint-breach', 'games'],
+    ['/tools/json', 'tools'], ['/games/demon-tower', 'demonTower'],
+    ['/games/demon-tower/leaderboard', 'demonTower'],
+    ['/games/demon-tower-other', 'games'],
+  ])('selects the most specific system for %s', (path, id) => {
+    expect(communitySystemByPath(path)?.id).toBe(id);
+  });
+  it.each(['/gamesmanship', '/toolshed', '/newsroom', '/me-other'])('does not match partial segment %s', (path) => {
+    expect(communitySystemByPath(path)).toBeUndefined();
+  });
   it('keeps growth archive account-only and both new capabilities disabled until release', () => {
     expect(COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled).toBe(false); expect(COMMUNITY_FEATURE_FLAGS.demonTowerAuto).toBe(false);
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'achievements')).toMatchObject({ path: '/achievements', label: '成长档案', enabled: false, requiresAccount: true });

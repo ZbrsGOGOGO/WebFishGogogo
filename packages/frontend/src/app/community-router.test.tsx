@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,6 +43,8 @@ describe('community mode routes', () => {
     const systemNavigation = screen.getByRole('navigation', { name: '全部系统' });
     expect(within(systemNavigation).getByRole('link', { name: '首页' })).toHaveAttribute('href', '/');
     expect(within(systemNavigation).getByRole('link', { name: '工位塔防' })).toHaveAttribute('href', '/tower-defense');
+    expect(within(systemNavigation).getByRole('link', { name: '小游戏' })).toHaveAttribute('href', '/games');
+    expect(within(systemNavigation).getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
     expect(within(systemNavigation).getByRole('link', { name: '我的主页' })).toHaveAttribute('href', '/me');
     for (const label of ['热点新闻', '经验交流', '农场', '投喂', '邀请', '好友']) {
       expect(systemNavigation).not.toHaveTextContent(label);
@@ -79,6 +81,20 @@ describe('community mode routes', () => {
 
     renderAt('/games');
     expect(await screen.findByRole('heading', { name: '小游戏专区' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['全部系统', '小游戏', '/games', '小游戏专区'],
+    ['全部系统', '工具', '/tools', '常用的小工具，打开就能用'],
+    ['小游戏与工具快捷入口', '小游戏', '/games', '小游戏专区'],
+    ['小游戏与工具快捷入口', '工具', '/tools', '常用的小工具，打开就能用'],
+  ])('opens %s / %s in one click without requiring login', async (navigation, label, path, heading) => {
+    renderAt('/');
+    const link = within(screen.getByRole('navigation', { name: navigation })).getByRole('link', { name: label });
+    expect(link).toHaveAttribute('href', path);
+    fireEvent.click(link);
+    expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '欢迎回来' })).not.toBeInTheDocument();
   });
 
   it.each(['/games/demon-tower', '/games/demon-tower/leaderboard'])('keeps disabled demon tower route %s non-mutating', async (path) => {
