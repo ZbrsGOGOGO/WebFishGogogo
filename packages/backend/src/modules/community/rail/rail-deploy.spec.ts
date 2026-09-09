@@ -24,7 +24,8 @@ describe('rail release boundaries', () => {
   });
   it('keeps existing six-game score unions separate and requires the new migration in release guards', () => {
     expect(source('packages/shared/src/game-rooms.ts').split('export const PLAY_GAME_KEYS')[1]?.split(';')[0]).not.toContain("'rail'");
-    expect(source('deploy/community-migration-rehearsal.sh')).toContain('LATEST_TIMESTAMP=1700000000029');
+    expect(source('deploy/community-migration-rehearsal.sh')).toContain('RAIL_TIMESTAMP=1700000000029');
+    expect(source('deploy/community-migration-rehearsal.sh')).toContain('LATEST_TIMESTAMP=1700000000030');
     expect(source('deploy/community-migration-rehearsal.sh')).toContain('assert_rail_reverted rehearsal_clean');
     expect(source('deploy/community-preflight.sh')).toContain('AddRailRoomsAndPasswords1700000000029');
     const target = source('deploy/community-migration-rehearsal.sh').match(/^LATEST_TIMESTAMP=\d+$/m)?.[0];

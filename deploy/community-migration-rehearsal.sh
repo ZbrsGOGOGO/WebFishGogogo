@@ -17,7 +17,8 @@ ZHESI_ARCADE_TIMESTAMP=1700000000025
 DEVELOPMENT_TIMESTAMP=1700000000026
 PLAY_TIMESTAMP=1700000000027
 TRENDING_TIMESTAMP=1700000000028
-LATEST_TIMESTAMP=1700000000029
+RAIL_TIMESTAMP=1700000000029
+LATEST_TIMESTAMP=1700000000030
 POSTGRES_IMAGE=${POSTGRES_IMAGE:-postgres:16.14-alpine}
 LOCK_TIMEOUT_MS=${REHEARSAL_LOCK_TIMEOUT_MS:-1000}
 
@@ -137,7 +138,7 @@ assert_target_applied() {
   latest_applied=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
   [ "$latest_applied" = "$LATEST_TIMESTAMP" ] ||
     fail "$database latest migration is $latest_applied, expected exactly $LATEST_TIMESTAMP"
-  for new_table in play_rooms play_room_members play_commands play_daily_scores play_daily_awards trending_news_board_runs trending_news_items rail_rooms rail_room_members rail_commands rail_chat_messages rail_daily_scores rail_daily_awards rail_player_stats; do
+  for new_table in play_rooms play_room_members play_commands play_daily_scores play_daily_awards trending_news_board_runs trending_news_items rail_rooms rail_room_members rail_commands rail_chat_messages rail_daily_scores rail_daily_awards rail_player_stats demon_tower_profiles demon_tower_world_floors demon_tower_commands demon_tower_contributions demon_tower_daily_progress demon_tower_daily_awards; do
     table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '$new_table';")
     [ "$table_count" = 1 ] || fail "$database is missing $new_table after migration"
   done
@@ -147,6 +148,8 @@ assert_target_applied() {
   [ "$rail_password_count" = 1 ] || fail "$database is missing nullable legacy-room password hash"
   rail_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('uq_rail_room_client', 'uq_rail_member_active', 'uq_rail_command_sequence', 'uq_rail_chat_client', 'uq_rail_chat_sequence', 'idx_rail_daily_ranking');")
   [ "$rail_index_count" = 6 ] || fail "$database is missing rail isolation/idempotency indexes"
+  tower_index_count=$(pg_scalar "$database" "SELECT count(*)::text FROM pg_indexes WHERE schemaname = 'public' AND indexname IN ('ix_demon_tower_commands_user_created', 'ix_demon_tower_daily_rank');")
+  [ "$tower_index_count" = 2 ] || fail "$database is missing demon tower command/ranking indexes"
   column_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'email_normalized';")
   [ "$column_count" = 1 ] || fail "$database is missing users.email_normalized after migration"
   for security_table in password_reset_tokens social_verification_sessions social_verification_callback_receipts account_restrictions account_appeals account_deletion_requests; do
@@ -213,6 +216,8 @@ assert_target_applied() {
 
 assert_target_absent() {
   database=$1
+  tower_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('demon_tower_profiles','demon_tower_world_floors','demon_tower_commands','demon_tower_contributions','demon_tower_daily_progress','demon_tower_daily_awards');")
+  [ "$tower_table_count" = 0 ] || fail "$database retained 0030 tables after rollback/failure"
   new_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('play_rooms', 'play_room_members', 'play_commands', 'play_daily_scores', 'play_daily_awards', 'trending_news_board_runs', 'trending_news_items');")
   [ "$new_table_count" = 0 ] || fail "$database retained 0027/0028 tables after rollback/failure"
   rail_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('rail_rooms','rail_room_members','rail_commands','rail_chat_messages','rail_daily_scores','rail_daily_awards','rail_player_stats');")
@@ -271,6 +276,16 @@ assert_target_absent() {
   [ "$guild_boss_table_count" = 0 ] || fail "$database retained 0021 guild-boss tables after rollback/failure"
   hot_news_table_count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('hot_news_headlines', 'hot_news_refresh_runs');")
   [ "$hot_news_table_count" = 0 ] || fail "$database retained 0022 daily-hot-news tables after rollback/failure"
+}
+
+assert_demon_tower_reverted() {
+  database=$1
+  latest=$(pg_scalar "$database" 'SELECT COALESCE(MAX("timestamp"), 0)::text FROM "migrations";')
+  [ "$latest" = "$RAIL_TIMESTAMP" ] || fail "$database did not return to 0029"
+  count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('demon_tower_profiles','demon_tower_world_floors','demon_tower_commands','demon_tower_contributions','demon_tower_daily_progress','demon_tower_daily_awards');")
+  [ "$count" = 0 ] || fail "$database retained 0030 tables after targeted revert"
+  count=$(pg_scalar "$database" "SELECT count(*)::text FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('rail_rooms','rail_room_members','rail_commands','rail_chat_messages','rail_daily_scores','rail_daily_awards','rail_player_stats');")
+  [ "$count" = 7 ] || fail "$database lost pre-existing Rail tables while reverting only 0030"
 }
 
 assert_rail_reverted() {
@@ -409,6 +424,10 @@ pass "clean snapshot migrated up through $LATEST_TIMESTAMP"
 
 # Exercise the newest migration's down path in this disposable database only.
 run_migration_cli rehearsal_clean 5000 migration:revert \
+  >"$REHEARSAL_TMP/demon-tower-revert.log" 2>&1 || fail "migration 0030 revert failed"
+assert_demon_tower_reverted rehearsal_clean
+pass "demon tower reverted to $RAIL_TIMESTAMP without removing earlier Rail tables"
+run_migration_cli rehearsal_clean 5000 migration:revert \
   >"$REHEARSAL_TMP/rail-revert.log" 2>&1 || fail "migration 0029 revert failed"
 assert_rail_reverted rehearsal_clean
 pass "rail rooms/passwords reverted to $TRENDING_TIMESTAMP"
@@ -541,4 +560,4 @@ assert_target_applied rehearsal_lock
 pass "migration succeeds after lock release"
 
 printf '%s\n' "Community PostgreSQL 16 migration rehearsal passed."
-printf '%s\n' "Evidence: clean up/down/up through game rooms 0027, trending snapshots 0028 and rail/passwords 0029 (preserving earlier contracts), targeted 0029/0028/0027/0026/0025 revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."
+printf '%s\n' "Evidence: clean up/down/up through game rooms 0027, trending snapshots 0028, rail/passwords 0029 and demon tower 0030 (preserving earlier contracts), targeted 0030/0029/0028/0027/0026/0025 revert/reapply, normalized-email collision abort, lock-timeout rollback and recovery."

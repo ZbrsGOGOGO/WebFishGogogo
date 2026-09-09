@@ -78,6 +78,8 @@ const CommunityLeaderboardsPage = lazy(() => import('../features/games/rooms/Com
 const RailLobbyPage = lazy(() => import('../features/games/rail/RailLobbyPage').then((module) => ({ default: module.RailLobbyPage })));
 const RailRoomPage = lazy(() => import('../features/games/rail/RailRoomPage').then((module) => ({ default: module.RailRoomPage })));
 const RailLeaderboardPage = lazy(() => import('../features/games/rail/RailLeaderboardPage').then((module) => ({ default: module.RailLeaderboardPage })));
+const DemonTowerPage = lazy(() => import('../features/games/demon-tower/DemonTowerPage').then((module) => ({ default: module.DemonTowerPage })));
+const DemonTowerLeaderboardPage = lazy(() => import('../features/games/demon-tower/DemonTowerLeaderboardPage').then((module) => ({ default: module.DemonTowerLeaderboardPage })));
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({ default: module.TetrisGamePage })),
 );
@@ -169,8 +171,8 @@ export function CommunityModeRouter(): JSX.Element {
                 : <CommunityUnavailablePage system="towerDefense" />
             }
           />
-          <Route path="/ledou" element={<Navigate to="/tower-defense" replace />} />
-          <Route path="/battle" element={<Navigate to="/tower-defense" replace />} />
+          <Route path="/ledou" element={<Navigate to={COMMUNITY_FEATURE_FLAGS.demonTower ? '/games/demon-tower' : '/tower-defense'} replace />} />
+          <Route path="/battle" element={<Navigate to={COMMUNITY_FEATURE_FLAGS.demonTower ? '/games/demon-tower' : '/tower-defense'} replace />} />
         </Route>
 
         <Route element={<RequireCommunityAccount skipOnboarding />}>
@@ -320,9 +322,15 @@ export function CommunityModeRouter(): JSX.Element {
           <Route path="rooms/:roomId" element={loading(<CommunityGameRoomPage />)} />
           <Route path="rail" element={loading(<RailLobbyPage />)} />
           <Route path="rail/rooms/:roomId" element={loading(<RailRoomPage />)} />
+          <Route path="demon-tower" element={COMMUNITY_FEATURE_FLAGS.demonTower
+            ? loading(<DemonTowerPage />)
+            : <CommunityUnavailablePage system="demonTower" title="九层妖塔暂未开放" />} />
         </Route>
         <Route path="leaderboards/:gameKey" element={loading(<CommunityGameLeaderboardPage />)} />
         <Route path="rail/leaderboard" element={loading(<RailLeaderboardPage />)} />
+        <Route path="demon-tower/leaderboard" element={COMMUNITY_FEATURE_FLAGS.demonTower
+          ? loading(<DemonTowerLeaderboardPage />)
+          : <CommunityUnavailablePage system="demonTower" title="九层妖塔暂未开放" />} />
       </Route>
       <Route path="/games" element={<CommunityArcadeGameLayout />}>
         <Route path="snake" element={loading(<SnakeGamePage />)} />

@@ -10,6 +10,7 @@ import { NewsModule } from './modules/community/news/news.module';
 import { ArcadeModule } from './modules/community/arcade/arcade.module';
 import { PlayModule } from './modules/community/play/play.module';
 import { RailModule } from './modules/community/rail/rail.module';
+import { DemonTowerModule } from './modules/community/demon-tower/demon-tower.module';
 import { DevelopmentModule } from './modules/development/development.module';
 
 /**
@@ -30,6 +31,7 @@ import { DevelopmentModule } from './modules/development/development.module';
     ArcadeModule,
     PlayModule,
     RailModule,
+    DemonTowerModule,
     DevelopmentModule,
   ],
   controllers: [CommunityHealthController],

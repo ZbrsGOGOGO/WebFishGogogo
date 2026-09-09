@@ -27,6 +27,7 @@ import {
 import { CommunityCommandReceipt } from '../../database/entities/community-command-receipt.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
 import { ConsentRecord } from '../../database/entities/consent-record.entity';
+import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile } from '../../database/entities/demon-tower.entity';
 import {
   DevelopmentEvent,
   DevelopmentMember,
@@ -579,6 +580,14 @@ export class AccountLifecycleService
           { grantedByUserId: null },
         );
         await this.anonymizeRail(manager, user, now);
+        // Account erasure is a soft deletion, so FK cascades alone cannot
+        // remove private game state. Keep aggregate world/financial history,
+        // but erase this person's saves, action receipts and ranked identity.
+        await manager.getRepository(DemonTowerCommand).delete({ userId: user.id });
+        await manager.getRepository(DemonTowerContribution).delete({ userId: user.id });
+        await manager.getRepository(DemonTowerDailyProgress).delete({ userId: user.id });
+        await manager.getRepository(DemonTowerProfile).delete({ userId: user.id });
+        await manager.getRepository(DemonTowerDailyAward).update({ winnerUserId: user.id }, { winnerUserId: null });
         await manager
           .getRepository(FriendRequest)
           .createQueryBuilder()

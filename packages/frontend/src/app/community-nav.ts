@@ -5,6 +5,7 @@ export type CommunitySystemId =
   | 'messages'
   | 'farm'
   | 'towerDefense'
+  | 'demonTower'
   | 'leaderboards'
   | 'feed'
   | 'invite'
@@ -44,6 +45,7 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
   chat: envFlag(import.meta.env.VITE_COMMUNITY_CHAT_ENABLED, false),
   farm: envFlag(import.meta.env.VITE_COMMUNITY_FARM_ENABLED, false),
   towerDefense: envFlag(import.meta.env.VITE_COMMUNITY_TOWER_DEFENSE_ENABLED, true),
+  demonTower: envFlag(import.meta.env.VITE_COMMUNITY_DEMON_TOWER_ENABLED, false),
   battleServer: envFlag(import.meta.env.VITE_COMMUNITY_BATTLE_SERVER_ENABLED, false),
   feed: envFlag(import.meta.env.VITE_COMMUNITY_FEED_ENABLED, false),
   invite: envFlag(import.meta.env.VITE_COMMUNITY_INVITE_ENABLED, false),
@@ -96,6 +98,14 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: COMMUNITY_FEATURE_FLAGS.farm,
     requiresAccount: true,
     description: '一键照料工位绿植',
+  },
+  {
+    id: 'demonTower',
+    label: '九层妖塔',
+    path: '/games/demon-tower',
+    enabled: COMMUNITY_FEATURE_FLAGS.demonTower,
+    requiresAccount: true,
+    description: '免费角色养成、文字探索与异步协作攻坚',
   },
   {
     id: 'towerDefense',

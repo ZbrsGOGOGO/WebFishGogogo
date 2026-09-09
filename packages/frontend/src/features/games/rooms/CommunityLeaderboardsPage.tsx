@@ -5,6 +5,7 @@ import type { PlayOfficeCoinLeaderboard } from '@stealth-reader/shared';
 import { communityGameErrorMessage, communityGameRoomsApi } from '../../../api/community-game-rooms';
 import { getCommunitySessionGeneration } from '../../../api/community-http';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
+import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
 import { usePlayCatalog } from './play-ui-state';
 import styles from './GameRooms.module.css';
 
@@ -40,6 +41,7 @@ export function CommunityLeaderboardsPage(): JSX.Element {
         <p className={styles.muted}>{data.rules}<br />更新时间：{new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date(data.updatedAt))}（北京时间）</p>
       </> : null}
     </div> : <div role="tabpanel" aria-label="小游戏每日榜">
+      {COMMUNITY_FEATURE_FLAGS.demonTower ? <section className={styles.panel}><div className={styles.panelHeading}><h2>九层妖塔 · 贡献日榜</h2><Link className={styles.quietButton} to="/games/demon-tower/leaderboard">查看妖塔贡献日榜 →</Link></div><div className={styles.panelBody}><p className={styles.muted}>按当日对守层者造成的实际伤害排名，每日冠军另获 100 办公币。通道建设贡献独立展示，不计入伤害日榜；无人造成有效伤害时不发奖。</p></div></section> : null}
       <section className={styles.panel}><div className={styles.panelHeading}><h2>轨道难题 · 生存率日榜</h2><Link className={styles.quietButton} to="/games/rail/leaderboard">查看轨道难题日榜 →</Link></div><div className={styles.panelBody}><p className={styles.muted}>3–9 人派对协作，纯真人完整操作的建房对局按生存率排名。每日冠军另获 100 办公币；练习、人机和挂机不发奖，恶魔值不兑换办公币。</p></div></section>
       {catalogError ? <p className={styles.error} role="alert">{catalogError} <button className={styles.quietButton} type="button" onClick={retryCatalog}>重试游戏目录</button></p> : null}
       {!catalog && !catalogError ? <p role="status" className={styles.empty}>正在读取游戏榜单…</p> : null}

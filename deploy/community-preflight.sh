@@ -135,6 +135,17 @@ for contract in \
 done
 grep -Fq 'AddRailRoomsAndPasswords1700000000029' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
   fail "rail/password migration 0029 is not registered"
+for contract in \
+  packages/backend/src/database/migrations/1700000000030-AddDemonTower.ts \
+  packages/backend/src/modules/community/demon-tower/demon-tower.module.ts \
+  deploy/community-demon-tower-rehearsal.cjs \
+  deploy/community-demon-tower-http-rehearsal.cjs; do
+  [ -f "$ROOT_DIR/$contract" ] || fail "missing demon tower release contract: $contract"
+done
+grep -Fq 'AddDemonTower1700000000030' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+  fail "demon tower migration 0030 is not registered"
+grep -Fq 'zone=community_demon_tower_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "demon tower proxy needs its separate bounded request budget"
 grep -Fq 'zone=community_rail_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "rail proxy needs its separate bounded request budget"
 AUTH_EMAIL_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/email-delivery.service.ts"
@@ -209,6 +220,7 @@ for build_flag in \
   VITE_COMMUNITY_NEWS_ENABLED \
   VITE_COMMUNITY_NEWS_ADMIN_ENABLED \
   VITE_COMMUNITY_TOWER_DEFENSE_ENABLED \
+  VITE_COMMUNITY_DEMON_TOWER_ENABLED \
   VITE_COMMUNITY_LEDOU_ENABLED \
   VITE_COMMUNITY_BATTLE_SERVER_ENABLED; do
   grep -Fq "ARG ${build_flag}=" "$ROOT_DIR/Dockerfile" ||
@@ -367,6 +379,12 @@ grep -Fq 'VITE_COMMUNITY_MODERATION_ENABLED: ${FEATURE_COMMUNITY_MODERATION_ENAB
 grep -Fq 'VITE_COMMUNITY_TOWER_DEFENSE_ENABLED: "true"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "community Compose must enable the local workstation tower-defense entry"
+grep -Fq 'FEATURE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER_ENABLED:-false}' \
+  "$ROOT_DIR/deploy/docker-compose.community.yml" ||
+  fail "community Compose must keep demon-tower server disabled by default"
+grep -Fq 'VITE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER_ENABLED:-false}' \
+  "$ROOT_DIR/deploy/docker-compose.community.yml" ||
+  fail "demon-tower frontend and server must use the same feature flag"
 grep -Fq 'VITE_COMMUNITY_LEDOU_ENABLED: "false"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "community Compose must disable the retired Ledou entry"
@@ -546,7 +564,9 @@ grep -Fq 'PLAY_TIMESTAMP=1700000000027' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'TRENDING_TIMESTAMP=1700000000028' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
-grep -Fq 'LATEST_TIMESTAMP=1700000000029' \
+grep -Fq 'RAIL_TIMESTAMP=1700000000029' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'LATEST_TIMESTAMP=1700000000030' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'chat_socket_tickets' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
@@ -575,8 +595,10 @@ grep -Fq 'assert_zhesi_arcade_reverted' \
 grep -Fq 'assert_development_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'assert_rail_reverted' \
+  "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
+grep -Fq 'assert_demon_tower_reverted' \
   "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
-  fail "migration rehearsal must verify chat 0014 through rail rooms/passwords 0029"
+  fail "migration rehearsal must verify chat 0014 through demon tower 0030"
 grep -Fq 'migration:revert' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'EMAIL_NORMALIZATION_COLLISION' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" &&
 grep -Fq 'lock-timeout' "$ROOT_DIR/deploy/community-migration-rehearsal.sh" ||
@@ -707,6 +729,9 @@ check_boolean FEATURE_NEWS_ADMIN_ENABLED
 # Existing deployments default to disabled when this newly added key is absent.
 if grep -q '^FEATURE_DEVELOPMENT_WORKSPACE_ENABLED=' "$ENV_FILE"; then
   check_boolean FEATURE_DEVELOPMENT_WORKSPACE_ENABLED
+fi
+if grep -q '^FEATURE_COMMUNITY_DEMON_TOWER_ENABLED=' "$ENV_FILE"; then
+  check_boolean FEATURE_COMMUNITY_DEMON_TOWER_ENABLED
 fi
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
 

@@ -55,7 +55,10 @@ describe('private development deployment boundaries', () => {
     );
 
     expect(rehearsal).toContain('DEVELOPMENT_TIMESTAMP=1700000000026');
-    expect(rehearsal).toContain('LATEST_TIMESTAMP=1700000000029');
+    expect(rehearsal).toContain('RAIL_TIMESTAMP=1700000000029');
+    expect(rehearsal).toContain('LATEST_TIMESTAMP=1700000000030');
+    expect(rehearsal).toContain('assert_demon_tower_reverted rehearsal_clean');
+    expect(rehearsal.indexOf('assert_demon_tower_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_rail_reverted rehearsal_clean'));
     expect(rehearsal.indexOf('assert_rail_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_trending_reverted rehearsal_clean'));
     expect(rehearsal.indexOf('assert_trending_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_play_reverted rehearsal_clean'));
     expect(rehearsal.indexOf('assert_play_reverted rehearsal_clean')).toBeLessThan(rehearsal.indexOf('assert_development_reverted rehearsal_clean'));

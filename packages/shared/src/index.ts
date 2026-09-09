@@ -6,3 +6,4 @@ export * from './game-rooms';
 export * from './news-trending';
 export * from './rail-game';
 export * from './rail-rooms';
+export * from './demon-tower';

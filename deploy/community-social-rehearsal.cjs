@@ -15,7 +15,7 @@ const path = require('node:path');
 
 assert.equal(process.env.SOCIAL_REHEARSAL_CONFIRMATION, 'ISOLATED_SOCIAL_ONLY:20260908');
 assert.equal(process.env.DB_DATABASE, 'community_social_rehearsal');
-assert.match(process.env.DB_HOST || '', /^rail-rehearsal-pg-[a-z0-9]{6,16}$/);
+assert.ok(process.env.DB_HOST === 'demon-tower-rehearsal-pg-hgbacy' || /^rail-rehearsal-pg-[a-z0-9]{6,16}$/.test(process.env.DB_HOST || ''), 'Reviewed isolated PG host only');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Dedicated isolated PG credentials required');
 assert.ok(!process.env.DATABASE_URL, 'Connection-string overrides are forbidden');
@@ -24,10 +24,12 @@ assert.notEqual(process.env.NODE_ENV, 'production');
 assert.notEqual(process.env.LOCAL_DEV, 'true', 'pg-mem and local moderation/bus adapters are forbidden');
 const redisUrl = new URL(process.env.REDIS_URL || '');
 assert.equal(redisUrl.protocol, 'redis:');
-assert.match(redisUrl.hostname, /^full-audit-redis-[a-z0-9]{6,16}$/);
+assert.ok(redisUrl.hostname === 'demon-tower-rehearsal-redis-hgbacy' || /^full-audit-redis-[a-z0-9]{6,16}$/.test(redisUrl.hostname), 'Reviewed isolated Redis host only');
 assert.equal(redisUrl.port || '6379', '6379');
 assert.equal(redisUrl.pathname, '/3');
-assert.ok(!redisUrl.username && !redisUrl.password && !redisUrl.search && !redisUrl.hash);
+assert.ok(!redisUrl.username && !redisUrl.search && !redisUrl.hash);
+if (redisUrl.hostname === 'demon-tower-rehearsal-redis-hgbacy') assert.ok(redisUrl.password, 'Dedicated isolated Redis password required');
+else assert.equal(redisUrl.password, '');
 process.env.NODE_ENV = 'test';
 process.env.LOCAL_DEV = 'false';
 process.env.DB_LOGGING = 'false';
@@ -69,7 +71,8 @@ const { NotificationService } = load('modules/community/notification.service');
 const { NotificationController } = load('modules/community/notification.controller');
 const { migrations } = load('database/migrations');
 assert.ok(migrations.some((migration) => Number(migration.name.slice(-13)) === 1700000000029));
-assert.ok(migrations.every((migration) => Number(migration.name.slice(-13)) <= 1700000000029));
+assert.ok(migrations.some((migration) => Number(migration.name.slice(-13)) === 1700000000030));
+assert.ok(migrations.every((migration) => Number(migration.name.slice(-13)) <= 1700000000030));
 const jwt = new JwtService({ secret: `synthetic-social-rehearsal-${randomUUID()}` });
 const users = [], stacks = [], clients = [], checks = [], ownedConnectionIds = new Set();
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -248,7 +251,7 @@ async function setup() {
     if (!seededTables.has(table)) assert.equal(Number((await db.query(`SELECT count(*) FROM "${table}"`))[0].count), 0, `Refuse existing ${table}`);
   }
   await db.runMigrations({ transaction: 'all' });
-  assert.equal(Number((await db.query('SELECT max(timestamp) AS timestamp FROM migrations'))[0].timestamp), 1700000000029);
+  assert.equal(Number((await db.query('SELECT max(timestamp) AS timestamp FROM migrations'))[0].timestamp), 1700000000030);
   baseline = await fingerprints();
   for (const table of businessTables) assert.equal(baseline[table].count, 0, `Refuse existing ${table}`);
   originalRooms = (await db.query('SELECT row_to_json(t) AS value FROM chat_rooms t')).map((row) => row.value);
@@ -256,7 +259,7 @@ async function setup() {
   await redis.connect();
   assert.equal(await redis.dbSize(), 0, 'Redis DB 3 must start empty');
   await db.getRepository(E.ChatRoom).update({ slug: 'general' }, { slowModeSeconds: 0 });
-  pass('isolation', 'empty-business PostgreSQL migrated to 0029; real isolated Redis DB 3; no production data');
+  pass('isolation', 'empty-business PostgreSQL migrated to 0030; real isolated Redis DB 3; no production data');
 }
 async function exercise() {
   const [first, second] = [await startStack(), await startStack()];

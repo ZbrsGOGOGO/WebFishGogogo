@@ -64,7 +64,7 @@ describe('community mode routes', () => {
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
   });
 
-  it.each(['/community', '/farm', '/tower-defense', '/ledou', '/news', '/users/member-1', '/leaderboards', '/games/rooms'])(
+  it.each(['/community', '/farm', '/tower-defense', '/ledou', '/news', '/users/member-1', '/leaderboards', '/games/rooms', '/games/demon-tower'])(
     'redirects a guest from member system %s to login',
     async (path) => {
       renderAt(path);
@@ -79,6 +79,16 @@ describe('community mode routes', () => {
 
     renderAt('/games');
     expect(await screen.findByRole('heading', { name: '小游戏专区' })).toBeInTheDocument();
+  });
+
+  it.each(['/games/demon-tower', '/games/demon-tower/leaderboard'])('keeps disabled demon tower route %s non-mutating', async (path) => {
+    useCommunityAuthStore.setState({ phase: 'active', user: activeUser, sessionReady: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    renderAt(path);
+    expect(await screen.findByRole('heading', { name: '九层妖塔暂未开放' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/demon-tower'))).toBe(false);
+    expect(screen.queryByRole('button', { name: /创建.*档案/ })).not.toBeInTheDocument();
   });
 
   it('does not present password reset as available while its backend gate is closed', async () => {

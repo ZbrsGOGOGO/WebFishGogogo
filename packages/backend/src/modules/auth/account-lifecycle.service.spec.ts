@@ -9,6 +9,7 @@ import { AdminAuditLog } from '../../database/entities/admin-audit-log.entity';
 import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.entity';
 import { AuthSession } from '../../database/entities/auth-session.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
+import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor } from '../../database/entities/demon-tower.entity';
 import {
   DevelopmentAttachmentRecord,
   DevelopmentEvent,
@@ -179,6 +180,64 @@ describe('AccountLifecycleService', () => {
     });
     expect(persisted).not.toContain('Private Person');
     expect(persisted).not.toContain(oldEmail);
+  });
+
+  it('clears demon tower private saves and receipts while preserving peers, world progress and award accounting', async () => {
+    const user = await seedUser(dataSource, 'tower-delete@example.com');
+    const peer = await seedUser(dataSource, 'tower-peer@example.com');
+    const session = await seedSession(dataSource, user.id, 'd');
+    const now = new Date('2026-09-08T12:00:00.000Z');
+    const profiles = dataSource.getRepository(DemonTowerProfile);
+    for (const owner of [user, peer]) {
+      await profiles.save(profiles.create({ userId: owner.id, version: 1,
+        state: { privateSeed: `${owner.id}:private`, privateCombatLog: ['private report'] },
+        actionWindowAt: null, actionWindowCount: 0, createdAt: now, updatedAt: now }));
+    }
+    const worlds = dataSource.getRepository(DemonTowerWorldFloor);
+    await worlds.save(worlds.create({ floor: 1, bossHp: 2300, bossMaxHp: 2400,
+      passageProgress: 0, passageRequired: 60, version: 2, unlockedAt: now,
+      defeatedAt: null, completedAt: null, updatedAt: now }));
+    const commands = dataSource.getRepository(DemonTowerCommand);
+    for (const owner of [user, peer]) {
+      await commands.save(commands.create({ userId: owner.id, requestId: randomUUID(), kind: 'enroll',
+        requestHash: 'd'.repeat(64), expectedVersion: 0, appliedVersion: 1,
+        receipt: { events: ['private receipt'] }, createdAt: now }));
+    }
+    const contributions = dataSource.getRepository(DemonTowerContribution);
+    for (const owner of [user, peer]) {
+      await contributions.save(contributions.create({ floor: 1, userId: owner.id,
+        bossDamage: 50, passageContribution: 0, level: 1, updatedAt: now }));
+    }
+    const daily = dataSource.getRepository(DemonTowerDailyProgress);
+    for (const owner of [user, peer]) {
+      await daily.save(daily.create({ serviceDate: '2026-09-08', userId: owner.id,
+        officeCoins: 0, bossDamage: 50, passageContribution: 0, bossAttempts: 1,
+        actionCount: 1, level: 1, achievedAt: now, updatedAt: now }));
+    }
+    const awards = dataSource.getRepository(DemonTowerDailyAward);
+    await awards.save(awards.create({ serviceDate: '2026-09-08', winnerUserId: user.id,
+      bossDamage: 50, coins: 100, awardedAt: now }));
+    const beforeWorld = await worlds.findOneByOrFail({ floor: 1 });
+    const beforePeer = await profiles.createQueryBuilder('profile').addSelect('profile.state')
+      .where('profile.userId = :id', { id: peer.id }).getOneOrFail();
+
+    await service.requestDeletion(user.id, session.id, 'tower-delete-idempotency');
+    const request = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
+    await expect(service.processDueDeletions(10, new Date(request.scheduledFor.getTime() + 1000))).resolves.toBe(1);
+
+    expect(await profiles.countBy({ userId: user.id })).toBe(0);
+    expect(await commands.countBy({ userId: user.id })).toBe(0);
+    expect(await contributions.countBy({ userId: user.id })).toBe(0);
+    expect(await daily.countBy({ userId: user.id })).toBe(0);
+    expect(await commands.countBy({ userId: peer.id })).toBe(1);
+    expect(await contributions.countBy({ userId: peer.id })).toBe(1);
+    expect(await daily.countBy({ userId: peer.id })).toBe(1);
+    expect(await worlds.findOneByOrFail({ floor: 1 })).toEqual(beforeWorld);
+    expect(await profiles.createQueryBuilder('profile').addSelect('profile.state')
+      .where('profile.userId = :id', { id: peer.id }).getOneOrFail()).toEqual(beforePeer);
+    expect(await awards.findOneByOrFail({ serviceDate: '2026-09-08' })).toMatchObject({
+      winnerUserId: null, bossDamage: 50, coins: 100, awardedAt: now,
+    });
   });
 
   it('removes private development files and clears authored review text when account deletion completes', async () => {

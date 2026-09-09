@@ -9,7 +9,7 @@ const { randomUUID, randomBytes } = require('node:crypto');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 assert.equal(process.env.ACCOUNT_REHEARSAL_CONFIRMATION, 'ISOLATED_ACCOUNT_ONLY:20260908');
-assert.equal(process.env.DB_HOST, 'rail-rehearsal-pg-audit4rbx3t');
+assert.ok(['rail-rehearsal-pg-audit4rbx3t', 'demon-tower-rehearsal-pg-hgbacy'].includes(process.env.DB_HOST), 'An explicitly reviewed isolated host is required');
 assert.equal(process.env.DB_DATABASE, 'community_account_rehearsal');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Dedicated isolated credentials required');
@@ -36,7 +36,7 @@ const dist = process.env.ACCOUNT_REHEARSAL_BACKEND_DIST || path.join(appRoot, 'p
 const load = (file) => fromApp(path.join(dist, file));
 const E = load('database/entities');
 const { migrations } = load('database/migrations');
-assert.equal(Math.max(...migrations.map((m) => Number(m.name.slice(-13)))), 1700000000029, 'Review rehearsal before future migrations');
+assert.equal(Math.max(...migrations.map((m) => Number(m.name.slice(-13)))), 1700000000030, 'Review rehearsal before future migrations');
 const { AuthService } = load('modules/auth/auth.service');
 const { AuthController } = load('modules/auth/auth.controller');
 const { JwtAuthGuard } = load('modules/auth/jwt-auth.guard');
@@ -128,7 +128,7 @@ async function setup() {
   await app.listen(0, '127.0.0.1');
   baseUrl = `http://127.0.0.1:${app.getHttpServer().address().port}`;
   process.env.PUBLIC_SITE_ORIGIN = baseUrl;
-  check('strict isolated database, schema 0029, real Nest HTTP and no mail/background workers');
+  check('strict isolated database, schema 0030, real Nest HTTP and no mail/background workers');
 }
 async function http(method, url, { token, cookie, body, form, origin = baseUrl, status = 200 } = {}) {
   assert.ok(url.startsWith('/v1/') || url === '/health' || url === '/health/ready');

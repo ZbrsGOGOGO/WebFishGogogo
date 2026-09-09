@@ -28,6 +28,7 @@ import { AddDevelopmentWorkspace1700000000026 } from './1700000000026-AddDevelop
 import { AddAuthoritativeGameRooms1700000000027 } from './1700000000027-AddAuthoritativeGameRooms';
 import { AddTrendingBoardSnapshots1700000000028 } from './1700000000028-AddTrendingBoardSnapshots';
 import { AddRailRoomsAndPasswords1700000000029 } from './1700000000029-AddRailRoomsAndPasswords';
+import { AddDemonTower1700000000030 } from './1700000000030-AddDemonTower';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -61,4 +62,5 @@ export const migrations = [
   AddAuthoritativeGameRooms1700000000027,
   AddTrendingBoardSnapshots1700000000028,
   AddRailRoomsAndPasswords1700000000029,
+  AddDemonTower1700000000030,
 ];
