@@ -214,4 +214,12 @@ describe('CommunityChatConnection', () => {
       },
     })?.type).toBe('chat.direct.message.created');
   });
+  it('accepts optional title on both room and direct WS authors while rejecting malformed title objects', () => {
+    const message = { id: 'm1', conversationId: 'c1', roomSlug: 'general', sequence: 1, version: 1, visibility: 'visible', body: '旧消息不改昵称', author: { publicId: 'p1', displayName: '同事' }, createdAt: 'now', updatedAt: 'now', permissions: { canWithdraw: false, withdrawUntil: null, canReport: true } };
+    for (const type of ['chat.message.created', 'chat.direct.message.created']) {
+      expect(parseCommunityChatServerEvent({ type, protocolVersion: 1, message })?.type).toBe(type);
+      expect(parseCommunityChatServerEvent({ type, protocolVersion: 1, message: { ...message, author: { ...message.author, title: { key: 'farm_first', label: '工位园丁' } } } })?.type).toBe(type);
+      expect(parseCommunityChatServerEvent({ type, protocolVersion: 1, message: { ...message, author: { ...message.author, title: { key: 'farm_first', label: { html: 'x' } } } } })).toBeNull();
+    }
+  });
 });

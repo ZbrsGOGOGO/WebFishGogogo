@@ -12,6 +12,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import { CommunityTitleBadge } from '../community-progression/CommunityTitleBadge';
 import {
   communityChatErrorMessage,
   communityDirectMessagesApi,
@@ -727,7 +728,7 @@ export function CommunityDirectMessagesPage(): JSX.Element {
               >
                 <span className={styles.directAvatar} aria-hidden="true">{communityAvatarMark(item.friend.avatarKey ?? undefined)}</span>
                 <span>
-                  <strong>{item.friend.displayName}</strong>
+                  <strong>{item.friend.displayName}<CommunityTitleBadge title={item.friend.title} /></strong>
                   <small>{item.lastMessage?.body ?? '已建立好友私聊'}</small>
                 </span>
                 {item.unreadCount > 0 ? <b aria-label={`${item.unreadCount} 条未读`}>{Math.min(item.unreadCount, 99)}</b> : null}
@@ -754,7 +755,7 @@ export function CommunityDirectMessagesPage(): JSX.Element {
                   ← 返回会话列表
                 </Link>
                 <div>
-                  <strong>{selected?.friend.displayName ?? '好友私聊'}</strong>
+                  <strong>{selected?.friend.displayName ?? '好友私聊'}<CommunityTitleBadge title={selected?.friend.title} /></strong>
                   <small>{selected?.friend.username ? `@${selected.friend.username}` : '只有你和对方可见'}</small>
                 </div>
                 {selected && selected.friend.publicId !== DELETED_USER_PUBLIC_ID ? (
@@ -785,7 +786,7 @@ export function CommunityDirectMessagesPage(): JSX.Element {
                     return (
                       <li key={message.id} data-mine={mine} data-visibility={message.visibility}>
                         <div>
-                          <span>{mine ? '我' : message.author.displayName}</span>
+                          <span>{message.visibility === 'blocked_placeholder' ? '已拉黑用户' : mine ? '我' : message.author.displayName}<CommunityTitleBadge title={message.author.title} hidden={message.visibility === 'blocked_placeholder'} /></span>
                           <time dateTime={message.createdAt}>{formatTime(message.createdAt)}</time>
                         </div>
                         {message.replyTo ? (

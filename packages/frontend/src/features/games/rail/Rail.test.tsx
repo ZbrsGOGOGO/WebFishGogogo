@@ -131,6 +131,10 @@ describe('rail workspace', () => {
     render(<RailRoomChat room={spectator} />); expect(screen.getByLabelText('观众讨论消息')).toBeInTheDocument(); fireEvent.click(screen.getByRole('tab', { name: '玩家讨论' }));
     expect(await screen.findByText('<img src=x onerror=alert(1)>')).toBeInTheDocument(); expect(screen.queryByRole('img')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: '发送' })).not.toBeInTheDocument(); expect(screen.getByText(/当前频道只读/)).toBeInTheDocument();
   });
+  it('shows equipped fixed-text titles in room discussion without changing author or message body', async () => {
+    vi.mocked(communityRailApi.chat).mockResolvedValue({ latestSequence: 1, hasMore: false, items: [{ id: 'titled-message', sequence: 1, channel: 'player', author: { publicId: 'person2', displayName: '讨论同事', username: null, title: { key: 'farm_first', label: '工位园丁' } }, body: '完整保留的发言', status: 'visible', createdAt: '2026-09-08T00:00:00Z' }] });
+    render(<RailRoomChat room={room()} />); expect(await screen.findByLabelText('佩戴称号：工位园丁')).toBeVisible(); expect(screen.getByText('完整保留的发言')).toBeVisible();
+  });
   it('keeps uncertain retries identical and serializes later actions with the new server sequence', async () => {
     const next = room({ version: 2, me: { ...room().me, nextSequence: 2 } }); const action = vi.spyOn(communityRailApi, 'action').mockRejectedValueOnce(new CommunityApiError(0, 'offline')).mockResolvedValueOnce(next).mockResolvedValue(room({ version: 3, me: { ...room().me, nextSequence: 3 } }));
     render(<Harness />); await screen.findByText('午间轨道讨论组'); fireEvent.click(screen.getByText('出善牌')); await screen.findByRole('alert'); fireEvent.click(screen.getByText('出恶牌')); expect(action).toHaveBeenCalledOnce(); fireEvent.click(screen.getByText('重试动作'));

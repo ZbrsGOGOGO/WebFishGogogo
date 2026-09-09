@@ -15,7 +15,7 @@ const path = require('node:path');
 
 assert.equal(process.env.PLAY_REHEARSAL_CONFIRMATION, 'ISOLATED_SYNTHETIC_ONLY:20260908');
 assert.equal(process.env.DB_DATABASE, 'community_play_rehearsal');
-assert.ok(process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'demon-tower-rehearsal-pg-hgbacy' || /^(?:play|rail)-rehearsal-pg-[a-z0-9]{6,16}$/.test(process.env.DB_HOST || ''), 'Explicit isolated DB_HOST required');
+assert.equal(process.env.DB_HOST, 'growth-pg-btpam6', 'Explicit isolated DB_HOST required');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Explicit dedicated test credentials required');
 assert.ok(!process.env.DATABASE_URL, 'Do not pass production connection strings');
@@ -34,12 +34,12 @@ const { PlatformAssetsService } = load('modules/platform/platform-assets.service
 const { NotificationService } = load('modules/community/notification.service');
 const { hashAuthRateLimitKey } = load('modules/auth/auth-crypto');
 const GAME_KEYS = ['snake', 'tetris', 'tank', 'zhesi', 'draw', 'undercover'];
-const oldTimestamp = 1700000000028;
+const oldTimestamp = 1700000000030;
 const timestamp = (migration) => Number(migration.name.slice(-13));
 assert.ok(E.PlayRoom && E.PlayDailyAward, 'Candidate entity build required');
 assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000029), 'Candidate migration 0029 required');
-assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000030), 'Candidate migration 0030 required');
-assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000030), 'Review this rehearsal before running future migrations');
+assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000032), 'Candidate migration 0032 required');
+assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000032), 'Review this rehearsal before running future migrations');
 const options = {
   type: 'postgres', host: process.env.DB_HOST, port: 5432,
   username: process.env.DB_USERNAME, password: process.env.DB_PASSWORD, database: process.env.DB_DATABASE,
@@ -124,13 +124,13 @@ async function schemaRehearsal() {
   for (;;) {
     const [last] = await db.query('SELECT timestamp FROM migrations ORDER BY timestamp DESC LIMIT 1');
     if (Number(last.timestamp) <= oldTimestamp) break;
-    assert.ok([1700000000030, 1700000000029].includes(Number(last.timestamp)), 'Only the two reviewed additive migrations may be reversed');
+    assert.ok([1700000000032, 1700000000031].includes(Number(last.timestamp)), 'Only the two reviewed additive migrations may be reversed');
     await db.undoLastMigration({ transaction: 'all' });
   }
   assert.deepEqual(await fingerprints(), beforeUpgrade, 'Additive migration down must preserve every baseline row');
   await db.runMigrations({ transaction: 'all' });
   baseline = await fingerprints();
-  check('migration 0028 → 0030 → 0028 → 0030, no baseline changes or old migration reversals');
+  check('migration 0030 → 0032 → 0030 → 0032, no baseline changes or old migration reversals');
 }
 
 async function roomChecks() {

@@ -12,6 +12,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { TitleBadge } from '@stealth-reader/shared';
 import { DataSource, EntityManager, In, IsNull, MoreThan } from 'typeorm';
 
 import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.entity';
@@ -33,6 +34,7 @@ import { ReferralCode } from '../../database/entities/referral-code.entity';
 import { ReferralRedemption } from '../../database/entities/referral-redemption.entity';
 import { secretHash } from '../community/community-validation';
 import { assertCommunityWritesEnabled } from '../community/community-write-gate';
+import { loadTitleBadges, unlockedTitleBadges } from '../community/progression/title-projection';
 import {
   validateNewPassword,
   validateUsernamePassword,
@@ -150,6 +152,9 @@ export interface AuthUserView {
   battleProfession: string | null;
   bio: string | null;
   privacy: CommunityPrivacySettings;
+  /** 本人视图的固定称号投影；不含成就私有指标、VIP 或佩戴请求信息。 */
+  equippedTitle: TitleBadge | null;
+  honors: TitleBadge[];
   /** 面向本人会话的产品角色；内部 user 映射为 member。 */
   roles: Array<'member' | 'moderator' | 'admin' | 'safety'>;
 }
@@ -780,7 +785,7 @@ export class AuthService {
           accessToken: await this.signAccessToken(user.id, session.id),
           refreshToken: next.raw,
           refreshExpiresAt,
-          user: this.toUserView(user, profile),
+          user: await this.toUserView(manager, user, profile),
         },
       } as RefreshOutcome;
     });
@@ -936,7 +941,7 @@ export class AuthService {
         throw new UnauthorizedException({ code: 'INVALID_SESSION' });
       }
       const profile = await this.ensureProfile(manager, user);
-      return this.toUserView(user, profile);
+      return this.toUserView(manager, user, profile);
     });
   }
 
@@ -972,7 +977,7 @@ export class AuthService {
 
       await manager.getRepository(User).save(user);
       await manager.getRepository(PlayerProfile).save(profile);
-      return this.toUserView(user, profile);
+      return this.toUserView(manager, user, profile);
     });
   }
 
@@ -991,7 +996,7 @@ export class AuthService {
       const profile = await this.ensureProfile(manager, user);
       profile.privacySettings = { ...privacy };
       await manager.getRepository(PlayerProfile).save(profile);
-      return this.toUserView(user, profile);
+      return this.toUserView(manager, user, profile);
     });
   }
 
@@ -1033,7 +1038,7 @@ export class AuthService {
       accessToken: await this.signAccessToken(user.id, session.id),
       refreshToken: refresh.raw,
       refreshExpiresAt,
-      user: this.toUserView(user, profile),
+      user: await this.toUserView(manager, user, profile),
     };
   }
 
@@ -1299,7 +1304,14 @@ export class AuthService {
     );
   }
 
-  private toUserView(user: User, profile: PlayerProfile): AuthUserView {
+  private async toUserView(manager: EntityManager, user: User, profile: PlayerProfile): Promise<AuthUserView> {
+    // All callers hold this user's account lock. Self can view their own honors
+    // regardless of public privacy, but restricted auth sessions get no titles.
+    // Reuse read-only, catalog-validated projections: this never unlocks an
+    // achievement, grants membership/coins, or accepts profile text as a badge.
+    const [titles, honors] = user.accountStatus === 'active'
+      ? await Promise.all([loadTitleBadges(manager, [user.id]), unlockedTitleBadges(manager, user.id)])
+      : [new Map<string, TitleBadge>(), []];
     return {
       id: user.publicId,
       publicId: user.publicId,
@@ -1312,6 +1324,8 @@ export class AuthService {
       avatarKey: profile.avatarKey,
       battleProfession: profile.battleProfession,
       bio: profile.bio,
+      equippedTitle: titles.get(user.id) ?? null,
+      honors,
       privacy: {
         ...DEFAULT_COMMUNITY_PRIVACY,
         ...profile.privacySettings,

@@ -151,6 +151,16 @@ describe('CommunityDirectMessagesPage', () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
+  it('renders title consistently in conversation list/header/messages and hides blocked message title', async () => {
+    const titled = { ...conversation, friend: { ...conversation.friend, title: { key: 'farm_first', label: '工位园丁' } } };
+    vi.mocked(communityDirectMessagesApi.listConversations).mockResolvedValue({ items: [titled], totalUnread: 0, nextCursor: null });
+    const normal = directMessage('title-normal', { author: { publicId: 'friend-public-id', displayName: '小李', title: { key: 'farm_first', label: '工位园丁' } } });
+    const blocked = directMessage('title-blocked', { id: 'blocked-title-message', sequence: 2, visibility: 'blocked_placeholder', author: { publicId: 'blocked', displayName: '不应显示', title: { key: 'farm_25', label: '绿意常驻' } } });
+    vi.mocked(communityDirectMessagesApi.listMessages).mockResolvedValue(directMessagePage([normal, blocked]));
+    render(<MemoryRouter initialEntries={['/messages/conversation-1']}><Routes><Route path="/messages/:conversationId" element={<CommunityDirectMessagesPage />} /></Routes></MemoryRouter>);
+    await waitFor(() => expect(screen.getAllByLabelText('佩戴称号：工位园丁')).toHaveLength(3));
+    expect(screen.queryByText('绿意常驻')).toBeNull(); expect(screen.queryByText('不应显示')).toBeNull(); expect(screen.getByText('已拉黑用户')).toBeVisible();
+  });
 
   it('sends over WebSocket and replaces the optimistic item with the targeted realtime message', async () => {
     render(

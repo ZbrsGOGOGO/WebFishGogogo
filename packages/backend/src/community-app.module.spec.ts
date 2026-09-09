@@ -36,6 +36,8 @@ import { RailController } from './modules/community/rail/rail.controller';
 import { RailModule } from './modules/community/rail/rail.module';
 import { DemonTowerController } from './modules/community/demon-tower/demon-tower.controller';
 import { DemonTowerModule } from './modules/community/demon-tower/demon-tower.module';
+import { CommunityProgressionModule } from './modules/community/progression/community-progression.module';
+import { CommunityProgressionController } from './modules/community/progression/community-progression.controller';
 import {
   NewsAdminController,
   NewsPreferenceController,
@@ -69,6 +71,7 @@ describe('CommunityAppModule route allowlist', () => {
         PlayController,
         RailController,
         DemonTowerController,
+        CommunityProgressionController,
         NewsPublicController,
         NewsPreferenceController,
         NewsAdminController,
@@ -84,6 +87,7 @@ describe('CommunityAppModule route allowlist', () => {
     expect(modules).toContain(PlayModule);
     expect(modules).toContain(RailModule);
     expect(modules).toContain(DemonTowerModule);
+    expect(modules).toContain(CommunityProgressionModule);
     expect(modules).toContain(NewsModule);
     expect(modules).not.toContain(OutboxModule);
     expect(modules).not.toContain(WorkerModule);

@@ -10,6 +10,7 @@ export type CommunitySystemId =
   | 'feed'
   | 'invite'
   | 'profile'
+  | 'achievements'
   | 'friends';
 
 export interface CommunitySystemNavItem {
@@ -46,6 +47,8 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
   farm: envFlag(import.meta.env.VITE_COMMUNITY_FARM_ENABLED, false),
   towerDefense: envFlag(import.meta.env.VITE_COMMUNITY_TOWER_DEFENSE_ENABLED, true),
   demonTower: envFlag(import.meta.env.VITE_COMMUNITY_DEMON_TOWER_ENABLED, false),
+  communityProgressionEnabled: envFlag(import.meta.env.VITE_COMMUNITY_PROGRESSION_ENABLED, false),
+  demonTowerAuto: envFlag(import.meta.env.VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED, false),
   battleServer: envFlag(import.meta.env.VITE_COMMUNITY_BATTLE_SERVER_ENABLED, false),
   feed: envFlag(import.meta.env.VITE_COMMUNITY_FEED_ENABLED, false),
   invite: envFlag(import.meta.env.VITE_COMMUNITY_INVITE_ENABLED, false),
@@ -154,6 +157,11 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: COMMUNITY_FEATURE_FLAGS.friends,
     requiresAccount: true,
     description: '好友申请、拉黑与互动',
+  },
+  {
+    id: 'achievements', label: '成长档案', path: '/achievements',
+    enabled: COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled, requiresAccount: true,
+    description: '成就称号与赠送 VIP 权益',
   },
 ] as const;
 

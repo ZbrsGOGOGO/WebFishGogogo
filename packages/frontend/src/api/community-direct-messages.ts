@@ -1,3 +1,4 @@
+import type { TitleBadge } from '@stealth-reader/shared';
 import { communityHttp } from './community-http';
 import { communityIdempotencyHeaders } from './community-idempotency';
 import type {
@@ -10,6 +11,7 @@ import type {
 } from './community-chat';
 
 export interface CommunityDirectConversationFriend {
+  title?: TitleBadge;
   publicId: string;
   username?: string | null;
   displayName: string;

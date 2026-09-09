@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import type { TitleBadge } from '@stealth-reader/shared';
+import { loadTitleBadges } from '../community/progression/title-projection';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   DataSource,
@@ -49,6 +51,7 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface DirectMessageFriendView {
+  title?: TitleBadge;
   publicId: string;
   username?: string;
   displayName: string;
@@ -131,6 +134,7 @@ interface ConversationAccess {
 }
 
 interface DirectMessageViewContext {
+  titles: Map<string, TitleBadge>;
   users: Map<string, User>;
   profiles: Map<string, PlayerProfile>;
   replies: Map<string, DirectMessage>;
@@ -768,7 +772,7 @@ export class DirectMessageService {
     const otherIds = conversations
       .map((conversation) => this.otherParticipant(conversation, userId))
       .filter((id): id is string => id !== null);
-    const [users, profiles, friendships, latestMessages] = await Promise.all([
+    const [users, profiles, friendships, latestMessages, titles] = await Promise.all([
       this.dataSource.getRepository(User).find({ where: { id: In(otherIds) } }),
       this.dataSource.getRepository(PlayerProfile).find({
         where: { userId: In(otherIds) },
@@ -780,6 +784,7 @@ export class DirectMessageService {
         ],
       }),
       this.latestMessages(conversations),
+      loadTitleBadges(this.dataSource.manager, otherIds),
     ]);
     const userById = new Map(users.map((user) => [user.id, user]));
     const profileByUser = new Map(profiles.map((profile) => [profile.userId, profile]));
@@ -807,7 +812,7 @@ export class DirectMessageService {
       return [
         {
           id: member.conversation.id,
-          friend: this.userView(user, profile),
+          friend: this.userView(user, profile, titles.get(user.id)),
           latestSequence: member.conversation.latestSequence,
           lastMessage: messageByConversation.get(member.conversation.id) ?? null,
           unreadCount: member.unreadCount,
@@ -865,13 +870,15 @@ export class DirectMessageService {
         ...replies.map((reply) => reply.authorId),
       ]),
     ];
-    const [users, profiles] = await Promise.all([
+    const [users, profiles, titles] = await Promise.all([
       this.dataSource.getRepository(User).find({ where: { id: In(authorIds) } }),
       this.dataSource.getRepository(PlayerProfile).find({
         where: { userId: In(authorIds) },
       }),
+      loadTitleBadges(this.dataSource.manager, authorIds),
     ]);
     const context: DirectMessageViewContext = {
+      titles,
       users: new Map(users.map((user) => [user.id, user])),
       profiles: new Map(profiles.map((profile) => [profile.userId, profile])),
       replies: new Map(replies.map((reply) => [reply.id, reply])),
@@ -908,7 +915,7 @@ export class DirectMessageService {
             avatarKey: 'violet',
             battleProfession: 'developer',
           }
-        : this.userView(author, context.profiles.get(author.id)),
+        : this.userView(author, context.profiles.get(author.id), context.titles.get(author.id)),
       replyTo: this.replyView(message.replyToMessageId, context),
       createdAt: message.createdAt.toISOString(),
       updatedAt: message.updatedAt.toISOString(),
@@ -956,6 +963,7 @@ export class DirectMessageService {
   private userView(
     user: User,
     profile?: PlayerProfile,
+    title?: TitleBadge,
   ): DirectMessageFriendView {
     if (user.accountStatus === 'deleted') {
       return {
@@ -969,6 +977,7 @@ export class DirectMessageService {
       publicId: user.publicId,
       ...(user.username ? { username: user.username } : {}),
       displayName: profile?.nickname ?? user.displayName ?? '社区用户',
+      ...(user.accountStatus === 'active' && title ? { title } : {}),
       avatarKey: profile?.avatarKey ?? 'violet',
       battleProfession: profile?.battleProfession ?? 'developer',
     };

@@ -117,6 +117,29 @@ describe('CommunityFarmPage growth system', () => {
     expect(screen.getByRole('button', { name: 'Lv.3 解锁' })).toBeDisabled();
   });
 
+  it('keeps the planted crop illustration when a different crop is selected for the next cycle', async () => {
+    vi.mocked(communityFarmApi.getOverview).mockResolvedValue({ ...overview,
+      crops: overview.crops.map((crop) => ({ ...crop, selected: crop.key === 'meeting_tomato' })),
+    });
+    const { container } = render(<CommunityFarmPage />);
+    expect(await screen.findByRole('heading', { name: '工位薄荷' })).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"] [data-crop-art]')).toHaveAttribute('data-crop-art', 'desk_mint');
+    const plots = screen.getByRole('heading', { name: '我的地块' }).closest('section')!;
+    expect(within(plots).getByRole('img')).toHaveAttribute('data-crop-art', 'desk_mint');
+    expect(screen.getByRole('img', { name: '会议番茄图标' })).toHaveAttribute('data-crop-art', 'meeting_tomato');
+  });
+
+  it('shows the selected next crop in an idle plot without changing a growing crop', async () => {
+    vi.mocked(communityFarmApi.getOverview).mockResolvedValue({ ...overview, state: 'idle',
+      crops: overview.crops.map((crop) => ({ ...crop, growing: false, selected: crop.key === 'meeting_tomato' })),
+    });
+    const { container } = render(<CommunityFarmPage />);
+    expect(await screen.findByRole('heading', { name: '会议番茄' })).toBeInTheDocument();
+    expect(container.querySelector('[aria-hidden="true"] [data-crop-art]')).toHaveAttribute('data-crop-art', 'meeting_tomato');
+    const plots = screen.getByRole('heading', { name: '我的地块' }).closest('section')!;
+    expect(within(plots).getByRole('img')).toHaveAttribute('data-crop-art', 'meeting_tomato');
+  });
+
   it('prominently shows the real balance and server-supplied income breakdown', async () => {
     vi.mocked(communityFarmApi.getOverview).mockResolvedValue(quotedFarm());
     render(<CommunityFarmPage />);

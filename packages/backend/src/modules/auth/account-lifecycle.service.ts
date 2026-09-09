@@ -28,6 +28,8 @@ import { CommunityCommandReceipt } from '../../database/entities/community-comma
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
 import { ConsentRecord } from '../../database/entities/consent-record.entity';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile } from '../../database/entities/demon-tower.entity';
+import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../database/entities/community-progression.entity';
+import { DemonTowerAutoRun } from '../../database/entities/demon-tower-auto-run.entity';
 import {
   DevelopmentEvent,
   DevelopmentMember,
@@ -584,6 +586,10 @@ export class AccountLifecycleService
         // remove private game state. Keep aggregate world/financial history,
         // but erase this person's saves, action receipts and ranked identity.
         await manager.getRepository(DemonTowerCommand).delete({ userId: user.id });
+        await manager.getRepository(DemonTowerAutoRun).delete({ userId: user.id });
+        await manager.getRepository(CommunityUserPresentation).delete({ userId: user.id });
+        await manager.getRepository(CommunityAchievementUnlock).delete({ userId: user.id });
+        await manager.getRepository(CommunityMembershipGrant).delete({ userId: user.id });
         await manager.getRepository(DemonTowerContribution).delete({ userId: user.id });
         await manager.getRepository(DemonTowerDailyProgress).delete({ userId: user.id });
         await manager.getRepository(DemonTowerProfile).delete({ userId: user.id });

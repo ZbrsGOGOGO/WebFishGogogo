@@ -79,6 +79,7 @@ const RailLobbyPage = lazy(() => import('../features/games/rail/RailLobbyPage').
 const RailRoomPage = lazy(() => import('../features/games/rail/RailRoomPage').then((module) => ({ default: module.RailRoomPage })));
 const RailLeaderboardPage = lazy(() => import('../features/games/rail/RailLeaderboardPage').then((module) => ({ default: module.RailLeaderboardPage })));
 const DemonTowerPage = lazy(() => import('../features/games/demon-tower/DemonTowerPage').then((module) => ({ default: module.DemonTowerPage })));
+const CommunityAchievementsPage = lazy(() => import('../features/community-progression/CommunityAchievementsPage').then((module) => ({ default: module.CommunityAchievementsPage })));
 const DemonTowerLeaderboardPage = lazy(() => import('../features/games/demon-tower/DemonTowerLeaderboardPage').then((module) => ({ default: module.DemonTowerLeaderboardPage })));
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({ default: module.TetrisGamePage })),
@@ -180,6 +181,7 @@ export function CommunityModeRouter(): JSX.Element {
         </Route>
         <Route element={<RequireCommunityAccount />}>
           <Route path="/me" element={<CommunityMyProfilePage />} />
+          <Route path="/achievements" element={COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? loading(<CommunityAchievementsPage />) : <CommunityUnavailablePage system="achievements" title="成长档案暂未开放" />} />
           <Route path="/account/security" element={<CommunityAccountSecurityPage />} />
           <Route path="/settings/privacy" element={<CommunityPrivacySettingsPage />} />
           {COMMUNITY_FEATURE_FLAGS.socialVerification ? (

@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { JwtService } from '@nestjs/jwt';
 import { Repository, type DataSource, type FindOneOptions, type ObjectLiteral } from 'typeorm';
 
@@ -18,6 +19,9 @@ import { ConsentRecord } from '../../database/entities/consent-record.entity';
 import { EmailVerification } from '../../database/entities/email-verification.entity';
 import { OutboxEvent } from '../../database/entities/outbox-event.entity';
 import { User } from '../../database/entities/user.entity';
+import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../database/entities/community-progression.entity';
+import { PlayerProfile, DEFAULT_COMMUNITY_PRIVACY } from '../../database/entities/player-profile.entity';
+import { WalletBalance } from '../../database/entities/wallet-balance.entity';
 import { hashBetaAccessCode, hashRefreshToken } from './auth-crypto';
 import { AuthEmailOutboxService } from './auth-email-outbox.service';
 import { AuthRateLimitService } from './auth-rate-limit.service';
@@ -96,6 +100,7 @@ describe('AuthService community account flow', () => {
     delete process.env.AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY;
     delete process.env.AUTH_EMAIL_OUTBOX_ENCRYPTION_KEY_ID;
     delete process.env.COMMUNITY_MAX_ACTIVE_USERS;
+    delete process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED;
     dataSource = await createLocalDevDataSource();
     jwtService = new JwtService({ secret: JWT_SECRET });
     const emailDelivery = new EmailDeliveryService();
@@ -120,6 +125,15 @@ describe('AuthService community account flow', () => {
   afterAll(() => {
     process.env = originalEnv;
   });
+
+  async function ownedTitles(userId: string) {
+    const now = new Date();
+    await dataSource.getRepository(CommunityAchievementUnlock).save([
+      { userId, achievementKey: 'farm_first', unlockedAt: now, sourceVersion: 1 },
+      { userId, achievementKey: 'farm_25', unlockedAt: now, sourceVersion: 1 },
+    ]);
+    await dataSource.getRepository(CommunityUserPresentation).save({ userId, equippedTitleKey: 'farm_first', version: 2, lastRequestId: randomUUID(), lastRequestHash: 'a'.repeat(64), updatedAt: now });
+  }
 
   it('creates a normalized pending account, four consents and a hashed dev Beta code', async () => {
     const result = await service.register(registration('person@example.com'));
@@ -220,6 +234,8 @@ describe('AuthService community account flow', () => {
       const user = await dataSource.getRepository(User).findOneByOrFail({
         emailNormalized: 'person@example.com',
       });
+      process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true';
+      await ownedTitles(user.id);
       user.accountStatus = accountStatus;
       await dataSource.getRepository(User).save(user);
 
@@ -228,8 +244,9 @@ describe('AuthService community account flow', () => {
         password: PASSWORD,
       });
       expect(restricted.user.accountStatus).toBe(accountStatus);
+      expect(restricted.user.equippedTitle).toBeNull(); expect(restricted.user.honors).toEqual([]);
       await expect(service.refresh(restricted.refreshToken)).resolves.toMatchObject({
-        user: { accountStatus },
+        user: { accountStatus, equippedTitle: null, honors: [] },
       });
       await expect(service.getCurrentUser(user.id)).rejects.toBeInstanceOf(
         UnauthorizedException,
@@ -589,6 +606,63 @@ describe('AuthService community account flow', () => {
         battleProfession: 'qa',
       },
     });
+  });
+
+  it('projects owned fixed titles in the actual current-user, profile, privacy, login and refresh responses', async () => {
+    process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true';
+    const registration = await service.registerAccount(accountRegistration('title_owner'));
+    expect(registration.user).toMatchObject({ equippedTitle: null, honors: [] });
+    const user = await dataSource.getRepository(User).findOneByOrFail({ usernameNormalized: 'title_owner' });
+    await ownedTitles(user.id);
+    await dataSource.getRepository(PlayerProfile).update(user.id, { title: 'not-a-catalog-title', privacySettings: { ...DEFAULT_COMMUNITY_PRIVACY, honors: 'self' } });
+    const expected = { equippedTitle: { key: 'farm_first', label: '工位园丁' }, honors: [{ key: 'farm_first', label: '工位园丁' }, { key: 'farm_25', label: '绿意常驻' }] };
+    const beforeUnlocks = await dataSource.getRepository(CommunityAchievementUnlock).find();
+    const beforePresentation = await dataSource.getRepository(CommunityUserPresentation).find();
+    const me = await service.getCurrentUser(user.id);
+    expect(me).toMatchObject({ ...expected, privacy: { honors: 'self' }, roles: ['member'] });
+    expect(JSON.stringify(me)).not.toMatch(/not-a-catalog-title|lastRequestId|lastRequestHash|sourceVersion|unlockedAt|vip/);
+    expect(JSON.stringify(me)).not.toContain('a'.repeat(64));
+    expect(JSON.stringify(me)).not.toContain(user.id);
+    expect(await service.updateProfile(user.id, { displayName: '新昵称', bio: '只修改简介' })).toMatchObject({ ...expected, displayName: '新昵称' });
+    expect(await service.updatePrivacy(user.id, { ...DEFAULT_COMMUNITY_PRIVACY, honors: 'friends' })).toMatchObject(expected);
+    const login = await service.loginAccount({ username: 'title_owner', password: PASSWORD }); expect(login.user).toMatchObject(expected);
+    expect((await service.refresh(login.refreshToken)).user).toMatchObject(expected);
+    expect(await dataSource.getRepository(CommunityAchievementUnlock).find()).toEqual(beforeUnlocks);
+    expect(await dataSource.getRepository(CommunityUserPresentation).find()).toEqual(beforePresentation);
+    expect(await dataSource.getRepository(CommunityMembershipGrant).count()).toBe(0);
+    expect(await dataSource.getRepository(WalletBalance).count()).toBe(0);
+  });
+
+  it('never derives an own-profile title from profile text, another account, a forged key or an unowned selection', async () => {
+    process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true';
+    await service.registerAccount(accountRegistration('title_unowned'));
+    await service.registerAccount(accountRegistration('title_other'));
+    const user = await dataSource.getRepository(User).findOneByOrFail({ usernameNormalized: 'title_unowned' });
+    const other = await dataSource.getRepository(User).findOneByOrFail({ usernameNormalized: 'title_other' });
+    await ownedTitles(other.id);
+    await dataSource.getRepository(PlayerProfile).update(user.id, { title: '<script>forged title</script>' });
+    await dataSource.getRepository(CommunityUserPresentation).save({ userId: user.id, equippedTitleKey: 'farm_first', version: 1, updatedAt: new Date() });
+    expect(await service.getCurrentUser(user.id)).toMatchObject({ equippedTitle: null, honors: [] });
+    await dataSource.getRepository(CommunityAchievementUnlock).save({ userId: user.id, achievementKey: '<img onerror=forged>', unlockedAt: new Date(), sourceVersion: 1 });
+    await dataSource.getRepository(CommunityUserPresentation).update(user.id, { equippedTitleKey: '<img onerror=forged>' });
+    const view = await service.getCurrentUser(user.id);
+    expect(view).toMatchObject({ equippedTitle: null, honors: [] }); expect(JSON.stringify(view)).not.toMatch(/<script>|<img|forged/);
+    expect(view.honors).not.toEqual((await service.getCurrentUser(other.id)).honors);
+  });
+
+  it('hides disabled progression without erasing ownership, then restores the same title on reenable', async () => {
+    await service.registerAccount(accountRegistration('title_disabled'));
+    const user = await dataSource.getRepository(User).findOneByOrFail({ usernameNormalized: 'title_disabled' }); await ownedTitles(user.id);
+    const before = await dataSource.getRepository(CommunityUserPresentation).find();
+    for (const enabled of ['false', undefined]) {
+      if (enabled === undefined) delete process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED; else process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = enabled;
+      expect(await service.getCurrentUser(user.id)).toMatchObject({ equippedTitle: null, honors: [] });
+      expect(await service.updateProfile(user.id, { bio: '称号功能维护中' })).toMatchObject({ equippedTitle: null, honors: [] });
+    }
+    expect(await dataSource.getRepository(CommunityUserPresentation).find()).toEqual(before);
+    expect(await dataSource.getRepository(CommunityAchievementUnlock).countBy({ userId: user.id })).toBe(2);
+    process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true';
+    expect(await service.getCurrentUser(user.id)).toMatchObject({ equippedTitle: { key: 'farm_first', label: '工位园丁' }, honors: expect.any(Array) });
   });
 
   it('lists devices and lets a user revoke only an owned session', async () => {

@@ -27,6 +27,11 @@ describe('community relationship and growth release gates', () => {
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'leaderboards')).toMatchObject({ path: '/leaderboards', label: '排行榜', enabled: true, requiresAccount: true });
     expect(communitySystemByPath('/leaderboards')?.id).toBe('leaderboards');
   });
+  it('keeps growth archive account-only and both new capabilities disabled until release', () => {
+    expect(COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled).toBe(false); expect(COMMUNITY_FEATURE_FLAGS.demonTowerAuto).toBe(false);
+    expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'achievements')).toMatchObject({ path: '/achievements', label: '成长档案', enabled: false, requiresAccount: true });
+    expect(communitySystemByPath('/achievements')?.id).toBe('achievements');
+  });
   it('keeps the new tower gated without replacing the existing local defense game', () => {
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'demonTower')).toMatchObject({
       path: '/games/demon-tower', label: '九层妖塔', enabled: false, requiresAccount: true,

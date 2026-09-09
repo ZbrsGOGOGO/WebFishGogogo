@@ -38,6 +38,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   feed: '喂',
   invite: '邀',
   profile: '我',
+  achievements: '录',
   friends: '友',
 };
 

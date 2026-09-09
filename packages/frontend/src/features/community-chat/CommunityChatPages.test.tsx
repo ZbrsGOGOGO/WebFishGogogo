@@ -171,6 +171,16 @@ describe('community fixed chat pages', () => {
     await waitFor(() => expect(communityChatApi.listMessages).toHaveBeenCalledWith('product', { limit: 50 }));
     expect(screen.getByRole('heading', { name: '产品会议室' })).toBeInTheDocument();
   });
+  it('shows known titles after authors without modifying names and hides a blocked author title', async () => {
+    vi.stubGlobal('WebSocket', BrowserFakeSocket);
+    const normal = { ...serverMessage('title-message'), author: { publicId: 'public-2', displayName: '称号同事', title: { key: 'farm_first', label: '工位园丁' } } };
+    const blocked: CommunityChatMessage = { ...normal, id: 'blocked-title', sequence: 2, visibility: 'blocked_placeholder', author: { publicId: 'blocked-user', displayName: '不应显示', title: { key: 'farm_25', label: '绿意常驻' } } };
+    vi.spyOn(communityChatApi, 'listMessages').mockResolvedValue({ items: [normal, blocked], latestSequence: 2, oldestSequence: 1, hasMoreBefore: false });
+    vi.spyOn(communityChatApi, 'createSocketTicket').mockResolvedValue({ ticket: 'title-ticket', expiresAt: '2099-01-01T00:00:00Z', protocolVersion: 1 });
+    render(<MemoryRouter initialEntries={['/community/chat/general']}><Routes><Route path="/community/chat/:roomSlug" element={<CommunityChatRoomPage />} /></Routes></MemoryRouter>);
+    expect(await screen.findByLabelText('佩戴称号：工位园丁')).toBeVisible(); expect(screen.getByText('称号同事')).toBeVisible();
+    expect(screen.queryByText('绿意常驻')).toBeNull(); expect(screen.queryByText('不应显示')).toBeNull(); expect(screen.getByText('已拉黑用户')).toBeVisible();
+  });
 
   it('opens a room on the newest part of the recent window without removing older history', async () => {
     vi.stubGlobal('WebSocket', BrowserFakeSocket);

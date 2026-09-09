@@ -2,6 +2,7 @@ import type {
   ChatMessageStatus,
   ChatRoomSlug,
 } from '../../database/entities/chat.entity';
+import type { TitleBadge } from '@stealth-reader/shared';
 
 export const CHAT_ROOM_SLUGS: readonly ChatRoomSlug[] = [
   'general',
@@ -53,6 +54,7 @@ export interface ChatMessageView {
   visibility: ChatMessageVisibility;
   body: string | null;
   author: {
+    title?: TitleBadge;
     publicId: string;
     displayName: string;
     avatarKey?: string;

@@ -1,4 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import type { TitleBadge } from '@stealth-reader/shared';
+import { loadTitleBadges } from '../community/progression/title-projection';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   DataSource,
@@ -69,6 +71,7 @@ export interface SendChatMessageInput {
 }
 
 interface ChatHistoryViewContext {
+  titles: Map<string, TitleBadge>;
   users: Map<string, User>;
   profiles: Map<string, PlayerProfile>;
   mentionsByMessage: Map<string, string[]>;
@@ -591,7 +594,7 @@ export class ChatService implements OnModuleInit {
         ...mentions.map((mention) => mention.mentionedUserId),
       ]),
     ];
-    const [users, profiles, blocks] = await Promise.all([
+    const [users, profiles, blocks, titles] = await Promise.all([
       manager.getRepository(User).find({ where: { id: In(identityIds) } }),
       manager.getRepository(PlayerProfile).find({
         where: { userId: In(authorIds) },
@@ -602,6 +605,7 @@ export class ChatService implements OnModuleInit {
           { blockerId: In(authorIds), blockedId: userId },
         ],
       }),
+      loadTitleBadges(manager, authorIds),
     ]);
     const mentionsByMessage = new Map<string, string[]>();
     for (const mention of mentions) {
@@ -610,6 +614,7 @@ export class ChatService implements OnModuleInit {
       mentionsByMessage.set(mention.messageId, ids);
     }
     const context: ChatHistoryViewContext = {
+      titles,
       users: new Map(users.map((user) => [user.id, user])),
       profiles: new Map(profiles.map((profile) => [profile.userId, profile])),
       mentionsByMessage,
@@ -659,6 +664,7 @@ export class ChatService implements OnModuleInit {
         : {
             publicId: author.publicId,
             displayName: authorProfile?.nickname ?? author.displayName ?? '社区用户',
+            ...(!context.blockedUserIds.has(message.authorId) && context.titles.has(message.authorId) ? { title: context.titles.get(message.authorId)! } : {}),
             ...(authorProfile?.avatarKey ? { avatarKey: authorProfile.avatarKey } : {}),
             ...(authorProfile?.battleProfession
               ? { battleProfession: authorProfile.battleProfession }
@@ -712,11 +718,12 @@ export class ChatService implements OnModuleInit {
 
   private async messageView(userId: string, message: ChatMessage): Promise<ChatMessageView> {
     const manager = this.dataSource.manager;
-    const [author, authorProfile, mentions, blocked] = await Promise.all([
+    const [author, authorProfile, mentions, blocked, titles] = await Promise.all([
       manager.getRepository(User).findOne({ where: { id: message.authorId } }),
       manager.getRepository(PlayerProfile).findOne({ where: { userId: message.authorId } }),
       manager.getRepository(ChatMessageMention).find({ where: { messageId: message.id } }),
       this.isBlocked(manager, userId, message.authorId),
+      loadTitleBadges(manager, [message.authorId]),
     ]);
     if (!author) throw chatException('CHAT_MESSAGE_NOT_FOUND', '消息不存在。', 404);
     const mentionedUsers =
@@ -752,6 +759,7 @@ export class ChatService implements OnModuleInit {
         : {
             publicId: author.publicId,
             displayName: authorProfile?.nickname ?? author.displayName ?? '社区用户',
+            ...(!blocked && titles.has(message.authorId) ? { title: titles.get(message.authorId)! } : {}),
             ...(authorProfile?.avatarKey ? { avatarKey: authorProfile.avatarKey } : {}),
             ...(authorProfile?.battleProfession
               ? { battleProfession: authorProfile.battleProfession }

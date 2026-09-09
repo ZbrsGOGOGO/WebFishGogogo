@@ -93,7 +93,20 @@ export interface DemonTowerWorldView {
 export interface DemonTowerOverview {
   serverNow: number; profile: DemonTowerProfileView | null; world: DemonTowerWorldView;
   wallet: { officeCoinBalance: number }; writesEnabled: boolean;
+  /** Server-owned automation. Omitted only by older clients/test fixtures. */
+  autoExplore?: DemonTowerAutoRunView | null;
 }
+export const DEMON_TOWER_AUTO_LIMITS = { maxExplorations: 20, maxSteps: 260, durationMs: 900_000, stepIntervalMs: 2000, startHealthPercent: 30, battleHealthPercent: 20 } as const;
+export type DemonTowerAutoStopReason = 'completed' | 'manual_stop' | 'low_health' | 'defeat' | 'battle_timeout' | 'stamina_empty' | 'vip_expired' | 'session_ended' | 'account_inactive' | 'day_changed' | 'maintenance' | 'time_limit' | 'step_limit' | 'profile_changed' | 'floor_changed' | 'quota_reached' | 'server_error';
+export interface DemonTowerAutoStartInput { requestId: string; expectedVersion: number; floor: number; maxExplorations: number }
+/** Stop is naturally idempotent by its owned run ID, with no moving version requirement. */
+export type DemonTowerAutoStopInput = Record<string, never>;
+export interface DemonTowerAutoRunView {
+  id: string; version: number; status: 'running' | 'completed' | 'stopped'; stopReason: DemonTowerAutoStopReason | null;
+  serviceDate: string; floor: number; maxExplorations: number; startedExplorations: number; completedExplorations: number;
+  steps: number; maxSteps: number; officeCoinsGranted: number; createdAt: number; nextStepAt: number | null; expiresAt: number; stoppedAt: number | null;
+}
+export interface DemonTowerAutoResponse { enabled: boolean; replayed: boolean; run: DemonTowerAutoRunView | null; overview: DemonTowerOverview }
 export type DemonTowerAction =
   | { kind: 'enroll'; payload: Record<string, never> }
   | { kind: 'explore'; payload: Record<string, never> }

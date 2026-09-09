@@ -218,6 +218,7 @@ function isMessage(value: unknown): value is CommunityChatMessage {
     typeof value.version === 'number' &&
     typeof value.author.publicId === 'string' &&
     typeof value.author.displayName === 'string' &&
+    isOptionalTitle(value.author.title) &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string';
 }
@@ -230,8 +231,13 @@ function isDirectMessage(value: unknown): value is CommunityDirectMessage {
     typeof value.version === 'number' &&
     typeof value.author.publicId === 'string' &&
     typeof value.author.displayName === 'string' &&
+    isOptionalTitle(value.author.title) &&
     typeof value.createdAt === 'string' &&
     typeof value.updatedAt === 'string';
+}
+
+function isOptionalTitle(value: unknown): boolean {
+  return value == null || (isRecord(value) && typeof value.key === 'string' && typeof value.label === 'string' && value.key.length <= 80 && value.label.length <= 80);
 }
 
 /** 无法确认结构或协议版本的帧会被忽略，不能让未知服务端数据进入 UI。 */

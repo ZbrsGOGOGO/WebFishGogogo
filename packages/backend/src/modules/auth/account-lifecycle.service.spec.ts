@@ -9,6 +9,8 @@ import { AdminAuditLog } from '../../database/entities/admin-audit-log.entity';
 import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.entity';
 import { AuthSession } from '../../database/entities/auth-session.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
+import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../database/entities/community-progression.entity';
+import { DemonTowerAutoRun } from '../../database/entities/demon-tower-auto-run.entity';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor } from '../../database/entities/demon-tower.entity';
 import {
   DevelopmentAttachmentRecord,
@@ -238,6 +240,39 @@ describe('AccountLifecycleService', () => {
     expect(await awards.findOneByOrFail({ serviceDate: '2026-09-08' })).toMatchObject({
       winnerUserId: null, bossDamage: 50, coins: 100, awardedAt: now,
     });
+  });
+
+  it('erases only the departing account’s VIP, titles, achievements and auto runs', async () => {
+    const user = await seedUser(dataSource, 'growth-delete@example.com');
+    const peer = await seedUser(dataSource, 'growth-peer@example.com');
+    const session = await seedSession(dataSource, user.id, '4');
+    const now = new Date();
+    for (const owner of [user, peer]) {
+      await dataSource.getRepository(CommunityMembershipGrant).save({ userId: owner.id,
+        campaignKey: 'test_gift', startsAt: now, expiresAt: new Date(now.getTime() + 30 * 86400000), createdAt: now });
+      await dataSource.getRepository(CommunityAchievementUnlock).save({ userId: owner.id,
+        achievementKey: 'farm_first', unlockedAt: now, sourceVersion: 1 });
+      await dataSource.getRepository(CommunityUserPresentation).save({ userId: owner.id,
+        equippedTitleKey: 'farm_first', version: 1, lastRequestId: null, lastRequestHash: null, updatedAt: now });
+      await dataSource.getRepository(DemonTowerAutoRun).save({ id: randomUUID(), userId: owner.id,
+        originAuthSessionId: owner.id === user.id ? session.id : null, startRequestId: randomUUID(),
+        requestHash: 'a'.repeat(64), version: 1, status: 'running', stopReason: null,
+        serviceDate: '2026-09-09', floor: 1, maxExplorations: 5, startedExplorations: 0,
+        completedExplorations: 0, steps: 0, expectedProfileVersion: 1, officeCoinsGranted: 0,
+        failureCount: 0, nextStepAt: now, expiresAt: new Date(now.getTime() + 900000),
+        createdAt: now, updatedAt: now, stoppedAt: null });
+    }
+    const tables = [CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation, DemonTowerAutoRun];
+    const beforePeer = await Promise.all(tables.map((entity) => dataSource.getRepository(entity).findBy({ userId: peer.id })));
+    await service.requestDeletion(user.id, session.id, 'growth-delete-idempotency');
+    const request = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
+    await expect(service.processDueDeletions(10, new Date(request.scheduledFor.getTime() + 1000))).resolves.toBe(1);
+    for (const [index, entity] of tables.entries()) {
+      const repo = dataSource.getRepository(entity);
+      expect(await repo.countBy({ userId: user.id })).toBe(0);
+      expect(await repo.findBy({ userId: peer.id })).toEqual(beforePeer[index]);
+    }
+    expect((await dataSource.getRepository(User).findOneByOrFail({ id: peer.id })).communityRole).toBe('user');
   });
 
   it('removes private development files and clears authored review text when account deletion completes', async () => {

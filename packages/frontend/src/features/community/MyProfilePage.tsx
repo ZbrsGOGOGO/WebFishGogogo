@@ -15,9 +15,17 @@ import { validateCommunityDisplayName } from '../community-auth/validation';
 import styles from './CommunityPages.module.css';
 import { COMMUNITY_AVATARS, communityAvatarMark } from './profile-options';
 import { communityRequestErrorMessage } from './request-error';
+import { getCommunitySessionGeneration } from '../../api/community-http';
+import { CommunityHonors, CommunityTitleBadge } from '../community-progression/CommunityTitleBadge';
+import { CommunityProgressionCard } from '../community-progression/CommunityProgressionCard';
 
 export function CommunityMyProfilePage(): JSX.Element {
+  const owner = useCommunityAuthStore((state) => state.user?.publicId);
+  return <MyProfileWorkspace key={`${owner}:${getCommunitySessionGeneration()}`} />;
+}
+function MyProfileWorkspace(): JSX.Element {
   const authUser = useCommunityAuthStore((state) => state.user);
+  const generation = getCommunitySessionGeneration();
   const updateUser = useCommunityAuthStore((state) => state.updateUser);
   const [profile, setProfile] = useState<CommunityProfile | null>(authUser);
   const [farmOverview, setFarmOverview] = useState<CommunityFarmOverview>();
@@ -98,6 +106,7 @@ export function CommunityMyProfilePage(): JSX.Element {
         avatarKey,
         battleProfession,
       });
+      if (getCommunitySessionGeneration() !== generation || useCommunityAuthStore.getState().user?.publicId !== authUser?.publicId) return;
       setProfile(next);
       updateUser(next);
       setNotice('主页资料已保存');
@@ -130,7 +139,7 @@ export function CommunityMyProfilePage(): JSX.Element {
           <div className={styles.profileSummary}>
             <span className={styles.avatar} aria-hidden="true">{communityAvatarMark(avatarKey)}</span>
             <div>
-              <h2>{profile?.displayName ?? '未设置昵称'}</h2>
+              <h2>{profile?.displayName ?? '未设置昵称'}<CommunityTitleBadge title={profile?.equippedTitle} /></h2>
               <p>公开编号：{profile?.publicId ?? '—'}</p>
               <Tag>{profession ? `社区职业 · ${profession.name}` : '尚未选择社区职业'}</Tag>
               {COMMUNITY_FEATURE_FLAGS.publicProfile && profile?.publicId ? <p><Link to={`/users/${encodeURIComponent(profile.publicId)}`}>预览公开主页</Link></p> : null}
@@ -172,8 +181,9 @@ export function CommunityMyProfilePage(): JSX.Element {
           <Link to="/tower-defense">带角色守工位</Link>
         </Card>
         <Card title="工位绿植"><p>{plantSummary}</p></Card>
-        <Card title="荣誉"><p>{profile?.honors?.length ? profile.honors.join('、') : '还没有获得荣誉'}</p></Card>
+        <Card title="荣誉"><p>{profile?.honors?.length ? <CommunityHonors honors={profile.honors} /> : '还没有获得荣誉'}</p>{COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <Link to="/achievements">管理成就与称号</Link> : null}</Card>
       </div>
+      {COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <CommunityProgressionCard /> : null}
     </main>
   );
 }

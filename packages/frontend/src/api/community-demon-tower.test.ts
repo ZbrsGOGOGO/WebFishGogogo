@@ -37,6 +37,18 @@ describe('demon tower API transport', () => {
     await expect(communityDemonTowerApi.action({ requestId: '00000000-0000-4000-8000-000000000001', expectedVersion: 0, kind: 'enroll', payload: {} })).rejects.toMatchObject({ status: 401 });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+  it('reads auto status and starts with CAS but stops by owned run ID without a moving version', async () => {
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(json({}))); vi.stubGlobal('fetch', fetcher);
+    const input = { requestId: '00000000-0000-4000-8000-000000000002', expectedVersion: 5, floor: 1, maxExplorations: 3 };
+    await communityDemonTowerApi.auto(); await communityDemonTowerApi.autoStart(input); await communityDemonTowerApi.autoStop('synthetic-run');
+    expect(fetcher.mock.calls[0][0]).toMatch(/\/auto-explore$/); expect(fetcher.mock.calls[0][1].method).toBe('GET');
+    expect(JSON.parse(fetcher.mock.calls[1][1].body)).toEqual(input); expect(fetcher.mock.calls[2][0]).toMatch(/\/auto-explore\/synthetic-run\/stop$/); expect(JSON.parse(fetcher.mock.calls[2][1].body)).toEqual({});
+  });
+  it('does not classify disabled auto as an uncertain mutation and gives VIP/floor reasons', () => {
+    expect(demonTowerOutcomeUncertain(new CommunityApiError(503, '', { code: 'DEMON_TOWER_AUTO_DISABLED' }))).toBe(false);
+    expect(demonTowerErrorMessage(new CommunityApiError(403, '', { code: 'VIP_REQUIRED' }))).toContain('仍可手动');
+    expect(demonTowerErrorMessage(new CommunityApiError(409, '', { code: 'DEMON_TOWER_AUTO_FLOOR_CHANGED' }))).toContain('没有启动');
+  });
   it('keeps transport failures uncertain but distinguishes explicit read-only rejection', () => {
     expect(demonTowerOutcomeUncertain(new CommunityApiError(0, 'lost'))).toBe(true);
     expect(demonTowerOutcomeUncertain(new CommunityApiError(502, 'upstream'))).toBe(true);

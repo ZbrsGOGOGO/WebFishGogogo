@@ -24,6 +24,8 @@ const USER: AuthUserView = {
   avatarKey: null,
   battleProfession: null,
   bio: null,
+  equippedTitle: null,
+  honors: [],
   privacy: {
     equipment: 'friends',
     battleRecord: 'friends',

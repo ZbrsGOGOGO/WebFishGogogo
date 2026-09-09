@@ -340,6 +340,16 @@ async function createArenaTestDataSource(): Promise<DataSource> {
     returns: 'integer' as never,
     implementation: (value: string) => [...value].length,
   });
+  db.public.registerFunction({
+    name: 'length', args: ['text' as never], returns: 'integer' as never,
+    implementation: (value: string) => [...value].length,
+  });
+  // Test adapter approximation only; the campaign transaction timestamp is
+  // checked against real PostgreSQL in the isolated migration rehearsal.
+  db.public.registerFunction({
+    name: 'transaction_timestamp', returns: 'timestamptz' as never,
+    implementation: () => new Date(), impure: true,
+  });
   // This fixture runs every migration, including the private attachment CHECK.
   db.public.registerFunction({
     name: 'octet_length',

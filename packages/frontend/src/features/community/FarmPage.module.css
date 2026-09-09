@@ -26,6 +26,11 @@
 .shelf { position: absolute; top: 76px; left: 8%; width: 150px; height: 72px; display: flex; align-items: end; justify-content: space-around; border-bottom: 8px solid #9c795c; }
 .shelf i { width: 30px; border-radius: 25px 25px 5px 5px; background: #719c69; }.shelf i:nth-child(1) { height: 42px; }.shelf i:nth-child(2) { height: 60px; }.shelf i:nth-child(3) { height: 34px; }
 .plantVisual { position: absolute; z-index: 2; right: 50%; bottom: 58px; width: 210px; height: 260px; transform: translateX(50%); }
+.cropSceneArt { display: block; width: 100%; height: 100%; transform-origin: 50% 90%; animation: sway 4s ease-in-out infinite; }
+.cropIcon { display: block; width: 52px; height: 60px; border-radius: 10px; background: #f0f4e9; }
+.plotCropIcon { width: 40px; height: 46px; }
+.farmStage[data-state='idle'] .cropSceneArt { filter: saturate(.72); }
+@media (prefers-reduced-motion: reduce) { .cropSceneArt { animation: none; } }
 .leaves { position: absolute; right: 20px; bottom: 70px; left: 20px; height: 170px; transform-origin: bottom center; animation: sway 4s ease-in-out infinite; }
 .leaves::before { content: ''; position: absolute; bottom: 0; left: 50%; width: 11px; height: 150px; border-radius: 9px; background: #4d8051; transform: translateX(-50%); }
 .leaves i { position: absolute; width: 80px; height: 48px; border-radius: 75% 12% 75% 12%; background: linear-gradient(145deg, #83bd66, #4f9657); box-shadow: inset 8px 5px 14px rgba(255,255,255,.18); }.leaves i:nth-child(1) { left: 13px; bottom: 42px; transform: rotate(18deg); }.leaves i:nth-child(2) { right: 10px; bottom: 68px; transform: scaleX(-1) rotate(14deg); }.leaves i:nth-child(3) { left: 25px; bottom: 97px; transform: rotate(28deg) scale(.8); }.leaves i:nth-child(4) { right: 23px; bottom: 122px; transform: scaleX(-1) rotate(24deg) scale(.74); }

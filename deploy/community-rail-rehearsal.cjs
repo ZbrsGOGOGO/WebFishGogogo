@@ -14,7 +14,7 @@ const path = require('node:path');
 
 assert.equal(process.env.RAIL_REHEARSAL_CONFIRMATION, 'ISOLATED_RAIL_ONLY:20260908');
 assert.equal(process.env.DB_DATABASE, 'community_rail_rehearsal');
-assert.ok(process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'demon-tower-rehearsal-pg-hgbacy' || /^rail-rehearsal-pg-[a-z0-9]{6,16}$/.test(process.env.DB_HOST || ''), 'Explicit isolated DB_HOST required');
+assert.equal(process.env.DB_HOST, 'growth-pg-btpam6', 'Explicit isolated DB_HOST required');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Dedicated test credentials required');
 assert.ok(!process.env.DATABASE_URL, 'Production connection strings are forbidden');
@@ -42,8 +42,8 @@ const { hashAuthRateLimitKey } = load('modules/auth/auth-crypto');
 const timestamp = (migration) => Number(migration.name.slice(-13));
 assert.ok(E.RailRoom && E.RailDailyAward && E.RailChatMessageRecord, 'Candidate Rail entity build required');
 assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000029), 'Migration 0029 required');
-assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000030), 'Additive migration 0030 required');
-assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000030), 'Review rehearsal before future migrations');
+assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000032), 'Additive migration 0032 required');
+assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000032), 'Review rehearsal before future migrations');
 
 const NativeDate = Date;
 let clock = NativeDate.parse('2099-06-01T02:00:00.000Z');
@@ -105,7 +105,7 @@ async function schema() {
     }
   }
   await db.runMigrations({ transaction: 'all' });
-  assert.equal(Number((await db.query('SELECT max(timestamp) AS timestamp FROM migrations'))[0].timestamp), 1700000000030);
+  assert.equal(Number((await db.query('SELECT max(timestamp) AS timestamp FROM migrations'))[0].timestamp), 1700000000032);
   assert.equal(await db.getRepository(E.User).count(), 0);
   for (const entity of [E.RailRoom, E.RailDailyAward, E.RailDailyScore, E.RailPlayerStats, E.RailChatMessageRecord, E.PlayRoom, E.AuthRateLimitBucket]) assert.equal(await db.getRepository(entity).count(), 0);
   baseline = await fingerprints();

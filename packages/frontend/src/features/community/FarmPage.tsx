@@ -22,6 +22,7 @@ import { Button } from '../../components/ui';
 import { communityFarmRemainingSeconds, formatCommunityFarmDuration } from './farm-countdown';
 import { communityRequestErrorMessage } from './request-error';
 import styles from './FarmPage.module.css';
+import { FarmCropArt } from './FarmCropArt';
 
 const GUEST_FARM_KEY = 'zbrs.guest-farm.v1';
 const GUEST_FIRST_CYCLE_SECONDS = 30;
@@ -486,6 +487,7 @@ export function CommunityFarmPage(): JSX.Element {
   const currentCrop = overview.crops.find((crop) => crop.growing) ?? overview.crops.find(
     (crop) => crop.key === overview.plant.appearanceKey || crop.name === overview.plant.name,
   );
+  const displayedCrop = idle ? selectedCrop ?? currentCrop : currentCrop;
   // Older servers reported firstCycle=true whenever there was no active cycle.
   const freeFirstCycle = idle && overview.plant.firstCycle && overview.growth.totalHarvests === 0;
   const seedCost = !authenticated || freeFirstCycle ? 0 : selectedCrop?.seedCost ?? 0;
@@ -533,15 +535,14 @@ export function CommunityFarmPage(): JSX.Element {
           <div className={styles.shelf}><i /><i /><i /></div>
           <div className={styles.plantVisual}>
             <span className={styles.sparkle}>✦</span>
-            <div className={styles.leaves}><i /><i /><i /><i /><b /></div>
-            <div className={styles.pot}><span /></div>
+            <FarmCropArt className={styles.cropSceneArt} scene cropKey={displayedCrop?.key ?? overview.plant.appearanceKey} label={displayedCrop?.name ?? overview.plant.name} />
           </div>
           <div className={styles.table} />
         </div>
 
         <div className={styles.controlPanel}>
           <span className={styles.statePill}>{statusLabel}</span>
-          <h2>{overview.plant.name}</h2>
+          <h2>{displayedCrop?.name ?? overview.plant.name}</h2>
           <p>Lv.{overview.plant.level} · 成长经验 {overview.plant.experience}</p>
 
           <div className={styles.progressBlock}>
@@ -596,7 +597,7 @@ export function CommunityFarmPage(): JSX.Element {
             const unlocked = index < overview.growth.plotCount;
             return (
               <article key={index} data-unlocked={unlocked}>
-                <span>{unlocked ? overview.crops.find((crop) => crop.selected)?.mark ?? '苗' : '锁'}</span>
+                {unlocked ? <FarmCropArt className={styles.plotCropIcon} cropKey={displayedCrop?.key ?? overview.plant.appearanceKey} label={displayedCrop?.name ?? overview.plant.name} /> : <span>锁</span>}
                 <strong>{unlocked ? `地块 ${index + 1}` : '未解锁'}</strong>
               </article>
             );
@@ -616,7 +617,7 @@ export function CommunityFarmPage(): JSX.Element {
         <div className={styles.cropGrid}>
           {overview.crops.map((crop) => (
             <article key={crop.key} data-selected={crop.selected} data-locked={!crop.unlocked}>
-              <b>{crop.mark}</b>
+              <FarmCropArt className={styles.cropIcon} cropKey={crop.key} label={crop.name} />
               <div><strong>{crop.name}</strong><small>{crop.description}</small></div>
               <dl><div><dt>成熟</dt><dd>{formatCommunityFarmDuration(crop.durationSeconds)}</dd></div><div><dt>总成本</dt><dd>{crop.seedCost} 办公币</dd></div><div><dt>总经验</dt><dd>{crop.experience}</dd></div></dl>
               {authenticated ? <div className={styles.cropRevenue}><FarmRevenueQuote crop={crop} /></div> : <p className={styles.guestCropHint}>登录后读取真实账号的成本与收益报价。</p>}

@@ -1,3 +1,4 @@
+import type { TitleBadge } from '@stealth-reader/shared';
 import { CommunityApiError, communityHttp } from './community-http';
 import { communityIdempotencyHeaders } from './community-idempotency';
 
@@ -57,6 +58,7 @@ export interface CommunityChatRoomPage {
 }
 
 export interface CommunityChatAuthor {
+  title?: TitleBadge;
   publicId: string;
   displayName: string;
   avatarKey?: string | null;

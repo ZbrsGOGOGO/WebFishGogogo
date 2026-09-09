@@ -3,7 +3,7 @@ import type { DemonTowerAction, DemonTowerAttribute, DemonTowerSkillId, DemonTow
 import {
   actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerEffectiveAttributes,
   demonTowerExperienceToNext, demonTowerMaxHp, demonTowerPersonalUnlockedFloor, demonTowerProfileView,
-  DemonTowerEngineError, DemonTowerEngineState,
+  DemonTowerEngineError, DemonTowerEngineState, demonTowerAutomaticAction,
 } from './demon-tower.engine';
 
 const NOW = Date.UTC(2026, 8, 8, 12);
@@ -52,6 +52,73 @@ function expectCode(run: () => unknown, code: string): void {
   try { run(); throw new Error(`Expected ${code}`); }
   catch (error) { expect(error).toBeInstanceOf(DemonTowerEngineError); expect((error as DemonTowerEngineError).code).toBe(code); }
 }
+
+describe('Server automatic exploration policy', () => {
+  it('is pure and can only choose ordinary explore, equipped ready skill, or normal attack', () => {
+    const idle = fresh(); const original = structuredClone(idle);
+    expect(demonTowerAutomaticAction(idle)).toEqual({ kind: 'explore', payload: {} }); expect(idle).toEqual(original);
+    const state = combat(); state.loadout.activeSkills = [];
+    const before = structuredClone(state);
+    expect(demonTowerAutomaticAction(state)).toEqual({ kind: 'attack', payload: { targetId: state.battle!.enemies[0].id } }); expect(state).toEqual(before);
+  });
+  it('uses equipped skill order, skips unhelpful healing and respects persisted cooldowns', () => {
+    const state = combat(); state.loadout.activeSkills = ['s1', 's2'];
+    expect(demonTowerAutomaticAction(state)).toMatchObject({ kind: 'skill', payload: { skillId: 's2' } });
+    state.battle!.player.hp = Math.floor(state.battle!.player.maxHp / 2);
+    expect(demonTowerAutomaticAction(state)).toMatchObject({ kind: 'skill', payload: { skillId: 's1' } });
+    state.battle!.cooldowns.s1 = 1; state.battle!.cooldowns.s2 = 1;
+    expect(demonTowerAutomaticAction(state).kind).toBe('attack');
+  });
+  it('never turns a boss challenge into automation and rejects absent living targets', () => {
+    const state = combat(); state.battle!.kind = 'boss';
+    expectCode(() => demonTowerAutomaticAction(state), 'INVALID_BATTLE');
+    state.battle!.kind = 'explore'; state.battle!.enemies.forEach(enemy => { enemy.hp = 0; });
+    expectCode(() => demonTowerAutomaticAction(state), 'INVALID_TARGET');
+  });
+  it.each(DEMON_TOWER_SKILLS.filter(skill => skill.kind === 'active').map(skill => skill.id))('selects %s only when equipped and executes it through the unchanged engine', id => {
+    const state = combat(); state.level = 120; state.loadout.activeSkills = [id];
+    state.battle!.player.hp = Math.floor(state.battle!.player.maxHp / 3);
+    const before = structuredClone(state), picked = demonTowerAutomaticAction(state);
+    expect(picked).toMatchObject({ kind: 'skill', payload: { skillId: id } });
+    expect(state).toEqual(before);
+    const result = action(state, picked);
+    expect(result.worldEffect).toBeNull(); expect(result.state.rngCounter).toBeGreaterThanOrEqual(state.rngCounter);
+    expect(result.state.battle?.turn ?? result.state.lastReport?.turns).toBe(1);
+    state.battle!.cooldowns[id] = 2;
+    expect(demonTowerAutomaticAction(state).kind).toBe('attack');
+  });
+  it('targets the first surviving enemy and never wastes the one-use recovery skill', () => {
+    const state = combat(); const live = structuredClone(state.battle!.enemies[0]); live.id = 'enemy-2';
+    state.battle!.enemies[0].hp = 0; state.battle!.enemies.push(live);
+    state.loadout.activeSkills = ['s13']; state.battle!.usedRevive = true;
+    state.battle!.player.hp = Math.floor(state.battle!.player.maxHp / 3);
+    const selected = demonTowerAutomaticAction(state);
+    expect(selected).toEqual({ kind: 'attack', payload: { targetId: 'enemy-2' } });
+    expect(() => action(state, selected)).not.toThrow();
+  });
+  it.each(DEMON_TOWER_FLOORS.map(floor => floor.floor))('runs a bounded policy against real floor %i encounters across six deterministic synthetic seeds', floor => {
+    const skillOrders: DemonTowerSkillId[][] = [['s2', 's1', 's3'], ['s4', 's7', 's5'], ['s13', 's14', 's16'], ['s6', 's10', 's15'], [], ['s1']];
+    let steps = 0;
+    for (const [seed, activeSkills] of skillOrders.entries()) {
+      let state = equipped('w1', 'w17', `automatic-floor-${floor}-seed-${seed}`);
+      state.level = 120; state.selectedFloor = floor; state.loadout.activeSkills = activeSkills;
+      let started = 0;
+      for (let step = 0; step < 80; step += 1) {
+        if (!state.battle && (started >= 3 || state.hp * 100 <= demonTowerMaxHp(state) * 30 || state.stamina < DEMON_TOWER_CATALOG.rules.exploreCost)) break;
+        if (state.battle && state.battle.player.hp * 100 <= state.battle.player.maxHp * 20) break;
+        const before = structuredClone(state), picked = demonTowerAutomaticAction(state);
+        expect(state).toEqual(before); expect(['explore', 'attack', 'skill']).toContain(picked.kind);
+        if (picked.kind === 'explore') started += 1;
+        if (picked.kind === 'skill') expect(activeSkills).toContain(picked.payload.skillId);
+        const result = action(state, picked, { now: NOW + step * 2000, world: world(floor) });
+        expect(result.worldEffect).toBeNull(); expect(result.officeCoinIntent).toBeLessThanOrEqual(DEMON_TOWER_CATALOG.rules.dailyOfficeCoinCap);
+        state = result.state; steps += 1;
+      }
+      expect(started).toBeGreaterThan(0); expect(started).toBeLessThanOrEqual(3);
+    }
+    expect(steps).toBeGreaterThan(6);
+  });
+});
 
 describe('DemonTower engine contracts and authority', () => {
   test('all nine floors, twenty weapons, sixteen skills are reachable before the level cap', () => {

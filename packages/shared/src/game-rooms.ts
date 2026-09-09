@@ -1,4 +1,5 @@
 import type { ArcadeGameAction, ArcadeGameKey, ArcadeGameMode, ArcadeGameView } from './arcade-game-state';
+import type { TitleBadge } from './community-progression';
 
 export const PLAY_GAME_KEYS: readonly ArcadeGameKey[] = ['snake', 'tetris', 'tank', 'zhesi', 'draw', 'undercover'];
 export const PLAY_DAILY_CHAMPION_COINS = 100;
@@ -22,7 +23,7 @@ export interface PlayCatalog {
   historyNotice: string;
 }
 export type PlayRoomStatus = 'waiting' | 'running' | 'finished' | 'closed';
-export interface PlayPerson { publicId: string; username: string | null; displayName: string }
+export interface PlayPerson { publicId: string; username: string | null; displayName: string; title?: TitleBadge }
 export interface PlayRoomSummary {
   id: string;
   title: string;

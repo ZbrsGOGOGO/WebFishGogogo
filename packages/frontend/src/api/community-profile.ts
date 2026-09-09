@@ -1,3 +1,4 @@
+import type { TitleBadge } from '@stealth-reader/shared';
 import type { CommunityAuthUser } from './community-auth';
 import { communityHttp } from './community-http';
 
@@ -25,7 +26,8 @@ export interface CommunityProfile extends CommunityAuthUser {
   bio?: string | null;
   privacy?: Partial<CommunityPrivacySettings>;
   battleLevel?: number;
-  honors?: string[];
+  honors?: Array<TitleBadge | string>;
+  equippedTitle?: TitleBadge | null;
 }
 
 export type CommunityRelationshipStatus =
@@ -61,7 +63,8 @@ export interface CommunityPublicProfile {
   ipRegion?: string | null;
   battleLevel?: number;
   equipment?: CommunityPublicEquipment[];
-  honors?: string[];
+  honors?: Array<TitleBadge | string>;
+  equippedTitle?: TitleBadge | null;
   plant?: CommunityPublicPlant | null;
   friendCount?: number;
   recentActivity?: Array<{

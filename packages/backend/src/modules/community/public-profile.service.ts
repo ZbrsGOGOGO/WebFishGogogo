@@ -14,6 +14,7 @@ import {
 import { PlayerProgression } from '../../database/entities/player-progression.entity';
 import { User } from '../../database/entities/user.entity';
 import { RelationshipPolicyService } from './relationship-policy.service';
+import { loadTitleBadges, unlockedTitleBadges } from './progression/title-projection';
 
 @Injectable()
 export class PublicProfileService {
@@ -73,6 +74,7 @@ export class PublicProfileService {
       avatarKey: profile?.avatarKey ?? 'violet',
       battleProfession: profile?.battleProfession ?? 'developer',
       bio: profile?.bio ?? null,
+      equippedTitle: (await loadTitleBadges(manager, [user.id])).get(user.id) ?? null,
       ipRegion: null,
       relationship: {
         status: self
@@ -99,7 +101,7 @@ export class PublicProfileService {
       result.battleLevel = progression?.level ?? 1;
     }
     if (this.canView(privacy.equipment, self, friend)) result.equipment = [];
-    if (this.canView(privacy.honors, self, friend)) result.honors = [];
+    if (this.canView(privacy.honors, self, friend)) result.honors = await unlockedTitleBadges(manager, user.id);
     if (this.canView(privacy.friendCount, self, friend)) {
       result.friendCount = await manager
         .getRepository(Friendship)

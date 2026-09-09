@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, NotFoundException, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
-import type { RailChatChannel, RailChatMessage, RailChatPage } from '@stealth-reader/shared';
+import type { RailChatChannel, RailChatMessage, RailChatPage, TitleBadge } from '@stealth-reader/shared';
 import { RailChatMessageRecord, RailRoom, RailRoomMember, User, UserBlock } from '../../../database/entities';
 import { AuthRateLimitService } from '../../auth/auth-rate-limit.service';
 import { assertChatWritesEnabled, assertCommunityChatEnabled, isChatWritesEnabled, isCommunityChatEnabled } from '../../chat/chat-gates';
@@ -9,6 +9,7 @@ import { ChatModerationService } from '../../chat/chat-moderation.service';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { hash } from '../play/play.rules';
 import { railObject, railPerson, railUuid } from './rail.rules';
+import { loadTitleBadges } from '../progression/title-projection';
 
 const PAGE_SIZE = 50;
 const ROOM_MESSAGE_LIMIT = 1000;
@@ -44,7 +45,8 @@ export class RailChatService {
       const hasMore = rows.length > PAGE_SIZE;
       const page = rows.slice(0, PAGE_SIZE);
       if (after === undefined) page.reverse();
-      return { items: page.map((row) => this.project(row)), latestSequence: room.latestChatSequence, hasMore };
+      const titles = await loadTitleBadges(manager, page.map((row) => row.authorId));
+      return { items: page.map((row) => this.project(row, titles.get(row.authorId))), latestSequence: room.latestChatSequence, hasMore };
     });
   }
 
@@ -63,7 +65,7 @@ export class RailChatService {
       if (!previous) this.assertOpen(context.room, context.member);
       return { ...context, previous };
     });
-    if (initial.previous) return this.project(initial.previous);
+    if (initial.previous) return this.projectWithTitle(this.db.manager, initial.previous);
     // Separate transaction: a rejected/failed message must not roll back its anti-spam quota.
     await new AuthRateLimitService(this.db).consume([
       { scope: 'rail:chat:account', dimension: userId, limit: 30, windowMs: 60_000 },
@@ -78,7 +80,7 @@ export class RailChatService {
       const { user, room, member } = await this.access(manager, userId, roomId, true);
       this.assertChannel(member, channel);
       const previous = await this.previous(manager, roomId, userId, clientMessageId, requestHash);
-      if (previous) return this.project(previous);
+      if (previous) return this.projectWithTitle(manager, previous);
       this.assertOpen(room, member);
       if (room.latestChatSequence >= ROOM_MESSAGE_LIMIT) throw new ConflictException({ code: 'RAIL_CHAT_ROOM_LIMIT', message: '本局消息已达到上限，请在下一局继续。' });
       const now = new Date();
@@ -90,7 +92,7 @@ export class RailChatService {
       // Do not save a partial room: never overwrite engine JSON or a password.
       await manager.getRepository(RailRoom).update(room.id, { latestChatSequence: message.sequence });
       message.author = user;
-      return this.project(message);
+      return this.projectWithTitle(manager, message);
     });
   }
 
@@ -105,7 +107,7 @@ export class RailChatService {
         message.status = 'withdrawn'; message.body = ''; message.withdrawnAt = new Date();
         await manager.getRepository(RailChatMessageRecord).save(message);
       }
-      return this.project(message);
+      return this.projectWithTitle(manager, message);
     });
   }
 
@@ -160,9 +162,12 @@ export class RailChatService {
     if (parsed > ROOM_MESSAGE_LIMIT + 1) throw new BadRequestException({ code: 'RAIL_CHAT_CURSOR_INVALID' });
     return parsed;
   }
-  private project(row: RailChatMessageRecord): RailChatMessage {
+  private async projectWithTitle(manager: EntityManager, row: RailChatMessageRecord): Promise<RailChatMessage> {
+    return this.project(row, (await loadTitleBadges(manager, [row.authorId])).get(row.authorId));
+  }
+  private project(row: RailChatMessageRecord, title?: TitleBadge): RailChatMessage {
     const deleted = row.author.accountStatus === 'deleted' || row.author.accountStatus === 'deleting';
     const status = deleted ? 'withdrawn' : row.status;
-    return { id: row.id, sequence: row.sequence, channel: row.channel, author: railPerson(row.author), body: status === 'visible' ? row.body : null, status, createdAt: row.createdAt.toISOString() };
+    return { id: row.id, sequence: row.sequence, channel: row.channel, author: { ...railPerson(row.author), ...(row.author.accountStatus === 'active' && title ? { title } : {}) }, body: status === 'visible' ? row.body : null, status, createdAt: row.createdAt.toISOString() };
   }
 }

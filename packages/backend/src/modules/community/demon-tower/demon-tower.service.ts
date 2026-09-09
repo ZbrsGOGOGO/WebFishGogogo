@@ -3,12 +3,14 @@ import { randomBytes } from 'node:crypto';
 import { DEMON_TOWER_CATALOG, type DemonTowerActionReceipt, type DemonTowerCatalog, type DemonTowerOverview } from '@stealth-reader/shared';
 import { DataSource, EntityManager } from 'typeorm';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor, User, WalletBalance } from '../../../database/entities';
+import { DemonTowerAutoRun } from '../../../database/entities/demon-tower-auto-run.entity';
 import { PlatformAssetsService } from '../../platform/platform-assets.service';
 import { PLATFORM_CLOCK, systemPlatformClock, type PlatformClock } from '../../platform/platform.constants';
 import { toBusinessLocalDate } from '../../platform/platform-time';
 import { hash } from '../play/play.rules';
 import { actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerProfileView, DemonTowerEngineError, type DemonTowerEngineResult, type DemonTowerEngineState, type DemonTowerWorldEffect } from './demon-tower.engine';
 import { assertDemonTowerWrites, DEMON_TOWER_DAILY_ACTION_LIMIT, DEMON_TOWER_DAILY_COINS, demonTowerAction, demonTowerEnabled, demonTowerWorldView, demonTowerWritesEnabled, initialDemonTowerWorld } from './demon-tower.rules';
+import { demonTowerAutoView } from './demon-tower-auto.rules';
 
 interface StoredReceipt {
   events: string[]; officeCoinsGranted: number; effectiveBossDamage: number; passageContribution: number;
@@ -25,18 +27,23 @@ export class DemonTowerService {
   catalog(): DemonTowerCatalog { return { ...DEMON_TOWER_CATALOG, enabled: demonTowerEnabled() }; }
 
   async overview(userId: string): Promise<DemonTowerOverview> {
-    return this.db.transaction(async (manager) => {
+    return this.db.transaction(manager => this.overviewInTransaction(manager, userId));
+  }
+  /** Internal transaction composition. Never exposes a caller-provided user or automation bypass to HTTP. */
+  async overviewInTransaction(manager: EntityManager, userId: string): Promise<DemonTowerOverview> {
       // Read requests also serialize against suspension/deletion, but never initialize or persist a save.
       await this.activeUser(manager, userId);
       return this.project(manager, userId, await this.profile(manager, userId));
-    });
   }
 
   async action(userId: string, raw: unknown): Promise<DemonTowerActionReceipt> {
+    return this.db.transaction(manager => this.applyActionInTransaction(manager, userId, raw));
+  }
+  /** Worker owns the SAME transaction as its durable step. Do not call public action() from a locked worker. */
+  async applyActionInTransaction(manager: EntityManager, userId: string, raw: unknown, auto?: { runId: string; fence: (now: Date) => Promise<void> }): Promise<DemonTowerActionReceipt> {
     assertDemonTowerWrites();
     const input = demonTowerAction(raw);
     const requestHash = hash({ expectedVersion: input.expectedVersion, kind: input.kind, payload: input.payload });
-    return this.db.transaction(async (manager) => {
       await this.activeUser(manager, userId);
       assertDemonTowerWrites();
       const commandRepo = manager.getRepository(DemonTowerCommand);
@@ -49,16 +56,20 @@ export class DemonTowerService {
         // Receipt is immutable; current state and current balance are intentionally NOT stored in it.
         return { requestId: input.requestId, replayed: true, overview: await this.project(manager, userId, profile), ...this.receipt(previous.receipt) };
       }
+      const running = await manager.getRepository(DemonTowerAutoRun).findOneBy({ userId, status: 'running' });
+      if (running && running.id !== auto?.runId) throw new ConflictException({ code: 'DEMON_TOWER_AUTO_RUNNING' });
+      if (auto && (!running || running.id !== auto.runId || !['explore', 'attack', 'skill'].includes(input.kind))) throw new ConflictException({ code: 'DEMON_TOWER_AUTO_NOT_RUNNING' });
       const version = profile?.version ?? 0;
       if (input.expectedVersion !== version) throw new ConflictException({ code: 'DEMON_TOWER_VERSION_CONFLICT', currentVersion: version });
       if (input.kind === 'enroll' && profile) throw new ConflictException({ code: 'DEMON_TOWER_ALREADY_ENROLLED' });
       if (input.kind !== 'enroll' && !profile) throw new ConflictException({ code: 'DEMON_TOWER_ENROLL_REQUIRED' });
 
       // The shared world is read and locked BEFORE simulation, so two final hits cannot race old HP.
-      const worlds = await this.lockWorld(manager);
+      const worlds = await this.lockWorldInTransaction(manager);
       assertDemonTowerWrites();
       const now = this.clock.now(); // Time and business date are always taken after the potentially waiting locks.
       const serviceDate = toBusinessLocalDate(now);
+      if (auto) await auto.fence(now);
       const world = demonTowerWorldView(worlds);
       if (input.kind === 'challenge_boss' || input.kind === 'donate') {
         // Bind the player's displayed target, not an ever-changing HP version. Same-floor cooperation remains valid.
@@ -118,9 +129,9 @@ export class DemonTowerService {
       // yesterday's contribution/quota with today's credit: roll back the entire still-open transaction.
       // An unconsumed request UUID can then be retried against the unchanged save on the new day.
       assertDemonTowerWrites();
+      if (auto) await auto.fence(this.clock.now());
       if (toBusinessLocalDate(this.clock.now()) !== serviceDate) throw new ConflictException({ code: 'DEMON_TOWER_DAY_CHANGED' });
       return { requestId: input.requestId, replayed: false, overview, ...stored };
-    });
   }
 
   private async activeUser(manager: EntityManager, userId: string): Promise<User> {
@@ -133,7 +144,7 @@ export class DemonTowerService {
     return manager.getRepository(DemonTowerProfile).createQueryBuilder('profile').addSelect('profile.state').where('profile.user_id = :userId', { userId }).getOne();
   }
   private state(profile: DemonTowerProfile): DemonTowerEngineState { return profile.state as unknown as DemonTowerEngineState; }
-  private async lockWorld(manager: EntityManager): Promise<DemonTowerWorldFloor[]> {
+  async lockWorldInTransaction(manager: EntityManager): Promise<DemonTowerWorldFloor[]> {
     const repo = manager.getRepository(DemonTowerWorldFloor);
     if (!await repo.exist()) {
       await repo.createQueryBuilder().insert().values(initialDemonTowerWorld(this.clock.now())).orIgnore().execute();
@@ -150,8 +161,11 @@ export class DemonTowerService {
     const wallet = await manager.getRepository(WalletBalance).findOneBy({ userId, currency: 'office_coin' });
     const balance = Number(wallet?.balance ?? 0);
     if (!Number.isSafeInteger(balance) || balance < 0) throw new Error('Demon tower wallet invariant failed');
+    const auto = await manager.getRepository(DemonTowerAutoRun).findOneBy({ userId, status: 'running' }) ?? await manager.getRepository(DemonTowerAutoRun).findOne({ where: { userId }, order: { createdAt: 'DESC', id: 'DESC' } });
+    const profileView = profile && state ? demonTowerProfileView(state, now.getTime(), profile.version, daily?.officeCoins ?? 0) : null;
+    if (profileView && auto?.status === 'running') profileView.availableActions = [];
     return {
-      serverNow: now.getTime(), profile: profile && state ? demonTowerProfileView(state, now.getTime(), profile.version, daily?.officeCoins ?? 0) : null,
+      serverNow: now.getTime(), profile: profileView, autoExplore: auto ? demonTowerAutoView(auto) : null,
       world: demonTowerWorldView(worlds ?? await manager.getRepository(DemonTowerWorldFloor).find({ order: { floor: 'ASC' } })),
       wallet: { officeCoinBalance: balance }, writesEnabled,
     };

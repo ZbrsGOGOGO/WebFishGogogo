@@ -11,7 +11,7 @@ const { createRequire } = require('node:module');
 const path = require('node:path');
 assert.equal(process.env.TRENDING_REHEARSAL_CONFIRMATION, 'ISOLATED_TRENDING_ONLY:20260908');
 assert.equal(process.env.DB_DATABASE, 'community_play_rehearsal');
-assert.ok(process.env.DB_HOST === '127.0.0.1' || process.env.DB_HOST === 'demon-tower-rehearsal-pg-hgbacy' || /^(?:play|rail)-rehearsal-pg-[a-z0-9]{6,16}$/.test(process.env.DB_HOST || ''), 'Explicit isolated DB_HOST required');
+assert.equal(process.env.DB_HOST, 'growth-pg-btpam6', 'Explicit isolated DB_HOST required');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Explicit dedicated test credentials required');
 assert.ok(!process.env.DATABASE_URL, 'Do not pass production connection strings');

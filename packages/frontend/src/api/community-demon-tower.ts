@@ -1,4 +1,4 @@
-import type { DemonTowerActionInput, DemonTowerActionReceipt, DemonTowerCatalog, DemonTowerContributions, DemonTowerLeaderboard, DemonTowerOverview } from '@stealth-reader/shared';
+import type { DemonTowerActionInput, DemonTowerActionReceipt, DemonTowerAutoResponse, DemonTowerAutoStartInput, DemonTowerCatalog, DemonTowerContributions, DemonTowerLeaderboard, DemonTowerOverview } from '@stealth-reader/shared';
 
 import { CommunityApiError, communityHttp, getCommunityAccessToken } from './community-http';
 
@@ -8,6 +8,9 @@ export const communityDemonTowerApi = {
   catalog: (signal?: AbortSignal): Promise<DemonTowerCatalog> => communityHttp.get(`${ROOT}/catalog`, { auth: false, signal }),
   overview: (signal?: AbortSignal): Promise<DemonTowerOverview> => communityHttp.get(`${ROOT}/overview`, { signal }),
   action: (input: DemonTowerActionInput, signal?: AbortSignal): Promise<DemonTowerActionReceipt> => communityHttp.post(`${ROOT}/actions`, input, { retryAfterRefresh: false, signal }),
+  auto: (signal?: AbortSignal): Promise<DemonTowerAutoResponse> => communityHttp.get(`${ROOT}/auto-explore`, { signal }),
+  autoStart: (input: DemonTowerAutoStartInput, signal?: AbortSignal): Promise<DemonTowerAutoResponse> => communityHttp.post(`${ROOT}/auto-explore`, input, { retryAfterRefresh: false, signal }),
+  autoStop: (id: string, signal?: AbortSignal): Promise<DemonTowerAutoResponse> => communityHttp.post(`${ROOT}/auto-explore/${encodeURIComponent(id)}/stop`, {}, { retryAfterRefresh: false, signal }),
   leaderboard: (date?: string, signal?: AbortSignal): Promise<DemonTowerLeaderboard> => communityHttp.get(`${ROOT}/leaderboard`, { auth: Boolean(getCommunityAccessToken()), query: { date }, signal }),
   contributions: (floor?: number, signal?: AbortSignal): Promise<DemonTowerContributions> => communityHttp.get(`${ROOT}/contributions`, { auth: Boolean(getCommunityAccessToken()), query: { floor }, signal }),
 };
@@ -17,6 +20,17 @@ export function demonTowerErrorCode(error: unknown): string {
 }
 
 const MESSAGES: Readonly<Record<string, string>> = {
+  DEMON_TOWER_AUTO_RUNNING: '服务器正在托管探索，请先停止并接回手动操作。',
+  DEMON_TOWER_AUTO_DISABLED: '服务器托管探索暂未开放，仍可手动探索。',
+  DEMON_TOWER_AUTO_VIP_REQUIRED: '托管探索需要有效 VIP 权益，手动探索不受影响。',
+  VIP_REQUIRED: 'VIP 权益当前无效，仍可手动探索；不会自动续赠。',
+  DEMON_TOWER_AUTO_IDEMPOTENCY_CONFLICT: '这次托管操作编号与内容不一致，请同步后重新设置。',
+  DEMON_TOWER_AUTO_FLOOR_CHANGED: '探索区域已变化，本次没有启动，请同步后重新确认固定楼层。',
+  DEMON_TOWER_AUTO_LOW_HEALTH: '生命未达到托管安全条件，请恢复后再启动。',
+  DEMON_TOWER_AUTO_START_LIMIT: '本小时启动批次较多，请稍后再试。',
+  DEMON_TOWER_AUTO_START_CANCELLED: '本批启动前账号、时间或服务状态发生变化，没有继续执行，请同步状态。',
+  DEMON_TOWER_AUTO_NOT_FOUND: '未找到这批属于你的委托，请同步托管状态。',
+  DEMON_TOWER_AUTO_REQUEST_INVALID: '委托参数无效，请检查次数和楼层后重新提交。',
   DEMON_TOWER_ACTIVE_ACCOUNT_REQUIRED: '账号状态已变化，请重新登录有效账号。',
   DEMON_TOWER_ENROLL_REQUIRED: '请先建立寻道者档案，再开始探索。',
   DEMON_TOWER_NOT_ENOUGH_STAMINA: '体力暂时不足，会按服务器时间自动恢复。',
@@ -102,6 +116,6 @@ export function demonTowerReadErrorMessage(error: unknown, hasPrevious = false):
 /** A transport failure is not proof that the server rejected a mutation. */
 export function demonTowerOutcomeUncertain(error: unknown): boolean {
   const code = demonTowerErrorCode(error);
-  if (code === 'DEMON_TOWER_DISABLED' || code === 'COMMUNITY_WRITES_DISABLED') return false;
+  if (code === 'DEMON_TOWER_DISABLED' || code === 'DEMON_TOWER_AUTO_DISABLED' || code === 'COMMUNITY_WRITES_DISABLED') return false;
   return !(error instanceof CommunityApiError) || error.status === 0 || error.status >= 500;
 }

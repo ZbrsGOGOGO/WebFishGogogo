@@ -12,6 +12,7 @@ import {
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 
 import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
+import { CommunityTitleBadge } from '../community-progression/CommunityTitleBadge';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
   communityChatApi,
@@ -712,7 +713,7 @@ export function CommunityChatRoomPage(): JSX.Element {
                             <strong>{authorName}</strong>
                           ) : (
                             <Link to={`/users/${encodeURIComponent(message.author.publicId)}`}>
-                              <strong>{authorName}</strong>
+                              <strong>{authorName}</strong><CommunityTitleBadge title={message.author.title} />
                             </Link>
                           )}
                           <span>{formatMessageTime(message.createdAt)} · #{message.sequence}</span>

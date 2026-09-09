@@ -21,6 +21,8 @@ import {
   useCommunitySocialWriteBlocked,
 } from './SocialVerificationGate';
 import styles from './CommunityPages.module.css';
+import { getCommunitySessionGeneration } from '../../api/community-http';
+import { CommunityHonors, CommunityTitleBadge } from '../community-progression/CommunityTitleBadge';
 
 const QUICK_FEEDS: Array<{ id: CommunityFeedType; label: string }> = [
   { id: 'coffee', label: '送咖啡' },
@@ -29,6 +31,11 @@ const QUICK_FEEDS: Array<{ id: CommunityFeedType; label: string }> = [
 ];
 
 export function CommunityPublicProfilePage(): JSX.Element {
+  const { publicId = '' } = useParams();
+  const owner = useCommunityAuthStore((state) => state.user?.publicId);
+  return <PublicProfileWorkspace key={`${publicId}:${owner}:${getCommunitySessionGeneration()}`} />;
+}
+function PublicProfileWorkspace(): JSX.Element {
   const { publicId = '' } = useParams();
   const phase = useCommunityAuthStore((state) => state.phase);
   const authUser = useCommunityAuthStore((state) => state.user);
@@ -44,6 +51,9 @@ export function CommunityPublicProfilePage(): JSX.Element {
 
   const load = useCallback(async (): Promise<void> => {
     if (!publicId) return;
+    // Relationship/privacy changes can make this profile unavailable. Do not
+    // retain previously visible honors or interaction controls during a reread.
+    setProfile(null);
     setLoading(true);
     setError(undefined);
     try {
@@ -159,7 +169,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
             <div className={styles.publicProfileHero}>
               <span className={styles.avatar} aria-hidden="true">{communityAvatarMark(profile.avatarKey)}</span>
               <div>
-                <h2>{profile.displayName}</h2>
+                <h2>{profile.displayName}<CommunityTitleBadge title={profile.equippedTitle} hidden={profile.relationship.status === 'blocked_by_me' || profile.relationship.status === 'unavailable'} /></h2>
                 <p>{profile.bio || '这个用户还没有填写简介。'}</p>
                 {profile.ipRegion ? <small>IP 归属地：{profile.ipRegion}</small> : null}
               </div>
@@ -234,7 +244,7 @@ export function CommunityPublicProfilePage(): JSX.Element {
               <Link to="/tower-defense">进入工位塔防</Link>
             </Card>
             <Card title="荣誉">
-              {!profile.honors ? <EmptyState title="未向你开放" message="荣誉可见范围由该用户控制。" /> : profile.honors.length === 0 ? <p>尚未获得荣誉</p> : <p>{profile.honors.join('、')}</p>}
+              {!profile.honors ? <EmptyState title="未向你开放" message="荣誉可见范围由该用户控制。" /> : profile.honors.length === 0 ? <p>尚未获得荣誉</p> : <p><CommunityHonors honors={profile.honors} /></p>}
             </Card>
           </div>
         </>

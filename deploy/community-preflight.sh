@@ -144,6 +144,18 @@ for contract in \
 done
 grep -Fq 'AddDemonTower1700000000030' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
   fail "demon tower migration 0030 is not registered"
+for contract in \
+  packages/backend/src/database/migrations/1700000000031-AddCommunityProgression.ts \
+  packages/backend/src/database/migrations/1700000000032-AddDemonTowerAutoExplore.ts \
+  packages/backend/src/modules/community/progression/community-progression.module.ts \
+  deploy/community-progression-rehearsal.cjs \
+  deploy/community-auto-explore-rehearsal.cjs; do
+  [ -f "$ROOT_DIR/$contract" ] || fail "missing progression/automatic exploration release contract: $contract"
+done
+for migration in AddCommunityProgression1700000000031 AddDemonTowerAutoExplore1700000000032; do
+  grep -Fq "$migration" "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+    fail "progression/automatic exploration migration is not registered: $migration"
+done
 grep -Fq 'zone=community_demon_tower_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "demon tower proxy needs its separate bounded request budget"
 grep -Fq 'zone=community_rail_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
@@ -221,6 +233,8 @@ for build_flag in \
   VITE_COMMUNITY_NEWS_ADMIN_ENABLED \
   VITE_COMMUNITY_TOWER_DEFENSE_ENABLED \
   VITE_COMMUNITY_DEMON_TOWER_ENABLED \
+  VITE_COMMUNITY_PROGRESSION_ENABLED \
+  VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED \
   VITE_COMMUNITY_LEDOU_ENABLED \
   VITE_COMMUNITY_BATTLE_SERVER_ENABLED; do
   grep -Fq "ARG ${build_flag}=" "$ROOT_DIR/Dockerfile" ||
@@ -385,6 +399,12 @@ grep -Fq 'FEATURE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER
 grep -Fq 'VITE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER_ENABLED:-false}' \
   "$ROOT_DIR/deploy/docker-compose.community.yml" ||
   fail "demon-tower frontend and server must use the same feature flag"
+for growth_flag in COMMUNITY_PROGRESSION DEMON_TOWER_AUTO_EXPLORE; do
+  grep -Fq "FEATURE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
+    "$ROOT_DIR/$COMPOSE_FILE" || fail "$growth_flag must default to disabled on the API"
+  grep -Fq "VITE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
+    "$ROOT_DIR/$COMPOSE_FILE" || fail "$growth_flag frontend and API must use the same source"
+done
 grep -Fq 'VITE_COMMUNITY_LEDOU_ENABLED: "false"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "community Compose must disable the retired Ledou entry"
@@ -732,6 +752,14 @@ if grep -q '^FEATURE_DEVELOPMENT_WORKSPACE_ENABLED=' "$ENV_FILE"; then
 fi
 if grep -q '^FEATURE_COMMUNITY_DEMON_TOWER_ENABLED=' "$ENV_FILE"; then
   check_boolean FEATURE_COMMUNITY_DEMON_TOWER_ENABLED
+fi
+for growth_flag in FEATURE_COMMUNITY_PROGRESSION_ENABLED FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED; do
+  if grep -q "^${growth_flag}=" "$ENV_FILE"; then check_boolean "$growth_flag"; fi
+done
+if [ "$(env_value FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED)" = true ]; then
+  [ "$(env_value FEATURE_COMMUNITY_PROGRESSION_ENABLED)" = true ] &&
+    [ "$(env_value FEATURE_COMMUNITY_DEMON_TOWER_ENABLED)" = true ] ||
+    fail "auto exploration requires progression and demon tower"
 fi
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
 

@@ -9,7 +9,7 @@ const { randomUUID, randomBytes } = require('node:crypto');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 assert.equal(process.env.ACCOUNT_REHEARSAL_CONFIRMATION, 'ISOLATED_ACCOUNT_ONLY:20260908');
-assert.ok(['rail-rehearsal-pg-audit4rbx3t', 'demon-tower-rehearsal-pg-hgbacy'].includes(process.env.DB_HOST), 'An explicitly reviewed isolated host is required');
+assert.equal(process.env.DB_HOST, 'growth-pg-btpam6', 'An explicitly reviewed isolated host is required');
 assert.equal(process.env.DB_DATABASE, 'community_account_rehearsal');
 assert.equal(process.env.DB_PORT || '5432', '5432');
 assert.ok(process.env.DB_USERNAME && process.env.DB_PASSWORD, 'Dedicated isolated credentials required');
@@ -36,7 +36,7 @@ const dist = process.env.ACCOUNT_REHEARSAL_BACKEND_DIST || path.join(appRoot, 'p
 const load = (file) => fromApp(path.join(dist, file));
 const E = load('database/entities');
 const { migrations } = load('database/migrations');
-assert.equal(Math.max(...migrations.map((m) => Number(m.name.slice(-13)))), 1700000000030, 'Review rehearsal before future migrations');
+assert.equal(Math.max(...migrations.map((m) => Number(m.name.slice(-13)))), 1700000000032, 'Review rehearsal before future migrations');
 const { AuthService } = load('modules/auth/auth.service');
 const { AuthController } = load('modules/auth/auth.controller');
 const { JwtAuthGuard } = load('modules/auth/jwt-auth.guard');

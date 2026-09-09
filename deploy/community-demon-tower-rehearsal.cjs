@@ -11,10 +11,10 @@ const { randomBytes, randomUUID } = require('node:crypto');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 assert.equal(process.env.DEMON_TOWER_REHEARSAL_CONFIRMATION, 'ISOLATED_SYNTHETIC_DEMON_TOWER_ONLY:20260908');
-assert.equal(process.env.DB_HOST, 'demon-tower-rehearsal-pg-hgbacy');
+assert.equal(process.env.DB_HOST, 'growth-pg-btpam6');
 assert.equal(process.env.DB_DATABASE, 'community_demon_tower_rehearsal');
 assert.equal(process.env.DB_PORT || '5432', '5432');
-assert.equal(process.env.DB_USERNAME, 'tower_test');
+assert.equal(process.env.DB_USERNAME, 'growth_test');
 assert.ok(process.env.DB_PASSWORD && process.env.DB_PASSWORD.length >= 8);
 assert.equal(process.env.NODE_ENV, 'test');
 assert.equal(process.env.LOCAL_DEV, 'false');
@@ -34,8 +34,8 @@ const { PlatformAssetsService } = load('modules/platform/platform-assets.service
 const { NotificationService } = load('modules/community/notification.service');
 const { toBusinessLocalDate } = load('modules/platform/platform-time');
 const timestamp = (migration) => Number(migration.name.slice(-13));
-assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000030));
-assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000030), 'Review future migrations explicitly');
+assert.ok(migrations.some((migration) => timestamp(migration) === 1700000000032));
+assert.ok(migrations.every((migration) => timestamp(migration) <= 1700000000032), 'Review future migrations explicitly');
 process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true';
 process.env.FEATURE_COMMUNITY_DEMON_TOWER_ENABLED = 'true';
 process.env.APP_MODE = 'community';
@@ -142,27 +142,31 @@ async function schema() {
   phase = 'schema-isolation-preflight';
   db = await new DataSource(options).initialize();
   const [identity] = await db.query('SELECT current_database() AS database, current_user AS username');
-  assert.equal(identity.database, 'community_demon_tower_rehearsal'); assert.equal(identity.username, 'tower_test');
+  assert.equal(identity.database, 'community_demon_tower_rehearsal'); assert.equal(identity.username, 'growth_test');
   const names = new Set((await db.query("SELECT tablename FROM pg_tables WHERE schemaname='public'")).map((row) => row.tablename));
   if (names.size) {
     assert.ok(names.has('users') && names.has('migrations'));
     assert.equal(Number((await db.query('SELECT count(*) FROM users'))[0].count), 0, 'Existing users forbidden before any migration');
     for (const name of towerTables) if (names.has(name)) assert.equal(Number((await db.query(`SELECT count(*) FROM "${name}"`))[0].count), 0, 'Existing tower data forbidden');
     const last = Number((await db.query('SELECT max(timestamp) AS value FROM migrations'))[0].value);
-    assert.ok([1700000000029, 1700000000030].includes(last), 'Only reviewed schema 29/30 permitted');
-    if (last === 1700000000030) await db.undoLastMigration({ transaction: 'all' });
+    assert.ok([1700000000030, 1700000000031, 1700000000032].includes(last), 'Only reviewed schema 30/31/32 permitted');
+    for (const name of ['membership_grants', 'achievement_unlocks', 'user_presentation', 'demon_tower_auto_runs']) {
+      if (names.has(name)) assert.equal(Number((await db.query(`SELECT count(*) FROM "${name}"`))[0].count), 0, 'Existing growth data forbidden');
+    }
+    for (let version = last; version > 1700000000030; version--) await db.undoLastMigration({ transaction: 'all' });
   } else {
     await db.destroy();
-    db = await new DataSource({ ...options, migrations: migrations.filter((item) => timestamp(item) <= 1700000000029) }).initialize();
+    db = await new DataSource({ ...options, migrations: migrations.filter((item) => timestamp(item) <= 1700000000030) }).initialize();
     await db.runMigrations({ transaction: 'all' });
     await db.destroy(); db = await new DataSource(options).initialize();
   }
   const beforeUpgrade = await fingerprints();
-  assert.equal(Number((await db.query('SELECT max(timestamp) AS value FROM migrations'))[0].value), 1700000000029);
+  assert.equal(Number((await db.query('SELECT max(timestamp) AS value FROM migrations'))[0].value), 1700000000030);
   phase = 'additive-migration-up-down-up';
   await db.runMigrations({ transaction: 'all' });
-  assert.equal(Number((await db.query('SELECT max(timestamp) AS value FROM migrations'))[0].value), 1700000000030);
-  assert.equal(Object.keys(await fingerprints()).length, Object.keys(beforeUpgrade).length + 6);
+  assert.equal(Number((await db.query('SELECT max(timestamp) AS value FROM migrations'))[0].value), 1700000000032);
+  assert.equal(Object.keys(await fingerprints()).length, Object.keys(beforeUpgrade).length + 4);
+  await db.undoLastMigration({ transaction: 'all' });
   await db.undoLastMigration({ transaction: 'all' });
   assert.deepEqual(await fingerprints(), beforeUpgrade, 'Reversing only new empty tables must preserve every old row');
   await db.runMigrations({ transaction: 'all' });
@@ -170,7 +174,7 @@ async function schema() {
   baseline = await fingerprints();
   assets = new PlatformAssetsService(clock); notifications = new NotificationService(db);
   service = new DemonTowerService(db, assets, clock); rewards = new DemonTowerRewardsService(db, assets, notifications, clock);
-  mark('schema 29 → 30 → 29 → 30: exactly six additive tables, no old row changes, rerun no-op');
+  mark('schema 30 → 32 → 30 → 32: exactly four additive tables, no old row changes, rerun no-op');
 }
 async function concurrentEmptyWorldInitialization() {
   phase = 'three-user-empty-world-initialization';

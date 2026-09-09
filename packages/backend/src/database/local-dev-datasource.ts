@@ -27,6 +27,20 @@ export async function createLocalDevDataSource(): Promise<DataSource> {
     implementation: () => randomUuid(),
     impure: true,
   });
+  // pg-mem only approximates this PostgreSQL transaction clock; fixed-time
+  // campaign and lock-wait boundaries are separately tested on real PostgreSQL.
+  db.public.registerFunction({
+    name: 'transaction_timestamp',
+    returns: DataType.timestamptz,
+    implementation: () => new Date(),
+    impure: true,
+  });
+  db.public.registerFunction({
+    name: 'length',
+    args: [DataType.text],
+    returns: DataType.integer,
+    implementation: (value: string) => [...value].length,
+  });
   // TypeORM 的 postgres 驱动在连接时会调用 SELECT version() / current_database()，
   // pg-mem 未内建，这里注册以通过连接握手。
   db.public.registerFunction({

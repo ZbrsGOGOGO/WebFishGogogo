@@ -26,6 +26,7 @@ export interface DemonTowerState {
   retry: () => Promise<boolean>;
   refresh: () => Promise<void>;
   dismissReceipt: () => void;
+  observeOverview: (next: DemonTowerOverview) => void;
 }
 
 export function useDemonTower(): DemonTowerState {
@@ -66,7 +67,9 @@ export function useDemonTower(): DemonTowerState {
     if (previous && next.serverNow < previous.serverNow && (next.profile?.version ?? 0) <= (previous.profile?.version ?? 0) && next.world.version <= previous.world.version) return;
     // The personal save and shared world advance independently. A receipt may
     // contain a newer character without being the newest world observation.
-    const value = previous && next.world.version < previous.world.version ? { ...next, world: previous.world, serverNow: Math.max(previous.serverNow, next.serverNow) } : next;
+    let value = previous && next.world.version < previous.world.version ? { ...next, world: previous.world, serverNow: Math.max(previous.serverNow, next.serverNow) } : next;
+    const oldRun = previous?.autoExplore; const nextRun = value.autoExplore;
+    if (oldRun && (nextRun === undefined || nextRun && (oldRun.id === nextRun.id && oldRun.version > nextRun.version || oldRun.createdAt > nextRun.createdAt))) value = { ...value, autoExplore: oldRun };
     const state = { key: requestKey, value };
     snapshotRef.current = state; setSnapshot(state);
     serverClock.current = { key: requestKey, offset: value.serverNow - Date.now() };
@@ -177,7 +180,7 @@ export function useDemonTower(): DemonTowerState {
   const act = useCallback((action: DemonTowerAction): Promise<boolean> => {
     const current = snapshotRef.current;
     if (!ownerId || !isCurrent(key) || pendingRef.current || current?.key !== key || !current.value.writesEnabled || catalog?.enabled !== true) return Promise.resolve(false);
-    if (action.kind === 'enroll' ? current.value.profile !== null : !current.value.profile?.availableActions.includes(action.kind)) return Promise.resolve(false);
+    if (current.value.autoExplore?.status === 'running' || (action.kind === 'enroll' ? current.value.profile !== null : !current.value.profile?.availableActions.includes(action.kind))) return Promise.resolve(false);
     return send({ key, status: 'uncertain', input: { ...action, requestId: crypto.randomUUID(), expectedVersion: current.value.profile?.version ?? 0 } });
   }, [ownerId, isCurrent, key, catalog?.enabled, send]);
   const retry = useCallback((): Promise<boolean> => {
@@ -186,6 +189,13 @@ export function useDemonTower(): DemonTowerState {
   }, [key, send]);
 
   const overview = snapshot?.key === key ? snapshot.value : null;
+  const observeOverview = useCallback((next: DemonTowerOverview): void => {
+    if (!isCurrent(key)) return;
+    const previous = snapshotRef.current?.key === key ? snapshotRef.current.value : null;
+    apply(next, key);
+    // Auto-run receipts contain cumulative grants, not a new wallet balance.
+    if ((next.profile?.version ?? 0) > (previous?.profile?.version ?? 0)) void refreshCommunityWallet();
+  }, [apply, isCurrent, key]);
   return {
     catalog, overview, receipt: receipt?.key === key ? receipt.value : null,
     loading: !catalog && !catalogError || Boolean(ownerId && catalog?.enabled && !overview && !error), refreshing,
@@ -193,6 +203,6 @@ export function useDemonTower(): DemonTowerState {
     stale, error: error?.key === key ? error.value : catalogError, ownerId,
     displayName: ownerId ? user?.displayName ?? '寻道者' : '寻道者',
     now: clock + (serverClock.current.key === key ? serverClock.current.offset : 0),
-    act, retry, refresh: manualRefresh, dismissReceipt: () => setReceipt(null),
+    act, retry, refresh: manualRefresh, dismissReceipt: () => setReceipt(null), observeOverview,
   };
 }

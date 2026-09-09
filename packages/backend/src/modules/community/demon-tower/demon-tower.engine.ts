@@ -538,6 +538,18 @@ function validateLoadout(state: DemonTowerEngineState, payload: unknown): DemonT
   }
   return clone(value) as unknown as DemonTowerLoadout;
 }
+/** Pure, deterministic policy; it does not spend resources, advance RNG or bypass actDemonTower. */
+export function demonTowerAutomaticAction(state: DemonTowerEngineState): DemonTowerAction {
+  if (!state.battle) return { kind: 'explore', payload: {} };
+  const battle = state.battle;
+  if (battle.kind !== 'explore') fail('INVALID_BATTLE');
+  const targetId = battle.enemies.find(enemy => enemy.hp > 0)?.id ?? fail('INVALID_TARGET');
+  const skillId = state.loadout.activeSkills.find(id => usableSkill(state, battle, id) &&
+    (id !== 's1' || battle.player.hp < battle.player.maxHp * 0.75) &&
+    (id !== 's13' || battle.player.hp < battle.player.maxHp * 0.5) &&
+    (id !== 's4' || !effect(battle.player, 'strength')) && (id !== 's7' || !effect(battle.player, 'illusion')));
+  return skillId ? { kind: 'skill', payload: { skillId, targetId } } : { kind: 'attack', payload: { targetId } };
+}
 export function actDemonTower(input: DemonTowerEngineState, raw: unknown, context: DemonTowerEngineContext): DemonTowerEngineResult {
   const root = exact(raw, ['kind', 'payload']);
   if (typeof root.kind !== 'string') fail('INVALID_ACTION');
