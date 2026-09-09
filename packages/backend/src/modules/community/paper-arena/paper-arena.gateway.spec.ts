@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import type { DataSource } from 'typeorm';
+import { PAPER_ARENA_PROTOCOL_VERSION, PAPER_ARENA_MAP_VERSION } from '@stealth-reader/shared';
 import { AuthSession, User } from '../../../database/entities';
 import { createLocalDevDataSource } from '../../../database/local-dev-datasource';
 import { ChatWebSocketGateway } from '../../chat/chat-websocket.gateway';
@@ -62,7 +63,7 @@ describe('paper arena real websocket security and shared HTTP server', () => {
   }
   async function authenticate(socket: WebSocket, ticket: string) {
     const authenticated = message(socket, 'paper.authenticated'), snapshot = message(socket, 'paper.snapshot');
-    socket.send(JSON.stringify({ type: 'paper.authenticate', protocolVersion: 1, ticket })); await authenticated; return snapshot;
+    socket.send(JSON.stringify({ type: 'paper.authenticate', protocolVersion: PAPER_ARENA_PROTOCOL_VERSION, ticket })); await authenticated; return snapshot;
   }
   it('allows only the configured origin and exact path without query tickets', async () => {
     await expect(open('https://untrusted.invalid')).rejects.toThrow('403');
@@ -74,6 +75,14 @@ describe('paper arena real websocket security and shared HTTP server', () => {
     const first = await open(), firstClose = closed(first); first.send(JSON.stringify({ type: 'paper.input', seq: 1 })); expect(await firstClose).toBe(4401);
     const second = await open(), secondClose = closed(second); second.send(Buffer.from('binary')); expect(await secondClose).toBe(4400);
   });
+  it('explicitly refuses old cached maps before consuming their one-time ticket', async () => {
+    const context = await setup(), legacy = await open(), error = message(legacy, 'paper.error'), end = closed(legacy);
+    legacy.send(JSON.stringify({ type: 'paper.authenticate', protocolVersion: 1, ticket: context.ticket.ticket }));
+    expect(await error).toMatchObject({ code: 'PAPER_PROTOCOL_UPGRADE_REQUIRED', requiredProtocolVersion: 2, mapVersion: PAPER_ARENA_MAP_VERSION });
+    expect(await end).toBe(4406);
+    const current = await open(), view = await authenticate(current, context.ticket.ticket);
+    expect(view.room.protocolVersion).toBe(2); expect(view.room.mapVersion).toBe(PAPER_ARENA_MAP_VERSION);
+  });
   it('authenticates once, streams safe snapshots, and both viewers receive the same authoritative score', async () => {
     const context = await setup(), socket = await open();
     const first = await authenticate(socket, context.ticket.ticket); expect(first.room.myPlayerId).toBe(context.room.myPlayerId);
@@ -81,7 +90,18 @@ describe('paper arena real websocket security and shared HTTP server', () => {
     await arena.start(context.user.id, context.room.id, {});
     const next = message(socket, 'paper.snapshot'); arena.tick(Date.now() + 100);
     const view = await next; expect(view.room.game.tick).toBe(2); expect(view.room.game.scores).toEqual((await arena.get(context.user.id, context.room.id)).game.scores);
-    const replay = await open(), replayClose = closed(replay); replay.send(JSON.stringify({ type: 'paper.authenticate', protocolVersion: 1, ticket: context.ticket.ticket })); expect(await replayClose).toBe(4401);
+    const replay = await open(), replayClose = closed(replay); replay.send(JSON.stringify({ type: 'paper.authenticate', protocolVersion: PAPER_ARENA_PROTOCOL_VERSION, ticket: context.ticket.ticket })); expect(await replayClose).toBe(4401);
+  });
+  it('real v2 socket carries weapon/jump intent while only the server changes loadout and height', async () => {
+    const context = await setup(), socket = await open(); await authenticate(socket, context.ticket.ticket); await arena.start(context.user.id, context.room.id, {});
+    socket.send(JSON.stringify({ type: 'paper.input', seq: 1, forward: .5, strafe: 0, yaw: 0, pitch: 0, fire: false, reload: false, weapon: 'shotgun', aim: true, jump: true, sprint: false }));
+    await new Promise(resolve => setTimeout(resolve, 25));
+    arena.tick(Date.now() + 100);
+    const view = await arena.get(context.user.id, context.room.id), player = view.players.find(p => p.id === view.myPlayerId)!;
+    expect(player.weapon).toBe('shotgun'); expect(player.switchingUntil).toBeGreaterThan(view.game.elapsedMs); expect(player.aiming).toBe(false);
+    expect(player.y).toBeGreaterThan(0); expect(player.arsenal.rifle).toEqual({ ammo: 30, reserve: 150 }); expect(player.arsenal.shotgun).toEqual({ ammo: 6, reserve: 30 });
+    player.arsenal.rifle.reserve = 999; expect((await arena.get(context.user.id, context.room.id)).players.find(p => p.id === view.myPlayerId)!.arsenal.rifle.reserve).toBe(150);
+    const serialized = JSON.stringify(view); for (const privateKey of ['nextFireAt', 'triggerPending', 'reloadPending', 'botPath', 'rng', context.ticket.ticket]) expect(serialized).not.toContain(privateKey);
   });
   it('closes forged position/score frames and high-rate floods without advancing the game', async () => {
     const context = await setup(), socket = await open(); await authenticate(socket, context.ticket.ticket);

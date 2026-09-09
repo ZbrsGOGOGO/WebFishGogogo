@@ -3,7 +3,7 @@ import type { IncomingMessage, Server } from 'node:http';
 import type { Socket } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
-import { isPaperArenaInput } from '@stealth-reader/shared';
+import { isPaperArenaInput, PAPER_ARENA_PROTOCOL_VERSION, PAPER_ARENA_MAP_VERSION } from '@stealth-reader/shared';
 import { PaperArenaService, paperArenaEnabled, type PaperPrincipal } from './paper-arena.service';
 
 interface Connection {
@@ -76,7 +76,11 @@ export class PaperArenaGateway implements OnModuleDestroy {
     } catch { socket.close(4400, 'Invalid JSON'); return; }
     try {
       if (!state.principal) {
-        if (state.authenticating || frame.type !== 'paper.authenticate' || frame.protocolVersion !== 1 || Object.keys(frame).length !== 3) { socket.close(4401, 'Authentication required'); return; }
+        if (state.authenticating || frame.type !== 'paper.authenticate' || Object.keys(frame).length !== 3) { socket.close(4401, 'Authentication required'); return; }
+        if (frame.protocolVersion !== PAPER_ARENA_PROTOCOL_VERSION) {
+          this.send(socket, { type: 'paper.error', code: 'PAPER_PROTOCOL_UPGRADE_REQUIRED', message: '联机场景与武器已更新，请刷新页面后重新加入。', requiredProtocolVersion: PAPER_ARENA_PROTOCOL_VERSION, mapVersion: PAPER_ARENA_MAP_VERSION });
+          socket.close(4406, 'Refresh required: protocol v2'); return;
+        }
         state.authenticating = true;
         const principal = await this.arena.consumeTicket(frame.ticket);
         if (socket.readyState !== WebSocket.OPEN || this.connections.get(socket) !== state) return;
@@ -85,7 +89,7 @@ export class PaperArenaGateway implements OnModuleDestroy {
         for (const [other, previous] of this.connections) if (other !== socket && previous.principal?.userId === principal.userId) other.close(4409, 'Reconnected elsewhere');
         this.arena.connect(principal, state.id); state.principal = principal; state.validatedUntil = Date.now() + 5000;
         clearTimeout(state.deadline);
-        this.send(socket, { type: 'paper.authenticated', playerId: this.arena.view(principal.userId, principal.roomId).myPlayerId });
+        this.send(socket, { type: 'paper.authenticated', protocolVersion: PAPER_ARENA_PROTOCOL_VERSION, mapVersion: PAPER_ARENA_MAP_VERSION, playerId: this.arena.view(principal.userId, principal.roomId).myPlayerId });
         this.send(socket, { type: 'paper.snapshot', room: this.arena.view(principal.userId, principal.roomId) });
         return;
       }

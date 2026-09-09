@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnApplicationBootstrap, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DataSource, In } from 'typeorm';
-import { acceptPaperArenaInput, createPaperArenaEngine, finishPaperArenaAtDeadline, PAPER_ARENA_RULES, resetPaperArenaInput, stepPaperArena, type PaperArenaEngine, type PaperArenaInput, type PaperArenaRoomSummary, type PaperArenaRoomView } from '@stealth-reader/shared';
+import { acceptPaperArenaInput, createPaperArenaEngine, finishPaperArenaAtDeadline, PAPER_ARENA_RULES, PAPER_ARENA_PROTOCOL_VERSION, PAPER_ARENA_MAP_VERSION, resetPaperArenaInput, stepPaperArena, type PaperArenaEngine, type PaperArenaInput, type PaperArenaRoomSummary, type PaperArenaRoomView } from '@stealth-reader/shared';
 import { AuthSession, User, UserBlock } from '../../../database/entities';
 import { AuthRateLimitService } from '../../auth/auth-rate-limit.service';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
@@ -15,7 +15,7 @@ interface Room {
 }
 export interface PaperPrincipal { userId: string; sessionId: string; roomId: string; playerId: string; admissionId: string; expiresAt: number }
 const MAX_ROOMS = 24;
-const RULES = '红蓝团队击败赛，空位及断线由 AI 接替。阵亡 2.5 秒后安全随机复活，保护 1.5 秒（开火取消）。默认静音；收起只停止本人输入，对局不停。单场最长 15 分钟；临时房间重启后结束，本模式暂不计官方排行榜、办公币或成就。';
+const RULES = '红蓝团队击败赛，五种独立弹药武器、瞄准/冲刺/跳跃由服务器判定；太刀正面格挡消耗体力并单次返弹。空位及断线由 AI 接替，重连不补血补弹。阵亡 2.5 秒后安全随机复活，保护 1.5 秒（开火取消）。收起只停止本人输入，对局不停；最长 15 分钟。临时房间重启后结束，不计官方排行榜、办公币或成就。原地图木箱保持静态，补给与钩索未开放。';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function paperArenaEnabled(): boolean { return process.env.FEATURE_PAPER_ARENA_ENABLED === 'true'; }
 function invalid(): never { throw new BadRequestException({ code: 'PAPER_INPUT_INVALID', message: '房间参数无效。' }); }
@@ -77,9 +77,9 @@ export class PaperArenaService implements OnApplicationBootstrap, OnModuleDestro
   }
   view(userId: string, roomId: string): PaperArenaRoomView {
     const { room, member } = this.member(userId, roomId);
-    return { ...this.summary(room), hostPlayerId: room.hostUserId ? room.members.get(room.hostUserId)?.playerId ?? null : null,
+    return { ...this.summary(room), protocolVersion: PAPER_ARENA_PROTOCOL_VERSION, mapVersion: PAPER_ARENA_MAP_VERSION, hostPlayerId: room.hostUserId ? room.members.get(room.hostUserId)?.playerId ?? null : null,
       myPlayerId: member.playerId, serverNow: Date.now(), rules: RULES,
-      players: room.engine.players.map(player => ({ ...player })),
+      players: room.engine.players.map(player => ({ ...player, arsenal: Object.fromEntries(Object.entries(player.arsenal).map(([id, ammo]) => [id, { ...ammo }])) as typeof player.arsenal })),
       game: { tick: room.engine.tick, elapsedMs: room.engine.elapsedMs, scores: { ...room.engine.scores }, winner: room.engine.winner, shots: room.engine.shots.map(shot => ({ ...shot })) } };
   }
   async list(userId: string) {
@@ -192,7 +192,7 @@ export class PaperArenaService implements OnApplicationBootstrap, OnModuleDestro
     if (this.tickets.size >= 256) throw new ConflictException({ code: 'PAPER_CAPACITY' });
     const ticket = randomBytes(32).toString('base64url'), expiresAt = now + 15_000;
     this.tickets.set(createHash('sha256').update(ticket).digest('hex'), { userId, sessionId, roomId: room.id, playerId: member.playerId, admissionId: member.admissionId, expiresAt });
-    return { ticket, expiresAt, wsPath: '/ws/paper-arena' };
+    return { ticket, expiresAt, wsPath: '/ws/paper-arena', protocolVersion: PAPER_ARENA_PROTOCOL_VERSION, mapVersion: PAPER_ARENA_MAP_VERSION };
   }
   async consumeTicket(raw: unknown): Promise<PaperPrincipal> {
     this.enabled(true);

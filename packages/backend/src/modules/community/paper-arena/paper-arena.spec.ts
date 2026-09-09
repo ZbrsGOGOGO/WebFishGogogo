@@ -19,19 +19,19 @@ describe('paper arena authoritative simulation', () => {
   it('uses fixed server ticks, normalizes diagonal speed, rejects replay, and expires held input', () => {
     const state = createPaperArenaEngine(4, 20, 1), player = state.players[0];
     state.players.forEach(p => { p.isBot = false; p.connected = true; });
-    player.x = -15; player.z = -15;
+    player.x = -46; player.z = -10; player.y = 0;
     expect(acceptPaperArenaInput(state, player.id, input({ forward: 1, strafe: 1 }))).toBe(true);
     expect(acceptPaperArenaInput(state, player.id, input({ forward: -1 }))).toBe(false);
     stepPaperArena(state);
-    expect(Math.hypot(player.x + 15, player.z + 15)).toBeCloseTo(PAPER_ARENA_RULES.playerSpeed * .05);
+    expect(Math.hypot(player.x + 46, player.z + 10)).toBeCloseTo(PAPER_ARENA_RULES.playerSpeed * .05);
     for (let i = 0; i < 8; i++) stepPaperArena(state);
     const position = [player.x, player.z]; stepPaperArena(state); expect([player.x, player.z]).toEqual(position);
     expect(state.elapsedMs).toBe(500);
   });
   function duel() {
     const state = createPaperArenaEngine(4, 20, 1);
-    state.players.forEach((p, i) => { p.isBot = false; p.connected = true; p.x = -16 + i; p.z = 16; });
-    const [a, b] = state.players; a.x = b.x = -5; a.z = -5; b.z = 2; a.yaw = 0;
+    state.players.forEach((p, i) => { p.isBot = false; p.connected = true; p.x = -33 + i; p.z = 42; p.y = 0; });
+    const [a, b] = state.players; a.x = b.x = -46; a.z = -10; b.z = -3; a.yaw = 0;
     return { state, a, b };
   }
   function fire(state: ReturnType<typeof createPaperArenaEngine>, id: string, ticks = 20) {
@@ -45,7 +45,7 @@ describe('paper arena authoritative simulation', () => {
   it('respects obstacles, teammates and spawn protection', () => {
     for (const mode of ['wall', 'team', 'protection']) {
       const { state, a, b } = duel();
-      if (mode === 'wall') { a.x = b.x = 0; a.z = -5; b.z = 5; b.protectedUntil = 0; }
+      if (mode === 'wall') { a.x = b.x = -40; a.z = -42; b.z = -32; b.protectedUntil = 0; }
       if (mode === 'team') { b.team = a.team; b.protectedUntil = 0; }
       fire(state, a.id, 20); expect(b.hp).toBe(100); expect(state.scores.red).toBe(0);
     }
@@ -62,19 +62,19 @@ describe('paper arena authoritative simulation', () => {
   it('enforces magazine/fire cadence and reload duration instead of input frequency', () => {
     const { state, a } = duel();
     for (let i = 0; i < 100; i++) acceptPaperArenaInput(state, a.id, input({ seq: i, fire: true }));
-    stepPaperArena(state); expect(a.ammo).toBe(24); // fresh spawn cooldown
+    stepPaperArena(state); expect(a.ammo).toBe(30); // fresh spawn cooldown
     for (let i = 0; i < 5; i++) { acceptPaperArenaInput(state, a.id, input({ seq: 100 + i, fire: true })); stepPaperArena(state); }
-    expect(a.ammo).toBe(23);
+    expect(a.ammo).toBe(27); // 95ms rifle: authoritative ticks at 100/200/300ms
     acceptPaperArenaInput(state, a.id, input({ seq: 110, reload: true })); stepPaperArena(state);
     const until = a.reloadingUntil; while (state.elapsedMs + 50 < until) stepPaperArena(state);
-    expect(a.ammo).toBe(23); stepPaperArena(state); expect(a.ammo).toBe(24);
+    expect(a.ammo).toBe(27); stepPaperArena(state); expect(a.ammo).toBe(30); expect(a.reserve).toBe(147);
   });
   it.each([1, 7, 21])('AI navigates and reaches a legitimate victory for deterministic seed %i', seed => {
     const a = createPaperArenaEngine(8, 20, seed), b = createPaperArenaEngine(8, 20, seed);
     while (!a.winner) stepPaperArena(a);
     for (let tick = 0; tick < a.tick; tick++) stepPaperArena(b);
     expect(a).toEqual(b); expect(Math.max(a.scores.red, a.scores.blue)).toBe(20); expect(a.elapsedMs).toBeLessThan(120_000);
-    expect(a.players.every(p => paperArenaWalkable(p.x, p.z))).toBe(true);
+    expect(a.players.every(p => paperArenaWalkable(p.x, p.z, .38, p.y, p.grounded))).toBe(true);
   });
   it.each([[0, 0, 'draw'], [3, 2, 'red'], [4, 5, 'blue']] as const)('settles the wall-clock deadline from existing scores %i:%i', (red, blue, winner) => {
     const state = createPaperArenaEngine(4, 100, 7); state.scores = { red, blue }; const rng = state.rng;

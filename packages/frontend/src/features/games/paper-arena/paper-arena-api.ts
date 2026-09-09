@@ -10,7 +10,7 @@ export const paperArenaApi={
   start:(roomId:string):Promise<PaperArenaRoomView>=>communityHttp.post(`${ROOT}/rooms/${encodeURIComponent(roomId)}/start`,{},{retryAfterRefresh:false}),
   leave:(roomId:string):Promise<unknown>=>communityHttp.post(`${ROOT}/rooms/${encodeURIComponent(roomId)}/leave`,{},{retryAfterRefresh:false}),
   team:(roomId:string,team:PaperTeam):Promise<PaperArenaRoomView>=>communityHttp.post(`${ROOT}/rooms/${encodeURIComponent(roomId)}/team`,{team},{retryAfterRefresh:false}),
-  ticket:(roomId:string,signal?:AbortSignal):Promise<{ticket:string;expiresAt:string;wsPath:string}>=>communityHttp.post(`${ROOT}/rooms/${encodeURIComponent(roomId)}/ticket`,{},{retryAfterRefresh:false,signal}),
+  ticket:(roomId:string,signal?:AbortSignal):Promise<{ticket:string;expiresAt:number;wsPath:string;protocolVersion:number;mapVersion:string}>=>communityHttp.post(`${ROOT}/rooms/${encodeURIComponent(roomId)}/ticket`,{},{retryAfterRefresh:false,signal}),
 };
 export function paperArenaSocketUrl(path:string):string{
   if(path!=='/ws/paper-arena')throw new Error('Unexpected room socket path');
