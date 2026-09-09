@@ -15,7 +15,8 @@ import {
   triggerFocusPulse, upgradeTowerDefenseHero, upgradeTowerDefensePlant,
   type TowerDefenseDirection, type TowerDefenseState, type TowerEnemyArchetype, type TowerType, type WorkstationCommand, WORKSTATION_SYNERGIES, WORKSTATION_JOBS,
 } from './tower-defense-logic';
-import { OfficeHeroArt, OfficePlantArt, OfficeTowerArt } from './OfficeTowerArt';
+import { OfficeHeroArt, OfficePlantArt, OfficeTowerArt, type OfficeHeroPose } from './OfficeTowerArt';
+import {RollingNumber,coinFlight} from './TowerVisualFeedback';
 import styles from './WorkstationTowerDefensePage.module.css';
 
 // Restock/evolution challenge scores are not comparable with V1–V3. Keep all untouched.
@@ -89,18 +90,28 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
   const [covered, setCovered] = useState(false);
   const [breachNotice, setBreachNotice] = useState<{ serial: number; count: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
+  const plantRef=useRef<HTMLElement>(null);
   const previousGame = useRef(game);
   const previousVisual = useRef(game);
-  const [coinBurst,setCoinBurst] = useState<{amount:number;serial:number}|null>(null);
+  const [coinBurst,setCoinBurst] = useState<{amount:number;serial:number;style:Record<string,string>}|null>(null);
   const [evolutionBanner,setEvolutionBanner] = useState(0);
+  const [evolutionSerial,setEvolutionSerial]=useState(0);
+  const [refreshFlash,setRefreshFlash]=useState(0),[plantFlash,setPlantFlash]=useState(0);
   useEffect(()=>{
     const before=previousVisual.current;
-    if(game.credits>before.credits)setCoinBurst({amount:game.credits-before.credits,serial:game.tick+game.credits});
-    const maxTier=(state:TowerDefenseState)=>Math.max(0,...state.towers.map(t=>t.level),...state.inventory.map(t=>t.tier));
-    if(maxTier(game)>maxTier(before)&&maxTier(game)>=2)setEvolutionBanner(maxTier(game));
+    if(game.credits>before.credits&&game.defeated>before.defeated){
+      const removed=before.enemies.find(enemy=>!game.enemies.some(next=>next.id===enemy.id)&&enemy.pathIndex<TOWER_DEFENSE_PATH.length-1);
+      const point=removed?TOWER_DEFENSE_PATH[removed.pathIndex]:null,board=boardRef.current?.getBoundingClientRect(),plant=plantRef.current?.querySelector('svg')?.getBoundingClientRect();
+      if(point&&board&&plant)setCoinBurst({amount:removed?.reward??game.credits-before.credits,serial:game.tick+game.credits,style:coinFlight({x:board.left+(point.x+.5)/TOWER_DEFENSE_WIDTH*board.width,y:board.top+(point.y+.5)/TOWER_DEFENSE_HEIGHT*board.height},{x:plant.left+plant.width/2,y:plant.top+plant.height/2})});
+    }
+    const mergedTiers=[...game.towers.filter(t=>before.towers.some(old=>old.id===t.id&&old.level<t.level)).map(t=>t.level),...game.inventory.filter(item=>item.tier>=2&&!before.inventory.some(old=>old.id===item.id&&old.tier===item.tier)).map(item=>item.tier)];
+    if(mergedTiers.length){setEvolutionBanner(Math.max(...mergedTiers));setEvolutionSerial(value=>value+1);}
+    if(game.nextOfferId>before.nextOfferId)setRefreshFlash(game.nextOfferId);
+    if(game.plantLevel>before.plantLevel)setPlantFlash(value=>value+1);
     previousVisual.current=game;
   },[game]);
-  useEffect(()=>{if(!evolutionBanner)return undefined;const timer=window.setTimeout(()=>setEvolutionBanner(0),1200);return()=>window.clearTimeout(timer);},[evolutionBanner]);
+  useEffect(()=>{if(!evolutionBanner)return undefined;const timer=window.setTimeout(()=>setEvolutionBanner(0),1200);return()=>window.clearTimeout(timer);},[evolutionBanner,evolutionSerial]);
+  useEffect(()=>{if(!refreshFlash)return undefined;const timer=window.setTimeout(()=>setRefreshFlash(0),3000);return()=>window.clearTimeout(timer);},[refreshFlash]);
 
   const name = character?.displayName?.trim() || '游客同事';
   const avatarMark = character?.avatarMark?.trim() || '守';
@@ -237,6 +248,8 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
   const intervalSeconds = TOWER_PLANT_INCOME_INTERVAL * TOWER_DEFENSE_TICK_MS / 1000;
   const secondsUntilIncome = Math.max(0, Math.ceil((TOWER_PLANT_INCOME_INTERVAL - game.plantIncomeTick) * TOWER_DEFENSE_TICK_MS / 1000));
   const activeEnemies = game.enemies.filter((enemy) => enemy.hp > 0);
+  const resting=game.status==='running'&&game.tick%36<12&&!activeEnemies.some(enemy=>{const point=TOWER_DEFENSE_PATH[enemy.pathIndex];return point&&Math.abs(point.x-game.hero.x)+Math.abs(point.y-game.hero.y)<=game.hero.range;});
+  const heroPose:OfficeHeroPose=resting?(['snack','phone','glasses'] as const)[Math.floor(game.tick/36)%3]!:'ready';
   const activeBoss = activeEnemies.find((enemy) => enemy.boss);
   const preparingFinalRound = game.status === 'intermission' || (game.status === 'paused' && game.resumeStatus === 'intermission');
   const roundSummary = getTowerRoundSummary(preparingFinalRound ? 2 : game.wave);
@@ -271,9 +284,9 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
       <section className={styles.battlePanel} aria-label="工位塔防战场">
         <div className={styles.statusBar} aria-label="当前战局">
           <div><span>核心耐久</span><strong aria-label="核心耐久">{game.coreHp}<small> / {TOWER_DEFENSE_CORE_HP}</small></strong><i style={{ '--value': `${game.coreHp / TOWER_DEFENSE_CORE_HP * 100}%` } as React.CSSProperties} /></div>
-          <div><span>局内金币</span><strong key={game.credits} className={`${styles.gold} ${styles.countRoll}`} aria-label="局内金币">{game.credits}<small> G</small></strong><small>不消耗账号办公币</small></div>
+          <div><span>局内金币</span><strong className={styles.gold} aria-label="局内金币"><RollingNumber value={game.credits}/><small> G</small></strong><small>不消耗账号办公币</small></div>
           <div><span>当前回合</span><strong aria-label="当前回合">{game.wave}<small> / {game.campaign?.totalWaves ?? TOWER_DEFENSE_WAVES}</small></strong><small>{WAVE_NAMES[game.wave - 1]}</small></div>
-          <div><span>本局得分</span><strong key={game.score} className={styles.countRoll} aria-label="本局得分">{game.score}</strong><small>已清理 {game.defeated} 项工作</small></div>
+          <div><span>本局得分</span><strong aria-label="本局得分"><RollingNumber value={game.score}/></strong><small>已清理 {game.defeated} 项工作</small></div>
         </div>
         <ol className={styles.roundProgress} aria-label="两回合进度">
           <li data-complete={game.wave > 1 || preparingFinalRound || game.status === 'won'} aria-current={game.wave === 1 && !preparingFinalRound ? 'step' : undefined}><b>01</b><span><strong>经营回合</strong><small>种绿植 · 凑零件 · 布阵</small></span><i>{game.wave > 1 || preparingFinalRound || game.status === 'won' ? '已守住' : '低压'}</i></li>
@@ -282,9 +295,9 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
         {preparingFinalRound ? <section className={styles.roundWarning} aria-labelledby="round-warning-title"><span aria-hidden="true">!</span><div><h2 id="round-warning-title">第二回合突袭预警</h2><p>经营回合奖励 {TOWER_INTERMISSION_CREDIT_BONUS} 金币已到账；间歇不持续产币。先整理阵容，再主动迎战。打印机清理群怪，咖啡机拖慢快敌；用定向订货补齐零件，守卫留在漏怪附近。</p>{roundSummary ? <small>相比第一回合：工作数量 ×{roundSummary.countMultiplier} · 总生命 ×{roundSummary.totalHpMultiplier}，还有混合敌群与护甲。</small> : null}</div></section> : null}
         {activeBoss ? <section className={styles.bossPanel} aria-label="小 Boss 战况"><div><strong>{activeBoss.name}</strong><span>小 Boss · {activeBoss.hp} / {activeBoss.maxHp}</span></div><progress aria-label="小 Boss 生命值" max={activeBoss.maxHp} value={Math.max(0, activeBoss.hp)} /><p>护甲 {activeBoss.armor} · 夹在混合敌群中进攻。碎纸机易伤配合主力输出，减速与群攻处理护卫。</p></section> : null}
         <div className={styles.deskEdge}><span><i /> {name}的办公桌</span><small>{guidance}</small></div>
-        <div className={styles.boardWrap}>
-          {coinBurst?<span className={styles.coinFly} key={coinBurst.serial} aria-hidden="true">+{coinBurst.amount} G</span>:null}
-          {evolutionBanner?<div className={styles.evolutionBanner} data-tier={evolutionBanner} aria-hidden="true">{evolutionBanner===3?'★★★ 满级进化！':'★★ 合成完成 · 选择塔位部署'}</div>:null}
+        <div className={styles.boardWrap} data-evolution-shake={evolutionBanner===3}>
+          {coinBurst?<span className={styles.coinFlight} key={coinBurst.serial} style={coinBurst.style as React.CSSProperties} data-coin-flight="kill-to-plant" aria-hidden="true">+{coinBurst.amount} G</span>:null}
+          {evolutionBanner?<><div key={`beam-${evolutionSerial}`} className={styles.evolutionBeam} data-tier={evolutionBanner} aria-hidden="true"/><div key={`banner-${evolutionSerial}`} className={styles.evolutionBanner} data-tier={evolutionBanner} aria-hidden="true">{evolutionBanner===3?'★★★ 满级进化！':'★★ 合成完成 · 选择塔位部署'}</div>{evolutionBanner===2?<span className={styles.placementBubble} aria-hidden="true">↓ 选择工位放置</span>:null}</>:null}
           {session&&game.campaign&&(game.campaign.countdown>0)?<div className={styles.countdown} role="status"><strong>{Math.min(5,Math.ceil(game.campaign.countdown*.28))}</strong><span>下一波准备</span><button type="button" onClick={()=>session.onCommand({type:'go'})}>GO · 跳过等待</button></div>:null}
           {game.campaign?.bag?<span className={styles.flyingBag} style={{left:`${game.campaign.bag.x/12*100}%`,top:`${game.campaign.bag.y/8*100}%`}} title="移动守卫靠近收取福袋">▱ +{game.campaign.bag.coins}</span>:null}
           <div className={styles.board} ref={boardRef} tabIndex={0} role="group" aria-label={`工位塔防地图，第 ${game.wave} 回合，核心耐久 ${game.coreHp}，${activeEnemies.length} 个目标，角色 ${game.hero.level} 级`}>
@@ -303,7 +316,7 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
                 </button> : null}
                 {enemies.slice(0, 2).map((enemy, index) => <span key={enemy.id} className={`${styles.enemy} ${enemy.boss ? styles.boss : ''}`} data-archetype={enemy.archetype} data-stack={index} data-hit={game.effects.some((effect) => effect.targetEnemyIds.includes(enemy.id))} data-controlled={(enemy.freezeTicks ?? 0) + (enemy.rootTicks ?? 0) + (enemy.stunTicks ?? 0) > 0} data-armor-broken={(enemy.armorBreakTicks ?? 0) > 0} title={`${enemy.name} · ${enemy.hp}/${enemy.maxHp}${enemy.armor > 0 ? ` · 护甲 ${enemy.armor}` : ''}${(enemy.armorBreakTicks ?? 0) > 0 ? ` · 破甲 ${enemy.armorBreakPoints}` : ''}${(enemy.freezeTicks ?? 0) > 0 ? ' · 冰冻' : (enemy.rootTicks ?? 0) > 0 ? ' · 定身' : (enemy.stunTicks ?? 0) > 0 ? ' · 眩晕' : ''}`}><i className={styles.enemyPaper}><b>{ENEMY_BRIEF[enemy.archetype]?.mark ?? '!'}</b></i><small style={{ '--value': `${Math.max(0, enemy.hp) / enemy.maxHp * 100}%` } as React.CSSProperties} /></span>)}
                 {enemies.length > 2 ? <b className={styles.enemyCount}>+{enemies.length - 2}</b> : null}
-                {isHero ? <span className={styles.hero} data-avatar={character?.avatarKey || 'guest'} data-pulsing={game.hero.lastPulseTick === game.tick} data-direction={game.hero.direction} data-hurt={game.hero.hurtTick === game.tick} data-idle={Math.floor(game.tick / 36) % 3}><OfficeHeroArt mark={avatarMark} /><b>YOU</b>{game.hero.hurtTick===game.tick?<small className={styles.guardHurt}>哎哟 −{game.hero.hurtAmount??1}</small>:game.tick>0&&game.tick%36<5?<small className={styles.guardIdle}>{["🍪 吃零食","▯ 看手机","⌐ 推眼镜"][Math.floor(game.tick/36)%3]}</small>:null}</span> : null}
+                {isHero ? <span className={styles.hero} data-avatar={character?.avatarKey || 'guest'} data-pulsing={game.hero.lastPulseTick === game.tick} data-direction={game.hero.direction} data-hurt={game.hero.hurtTick === game.tick}><OfficeHeroArt mark={avatarMark} pose={heroPose}/><b>YOU</b>{game.hero.hurtTick===game.tick?<small className={styles.guardHurt}>哎哟 −{game.hero.hurtAmount??1}</small>:heroPose!=='ready'?<small className={styles.guardIdle}>{{snack:'吃零食',phone:'看手机',glasses:'推眼镜'}[heroPose]}</small>:null}</span> : null}
               </span>;
             })}
             <svg className={styles.battleEffects} viewBox={`0 0 ${TOWER_DEFENSE_WIDTH * 64} ${TOWER_DEFENSE_HEIGHT * 64}`} aria-hidden="true" focusable="false">
@@ -336,11 +349,11 @@ export function WorkstationTowerDefensePage({ character, session }: WorkstationT
         </section>
       </section>
       <aside className={styles.workbench} aria-label="合成工作台">
-        <section className={styles.plantCard} data-hurt={game.campaign?.plantHurtTick === game.tick} data-planted={game.plantLevel > 0} aria-labelledby="plant-title"><OfficePlantArt /><div><span className={styles.eyebrow}>你的第一份被动收入</span><h2 id="plant-title">办公桌绿植 <small>Lv.{game.plantLevel}</small></h2><p aria-label="绿植产币">{game.plantLevel > 0 ? `每 ${Number(intervalSeconds.toFixed(1))} 秒 +${plantIncomePerPayout(game.plantLevel)} G` : '买一盆绿植，战斗时持续产金币'}</p><small>{game.plantLevel === 0 ? '不占塔位，只影响本局' : game.status === 'running' ? `约 ${secondsUntilIncome} 秒后产币` : '等待战斗开始后产币'}</small></div><button type="button" className={styles.plantButton} aria-label={game.plantLevel === 0 ? '购买办公桌绿植' : '升级办公桌绿植'} disabled={!editable || game.plantLevel >= TOWER_PLANT_MAX_LEVEL || game.credits < plantUpgradeCost(game.plantLevel)} onClick={() => runAction(upgradeTowerDefensePlant, { type: 'plant' })}>{game.plantLevel >= TOWER_PLANT_MAX_LEVEL ? '绿植已满级' : `${game.plantLevel === 0 ? '种下' : '升级'} · ${plantUpgradeCost(game.plantLevel)} G`}</button></section>
+        <section ref={plantRef} className={styles.plantCard} data-hurt={game.campaign?.plantHurtTick === game.tick} data-planted={game.plantLevel > 0} aria-labelledby="plant-title"><OfficePlantArt key={plantFlash}/><div><span className={styles.eyebrow}>你的第一份被动收入</span>{game.campaign?.plantHurtTick===game.tick?<em className={styles.plantBroken}>破防！</em>:null}<h2 id="plant-title">办公桌绿植 <small>Lv.{game.plantLevel}</small></h2><p aria-label="绿植产币">{game.plantLevel > 0 ? `每 ${Number(intervalSeconds.toFixed(1))} 秒 +${plantIncomePerPayout(game.plantLevel)} G` : '买一盆绿植，战斗时持续产金币'}</p><small>{game.plantLevel === 0 ? '不占塔位，只影响本局' : game.status === 'running' ? `约 ${secondsUntilIncome} 秒后产币` : '等待战斗开始后产币'}</small></div><button type="button" className={styles.plantButton} aria-label={game.plantLevel === 0 ? '购买办公桌绿植' : '升级办公桌绿植'} disabled={!editable || game.plantLevel >= TOWER_PLANT_MAX_LEVEL || game.credits < plantUpgradeCost(game.plantLevel)} onClick={() => runAction(upgradeTowerDefensePlant, { type: 'plant' })}>{game.plantLevel >= TOWER_PLANT_MAX_LEVEL ? '绿植已满级' : `${game.plantLevel === 0 ? '种下' : '升级'} · ${plantUpgradeCost(game.plantLevel)} G`}</button></section>
         {session&&game.campaign&&game.plantLevel>0?<div className={styles.plantDurability}><span>绿植耐久 {game.campaign.plantHp??(6+game.plantLevel*3)}/{6+game.plantLevel*3} · 耐久归零暂停产币</span><button type="button" disabled={!editable||game.credits<10||(game.campaign.plantHp??99)>=6+game.plantLevel*3} onClick={()=>session.onCommand({type:"repair-plant"})}>养护 · 10 G</button></div>:null}
         <section className={styles.workCard} aria-labelledby="shop-title">
           <p className={styles.shopBalance} aria-label="商店可用局内金币"><span>本局可用金币</span><strong>{game.credits} <small>G</small></strong><small>仅本局使用</small></p>
-          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>SUPPLY ROOM</span><h2 id="shop-title">零件补给站</h2></div><button type="button" className={styles.refreshButton} aria-label={`刷新零件商店，${TOWER_SHOP_REFRESH_COST} 金币`} disabled={!editable || game.credits < TOWER_SHOP_REFRESH_COST} onClick={() => runAction(refreshTowerDefenseShop, { type: 'refresh' })}>↻ 刷新 <b>{TOWER_SHOP_REFRESH_COST} G</b></button></div><p className={styles.sectionHint}>四格随机补给 + 一格定向订货。买后原格售罄，花 {TOWER_SHOP_REFRESH_COST} G 刷新才补货。</p>
+          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>SUPPLY ROOM</span><h2 id="shop-title">零件补给站</h2></div><button type="button" key={refreshFlash} className={styles.refreshButton} data-refreshing={refreshFlash>0} aria-label={`刷新零件商店，${TOWER_SHOP_REFRESH_COST} 金币`} disabled={!editable || game.credits < TOWER_SHOP_REFRESH_COST} onClick={() => runAction(refreshTowerDefenseShop, { type: 'refresh' })}>↻ 刷新 <b>{TOWER_SHOP_REFRESH_COST} G</b></button></div><p className={styles.sectionHint}>四格随机补给 + 一格定向订货。买后原格售罄，花 {TOWER_SHOP_REFRESH_COST} G 刷新才补货。</p>
           <div className={styles.focusOrder}><div><label htmlFor="tower-order-type">定向订货塔型</label><span>选择免费 · 售罄后只预约下次刷新 · 单件含定向溢价</span></div><select id="tower-order-type" value={game.shopFocus} disabled={!editable} onChange={(event) => runAction((state) => setTowerShopFocus(state, event.target.value as TowerType), { type: 'focus', towerType: event.target.value as TowerType })}>{Object.values(TOWER_DEFINITIONS).map((tower) => <option key={tower.type} value={tower.type}>{tower.name} · {focusedTowerPartCost(tower.type)} G</option>)}</select></div>
           <div className={styles.shopGrid} aria-label="五格零件商店">{game.shop.map((offer, index) => <button type="button" key={offer.id} className={styles.shopOffer} data-type={offer.type} data-focused={offer.source === 'focused'} data-sold-out={Boolean(offer.soldOut)} data-rarity={offer.rarity ?? 'R'} aria-label={offer.soldOut ? `第 ${index + 1} 格已售罄，刷新后补货` : `购买第 ${index + 1} 格${TOWER_DEFINITIONS[offer.type].name}零件，${offer.cost} 金币${offer.source === 'focused' ? '，定向订货' : ''}`} disabled={!editable || Boolean(offer.soldOut) || game.credits < offer.cost} onClick={() => runAction((state) => buyTowerShopOffer(state, offer.id), { type: 'buy', offerId: offer.id })}><small>{offer.source === 'focused' ? '定向订货' : `${offer.rarity ?? 'R'} · 1 阶零件`}</small><OfficeTowerArt kind={offer.type} tier={1} /><strong>{offer.soldOut ? '已售罄' : TOWER_DEFINITIONS[offer.type].name}</strong><span>{offer.soldOut ? '待刷新' : <>{offer.cost} <small>G</small></>}</span></button>)}</div>
           <div className={styles.mergeRecipe} aria-label="合成规则"><span>同名 1 阶 ×3</span><b>→</b><strong>2 阶可部署</strong><b>→</b><span>同名 2 阶 ×3<br /><strong>3 阶满级</strong></span></div>

@@ -42,4 +42,8 @@ describe('account campaign interface',()=>{
     vi.mocked(workstationApi.leaderboard).mockResolvedValue({mode:'story',date:'2026-09-09',dailyChampionCoins:12,rules:'server',items:[{publicId:'person',displayName:'测试同事',score:1234,waves:2,streak:2,rank:1}]});
     render(<MemoryRouter><WorkstationLeaderboardPage/></MemoryRouter>);expect(await screen.findByText('测试同事')).toBeInTheDocument();expect(screen.getByText(/每日冠军 12 办公币/)).toBeInTheDocument();expect(workstationApi.leaderboard).toHaveBeenCalledWith('story',undefined,expect.any(AbortSignal));
   });
+  it('renders real report comparisons/formations and an explicit clipboard-unavailable fallback',async()=>{
+    const initial=snapshot();initial.profile.stats.bestScore=1000;initial.reports=[{id:'report',mode:'story',chapter:1,score:750,successfulWaves:2,stars:3,streak:2,coins:9,outcome:'won',settledAt:'2026-09-09T01:00:00Z',formation:[{type:'single',slotIndex:4,level:3}]}];vi.mocked(workstationApi.overview).mockResolvedValue(initial);const original=Object.getOwnPropertyDescriptor(navigator,'clipboard');Object.defineProperty(navigator,'clipboard',{configurable:true,value:undefined});
+    try{render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);expect(await screen.findByText('距个人最高还差 25%')).toBeInTheDocument();expect(screen.getByLabelText('与个人最高分对比')).toHaveAttribute('value','750');expect(screen.getByText(/5号位.*★★★/)).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'复制分享战报'}));expect(await screen.findByText('当前浏览器不支持剪贴板，可直接截图这张战报卡片。')).toBeInTheDocument();}finally{if(original)Object.defineProperty(navigator,'clipboard',original);else delete (navigator as unknown as Record<string,unknown>).clipboard;}
+  });
 });

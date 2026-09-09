@@ -75,11 +75,13 @@ export function OfficePlantArt({ className }: { className?: string }): JSX.Eleme
   </svg>;
 }
 
-export function OfficeHeroArt({ className, mark }: { className?: string; mark: string }): JSX.Element {
-  return <svg className={className} viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false">
+export type OfficeHeroPose='ready'|'snack'|'phone'|'glasses';
+export function OfficeHeroArt({ className, mark,pose='ready' }: { className?: string; mark: string;pose?:OfficeHeroPose }): JSX.Element {
+  return <svg className={className} viewBox="0 0 64 64" fill="none" aria-hidden="true" focusable="false" data-hero-pose={pose}>
     <ellipse cx="32" cy="58" rx="19" ry="4" fill="#244541" opacity=".2" /><path d="M22 47v10m20-10v10" stroke="#344e50" strokeWidth="8" strokeLinecap="round" />
     <path d="M17 46v-9c0-8 6-12 15-12s15 4 15 12v9H17Z" fill="#5b9c9a" stroke="#376563" strokeWidth="2" /><path d="m27 27 5 6 5-6" fill="#fff4de" /><path d="m31 33-2 11 3 3 3-3-2-11" fill="#dcab65" />
     <rect x="22" y="7" width="22" height="22" rx="10" fill="#f3c9a2" /><path d="M20 15C19 0 49 0 45 19l-5-8-17 7-3-3Z" fill="#344c4b" /><circle cx="28" cy="20" r="1.5" fill="#344c4b" /><circle cx="37" cy="20" r="1.5" fill="#344c4b" />
-    <path d="m17 35-5 10m35-10 5 10" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round" /><rect x="43" y="35" width="14" height="18" rx="3" fill="#f9f0da" stroke="#b99761" strokeWidth="2" /><text x="50" y="48" textAnchor="middle" fontSize="10" fontWeight="800" fill="#7a633d">{Array.from(mark)[0] ?? '守'}</text>
+    <path d="m17 35-5 10" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round" />
+    {pose==='snack'?<g data-hero-hand="snack"><path d="m47 35-9-6-3-4" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round"/><circle cx="34" cy="26" r="5" fill="#d8a860" stroke="#a47540"/><path d="m31 25 1 1m4 1 1 1m-3-5 1 1" stroke="#815938" strokeWidth="2"/><circle data-crumb="true" cx="28" cy="30" r="1" fill="#c3944c"/></g>:pose==='phone'?<g data-hero-hand="phone"><path d="m47 35-8 8-8-4" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round"/><rect x="24" y="29" width="13" height="19" rx="2" fill="#3b555e"/><rect x="26" y="32" width="9" height="12" rx="1" fill="#a5d8cd"/><path d="M28 36h5m-5 3h3" stroke="#fff"/><circle cx="30.5" cy="46" r=".8" fill="#d7e8e2"/></g>:pose==='glasses'?<><g data-hero-hand="glasses"><path d="m47 35 3-8-8-7" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round"/></g><g data-glasses="true" stroke="#4a626b" strokeWidth="1.5"><rect x="23" y="17" width="9" height="7" rx="2"/><rect x="34" y="17" width="9" height="7" rx="2"/><path d="M32 20h2"/></g></>:<><path d="m47 35 5 10" stroke="#f3c9a2" strokeWidth="6" strokeLinecap="round" /><rect x="43" y="35" width="14" height="18" rx="3" fill="#f9f0da" stroke="#b99761" strokeWidth="2" /><text x="50" y="48" textAnchor="middle" fontSize="10" fontWeight="800" fill="#7a633d">{Array.from(mark)[0] ?? '守'}</text></>}
   </svg>;
 }

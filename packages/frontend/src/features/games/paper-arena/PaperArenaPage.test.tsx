@@ -16,6 +16,7 @@ describe('paper arena lobby and discreet room UI',()=>{
   it('offers every 4–8 capacity, 20–100 target and optional password without invitation codes',async()=>{
     render(<MemoryRouter><PaperArenaPage/></MemoryRouter>);expect(await screen.findByRole('heading',{name:'新建一份演练'})).toBeInTheDocument();
     for(const count of [4,5,6,7,8])expect(screen.getByRole('option',{name:`${count} 人`})).toBeInTheDocument();
+    expect(screen.getByLabelText('房间名称')).toHaveAttribute('maxLength','32');
     expect(screen.getByLabelText('获胜击败数')).toHaveAttribute('min','20');expect(screen.getByLabelText('获胜击败数')).toHaveAttribute('max','100');expect(screen.getByLabelText('房间密码（可留空）')).toHaveAttribute('type','password');
     expect(screen.getByText(/暂不发放办公币/)).toBeInTheDocument();expect(screen.getByRole('link',{name:'返回单机'})).toHaveAttribute('href','/games/ballpoint-breach');
   });
