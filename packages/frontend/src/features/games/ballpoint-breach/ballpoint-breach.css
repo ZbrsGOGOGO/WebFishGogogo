@@ -1,0 +1,40 @@
+/* WebFish small-window UI; adapted from Ballpoint Breach's Apache-2.0 notebook aesthetic.
+ * Every selector is scoped; no body rules, remote fonts, fullscreen or viewport-sized HUD. */
+.ballpointSurface{--bp-ink:#455365;--bp-paper:#f5f3e9;--value:100%;--reticle-spread:18px;position:relative;isolation:isolate;width:100%;height:100%;min-height:220px;overflow:hidden;container-type:size;color:var(--bp-ink);background:var(--bp-paper);font:12px/1.45 system-ui,sans-serif;user-select:none}
+.ballpointSurface *{box-sizing:border-box}
+.ballpointSurface canvas{display:block;width:100%;height:100%;outline:none;filter:saturate(.48)}
+.ballpointSurface button{border:1px solid #7d8995;border-radius:5px;background:#f9f9f5;color:#384657;padding:6px 12px;cursor:pointer;font:inherit}
+.ballpointSurface button:hover{background:#e8ecec}
+.ballpointSurface button:focus-visible{outline:2px solid #627da0;outline-offset:2px}
+.ballpointSurface button[hidden]{display:none}
+.ballpointSurface [data-bp="paper-lines"],.ballpointSurface [data-bp="vignette"],.ballpointSurface [data-bp="hud"],.ballpointSurface [data-bp="game-overlay"]{position:absolute;inset:0}
+.ballpointSurface [data-bp="paper-lines"],.ballpointSurface [data-bp="vignette"],.ballpointSurface [data-bp="hud"]{pointer-events:none}
+.ballpointSurface [data-bp="paper-lines"]{z-index:2;opacity:.35;background:linear-gradient(90deg,transparent 35px,#b789893b 36px,transparent 37px),repeating-linear-gradient(0deg,transparent 0 27px,#8398b82a 28px,transparent 29px)}
+.ballpointSurface [data-bp="vignette"]{z-index:3;box-shadow:inset 0 0 15px #32384c1a}
+.ballpointSurface.player-hit [data-bp="vignette"]{box-shadow:inset 0 0 32px #af66666b}
+.ballpointSurface [data-bp="hud"]{z-index:4;text-shadow:0 1px 2px var(--bp-paper)}
+.ballpointSurface .bp-score{position:absolute;top:12px;left:12px}
+.ballpointSurface .bp-wave{position:absolute;right:12px;top:12px;text-align:right}
+.ballpointSurface .bp-wave small{display:block;font-size:10px}
+.ballpointSurface .bp-health{position:absolute;left:12px;bottom:55px;display:flex;gap:6px;align-items:center;font-size:10px}
+.ballpointSurface .bp-health i,.ballpointSurface .bp-ability i,.ballpointSurface [data-bp="boss-health"] i{display:block;position:relative;width:75px;height:6px;border:1px solid #78828e;background:#f5f3e9c9;overflow:hidden}
+.ballpointSurface .bp-health i::after,.ballpointSurface .bp-ability i::after,.ballpointSurface [data-bp="boss-health"] i::after{content:"";display:block;width:var(--value,100%);height:100%;background:#687d8d}
+.ballpointSurface .bp-ammo{position:absolute;left:12px;bottom:19px}.ballpointSurface .bp-ammo strong{font-size:24px}.ballpointSurface .bp-ammo span{font-size:12px}
+.ballpointSurface .bp-weapons{position:absolute;right:12px;bottom:23px;text-align:right;max-width:125px}.ballpointSurface .bp-weapons>strong{font-size:14px}.ballpointSurface .bp-weapons>small{display:none}.ballpointSurface .bp-weapons ol{margin:0 0 4px;padding-left:20px;font-size:9px}.ballpointSurface .bp-weapons li{opacity:.38}.ballpointSurface .bp-weapons li.selected{opacity:1}.ballpointSurface .bp-weapons em{font-style:normal;margin-left:8px}
+.ballpointSurface .bp-ability{position:absolute;left:50%;bottom:23px;transform:translateX(-50%);font-size:9px;text-align:center}.ballpointSurface .bp-ability i{width:72px}
+.ballpointSurface [data-bp="block-stamina"]{bottom:45px;opacity:0}.ballpointSurface [data-bp="block-stamina"].visible{opacity:1}
+.ballpointSurface [data-bp="context-tip"]{position:absolute;left:20%;right:20%;bottom:58px;font-size:10px;text-align:center;opacity:0}.ballpointSurface [data-bp="context-tip"].visible{opacity:1}
+.ballpointSurface [data-bp="wave-banner"]{position:absolute;top:22%;left:20%;right:20%;text-align:center;opacity:0}.ballpointSurface [data-bp="wave-banner"].visible{opacity:1}.ballpointSurface [data-bp="wave-banner"] strong{display:block;font-size:23px}.ballpointSurface [data-bp="wave-banner"] span{font-size:9px}
+.ballpointSurface [data-bp="boss-health"]{position:absolute;left:35%;right:35%;top:10px;opacity:0;text-align:center;font-size:9px}.ballpointSurface [data-bp="boss-health"].visible{opacity:1}.ballpointSurface [data-bp="boss-health"] i{width:100%;margin-top:4px}
+.ballpointSurface .bp-crosshair,.ballpointSurface [data-bp="hit-marker"],.ballpointSurface [data-bp="damage-indicator"]{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+.ballpointSurface .bp-crosshair{width:16px;height:16px;border:1px dashed #68718a;border-radius:50%}.ballpointSurface .bp-crosshair::after{content:"";position:absolute;left:6px;top:6px;width:2px;height:2px;background:#916578}.ballpointSurface.scoped .bp-crosshair{opacity:0}
+.ballpointSurface [data-bp="hit-marker"]{font-size:26px;color:#946176;opacity:0}.ballpointSurface [data-bp="hit-marker"].visible{opacity:1}
+.ballpointSurface [data-bp="damage-indicator"]{width:260px;height:260px;opacity:0;scale:.65}.ballpointSurface [data-bp="damage-indicator"].visible{opacity:1}.ballpointSurface [data-bp="damage-indicator"] i{position:absolute;border-left:7px solid transparent;border-right:7px solid transparent;border-top:12px solid #a67777}
+.ballpointSurface [data-bp="scope-overlay"]{position:absolute;inset:0;opacity:0;background:radial-gradient(circle,transparent 0 85px,#f5f3e9eb 88px)}.ballpointSurface [data-bp="scope-overlay"].visible{opacity:1}.ballpointSurface .bp-scope-reticle{position:absolute;width:172px;height:172px;left:50%;top:50%;transform:translate(-50%,-50%);border:1px solid #586578;border-radius:50%}.ballpointSurface .bp-scope-reticle::before,.ballpointSurface .bp-scope-reticle::after{content:"";position:absolute;background:#647486}.ballpointSurface .bp-scope-reticle::before{left:50%;height:100%;width:1px}.ballpointSurface .bp-scope-reticle::after{top:50%;height:1px;width:100%}
+.ballpointSurface [data-bp="game-overlay"]{z-index:6;display:none;place-items:center;background:#f5f3e9de;overflow:auto;padding:12px}.ballpointSurface [data-bp="game-overlay"].visible{display:grid}.ballpointSurface .bp-overlay-card{max-width:380px;text-align:center;padding:12px}.ballpointSurface .bp-overlay-card h2{font-size:23px;font-weight:600;letter-spacing:3px;margin:4px 0 10px}.ballpointSurface .bp-overlay-card p{margin:7px 0 12px}.ballpointSurface .bp-eyebrow{font-size:9px;letter-spacing:1.3px;color:#80858a}.ballpointSurface .bp-overlay-card .bp-controls{font-size:10px;line-height:1.7;margin:13px 0 8px}.ballpointSurface .bp-overlay-card small{font-size:9px;color:#77808a}
+.ballpointSurface .bp-pause{position:absolute;z-index:5;top:8px;left:50%;transform:translateX(-50%);font-size:10px;padding:3px 8px;background:#f5f3e9bb}
+.ballpointSurface [data-bp="stage"]{position:absolute;z-index:5;bottom:4px;left:50%;transform:translateX(-50%);font-size:8px;white-space:nowrap;opacity:.6;pointer-events:none}
+.ballpointSurface .bp-fallback{position:absolute;z-index:8;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:22px;background:var(--bp-paper);font-size:12px}.ballpointSurface .bp-fallback h2{font-size:16px}.ballpointSurface .bp-fallback p{max-width:350px;margin:6px 0}
+@container (max-height:300px){.ballpointSurface .bp-weapons ol{display:none}.ballpointSurface .bp-overlay-card{padding:4px}.ballpointSurface .bp-overlay-card h2{font-size:19px;margin:3px 0}.ballpointSurface .bp-overlay-card p{margin:5px 0 8px}.ballpointSurface .bp-overlay-card .bp-controls{margin:7px 0 5px;font-size:9px}}
+@container (max-width:400px){.ballpointSurface .bp-weapons ol{display:none}.ballpointSurface .bp-weapons{max-width:95px}.ballpointSurface .bp-overlay-card h2{font-size:20px}.ballpointSurface .bp-ability{left:52%}.ballpointSurface [data-bp="context-tip"]{font-size:9px;left:18%;right:18%}}
+@media(prefers-reduced-motion:reduce){.ballpointSurface *{animation:none!important;transition:none!important}}

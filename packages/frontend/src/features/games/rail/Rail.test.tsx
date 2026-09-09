@@ -88,6 +88,21 @@ describe('rail workspace', () => {
     render(<RailGameSurface view={game({ phase: 'decision', viewerRole: 'spectator', me: null })} onAction={vi.fn()} />);
     expect(screen.getByText('旁观中 · 无手牌')).toBeInTheDocument(); expect(screen.queryByLabelText('自己的手牌')).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: '列车经过 A 轨' })).not.toBeInTheDocument();
   });
+  it('keeps long v2 card text intact in hand, track and target without submitting template metadata', async () => {
+    const longBuff = { ...buff, id: 'r2:p0:buff:1', templateId: 'rail-v2-buff-09', deckVersion: 'rail-deck-20260909-v2', title: '愿意把豪华邮轮送给你，只要你能放过Ta', description: '仅是附加的虚构辩论条件，不改变发牌、胜负规则、现实资产或账号办公币。' };
+    const longBad = { ...bad, title: '故意克扣饭菜还把餐费据为己有的食堂阿姨' };
+    const action = vi.fn().mockResolvedValue(true);
+    render(<RailGameSurface view={game({ phase: 'buff', tracks: { A: [{ id: 'long-target', card: longBad, ownerId: 'person1', track: 'A', automatic: false, buff: null }], B: [] }, me: { ...game().me!, hand: { good: [], bad: [], buff: [longBuff] }, availableActions: ['place_buff'] } })} onAction={action} />);
+    const card = screen.getByRole('button', { name: new RegExp(longBuff.title) });
+    expect(card.querySelector('strong')?.textContent).toBe(longBuff.title);
+    expect(card.querySelector('span')?.textContent).toBe(longBuff.description);
+    expect(screen.getByText(longBad.title, { selector: 'strong' })).toBeVisible();
+    expect(screen.getByRole('option', { name: new RegExp(longBad.title) })).toHaveTextContent(longBad.title);
+    fireEvent.click(card);
+    fireEvent.change(screen.getByLabelText('条件牌目标'), { target: { value: 'long-target' } });
+    fireEvent.click(screen.getByRole('button', { name: '追加这一条件' }));
+    await waitFor(() => expect(action).toHaveBeenCalledWith({ kind: 'place_buff', payload: { roundToken: 'round-token-1', cardId: 'r2:p0:buff:1', targetId: 'long-target' } }));
+  });
   it('requires a deliberate 1–10 rating and states that ratings do not pay coins', async () => {
     const action = vi.fn().mockResolvedValue(true); render(<RailGameSurface view={game({ phase: 'rating', me: { ...game().me!, availableActions: ['rate'] } })} onAction={action} />);
     expect(screen.getByRole('button', { name: '提交评分' })).toBeDisabled(); fireEvent.click(screen.getByRole('button', { name: '7' })); fireEvent.click(screen.getByRole('button', { name: '提交评分' }));
@@ -135,6 +150,41 @@ describe('rail workspace', () => {
     vi.mocked(communityRailApi.chat).mockResolvedValue({ latestSequence: 1, hasMore: false, items: [{ id: 'titled-message', sequence: 1, channel: 'player', author: { publicId: 'person2', displayName: '讨论同事', username: null, title: { key: 'farm_first', label: '工位园丁' } }, body: '完整保留的发言', status: 'visible', createdAt: '2026-09-08T00:00:00Z' }] });
     render(<RailRoomChat room={room()} />); expect(await screen.findByLabelText('佩戴称号：工位园丁')).toBeVisible(); expect(screen.getByText('完整保留的发言')).toBeVisible();
   });
+  it('queries the selected channel instead of losing quiet messages behind an active channel', async () => {
+    vi.mocked(communityRailApi.chat).mockImplementation(async (_id, query) => ({ latestSequence: 60, hasMore: false,
+      items: query && typeof query === 'object' && query.channel === 'spectator' ? [{ id: 'quiet5', sequence: 5, channel: 'spectator',
+        author: { publicId: 'person2', displayName: '安静观众', username: null }, body: '较早的观众看法', status: 'visible', createdAt: '2026-09-09T00:00:00Z' }] : [] }));
+    render(<RailRoomChat room={room()} />);
+    await waitFor(() => expect(communityRailApi.chat).toHaveBeenCalledWith('rail-room-1', { channel: 'player', limit: 50 }, expect.any(AbortSignal)));
+    fireEvent.click(screen.getByRole('tab', { name: '观众讨论' }));
+    expect(await screen.findByText('较早的观众看法')).toBeVisible();
+    expect(screen.getByText(/最近 200 条/)).toBeVisible();
+  });
+  it('expands and re-reads the whole visible channel so earlier withdrawals are not cached', async () => {
+    vi.useFakeTimers(); let withdrawn = false;
+    vi.mocked(communityRailApi.chat).mockImplementation(async (_id, query) => {
+      const expanded = typeof query === 'object' && query.limit === 100;
+      return { latestSequence: 61, hasMore: !expanded, items: expanded ? [{ id: 'old-message', sequence: 1, channel: 'player',
+        author: { publicId: 'person2', displayName: '同事', username: null }, body: withdrawn ? null : '很早的内容', status: withdrawn ? 'withdrawn' : 'visible', createdAt: '2026-09-09T00:00:00Z' }] : [] };
+    });
+    render(<RailRoomChat room={room()} />);
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole('button', { name: '查看本频道更早消息' }));
+    await act(async () => { await Promise.resolve(); }); expect(screen.getByText('很早的内容')).toBeVisible();
+    withdrawn = true; await act(async () => { await vi.advanceTimersByTimeAsync(1200); });
+    expect(screen.queryByText('很早的内容')).toBeNull(); expect(screen.getByText('这条消息已撤回')).toBeVisible();
+    expect(vi.mocked(communityRailApi.chat).mock.calls.at(-1)?.[1]).toEqual({ channel: 'player', limit: 100 });
+  });
+  it('ignores a late channel response and distinguishes loading or failed reads from empty history', async () => {
+    const late = deferred<Awaited<ReturnType<typeof communityRailApi.chat>>>();
+    vi.mocked(communityRailApi.chat).mockReturnValueOnce(late.promise).mockRejectedValue(new CommunityApiError(403, 'Forbidden'));
+    render(<RailRoomChat room={room()} />);
+    expect(screen.getByText('正在读取本频道消息…')).toBeVisible();
+    fireEvent.click(screen.getByRole('tab', { name: '观众讨论' }));
+    expect(await screen.findByText('暂时无法读取本频道消息。')).toBeVisible();
+    await act(async () => { late.resolve({ latestSequence: 1, hasMore: false, items: [{ id: 'late', sequence: 1, channel: 'player', author: { publicId: 'person2', displayName: '同事', username: null }, body: '迟来的旧频道内容', status: 'visible', createdAt: '2026-09-09T00:00:00Z' }] }); });
+    expect(screen.queryByText('迟来的旧频道内容')).toBeNull();
+  });
   it('keeps uncertain retries identical and serializes later actions with the new server sequence', async () => {
     const next = room({ version: 2, me: { ...room().me, nextSequence: 2 } }); const action = vi.spyOn(communityRailApi, 'action').mockRejectedValueOnce(new CommunityApiError(0, 'offline')).mockResolvedValueOnce(next).mockResolvedValue(room({ version: 3, me: { ...room().me, nextSequence: 3 } }));
     render(<Harness />); await screen.findByText('午间轨道讨论组'); fireEvent.click(screen.getByText('出善牌')); await screen.findByRole('alert'); fireEvent.click(screen.getByText('出恶牌')); expect(action).toHaveBeenCalledOnce(); fireEvent.click(screen.getByText('重试动作'));
@@ -150,7 +200,7 @@ describe('rail workspace', () => {
   it('rechecks the latest chat window so an unchanged-sequence withdrawal removes the body', async () => {
     vi.useFakeTimers(); const message = { id: 'm1', sequence: 1, channel: 'player' as const, author: { publicId: 'person2', displayName: '另一玩家', username: null }, body: '即将撤回的内容', status: 'visible' as const, createdAt: '2026-09-08T00:00:00Z' };
     vi.mocked(communityRailApi.chat).mockResolvedValueOnce({ items: [message], latestSequence: 1, hasMore: false }).mockResolvedValue({ items: [{ ...message, body: null, status: 'withdrawn' }], latestSequence: 1, hasMore: false }); render(<RailRoomChat room={room()} />);
-    await act(async () => { await Promise.resolve(); }); expect(screen.getByText(message.body)).toBeInTheDocument(); await act(async () => { await vi.advanceTimersByTimeAsync(1200); }); expect(screen.queryByText(message.body)).not.toBeInTheDocument(); expect(screen.getByText('这条消息已撤回')).toBeInTheDocument(); expect(vi.mocked(communityRailApi.chat).mock.calls[1][1]).toBeUndefined();
+    await act(async () => { await Promise.resolve(); }); expect(screen.getByText(message.body)).toBeInTheDocument(); await act(async () => { await vi.advanceTimersByTimeAsync(1200); }); expect(screen.queryByText(message.body)).not.toBeInTheDocument(); expect(screen.getByText('这条消息已撤回')).toBeInTheDocument(); expect(vi.mocked(communityRailApi.chat).mock.calls[1][1]).toEqual({ channel: 'player', limit: 50 });
   });
   it('does not resurrect a locally withdrawn message from an older tail response', async () => {
     vi.useFakeTimers();

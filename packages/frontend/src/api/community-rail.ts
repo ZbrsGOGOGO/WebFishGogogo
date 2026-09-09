@@ -1,10 +1,11 @@
-import type { RailActionInput, RailBotsInput, RailCatalog, RailChatMessage, RailChatPage, RailChatSendInput, RailCreateInput, RailJoinInput, RailLeaderboard, RailPersonalStats, RailRoomList, RailRoomView } from '@stealth-reader/shared';
+import type { RailActionInput, RailBotsInput, RailCatalog, RailChatChannel, RailChatMessage, RailChatPage, RailChatSendInput, RailCreateInput, RailJoinInput, RailLeaderboard, RailPersonalStats, RailRoomList, RailRoomView } from '@stealth-reader/shared';
 
 import { CommunityApiError, communityHttp } from './community-http';
 
 const ROOT = '/v1/games/rail';
 const segment = encodeURIComponent;
 const writeOptions = { retryAfterRefresh: false } as const;
+export interface RailChatQuery { afterSequence?: number; beforeSequence?: number; channel?: RailChatChannel; limit?: 50 | 100 | 150 | 200 }
 
 export const communityRailApi = {
   catalog: (signal?: AbortSignal): Promise<RailCatalog> => communityHttp.get(`${ROOT}/catalog`, { auth: false, signal }),
@@ -18,7 +19,7 @@ export const communityRailApi = {
   start: (roomId: string): Promise<RailRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/start`, {}, writeOptions),
   action: (roomId: string, input: RailActionInput): Promise<RailRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/actions`, input, writeOptions),
   leave: (roomId: string): Promise<RailRoomView> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/leave`, {}, writeOptions),
-  chat: (roomId: string, afterSequence?: number, signal?: AbortSignal): Promise<RailChatPage> => communityHttp.get(`${ROOT}/rooms/${segment(roomId)}/chat`, { query: { afterSequence }, signal }),
+  chat: (roomId: string, query?: number | RailChatQuery, signal?: AbortSignal): Promise<RailChatPage> => communityHttp.get(`${ROOT}/rooms/${segment(roomId)}/chat`, { query: typeof query === 'number' ? { afterSequence: query } : { ...query }, signal }),
   sendChat: (roomId: string, input: RailChatSendInput): Promise<RailChatMessage> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/chat`, input, writeOptions),
   withdrawChat: (roomId: string, messageId: string): Promise<RailChatMessage> => communityHttp.post(`${ROOT}/rooms/${segment(roomId)}/chat/${segment(messageId)}/withdraw`, {}, writeOptions),
   leaderboard: (date?: string, signal?: AbortSignal): Promise<RailLeaderboard> => communityHttp.get(`${ROOT}/leaderboard`, { auth: false, query: { date }, signal }),

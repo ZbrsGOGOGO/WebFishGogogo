@@ -65,6 +65,7 @@ export function developmentError(error: unknown, fallback: string): string {
     if (code === 'COMMENT_LIMIT') return '这条提案的评论数量已达上限。';
     if (code === 'DECISION_LIMIT') return '这条提案的决策记录已达上限。';
     if (code === 'ATTACHMENTS_FROZEN') return '当前状态已冻结附件，无法继续上传。';
+    if (code === 'DEVELOPMENT_EXPORT_LIMIT') return '当前筛选超过 200 条，请按状态分别导出；没有生成不完整文件。';
     if (error.status === 409) {
       return error.message && error.message !== 'Conflict'
         ? error.message

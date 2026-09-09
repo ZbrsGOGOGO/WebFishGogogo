@@ -136,5 +136,20 @@ describe('RailChatService', () => {
     expect(tail.hasMore).toBe(true);
     expect((await service.list(host.id, room.id, { beforeSequence: '20' })).items.map((entry) => entry.sequence)).toEqual([11, 12, 13, 14, 15, 16, 17, 18, 19]);
     expect((await service.list(host.id, room.id, { afterSequence: '207' })).items.map((entry) => entry.sequence)).toEqual([208, 209, 210]);
+    const expanded = await service.list(host.id, room.id, { channel: 'player', limit: '200' });
+    expect(expanded.items).toHaveLength(200); expect(expanded.items[0].sequence).toBe(11); expect(expanded.hasMore).toBe(false);
+    for (const limit of [0, 1, 49, 51, 201, '', '050', '50.0', '50e0', true, ['50'], null]) {
+      await expect(service.list(host.id, room.id, { limit })).rejects.toMatchObject({ response: { code: 'RAIL_CHAT_LIMIT_INVALID' } });
+    }
+  });
+  it('keeps a quiet channel accessible when the other channel fills the latest mixed page', async () => {
+    const { host, spectator, room } = await setup();
+    await db.getRepository(RailChatMessageRecord).insert(Array.from({ length: 60 }, (_, index) => ({ roomId: room.id, authorId: index === 4 ? spectator.id : host.id, clientMessageId: randomUUID(), requestHash: 'a'.repeat(64), sequence: index + 1, channel: index === 4 ? 'spectator' as const : 'player' as const, body: index === 4 ? '安静频道里的看法' : `讨论${index}`, status: 'visible' as const, createdAt: new Date(), withdrawnAt: null })));
+    await db.getRepository(RailRoom).update(room.id, { latestChatSequence: 60 });
+    expect((await service.list(host.id, room.id)).items.some((message) => message.sequence === 5)).toBe(false);
+    const quiet = await service.list(host.id, room.id, { channel: 'spectator', limit: 50 });
+    expect(quiet.items.map((message) => message.sequence)).toEqual([5]); expect(quiet.hasMore).toBe(false);
+    await service.withdraw(spectator.id, room.id, quiet.items[0].id);
+    expect((await service.list(host.id, room.id, { channel: 'spectator', limit: 100 })).items[0]).toMatchObject({ body: null, status: 'withdrawn' });
   });
 });

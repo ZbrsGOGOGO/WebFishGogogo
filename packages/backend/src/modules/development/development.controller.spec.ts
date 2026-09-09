@@ -26,12 +26,16 @@ describe('DevelopmentController HTTP attachment boundary', () => {
   let service: {
     addAttachment: jest.Mock;
     attachmentContent: jest.Mock;
+    reviewExport: jest.Mock;
+    saveProgress: jest.Mock;
   };
 
   beforeEach(async () => {
     accessAllowed = true;
     authorAllowed = true;
     service = {
+      reviewExport: jest.fn().mockResolvedValue({ complete: true, total: 0, requests: [] }),
+      saveProgress: jest.fn().mockResolvedValue({ id: REQUEST_ID, version: 2 }),
       addAttachment: jest.fn().mockResolvedValue({ id: REQUEST_ID, version: 2 }),
       attachmentContent: jest.fn().mockResolvedValue({
         filename: '需求 附件.txt',
@@ -152,6 +156,29 @@ describe('DevelopmentController HTTP attachment boundary', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+  });
+
+  it('accepts explicit all-status export and rejects unknown status before service invocation', async () => {
+    expect((await fetch(`${origin}/v1/development/review-export?status=all`)).status).toBe(200);
+    expect(service.reviewExport).toHaveBeenLastCalledWith(USER_ID, 'all');
+    expect((await fetch(`${origin}/v1/development/review-export?status=made_up`)).status).toBe(400);
+    expect(service.reviewExport).toHaveBeenCalledTimes(1);
+    accessAllowed = false;
+    expect((await fetch(`${origin}/v1/development/review-export?status=all`)).status).toBe(403);
+    expect(service.reviewExport).toHaveBeenCalledTimes(1);
+  });
+
+  it('validates progress writes and applies the capability guard', async () => {
+    const input = { expectedVersion: 1, summary: '验收范围', items: [{ id: 'one', label: '逐项验收', status: 'todo' }] };
+    const post = (body: unknown) => fetch(`${origin}/v1/development/requests/${REQUEST_ID}/progress`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    expect((await post(input)).status).toBe(201);
+    expect(service.saveProgress).toHaveBeenLastCalledWith(USER_ID, REQUEST_ID, input);
+    expect((await post({ ...input, grantOwner: true })).status).toBe(400);
+    accessAllowed = false;
+    expect((await post(input)).status).toBe(403);
+    expect(service.saveProgress).toHaveBeenCalledTimes(1);
   });
 
   async function upload(

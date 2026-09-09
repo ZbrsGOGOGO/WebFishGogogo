@@ -8,8 +8,10 @@ import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
 import { PRACTICE_PATHS, usePlayCatalog } from './play-ui-state';
 import styles from './GameRooms.module.css';
+import { useBallpointWindow } from '../ballpoint-breach/BallpointWindow';
 
 export function CommunityGamesPage(): JSX.Element {
+  const ballpoint = useBallpointWindow();
   const { catalog, error: catalogError, retry } = usePlayCatalog();
   const active = useCommunityAuthStore((state) => state.phase === 'active');
   const userId = useCommunityAuthStore((state) => state.user?.publicId);
@@ -39,6 +41,7 @@ export function CommunityGamesPage(): JSX.Element {
   return <section aria-label="小游戏专区">
     <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>LIGHTWEIGHT WORKSPACE</span><h1>小游戏专区</h1><p>一个人随时练习，也可以邀请同事加入同一场挑战。收起画面不丢进度，线上房间仍正常计时。</p></div><span className={styles.muted}>默认静音</span></div>
     <nav className={styles.tabs} aria-label="小游戏模式"><Link to="/games" aria-current="page">单机挑战</Link><Link to="/games/rooms">玩家建房</Link></nav>
+    <section className={styles.panel} aria-label="纸上突围本地单机"><div className={styles.panelHeading}><h2>纸上突围 · Ballpoint Breach</h2><span className={styles.muted}>本地单机 · 低调小窗</span></div><div className={styles.panelBody}><p className={styles.muted}>纸笔场景、五轮关卡与抓钩。右下角工作稿可收起、恢复；站内切页保留本轮并自动暂停。默认静音，需桌面键盘鼠标与 WebGL 2。</p><div className={styles.rowActions} style={{ justifyContent: 'flex-start' }}><button className={styles.quietButton} type="button" onClick={ballpoint.openWindow}>{ballpoint.isOpen ? '恢复工作稿小窗' : '打开工作稿小窗'}</button><Link className={styles.textLink} to="/games/ballpoint-breach">玩法与来源说明</Link></div><p className={styles.muted}>不支持玩家建房，不参与官方排行榜、成就或办公币奖励。关闭、刷新或切换账号会结束本轮。</p></div></section>
     {COMMUNITY_FEATURE_FLAGS.demonTower ? <section className={styles.panel} aria-label="九层妖塔角色养成"><div className={styles.panelHeading}><h2>九层妖塔 · 角色养成</h2><span className={styles.muted}>免费养成 · 异步协作</span></div><div className={styles.panelBody}><p className={styles.muted}>建立自己的角色档案，探索九层区域，收集武器和技能。个人冒险随时继续，全站共同推进守层者与通道建设，不用凑齐在线人数。</p><div className={styles.rowActions} style={{ justifyContent: 'flex-start' }}><Link className={styles.quietButton} to="/games/demon-tower">{active ? '进入角色档案 →' : '登录建立档案 →'}</Link><Link className={styles.textLink} to="/games/demon-tower/leaderboard">查看妖塔贡献日榜</Link></div><p className={styles.muted}>服务端保存进度；日常办公币最多 200，贡献日榜冠军另奖 100。武器与技能均可免费获得，没有充值入口。</p></div></section> : null}
     <section className={styles.panel} aria-label="轨道难题派对协作"><div className={styles.panelHeading}><h2>轨道难题 · 新协作项目</h2><span className={styles.muted}>3–9 席 · 可观战</span></div><div className={styles.panelBody}><p className={styles.muted}>轮流担任列车长，出牌、加特性，再讨论两条轨道的取舍。可用人机补位练习，也可以设置密码邀请同事一起玩。</p><div className={styles.rowActions} style={{ justifyContent: 'flex-start' }}><Link className={styles.quietButton} to="/games/rail">练习 / 玩家建房 →</Link><Link className={styles.textLink} to="/games/rail/leaderboard">查看生存率日榜</Link></div><p className={styles.muted}>至少 3 位真人、无机器人且完整手动操作的建房对局才可参榜；每日冠军 100 办公币，恶魔值仅作趣味展示。</p></div></section>
     {error ? <div className={styles.error} role="alert">{error} <Link to="/games/rooms">查看进行中的房间</Link></div> : null}

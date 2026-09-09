@@ -187,7 +187,7 @@ describe('development pages', () => {
     expect(await screen.findByText('优化聊天体验')).toBeInTheDocument();
     expect(screen.getByText('服务端仅返回当前账号自己提交的提案。')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '协作成员' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '导出待审 JSON' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '导出当前筛选 JSON' })).not.toBeInTheDocument();
     expect(listMembers).not.toHaveBeenCalled();
   });
 
@@ -210,7 +210,7 @@ describe('development pages', () => {
       await members.promise;
     });
     expect(screen.getByRole('button', { name: '授权提案' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: '导出待审 JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '导出当前筛选 JSON' })).toBeInTheDocument();
     expect(screen.getByText(/AI 审核/)).toBeInTheDocument();
     expect(screen.getByText('站长')).toBeInTheDocument();
   });
@@ -301,7 +301,7 @@ describe('development pages', () => {
         <DevelopmentAccessProvider value={accessValue('owner')}><Frame /></DevelopmentAccessProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: '导出待审 JSON' }));
+    fireEvent.click(await screen.findByRole('button', { name: '导出当前筛选 JSON' }));
     fireEvent.click(screen.getByRole('button', { name: '离开导出页' }));
     await act(async () => {
       pendingExport.resolve({ schemaVersion: 1, generatedAt: '2026-09-07T00:00:00Z', notice: '手动审阅', requests: [] });
@@ -309,6 +309,56 @@ describe('development pages', () => {
     });
     expect(screen.getByRole('heading', { name: '已离开导出页' })).toBeInTheDocument();
     expect(download).not.toHaveBeenCalled();
+  });
+
+  it('exports the selected status including done and rejects incomplete payloads', async () => {
+    vi.spyOn(communityDevelopmentApi, 'listRequests').mockResolvedValue(page([]));
+    vi.spyOn(communityDevelopmentApi, 'listMembers').mockResolvedValue({ items: [] });
+    const exportReview = vi.spyOn(communityDevelopmentApi, 'exportReview').mockResolvedValue({
+      schemaVersion: 1, generatedAt: '2026-09-09T00:00:00Z', notice: '手工审阅', requests: [],
+      scope: 'all', total: 0, exportedCount: 0, complete: true,
+    });
+    const download = vi.spyOn(developmentFormat, 'downloadPrivateBlob').mockImplementation(() => undefined);
+    renderDashboard('owner');
+    fireEvent.click(await screen.findByRole('button', { name: '导出当前筛选 JSON' }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(exportReview).toHaveBeenLastCalledWith('all');
+    fireEvent.change(screen.getByLabelText('状态'), { target: { value: 'done' } });
+    exportReview.mockResolvedValue({ schemaVersion: 1, generatedAt: '2026-09-09T00:00:00Z', notice: '',
+      requests: [], scope: 'done', total: 21, exportedCount: 0, complete: true });
+    fireEvent.click(screen.getByRole('button', { name: '导出当前筛选 JSON' }));
+    await waitFor(() => expect(exportReview).toHaveBeenLastCalledWith('done'));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(download).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows partial scope and follow-up on a previously completed proposal without owner controls', async () => {
+    vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(detail({ status: 'done', version: 4,
+      review: { reviewedVersion: 3, reviewedAt: '2026-09-09T00:00:00Z', hasUnreviewedChanges: true, completedItems: 1, totalItems: 2, summary: '本批只完成界面' },
+      progress: { reviewedVersion: 3, reviewedAt: '2026-09-09T00:00:00Z', summary: '本批只完成界面',
+        items: [{ id: 'ui', label: '<img src=x>界面已验收', status: 'done' }, { id: 'server', label: '后端待开发', status: 'todo' }] },
+    }));
+    const view = renderDetail('contributor');
+    expect(await screen.findByText('已验收 1 / 2 项')).toBeInTheDocument();
+    expect(screen.getByText(/审阅后有新补充/)).toBeInTheDocument();
+    expect(screen.getByText(/不代表整篇需求已实现/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '编辑分项进度' })).not.toBeInTheDocument();
+    expect(view.container.querySelector('img[src="x"]')).toBeNull();
+  });
+
+  it('saves owner progress with the exact version and does not silently mark the proposal done', async () => {
+    vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(detail());
+    const save = vi.spyOn(communityDevelopmentApi, 'saveProgress').mockResolvedValue(detail({ version: 2 }));
+    renderDetail('owner');
+    fireEvent.click(await screen.findByRole('button', { name: '编辑分项进度' }));
+    fireEvent.change(screen.getByRole('textbox', { name: '本批交付范围及未完成说明' }), { target: { value: '只验证这一项' } });
+    fireEvent.click(screen.getByRole('button', { name: '添加验收项' }));
+    fireEvent.change(screen.getByLabelText('验收项 1'), { target: { value: '接口验收' } });
+    fireEvent.change(screen.getByLabelText('验收项 1 状态'), { target: { value: 'done' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存分项进度' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('request-1', { expectedVersion: 1, summary: '只验证这一项',
+      items: [{ id: expect.any(String), label: '接口验收', status: 'done' }] }));
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: '本批交付范围及未完成说明' })).not.toBeInTheDocument());
   });
 
   it('keeps the newest status-filter response when requests settle out of order', async () => {

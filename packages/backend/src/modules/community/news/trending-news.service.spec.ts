@@ -10,6 +10,7 @@ import {
   INTERNAL_TRENDING_BOARDS,
   TrendingNewsService,
   fetchGitHubRising,
+  fetchBaiduTrending,
   fetchHackerNews,
   fetchStackOverflow,
   isDailyTrendingNewsDue,
@@ -29,6 +30,8 @@ function sourceFetch(tag: string, failHost?: string): jest.MockedFunction<typeof
     const url = new URL(String(input));
     expect(init?.redirect).toBe('manual');
     if (url.hostname === failHost) return jsonResponse({ error: 'temporary' }, 503);
+    if (url.hostname === 'top.baidu.com') return new Response(`<!--s-data:${JSON.stringify({ data: { cards: [{ content:
+      Array.from({ length: 10 }, (_, index) => ({ index, word: `${tag} 百度 ${index}`, rawUrl: `https://www.baidu.com/s?wd=${tag}-${index}`, hotScore: '1234' })) }] } })}-->`, { headers: { 'content-type': 'text/html' } });
     if (url.pathname.endsWith('/topstories.json')) {
       return jsonResponse(Array.from({ length: 10 }, (_, index) => index + 1));
     }
@@ -71,6 +74,48 @@ function sourceFetch(tag: string, failHost?: string): jest.MockedFunction<typeof
 }
 
 describe('daily trending news', () => {
+  it('reads only Baidu public ranked metadata, drops pinned/unsafe entries and never evaluates scripts', async () => {
+    const content = [
+      { index: 0, word: '置顶内容', isTop: true, rawUrl: 'https://www.baidu.com/s?wd=pinned' },
+      { index: 0, word: '公开榜单一', rawUrl: 'https://www.baidu.com/s?wd=one', hotScore: '5000', desc: '正文不得保存', img: 'private-image' },
+      { index: 1, word: '非法地址', rawUrl: 'https://www.baidu.com.evil.example/s?wd=bad' },
+      { index: 2, word: '&lt;b&gt;公开榜单二&lt;/b&gt;', rawUrl: 'https://www.baidu.com/s?wd=two', hotScore: 'bad' },
+      { index: 3, word: '公开榜单一', rawUrl: 'https://www.baidu.com/s?wd=duplicate' },
+    ];
+    const fetcher = jest.fn().mockResolvedValue(new Response(`<script>throw 'never execute'</script><!--s-data:${JSON.stringify({ data: { cards: [{ content }] } })}-->`, { headers: { 'content-type': 'text/html; charset=utf-8' } })) as jest.MockedFunction<typeof fetch>;
+    const rows = await fetchBaiduTrending(fetcher);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => row.sourceRank)).toEqual([1, 3]);
+    expect(rows[1]).toMatchObject({ title: '公开榜单二', heatText: null, publishedAt: null });
+    expect(rows[0].sourceItemId).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(rows)).not.toMatch(/正文不得保存|private-image|never execute/);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0]).toEqual(['https://top.baidu.com/board?tab=realtime', expect.objectContaining({ redirect: 'manual', signal: expect.any(AbortSignal) })]);
+  });
+
+  it.each([
+    [302, 'text/html', '<html>login</html>'], [403, 'text/html', 'blocked'],
+    [200, 'application/json', '{}'], [200, 'text/html', '<html>no supported state</html>'],
+    [200, 'text/html', '<!--s-data:{"data":{"cards":[]}}-->'],
+    [200, 'text/html', 'x'.repeat(2_000_001)],
+  ])('fails closed on blocked, changed or oversized Baidu responses %#', async (status, type, body) => {
+    const fetcher = jest.fn().mockResolvedValue(new Response(body, { status, headers: { 'content-type': type } })) as jest.MockedFunction<typeof fetch>;
+    await expect(fetchBaiduTrending(fetcher)).rejects.toThrow();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the last Baidu snapshot on upstream restrictions without pretending it refreshed', async () => {
+    const dataSource = await createLocalDevDataSource();
+    try {
+      await new TrendingNewsService(dataSource, sourceFetch('old')).refresh(new Date('2026-09-08T00:10:00Z'));
+      const service = new TrendingNewsService(dataSource, sourceFetch('new', 'top.baidu.com'));
+      await service.refresh(new Date('2026-09-09T00:10:00Z'));
+      const board = (await service.listDaily(new Date('2026-09-09T01:00:00Z'))).boards.find((row) => row.id === 'baidu');
+      expect(board).toMatchObject({ status: 'stale', snapshotDate: '2026-09-08' });
+      expect(board?.items.every((row) => row.title.startsWith('old'))).toBe(true);
+    } finally { await dataSource.destroy(); }
+  });
+
   it('uses the fixed Beijing 08:10 daily boundary', () => {
     expect(shanghaiTrendingServiceDate(new Date('2026-09-08T00:09:59.000Z'))).toBe('2026-09-08');
     expect(isDailyTrendingNewsDue(new Date('2026-09-08T00:09:59.000Z'))).toBe(false);
@@ -139,18 +184,18 @@ describe('daily trending news', () => {
     try {
       const service = new TrendingNewsService(dataSource, sourceFetch('day1'));
       await expect(service.refresh(new Date('2026-09-08T00:10:00.000Z'))).resolves.toEqual({
-        refreshedBoards: ['hacker_news', 'stackoverflow', 'github_rising'],
-        itemCount: 30,
+        refreshedBoards: ['hacker_news', 'stackoverflow', 'github_rising', 'baidu'],
+        itemCount: 40,
       });
       const page = await service.listDaily(new Date('2026-09-08T01:00:00.000Z'));
       expect(page.schedule).toBe('每天 08:10（北京时间）');
       expect(page.serviceDate).toBe('2026-09-08');
-      expect(page.boards.slice(0, 3).map((board) => [board.id, board.status, board.items.length]))
+      expect(page.boards.slice(0, 4).map((board) => [board.id, board.status, board.items.length]))
         .toEqual(INTERNAL_TRENDING_BOARDS.map((board) => [board.id, 'fresh', 10]));
-      expect(page.boards.slice(3).map((board) => [board.id, board.status, board.items.length]))
+      expect(page.boards.slice(4).map((board) => [board.id, board.status, board.items.length]))
         .toEqual(EXTERNAL_TRENDING_BOARDS.map((board) => [board.id, 'external_only', 0]));
-      expect(await dataSource.getRepository(TrendingNewsBoardRun).count()).toBe(3);
-      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(30);
+      expect(await dataSource.getRepository(TrendingNewsBoardRun).count()).toBe(4);
+      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(40);
     } finally {
       await dataSource.destroy();
     }
@@ -166,8 +211,8 @@ describe('daily trending news', () => {
         sourceFetch('day2', 'api.stackexchange.com'),
       );
       await expect(dayTwo.refresh(new Date('2026-09-09T00:10:00.000Z'))).resolves.toEqual({
-        refreshedBoards: ['hacker_news', 'github_rising'],
-        itemCount: 20,
+        refreshedBoards: ['hacker_news', 'github_rising', 'baidu'],
+        itemCount: 30,
       });
 
       const page = await dayTwo.listDaily(new Date('2026-09-09T01:00:00.000Z'));
@@ -179,7 +224,7 @@ describe('daily trending news', () => {
         ]);
       expect(page.boards[1].items[0].title).toContain('day1');
       expect(page.boards[0].items[0].title).toContain('day2');
-      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(50);
+      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(70);
     } finally {
       await dataSource.destroy();
     }
@@ -203,8 +248,8 @@ describe('daily trending news', () => {
       }) as jest.MockedFunction<typeof fetch>;
       const service = new TrendingNewsService(dataSource, fetcher);
       await expect(service.refresh(new Date('2026-09-09T00:10:00.000Z'))).resolves.toEqual({
-        refreshedBoards: ['stackoverflow', 'github_rising'],
-        itemCount: 20,
+        refreshedBoards: ['stackoverflow', 'github_rising', 'baidu'],
+        itemCount: 30,
       });
       const page = await service.listDaily(new Date('2026-09-09T01:00:00.000Z'));
       expect(page.boards[0]).toMatchObject({
@@ -245,8 +290,8 @@ describe('daily trending news', () => {
       const nextFetch = sourceFetch('day2');
       await expect(new TrendingNewsService(dataSource, nextFetch)
         .refresh(new Date('2026-09-09T00:10:00.000Z'))).resolves.toEqual({
-        refreshedBoards: ['hacker_news', 'github_rising'],
-        itemCount: 20,
+        refreshedBoards: ['hacker_news', 'github_rising', 'baidu'],
+        itemCount: 30,
       });
       expect(nextFetch.mock.calls.some(([input]) =>
         new URL(String(input)).hostname === 'api.stackexchange.com',
@@ -270,9 +315,9 @@ describe('daily trending news', () => {
       const results = await Promise.all(
         services.map((service) => service.refresh(new Date('2026-09-08T00:10:00.000Z'))),
       );
-      expect(results.reduce((count, result) => count + result.refreshedBoards.length, 0)).toBe(3);
-      expect(await dataSource.getRepository(TrendingNewsBoardRun).count()).toBe(3);
-      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(30);
+      expect(results.reduce((count, result) => count + result.refreshedBoards.length, 0)).toBe(4);
+      expect(await dataSource.getRepository(TrendingNewsBoardRun).count()).toBe(4);
+      expect(await dataSource.getRepository(TrendingNewsItemRecord).count()).toBe(40);
     } finally {
       await dataSource.destroy();
     }

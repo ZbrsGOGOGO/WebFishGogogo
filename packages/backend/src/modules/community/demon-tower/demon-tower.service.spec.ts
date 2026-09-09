@@ -70,6 +70,35 @@ describe('DemonTowerService entity integration', () => {
     for (const extra of [{ userId: suspended.id }, { score: 100000 }, { seed: 'forged' }]) await expect(service.action(a.id, { ...request(), ...extra })).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_REQUEST_INVALID' } });
     expect(await db.getRepository(DemonTowerProfile).count()).toBe(0);
   });
+  it('persists an explicit innate choice once with CAS/idempotency, never grants currency or accepts forged traits', async () => {
+    const a = await user('innate'); await act(a, 'enroll');
+    const before = await rawProfile(a), input = request('choose_innate', before.version, { attribute: 'DEF' });
+    await expect(service.action(a.id, { ...input, payload: { attribute: 'DEF', innates: ['feign'] } })).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_INVALID_ACTION' } });
+    expect(await rawProfile(a)).toEqual(before);
+    const selected = await service.action(a.id, input), saved = await rawProfile(a);
+    expect(selected.overview.profile!.growth).toMatchObject({ chosenAttribute: 'DEF', innates: ['defense'] });
+    expect(selected.officeCoinsGranted).toBe(0); expect(selected.overview.profile!.materials).toEqual(before.state.materials);
+    const replay = await service.action(a.id, input);
+    expect(replay.replayed).toBe(true); expect(await rawProfile(a)).toEqual(saved);
+    await expect(service.action(a.id, request('choose_innate', saved.version, { attribute: 'STR' }))).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_INNATE_ALREADY_CHOSEN' } });
+    expect(await db.getRepository(WalletLedger).count()).toBe(0); expect(await db.getRepository(DemonTowerCommand).count()).toBe(2);
+    expect((await db.getRepository(DemonTowerDailyProgress).findOneByOrFail({ userId: a.id, serviceDate: '2099-09-08' })).actionCount).toBe(2);
+  });
+  it('does not write a legacy growth migration on GET and preserves old inventory when the first write adapts it', async () => {
+    const a = await user('legacygrowth'); await act(a, 'enroll');
+    await prepareState(a, state => {
+      delete state.growth; for (const item of state.weapons) { delete item.star; delete item.favor; delete item.levelExempt; }
+      for (const item of state.skills) delete item.levelExempt;
+      state.weapons[0].quality = 5; state.weapons[0].spareCopies = 12;
+    });
+    const before = await rawProfile(a);
+    expect((await service.overview(a.id)).profile!.growth!.chosenAttribute).toBeNull();
+    expect(await rawProfile(a)).toEqual(before);
+    await act(a, 'choose_innate', { attribute: 'STR' });
+    const saved = (await rawProfile(a)).state as unknown as DemonTowerEngineState;
+    expect(saved.growth!.rulesVersion).toBe(2); expect(saved.weapons[0]).toMatchObject({ quality: 5, spareCopies: 12, star: 1, favor: 0, levelExempt: true });
+    expect(saved.materials).toEqual(before.state.materials); expect(saved.rngCounter).toEqual(before.state.rngCounter);
+  });
   it('binds UUID to full action/version payload, supports stale exact replay and returns current state/current wallet', async () => {
     const a = await user('alice'); const enrollment = request();
     const first = await service.action(a.id, enrollment);

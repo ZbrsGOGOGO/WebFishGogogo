@@ -64,6 +64,7 @@ import { PublicToolsPage } from '../features/tools/PublicToolsPage';
 import { DevelopmentAccessGate } from '../features/development/development-access';
 import { communityAvatarMark } from '../features/community/profile-options';
 import { useCommunityAuthStore } from './store/community-auth-store';
+import { BallpointBreachEntryPage, BallpointWindowProvider } from '../features/games/ballpoint-breach/BallpointWindow';
 
 const WorkstationTowerDefensePage = lazy(() =>
   import('../features/workstation-tower-defense').then((module) => ({
@@ -134,6 +135,7 @@ function NotFoundPage(): JSX.Element {
 
 export function CommunityModeRouter(): JSX.Element {
   return (
+    <BallpointWindowProvider>
     <Routes>
       <Route element={<CommunitySiteLayout />}>
         <Route index element={<CommunityHomePage />} />
@@ -319,6 +321,7 @@ export function CommunityModeRouter(): JSX.Element {
       <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<CommunityGameWorkspaceLayout />}>
         <Route index element={loading(<CommunityGamesPage />)} />
+        <Route path="ballpoint-breach" element={<BallpointBreachEntryPage />} />
         <Route element={<RequireCommunityAccount />}>
           <Route path="rooms" element={loading(<CommunityGameRoomsPage />)} />
           <Route path="rooms/:roomId" element={loading(<CommunityGameRoomPage />)} />
@@ -342,6 +345,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="three-sum" element={<Navigate to="/games" replace />} />
       </Route>
     </Routes>
+    </BallpointWindowProvider>
   );
 }
 

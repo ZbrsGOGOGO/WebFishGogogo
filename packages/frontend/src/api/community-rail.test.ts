@@ -55,4 +55,17 @@ describe('rail REST contract', () => {
     expect(railErrorMessage(new CommunityApiError(409, 'Conflict', { code: 'RAIL_STALE_ROUND' }))).toContain('下一回合');
     expect(railErrorMessage(new CommunityApiError(400, 'Invalid', { code: 'RAIL_UNKNOWN' }))).not.toContain('RAIL_');
   });
+  it('requests channel-specific expanded windows and keeps beforeSequence available', async () => {
+    const fetcher = vi.fn().mockImplementation(() => Promise.resolve(json({})));
+    vi.stubGlobal('fetch', fetcher);
+    const abort = new AbortController();
+    await communityRailApi.chat('room/1', { channel: 'spectator', limit: 100 }, abort.signal);
+    const url = new URL(String(fetcher.mock.calls[0][0]), 'https://example.invalid');
+    expect(url.pathname).toContain('/rooms/room%2F1/chat');
+    expect(url.searchParams.get('channel')).toBe('spectator');
+    expect(url.searchParams.get('limit')).toBe('100');
+    expect(fetcher.mock.calls[0][1].signal).toBe(abort.signal);
+    await communityRailApi.chat('room1', { beforeSequence: 60, channel: 'player' });
+    expect(String(fetcher.mock.calls[1][0])).toContain('beforeSequence=60');
+  });
 });

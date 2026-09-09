@@ -6,6 +6,7 @@ import type {
   DevelopmentRequestPage,
   DevelopmentReviewExport,
   DevelopmentStatus,
+  DevelopmentProgressInput,
 } from '@stealth-reader/shared';
 
 import { communityHttp } from './community-http';
@@ -31,6 +32,9 @@ export const communityDevelopmentApi = {
 
   getRequest: (requestId: string) =>
     communityHttp.get<DevelopmentRequestDetail>(requestPath(requestId)),
+
+  saveProgress: (requestId: string, input: DevelopmentProgressInput) =>
+    communityHttp.post<DevelopmentRequestDetail>(`${requestPath(requestId)}/progress`, input, { retryAfterRefresh: false }),
 
   addComment: (requestId: string, body: string, expectedVersion: number) =>
     communityHttp.post<DevelopmentRequestDetail>(
@@ -80,9 +84,8 @@ export const communityDevelopmentApi = {
     { retryAfterRefresh: false },
   ),
 
-  exportReview: (status?: DevelopmentStatus) => communityHttp.get<DevelopmentReviewExport>(
+  exportReview: (status?: DevelopmentStatus | 'all') => communityHttp.get<DevelopmentReviewExport>(
     `${DEVELOPMENT_API}/review-export`,
     { query: { status } },
   ),
 };
-

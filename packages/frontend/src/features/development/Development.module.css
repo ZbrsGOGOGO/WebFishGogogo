@@ -131,4 +131,10 @@
   .rowActions { flex-wrap: wrap; }
   .headerActions { justify-content: flex-start; }
 }
-
+.reviewExcerpt { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; color: #52627b; font-size: 12px; line-height: 1.6; }
+.progressList { display: grid; gap: 10px; padding: 0; margin: 12px 0; list-style: none; }
+.progressList li { display: flex; align-items: flex-start; gap: 10px; overflow-wrap: anywhere; }
+.progressEditor { display: grid; gap: 12px; margin-top: 16px; }
+.progressRow { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 8px; align-items: start; }
+.progressRow input, .progressRow select { box-sizing: border-box; min-width: 0; max-width: 100%; border: 1px solid #d9e2ef; border-radius: 6px; padding: 7px; background: white; }
+@media (max-width: 480px) { .progressRow { grid-template-columns: minmax(0, 1fr) 86px; } .progressRow button { grid-column: 2; } }

@@ -10,7 +10,8 @@ export const TOWER_SHOP_SIZE = 5;
 export const TOWER_SHOP_REFRESH_COST = 10;
 export const TOWER_FOCUSED_ORDER_INDEX = TOWER_SHOP_SIZE - 1;
 export const TOWER_FOCUSED_ORDER_PREMIUM_RATE = 1.25;
-export const TOWER_INTERMISSION_CREDIT_BONUS = 50;
+// Covers five mandatory restocks when assembling two extra tier-two defenses.
+export const TOWER_INTERMISSION_CREDIT_BONUS = 100;
 export const TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP = 2;
 export const TOWER_PRINTER_ARMOR_PIERCE = 2;
 export const TOWER_PLANT_MAX_LEVEL = 3;
@@ -34,6 +35,7 @@ export type TowerTier = 1 | 2 | 3;
 export type TowerEnemyArchetype = 'basic' | 'fast' | 'swarm' | 'elite' | 'midboss';
 export type TowerShopOfferSource = 'random' | 'guaranteed' | 'focused';
 export type TowerCombatSource = 'hero' | 'pulse' | TowerType;
+export type TowerCombatTechnique = 'pierce' | 'freeze' | 'root' | 'stun' | 'taunt' | 'true-damage' | 'execute' | 'vulnerable';
 export type TowerDefenseActionCode =
   | 'ok'
   | 'invalid_status'
@@ -83,6 +85,12 @@ export interface TowerDefenseEnemy {
   score: number;
   coreDamage: number;
   boss: boolean;
+  armorBreakTicks?: number;
+  armorBreakPoints?: number;
+  freezeTicks?: number;
+  rootTicks?: number;
+  stunTicks?: number;
+  controlImmunityTicks?: number;
 }
 
 export interface TowerDefenseTower {
@@ -107,7 +115,7 @@ export interface TowerShopOffer {
   tier: 1;
   cost: number;
   source?: TowerShopOfferSource;
-  /** Reserved for a possible explicit-refresh shop mode; current offers refill immediately. */
+  /** A bought offer keeps its slot and identity until an explicitly paid refresh. */
   soldOut?: boolean;
 }
 
@@ -118,6 +126,7 @@ export interface TowerCombatEffect {
   from: TowerDefensePoint;
   to: TowerDefensePoint;
   targetEnemyIds: string[];
+  technique?: TowerCombatTechnique;
 }
 
 export interface TowerDefenseActionFeedback {
@@ -169,6 +178,7 @@ export interface TowerDefenseState {
   wave: number;
   tick: number;
   coreHp: number;
+  breached: number;
   credits: number;
   score: number;
   defeated: number;
@@ -213,7 +223,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'single',
     name: '订书机',
     mark: '订',
-    description: '高频锁定最靠近核心的单个目标。',
+    description: '高频单体碎甲：2 阶削减 1 点护甲，3 阶削减 2 点护甲，帮助全队处理精英。',
     cost: 18,
     partCost: 18,
     range: 3,
@@ -222,7 +232,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'slow',
     name: '咖啡机',
     mark: '咖',
-    description: '泼洒咖啡，伤害一小片待办并减慢移动。',
+    description: '冰美式短暂冰冻主目标、周围减速；3 阶浓缩喷射定身更久。控场有抗性间隔，不能无限定住。',
     cost: 20,
     partCost: 20,
     range: 3,
@@ -231,7 +241,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'splash',
     name: '打印机',
     mark: '印',
-    description: `打印风暴同时处理相邻待办，并穿透 ${TOWER_PRINTER_ARMOR_PIERCE} 点护甲。`,
+    description: `2 阶激光处理同一直线目标，穿透 ${TOWER_PRINTER_ARMOR_PIERCE} 点护甲；3 阶 3D 打印炮台对邻近敌群造成真伤。`,
     cost: 22,
     partCost: 22,
     range: 3,
@@ -240,7 +250,7 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'push',
     name: '转椅',
     mark: '椅',
-    description: '把单个待办推回走廊前段，争取处理时间。',
+    description: '2 阶人体工学椅推退并短暂眩晕；3 阶老板椅嘲讽附近最多 3 个目标，向后聚拢。Boss 抵抗聚怪。',
     cost: 22,
     partCost: 22,
     range: 2,
@@ -249,10 +259,33 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
     type: 'shred',
     name: '碎纸机',
     mark: '碎',
-    description: '留下易伤标记，让后续每次攻击造成额外伤害。',
+    description: '普通文书类目标受真伤，其他目标叠易伤；2 阶吞噬残血普通敌人，3 阶碎纸风暴扩大范围。Boss 不会被吞噬。',
     cost: 24,
     partCost: 24,
     range: 2,
+  },
+};
+
+export const TOWER_EVOLUTIONS: Record<TowerType, Record<2 | 3, { name: string; description: string }>> = {
+  single: {
+    2: { name: '碎甲订书机', description: '单体 4 伤害，每 3 拍攻击；削甲 1 点持续 6 拍。' },
+    3: { name: '重型订书机', description: '单体 7 伤害，每 2 拍攻击；削甲 2 点持续 9 拍。' },
+  },
+  slow: {
+    2: { name: '冰美式', description: '主目标冰冻 2 拍，相邻目标减速；控制间隔至少 12 拍。' },
+    3: { name: '浓缩喷射', description: '主目标定身 3 拍，范围伤害和减速提高；Boss 只停 1 拍。' },
+  },
+  splash: {
+    2: { name: '激光打印机', description: '沿主目标所在直线穿透，最多延伸 2 格；穿甲 2 点。' },
+    3: { name: '3D 打印炮台', description: '主目标及路径相邻敌人受到 6 点范围真伤，忽略护甲。' },
+  },
+  push: {
+    2: { name: '人体工学椅', description: '单体推退 1 格并眩晕 1 拍，每 8 拍攻击一次。' },
+    3: { name: '老板椅', description: '嘲讽附近最多 3 个目标，向后聚拢并眩晕 2 拍；Boss 不被聚拢。' },
+  },
+  shred: {
+    2: { name: '工业碎纸机', description: '普通文书受真伤，叠易伤；命中后生命不高于 15% 的非 Boss 会被吞噬。' },
+    3: { name: '碎纸风暴', description: '处理路径相邻最多 3 个敌人，吞噬线提高到 25%；Boss 仅承受正常伤害/易伤。' },
   },
 };
 
@@ -263,24 +296,24 @@ const ROUND_TWO_TEMPLATES: Record<
   Omit<TowerRoundEnemySpawn, 'spawnDelayTicks'>
 > = {
   basic: {
-    name: '常规任务', archetype: 'basic', hp: 14, speedTicks: 5, armor: 0,
+    name: '常规任务', archetype: 'basic', hp: 16, speedTicks: 5, armor: 0,
     singleTargetDamageCap: null, reward: 7, score: 115, coreDamage: 1,
   },
   fast: {
-    name: '紧急消息', archetype: 'fast', hp: 8, speedTicks: 2, armor: 0,
+    name: '紧急消息', archetype: 'fast', hp: 10, speedTicks: 2, armor: 0,
     singleTargetDamageCap: null, reward: 5, score: 90, coreDamage: 1,
   },
   swarm: {
-    name: '群聊轰炸', archetype: 'swarm', hp: 6, speedTicks: 5, armor: 2,
+    name: '群聊轰炸', archetype: 'swarm', hp: 8, speedTicks: 5, armor: 2,
     singleTargetDamageCap: TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP,
     reward: 4, score: 70, coreDamage: 3,
   },
   elite: {
-    name: '重点催办', archetype: 'elite', hp: 25, speedTicks: 6, armor: 3,
+    name: '重点催办', archetype: 'elite', hp: 30, speedTicks: 6, armor: 3,
     singleTargetDamageCap: null, reward: 16, score: 220, coreDamage: 2,
   },
   midboss: {
-    name: '临时加班通知', archetype: 'midboss', hp: 60, speedTicks: 6, armor: 4,
+    name: '临时加班通知', archetype: 'midboss', hp: 80, speedTicks: 6, armor: 4,
     singleTargetDamageCap: null, reward: 30, score: 500, coreDamage: 4, boss: true,
   },
 };
@@ -347,7 +380,7 @@ export const TOWER_ROUND_CONFIGS: readonly TowerRoundConfig[] = [
     description: '快速消息、突破时冲击 3 点的成团群聊与护甲催办交错来袭，中段还有临时加班通知。',
     spawnIntervalTicks: 8,
     targetCountMultiplier: 4,
-    targetHpMultiplier: 4,
+    targetHpMultiplier: 5,
     spawns: ROUND_TWO_SPAWNS,
   },
 ] as const;
@@ -504,6 +537,7 @@ export function createTowerDefenseState(seed = DEFAULT_RNG_SEED): TowerDefenseSt
     wave: 1,
     tick: 0,
     coreHp: TOWER_DEFENSE_CORE_HP,
+    breached: 0,
     credits: 110,
     score: 0,
     defeated: 0,
@@ -685,7 +719,7 @@ export function setTowerShopFocus(
   }
   const currentIndex = state.shop.findIndex((offer) => offer.source === 'focused');
   const focusIndex = currentIndex >= 0 ? currentIndex : TOWER_FOCUSED_ORDER_INDEX;
-  if (state.shopFocus === type && state.shop[focusIndex]?.type === type) {
+  if (state.shopFocus === type) {
     return makeFeedback(
       state,
       true,
@@ -694,17 +728,22 @@ export function setTowerShopFocus(
     );
   }
   const shop = state.shop.slice();
-  shop[focusIndex] = focusedOffer(type, state.nextOfferId);
+  const soldOut = Boolean(shop[focusIndex]?.soldOut);
+  // A free preference change must never refill a bought slot. The last offer
+  // stays as a receipt; the new type is applied by createRandomShop on refresh.
+  if (!soldOut) shop[focusIndex] = focusedOffer(type, state.nextOfferId);
   return makeFeedback(
     {
       ...state,
       shop,
       shopFocus: type,
-      nextOfferId: state.nextOfferId + 1,
+      nextOfferId: state.nextOfferId + (soldOut ? 0 : 1),
     },
     true,
     'ok',
-    `定向订货已切换为${TOWER_DEFINITIONS[type].name}，价格包含加急服务费。`,
+    soldOut
+      ? `已预约${TOWER_DEFINITIONS[type].name}；此格已售罄，花费 ${TOWER_SHOP_REFRESH_COST} 金币刷新后补货。`
+      : `定向订货已切换为${TOWER_DEFINITIONS[type].name}，价格包含加急服务费。`,
   );
 }
 
@@ -757,11 +796,7 @@ export function buyTowerShopOffer(
     return makeFeedback(state, false, 'inventory_full', '背包已满，请部署、合成或出售后再购买。');
   }
 
-  const focused = offer.source === 'focused';
-  const replacement = focused
-    ? { offer: focusedOffer(state.shopFocus, state.nextOfferId), seed: state.rngSeed }
-    : randomOffer(state.rngSeed, state.nextOfferId);
-  const shop = state.shop.map((entry, index) => index === offerIndex ? replacement.offer : entry);
+  const shop = state.shop.map((entry, index) => index === offerIndex ? { ...entry, soldOut: true } : entry);
   const didMerge = merged.finalItem.tier > offer.tier;
   return makeFeedback(
     {
@@ -769,9 +804,7 @@ export function buyTowerShopOffer(
       credits: state.credits - offer.cost,
       inventory: merged.inventory,
       shop,
-      rngSeed: replacement.seed,
       nextItemId: state.nextItemId + 1,
-      nextOfferId: state.nextOfferId + 1,
     },
     true,
     'ok',
@@ -975,6 +1008,7 @@ function targetIndex(
 interface DamageOptions {
   area?: boolean;
   armorPiercing?: number;
+  trueDamage?: boolean;
 }
 
 function damageEnemy(
@@ -984,7 +1018,8 @@ function damageEnemy(
 ): TowerDefenseEnemy {
   const vulnerability = enemy.shredTicks > 0 ? enemy.shredStacks : 0;
   const rawDamage = Math.max(0, damage) + vulnerability;
-  const armor = Math.max(0, enemy.armor - (options.armorPiercing ?? 0));
+  const broken = (enemy.armorBreakTicks ?? 0) > 0 ? (enemy.armorBreakPoints ?? 0) : 0;
+  const armor = options.trueDamage ? 0 : Math.max(0, enemy.armor - broken - (options.armorPiercing ?? 0));
   let dealt = rawDamage > 0 ? Math.max(1, rawDamage - armor) : 0;
   if (!options.area && enemy.singleTargetDamageCap !== null) {
     dealt = Math.min(dealt, enemy.singleTargetDamageCap);
@@ -1011,6 +1046,7 @@ function makeEffect(
   from: TowerDefensePoint,
   to: TowerDefensePoint,
   targetEnemyIds: string[],
+  technique?: TowerCombatTechnique,
 ): TowerCombatEffect {
   return {
     id: `effect-${tick}-${index}`,
@@ -1019,7 +1055,14 @@ function makeEffect(
     from: { x: from.x, y: from.y },
     to: { x: to.x, y: to.y },
     targetEnemyIds,
+    ...(technique ? { technique } : {}),
   };
+}
+
+/** Shared hard-control resistance prevents several towers from permanently locking an enemy. */
+function controlEnemy(enemy: TowerDefenseEnemy, kind: 'freezeTicks' | 'rootTicks' | 'stunTicks', ticks: number): TowerDefenseEnemy {
+  if ((enemy.controlImmunityTicks ?? 0) > 0 || enemy.hp <= 0) return enemy;
+  return { ...enemy, [kind]: enemy.boss ? 1 : ticks, controlImmunityTicks: enemy.boss ? 18 : 12 };
 }
 
 export function triggerFocusPulse(state: TowerDefenseState): TowerDefenseState {
@@ -1081,26 +1124,45 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
     if (!target) return nextTower;
 
     if (tower.type === 'single') {
-      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), [target.id]));
-      enemies[index] = damageEnemy(target, tower.level === 3 ? 7 : 4);
+      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), [target.id], 'pierce'));
+      const broken = { ...target,
+        armorBreakPoints: Math.max(target.armorBreakPoints ?? 0, tower.level === 3 ? 2 : 1),
+        armorBreakTicks: Math.max(target.armorBreakTicks ?? 0, tower.level === 3 ? 9 : 6) };
+      enemies[index] = damageEnemy(broken, tower.level === 3 ? 7 : 4);
       return { ...nextTower, cooldown: tower.level === 3 ? 2 : 3 };
     }
 
     if (tower.type === 'push') {
-      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), [target.id]));
-      const pushed = Math.max(0, target.pathIndex - (target.boss ? 1 : tower.level === 3 ? 2 : 1));
-      enemies[index] = { ...damageEnemy(target, tower.level === 3 ? 4 : 2), pathIndex: pushed };
-      return { ...nextTower, cooldown: 6 };
+      const affected = tower.level === 3
+        ? [index, ...enemies.map((enemy, candidate) => candidate !== index && enemy.hp > 0 && Math.abs(enemy.pathIndex - target.pathIndex) <= 2 ? candidate : -1).filter((candidate) => candidate >= 0)].slice(0, 3)
+        : [index];
+      const anchor = Math.max(0, target.pathIndex - (tower.level === 3 ? 2 : 1));
+      for (const candidate of affected) {
+        const enemy = enemies[candidate];
+        const damaged = damageEnemy(enemy, tower.level === 3 ? 4 : 2, { area: tower.level === 3 });
+        // Boss cannot be dragged, and no enemy is ever moved forwards by a taunt.
+        const pathIndex = enemy.boss ? enemy.pathIndex : Math.min(enemy.pathIndex, anchor);
+        enemies[candidate] = controlEnemy({ ...damaged, pathIndex }, 'stunTicks', tower.level === 3 ? 2 : 1);
+      }
+      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), affected.map((candidate) => enemies[candidate].id), tower.level === 3 ? 'taunt' : 'stun'));
+      return { ...nextTower, cooldown: 8 };
     }
 
     if (tower.type === 'shred') {
-      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), [target.id]));
-      const damaged = damageEnemy(target, tower.level === 3 ? 4 : 2);
-      enemies[index] = {
-        ...damaged,
-        shredTicks: Math.max(damaged.shredTicks, tower.level === 3 ? 14 : 10),
-        shredStacks: Math.min(5, damaged.shredStacks + (tower.level === 3 ? 2 : 1)),
-      };
+      const affected = tower.level === 3
+        ? [index, ...enemies.map((enemy, candidate) => candidate !== index && enemy.hp > 0 && Math.abs(enemy.pathIndex - target.pathIndex) <= 1 ? candidate : -1).filter((candidate) => candidate >= 0)].slice(0, 3)
+        : [index];
+      let executed = false;
+      for (const candidate of affected) {
+        const enemy = enemies[candidate];
+        const damaged = damageEnemy(enemy, tower.level === 3 ? 4 : 2, { area: tower.level === 3, trueDamage: enemy.archetype === 'basic' });
+        const execute = !enemy.boss && damaged.hp > 0 && damaged.hp <= enemy.maxHp * (tower.level === 3 ? .25 : .15);
+        executed ||= execute;
+        enemies[candidate] = { ...damaged, hp: execute ? 0 : damaged.hp,
+          shredTicks: Math.max(damaged.shredTicks, tower.level === 3 ? 14 : 10),
+          shredStacks: Math.min(5, damaged.shredStacks + (tower.level === 3 ? 2 : 1)) };
+      }
+      effects.push(makeEffect(state.tick, effects.length, tower.type, origin, enemyPoint(target), affected.map((candidate) => enemies[candidate].id), executed ? 'execute' : 'vulnerable'));
       return { ...nextTower, cooldown: 4 };
     }
 
@@ -1108,7 +1170,14 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
     const affectedIndexes: number[] = [];
     for (let enemyIndex = 0; enemyIndex < enemies.length; enemyIndex += 1) {
       const enemy = enemies[enemyIndex];
-      if (enemy.hp > 0 && Math.abs(enemy.pathIndex - targetPathIndex) <= 1) {
+      const point = enemyPoint(enemy);
+      const center = enemyPoint(target);
+      const previousPoint = TOWER_DEFENSE_PATH[target.pathIndex > 0 ? target.pathIndex - 1 : 1];
+      const sameLaserLine = previousPoint?.y === center.y ? point.y === center.y : point.x === center.x;
+      const inArea = tower.type === 'splash' && tower.level === 2
+        ? sameLaserLine && distance(point, center) <= 2
+        : Math.abs(enemy.pathIndex - targetPathIndex) <= 1;
+      if (enemy.hp > 0 && inArea) {
         affectedIndexes.push(enemyIndex);
       }
     }
@@ -1119,6 +1188,9 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
       origin,
       enemyPoint(target),
       affectedIndexes.map((enemyIndex) => enemies[enemyIndex].id),
+      tower.type === 'slow'
+        ? ((target.controlImmunityTicks ?? 0) === 0 ? (tower.level === 3 ? 'root' : 'freeze') : undefined)
+        : (tower.level === 3 ? 'true-damage' : 'pierce'),
     ));
     if (tower.type === 'slow') {
       for (const enemyIndex of affectedIndexes) {
@@ -1132,13 +1204,14 @@ function runAttacks(state: TowerDefenseState): TowerDefenseState {
           slowTicks: Math.max(damaged.slowTicks, tower.level === 3 ? 9 : 7),
         };
       }
+      enemies[index] = controlEnemy(enemies[index], tower.level === 3 ? 'rootTicks' : 'freezeTicks', tower.level === 3 ? 3 : 2);
       return { ...nextTower, cooldown: 4 };
     }
     for (const enemyIndex of affectedIndexes) {
       enemies[enemyIndex] = damageEnemy(
         enemies[enemyIndex],
         tower.level === 3 ? 6 : 3,
-        { area: true, armorPiercing: TOWER_PRINTER_ARMOR_PIERCE },
+        { area: true, armorPiercing: TOWER_PRINTER_ARMOR_PIERCE, trueDamage: tower.level === 3 },
       );
     }
     return { ...nextTower, cooldown: 5 };
@@ -1185,29 +1258,39 @@ function spawnEnemy(state: TowerDefenseState, tick: number): TowerDefenseState {
 
 function moveEnemies(state: TowerDefenseState, tick: number): TowerDefenseState {
   let coreDamage = 0;
+  let breached = state.breached;
   const enemies: TowerDefenseEnemy[] = [];
   for (const enemy of state.enemies) {
     const slowed = enemy.slowTicks > 0;
     const slowTicks = Math.max(0, enemy.slowTicks - 1);
     const shredTicks = Math.max(0, enemy.shredTicks - 1);
+    const controlled = (enemy.freezeTicks ?? 0) > 0 || (enemy.rootTicks ?? 0) > 0 || (enemy.stunTicks ?? 0) > 0;
+    const armorBreakTicks = Math.max(0, (enemy.armorBreakTicks ?? 0) - 1);
     const nextEnemy = {
       ...enemy,
       slowTicks,
       shredTicks,
       shredStacks: shredTicks > 0 ? enemy.shredStacks : 0,
+      armorBreakTicks,
+      armorBreakPoints: armorBreakTicks > 0 ? (enemy.armorBreakPoints ?? 0) : 0,
+      freezeTicks: Math.max(0, (enemy.freezeTicks ?? 0) - 1),
+      rootTicks: Math.max(0, (enemy.rootTicks ?? 0) - 1),
+      stunTicks: Math.max(0, (enemy.stunTicks ?? 0) - 1),
+      controlImmunityTicks: Math.max(0, (enemy.controlImmunityTicks ?? 0) - 1),
     };
     const movementInterval = enemy.speedTicks + (slowed ? 2 : 0);
-    if (tick % movementInterval !== 0) {
+    if (controlled || tick % movementInterval !== 0) {
       enemies.push(nextEnemy);
       continue;
     }
     if (enemy.pathIndex >= TOWER_DEFENSE_PATH.length - 1) {
       coreDamage += enemy.coreDamage;
+      breached += 1;
       continue;
     }
     enemies.push({ ...nextEnemy, pathIndex: enemy.pathIndex + 1 });
   }
-  return { ...state, enemies, coreHp: Math.max(0, state.coreHp - coreDamage) };
+  return { ...state, enemies, breached, coreHp: Math.max(0, state.coreHp - coreDamage) };
 }
 
 function applyPlantIncome(state: TowerDefenseState): TowerDefenseState {

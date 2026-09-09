@@ -10,7 +10,7 @@ import {
 import { Button, Card, PageHeader } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
 import { useGamePrivacy } from '../GamePrivacyContext';
-import { shouldIgnoreGameKeyboard } from '../game-input';
+import { listenForOtherLocalGame, shouldIgnoreGameKeyboard } from '../game-input';
 import {
   GRID_SIZE,
   advanceGame,
@@ -194,8 +194,10 @@ export function SnakeGamePage(): JSX.Element {
     };
 
     window.addEventListener('blur', pauseForInterruption);
+    const stopListening = listenForOtherLocalGame('snake', pauseForInterruption);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      stopListening();
       window.removeEventListener('blur', pauseForInterruption);
       document.removeEventListener(
         'visibilitychange',

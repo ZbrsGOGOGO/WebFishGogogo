@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   TrendingNewsBoard,
@@ -36,7 +36,7 @@ const MAX_UPSTREAM_BACKOFF_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export const TRENDING_NEWS_FETCH = Symbol('TRENDING_NEWS_FETCH');
 
-type InternalBoardId = 'hacker_news' | 'stackoverflow' | 'github_rising';
+type InternalBoardId = 'hacker_news' | 'stackoverflow' | 'github_rising' | 'baidu';
 
 interface InternalBoardConfig {
   id: InternalBoardId;
@@ -92,8 +92,9 @@ class UpstreamRetryError extends Error {
 }
 
 /**
- * These three sources expose documented public JSON APIs. We do not scrape
- * their HTML pages or retrieve linked article/question bodies.
+ * The first three sources expose documented public JSON APIs. Baidu uses only
+ * the public board's embedded JSON (not a documented API). Never evaluate page
+ * scripts, forward cookies, follow redirects or retrieve linked article bodies.
  *
  * Hacker News: https://github.com/HackerNews/API
  * Stack Exchange: https://api.stackexchange.com/docs/questions
@@ -121,6 +122,11 @@ export const INTERNAL_TRENDING_BOARDS: readonly InternalBoardConfig[] = [
     sourceUrl: 'https://github.com/search?type=repositories',
     note: '依 GitHub 官方 Search API 统计近 7 日新建且 Star 较高的仓库，不冒称 GitHub Trending；过滤后保留原名次。',
   },
+  {
+    id: 'baidu', label: '百度热搜', group: 'social',
+    sourceUrl: 'https://top.baidu.com/board?tab=realtime',
+    note: '每日读取百度公开榜单页面中的标题、排名与热度，非官方开放 API；不保存摘要、图片或新闻正文。来源结构变化时保留最近快照并标记更新失败。',
+  },
 ] as const;
 
 export const EXTERNAL_TRENDING_BOARDS: readonly ExternalBoardConfig[] = [
@@ -133,11 +139,6 @@ export const EXTERNAL_TRENDING_BOARDS: readonly ExternalBoardConfig[] = [
     id: 'zhihu', label: '知乎热榜', group: 'social',
     sourceUrl: 'https://www.zhihu.com/hot',
     note: '公开网页接口当前需要授权，本站未抓取或伪造榜单。',
-  },
-  {
-    id: 'baidu', label: '百度热搜', group: 'social',
-    sourceUrl: 'https://top.baidu.com/board?tab=realtime',
-    note: '暂无经核验的稳定官方开放数据合同，仅保留官方入口。',
   },
   {
     id: 'bilibili', label: '哔哩哔哩排行榜', group: 'entertainment',
@@ -424,6 +425,7 @@ export class TrendingNewsService
       case 'hacker_news': return collectHackerNews(this.fetcher);
       case 'stackoverflow': return collectStackOverflow(this.fetcher);
       case 'github_rising': return collectGitHubRising(serviceDate, this.fetcher);
+      case 'baidu': return { items: await fetchBaiduTrending(this.fetcher), retryAfterMs: null, retryAtMs: null };
     }
   }
 
@@ -616,6 +618,44 @@ async function collectGitHubRising(
     ),
     retryAtMs: result.quotaRemaining === 0 ? result.retryAtMs : null,
   };
+}
+
+/** Metadata only, from one fixed public host. Unknown/blocked pages fail closed. */
+export async function fetchBaiduTrending(fetcher: typeof fetch = globalThis.fetch): Promise<CollectedTrendingItem[]> {
+  const response = await fetcher('https://top.baidu.com/board?tab=realtime', {
+    headers: { Accept: 'text/html', 'User-Agent': 'MomoCompany-Trending/1.0 (+https://zbrshyyzxx.top)' },
+    redirect: 'manual', signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    const retry = retryDirective(response);
+    throw new UpstreamRetryError(`public board returned HTTP ${response.status}`, retry.retryAfterMs, retry.retryAtMs);
+  }
+  if (!/^text\/html(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('public board response was not HTML');
+  }
+  const html = await readLimitedText(response, MAX_JSON_BYTES);
+  const embedded = html.match(/<!--s-data:([\s\S]*?)-->/)?.[1];
+  if (!embedded) throw new Error('public board has no supported embedded data');
+  const raw: unknown = JSON.parse(embedded);
+  if (!isRecord(raw) || !isRecord(raw.data) || !Array.isArray(raw.data.cards)) throw new Error('public board structure changed');
+  const items = raw.data.cards.flatMap((card): CollectedTrendingItem[] => {
+    if (!isRecord(card) || !Array.isArray(card.content)) return [];
+    return card.content.flatMap((value): CollectedTrendingItem[] => {
+      if (!isRecord(value) || value.isTop === true) return []; // pinned editorial item is not a ranked trend
+      const rankIndex = positiveInteger(value.index);
+      const title = cleanExternalTitle(value.word);
+      const originalUrl = safeSourceUrl(value.rawUrl ?? value.url, ['www.baidu.com']);
+      if (rankIndex === null || rankIndex >= 20 || !title || !originalUrl || new URL(originalUrl).pathname !== '/s') return [];
+      const score = typeof value.hotScore === 'string' && /^\d{1,16}$/.test(value.hotScore) ? value.hotScore : null;
+      return [{ sourceItemId: createHash('sha256').update(title).digest('hex'), sourceRank: rankIndex + 1, title, originalUrl,
+        heatText: score === null ? null : `${score} 热度`, publishedAt: null }];
+    });
+  });
+  const result = uniqueItems(items).sort((a, b) => a.sourceRank - b.sourceRank).slice(0, MAX_ITEMS_PER_BOARD);
+  if (!result.length) throw new Error('public board has no valid ranked items');
+  return result;
 }
 
 async function fetchOfficialJson(

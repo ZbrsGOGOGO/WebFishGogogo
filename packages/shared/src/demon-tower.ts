@@ -11,11 +11,13 @@ export type DemonTowerTerrain = 'plain' | 'lake' | 'mountain' | 'sea';
 export type DemonTowerWeaponType = '重兵' | '轻兵' | '长兵' | '盾兵' | '法器';
 export interface DemonTowerWeaponDefinition {
   id: DemonTowerWeaponId; name: string; type: DemonTowerWeaponType; attribute: DemonTowerAttribute;
-  rarity: DemonTowerRarity; requiredLevel: number; baseBonus: number; qualityCap: number; description: string;
+  rarity: DemonTowerRarity; requiredLevel: number; dropLevel: number; legacyRequiredLevel: number; weight: number; tier: number;
+  baseBonus: number; qualityCap: number; description: string;
 }
 export interface DemonTowerSkillDefinition {
   id: DemonTowerSkillId; name: string; category: '回复' | '伤害' | '维度'; kind: 'active' | 'passive';
-  rarity: DemonTowerRarity; requiredLevel: number; cooldown: number; qualityCap: number; description: string;
+  rarity: DemonTowerRarity; requiredLevel: number; dropLevel: number; legacyRequiredLevel: number; weight: number; tier: number;
+  cooldown: number; qualityCap: number; description: string;
 }
 export interface DemonTowerFloorDefinition {
   floor: number; name: string; terrain: DemonTowerTerrain; requiredLevel: number; description: string;
@@ -38,8 +40,27 @@ export interface DemonTowerCatalog {
     lootGuaranteeEvery: number; attributeResetCooldownMs: number;
     resetTimezone: 'Asia/Shanghai'; rulesText: readonly string[] };
 }
-export interface DemonTowerOwnedWeapon { id: DemonTowerWeaponId; quality: number; spareCopies: number }
-export interface DemonTowerOwnedSkill { id: DemonTowerSkillId; quality: number; spareCopies: number }
+export interface DemonTowerOwnedWeapon { id: DemonTowerWeaponId; quality: number; spareCopies: number; star?: number; favor?: number; levelExempt?: boolean }
+export interface DemonTowerOwnedSkill { id: DemonTowerSkillId; quality: number; spareCopies: number; levelExempt?: boolean }
+export type DemonTowerInnateId = 'strength' | 'speed' | 'agility' | 'defense' | 'luck' | 'master' | 'shield' | 'feign';
+export interface DemonTowerGrowthView {
+  rulesVersion: 2; pendingLegacyBattle: boolean; chosenAttribute: DemonTowerAttribute | null;
+  innates: DemonTowerInnateId[]; unlockedCount: number; nextInnateLevel: number | null;
+  /** Counts eligible exploration settlements without these rarities, not secret RNG state. */
+  misses: { ling: number; xian: number }; eligible: { ling: boolean; xian: boolean };
+}
+export const DEMON_TOWER_INNATES: readonly { id: DemonTowerInnateId; name: string; attribute?: DemonTowerAttribute; description: string }[] = [
+  { id: 'strength', name: '天生神力', attribute: 'STR', description: '永久力量+8，不占技能槽，不计入可洗点基础属性。' },
+  { id: 'speed', name: '疾如雷电', attribute: 'SPD', description: '永久速度+8；每次普通攻击有30%概率追加一次速度伤害，不递归连击。' },
+  { id: 'agility', name: '身轻如燕', attribute: 'AGI', description: '永久敏捷+8，直接攻击暴击率增加5个百分点。' },
+  { id: 'defense', name: '钢筋铁骨', attribute: 'DEF', description: '永久防御+8，受到直接攻击伤害减少10%。' },
+  { id: 'luck', name: '气运之子', attribute: 'LUCK', description: '永久幸运+8。' },
+  { id: 'master', name: '兵器通神', description: '普通攻击及其连击伤害增加20%，不放大技能或反伤。' },
+  { id: 'shield', name: '金刚不坏', description: '每场开始额外获得1倍防御护盾。' },
+  { id: 'feign', name: '装死', description: '每场第一次致命伤保留1生命，优先于续命丹心消耗；后续攻击仍可击败你。' },
+];
+export const DEMON_TOWER_RARITY_ORDER: readonly DemonTowerRarity[] = ['凡', '精', '灵', '仙', '神'];
+export const DEMON_TOWER_LOOT_WEIGHTS = { weapon: { 凡: 0, 精: 40, 灵: 30, 仙: 20, 神: 10 }, skill: { 凡: 40, 精: 30, 灵: 20, 仙: 10, 神: 0 } } as const;
 export interface DemonTowerUpgradeCost {
   available: boolean; reason: 'max_quality' | 'level_required' | null; requiredLevel: number;
   spareCopies: number; materials: DemonTowerMaterials;
@@ -75,6 +96,7 @@ export interface DemonTowerDailyView {
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
+  growth?: DemonTowerGrowthView;
   version: number; level: number; experience: number; experienceToNext: number; totalExperience: number;
   attributes: DemonTowerAttributes; effectiveAttributes: DemonTowerAttributes; unspentPoints: number;
   /** Only spent free points are refundable; null means a first reset has no cooldown. */
@@ -118,6 +140,7 @@ export type DemonTowerAction =
   | { kind: 'equip'; payload: DemonTowerLoadout }
   | { kind: 'allocate'; payload: { attribute: DemonTowerAttribute; points: number } }
   | { kind: 'reset_attributes'; payload: Record<string, never> }
+  | { kind: 'choose_innate'; payload: { attribute: DemonTowerAttribute } }
   | { kind: 'upgrade'; payload: { itemType: 'weapon' | 'skill'; itemId: DemonTowerWeaponId | DemonTowerSkillId } }
   | { kind: 'select_floor'; payload: { floor: number } }
   | { kind: 'challenge_boss'; payload: { floor: number } }
@@ -144,11 +167,18 @@ export interface DemonTowerContributions {
 }
 
 const weapon = (id: DemonTowerWeaponId, name: string, type: DemonTowerWeaponType, attribute: DemonTowerAttribute,
-  rarity: DemonTowerRarity, requiredLevel: number, baseBonus: number, description: string): DemonTowerWeaponDefinition =>
-  ({ id, name, type, attribute, rarity, requiredLevel, baseBonus, qualityCap: ({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[rarity], description });
+  rarity: DemonTowerRarity, legacyRequiredLevel: number, baseBonus: number, description: string): DemonTowerWeaponDefinition =>
+  ({ id, name, type, attribute, rarity, legacyRequiredLevel,
+    dropLevel: ({ 凡: 1, 精: 1, 灵: 16, 仙: 31, 神: 46 })[rarity], requiredLevel: ({ 凡: 1, 精: 16, 灵: 31, 仙: 46, 神: 61 })[rarity],
+    tier: ({ 凡: 3, 精: 3, 灵: 2, 仙: 1, 神: 0 })[rarity],
+    weight: ({ w1: 0.9, w2: 0.9, w3: 0.9, w5: 1.1, w10: 1.1, w14: 0.9, w19: 1.2, w20: 0.7 } as Partial<Record<DemonTowerWeaponId, number>>)[id] ?? 1,
+    baseBonus, qualityCap: ({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[rarity], description });
 const skill = (id: DemonTowerSkillId, name: string, category: DemonTowerSkillDefinition['category'], kind: DemonTowerSkillDefinition['kind'],
-  rarity: DemonTowerRarity, requiredLevel: number, cooldown: number, description: string): DemonTowerSkillDefinition =>
-  ({ id, name, category, kind, rarity, requiredLevel, cooldown, qualityCap: ({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[rarity], description });
+  rarity: DemonTowerRarity, legacyRequiredLevel: number, cooldown: number, description: string): DemonTowerSkillDefinition =>
+  ({ id, name, category, kind, rarity, legacyRequiredLevel,
+    requiredLevel: ({ 凡: 1, 精: 16, 灵: 31, 仙: 46, 神: 61 })[rarity], dropLevel: ({ 凡: 1, 精: 16, 灵: 31, 仙: 46, 神: 61 })[rarity],
+    tier: ({ 凡: 3, 精: 2, 灵: 1, 仙: 0, 神: 0 })[rarity], weight: id === 's13' ? 0.6 : id === 's15' || id === 's16' ? 0.9 : 1,
+    cooldown, qualityCap: ({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[rarity], description });
 
 export const DEMON_TOWER_WEAPONS: readonly DemonTowerWeaponDefinition[] = [
   weapon('w1', '斩马刀', '重兵', 'STR', '精', 1, 6, '破甲：目标防御不低于自身力量时，伤害增加15%。'),
@@ -173,8 +203,8 @@ export const DEMON_TOWER_WEAPONS: readonly DemonTowerWeaponDefinition[] = [
   weapon('w20', '混元幡', '法器', 'LUCK', '神', 48, 23, '改命：常驻幸运+15，探索物品掉落概率增加10个百分点。'),
 ];
 export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
-  skill('s1', '回春术', '回复', 'active', '凡', 1, 3, '恢复20+2倍幸运生命，不超过生命上限。'),
-  skill('s2', '裂地斩', '伤害', 'active', '凡', 1, 2, '造成2倍力量伤害；自身下一回合速度降低25%。'),
+  skill('s1', '回春术', '回复', 'active', '凡', 1, 3, '恢复20+2倍幸运生命，随后同回合普通攻击一次；旧进行中战斗沿用原治疗规则。'),
+  skill('s2', '裂地斩', '伤害', 'active', '凡', 1, 2, '造成2倍力量伤害；命中非首领目标时20%概率震慑一次，自身下一回合速度降低25%。'),
   skill('s3', '铁壁', '维度', 'active', '凡', 1, 3, '获得1.5倍防御护盾，持续2回合；品质提升护盾量。'),
   skill('s4', '力之祝福', '维度', 'active', '凡', 1, 4, '力量增加10，持续3回合。'),
   skill('s5', '疾影连刺', '伤害', 'active', '精', 6, 2, '连续攻击3段，每段0.6倍速度伤害，逐段结算护盾。'),
@@ -187,9 +217,22 @@ export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
   skill('s12', '生生不息', '回复', 'passive', '灵', 18, 0, '战斗外生命自动恢复速度增加30%。'),
   skill('s13', '续命丹心', '回复', 'active', '仙', 36, 0, '每场一次：恢复至至少50%生命，并保留一次致命伤后50%生命复起的效果。'),
   skill('s14', '全维淬炼', '维度', 'active', '仙', 36, 5, '五属性各增加5，持续2回合。'),
-  skill('s15', '气运一击', '伤害', 'active', '仙', 36, 4, '造成1至4倍幸运的随机伤害，随机数仅由服务器生成。'),
+  skill('s15', '气运一击', '伤害', 'active', '仙', 36, 4, '非首领目标有8%概率被压至1生命（无视护盾）；否则造成1至4倍幸运伤害。共享首领免疫压血，只结算普通伤害。'),
   skill('s16', '崩山击', '伤害', 'active', '仙', 36, 4, '造成3倍力量伤害，并使目标防御降低30%，持续2回合。'),
 ];
+/** Conditional on receiving this item kind. Level filtering and guarantees are applied before normalization. */
+export function demonTowerLootPool(kind: 'weapon' | 'skill', level: number, minimum: DemonTowerRarity = '凡') {
+  const definitions = kind === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS;
+  return DEMON_TOWER_RARITY_ORDER.filter(rarity => DEMON_TOWER_RARITY_ORDER.indexOf(rarity) >= DEMON_TOWER_RARITY_ORDER.indexOf(minimum))
+    .map(rarity => ({ rarity, weight: DEMON_TOWER_LOOT_WEIGHTS[kind][rarity], items: definitions.filter(item => item.rarity === rarity && item.dropLevel <= level) }))
+    .filter(group => group.weight > 0 && group.items.length > 0);
+}
+export function demonTowerItemDropPercent(kind: 'weapon' | 'skill', id: string, level: number): number {
+  const pool = demonTowerLootPool(kind, level), group = pool.find(entry => entry.items.some(item => item.id === id));
+  const item = group?.items.find(entry => entry.id === id);
+  if (!group || !item) return 0;
+  return 100 * group.weight / pool.reduce((sum, entry) => sum + entry.weight, 0) * item.weight / group.items.reduce((sum, entry) => sum + entry.weight, 0);
+}
 const DEMON_TOWER_MECHANIC_HINTS: Record<number, string> = {
   1: '犼野守关者与精英先蓄力、下次行动重击（1.35倍）；蓄力不攻击，震慑可打断，提前铁壁或治疗可应对。',
   2: '湖雾妖物先预告毒雾、下次弱攻击穿透护盾才施加2回合毒伤；毒不叠层，护盾与治疗都有效。',
@@ -233,17 +276,21 @@ export const DEMON_TOWER_CATALOG: DemonTowerCatalog = {
       '世界首领伤害与通道材料由全服共享，不要求实时组队或最低人数；后来者可探索已解锁楼层。',
       '妖塔日常办公币最多200枚/上海自然日，由平台统一钱包结算；没有额外付费或承诺返利。',
       '重复物品保留为副本。升阶必定成功：优先消耗一个副本，否则使用独立材料；到品质上限仍保留副本。',
-      '每4次可掉落的探索结算至少获得1件武器或技能；保底优先当前等级可用的未收录物品，武器与技能交替补齐。',
+      '每4次可掉落探索结算至少获得1件物品，保底在抽中的稀有度内优先未收录；常规武器池精/灵/仙/神权重40/30/20/10，技能池凡/精/灵/仙同权重，先过滤获取等级再归一。不是每次探索的绝对出货率。',
+      '达到Lv16后累计无灵以上探索结算，连续20次未得则下一次保底；Lv31后仙以上同理50次。未达资格不计数，保底可调整武器/技能种类以保证有合法物品，不会抽空。',
+      '武器星级独立于+N。每次普攻行动主手与已装法器各+1熟练度，多段不重复；每星需当前星级×15熟练度，升星清零，最高5星，每星普攻伤害+10%。无降星、无付费升星。',
+      '免费选择一次心性主维获得首个命格；随后在Lv16/31/46/61/76/91/106依次补齐8命格，不占技能槽。旧角色同样可选；旧战斗结束后启用新规则。',
+      '新手赠送五武器和旧存档已拥有物品保留使用资格。新掉落武器按获取/装备双等级限制，不删除旧装备，不增加充值、灵石商店或自动购买。',
       '战斗外生命与体力按服务器时间恢复，战斗内不自动回血；负伤可以休整。',
   ] },
 };
 
 /** Display helper only. The server recomputes against locked, owned inventory. */
-export function demonTowerUpgradeCost(itemType: 'weapon' | 'skill', itemId: string, quality: number, spareCopies: number, level: number): DemonTowerUpgradeCost {
+export function demonTowerUpgradeCost(itemType: 'weapon' | 'skill', itemId: string, quality: number, spareCopies: number, level: number, levelExempt = false): DemonTowerUpgradeCost {
   const item = (itemType === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS).find((entry) => entry.id === itemId);
   const materials: DemonTowerMaterials = { ore: 0, herb: 0, soul: 0, clue: 0 };
   const next = quality + 1;
-  const requiredLevel = Math.max(item?.requiredLevel ?? 120, Math.max(1, (next - 2) * 8));
+  const requiredLevel = Math.max(levelExempt ? item?.legacyRequiredLevel ?? 120 : item?.requiredLevel ?? 120, Math.max(1, (next - 2) * 8));
   const reason = !item || quality >= item.qualityCap ? 'max_quality' : level < requiredLevel ? 'level_required' : null;
   if (spareCopies < 1 && item) {
     if (itemType === 'weapon') materials.ore = 3 + next * 3;

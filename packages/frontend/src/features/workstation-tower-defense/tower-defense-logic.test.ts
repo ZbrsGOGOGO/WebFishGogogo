@@ -102,10 +102,10 @@ function assertEconomyInvariants(state: TowerDefenseState): void {
   expect(state.credits).toBeGreaterThanOrEqual(0);
   expect(state.shop).toHaveLength(TOWER_SHOP_SIZE);
   expect(new Set(state.shop.map((offer) => offer.id)).size).toBe(TOWER_SHOP_SIZE);
-  expect(state.shop[TOWER_FOCUSED_ORDER_INDEX]).toMatchObject({
-    type: state.shopFocus,
-    source: 'focused',
-  });
+  expect(state.shop[TOWER_FOCUSED_ORDER_INDEX].source).toBe('focused');
+  if (!state.shop[TOWER_FOCUSED_ORDER_INDEX].soldOut) {
+    expect(state.shop[TOWER_FOCUSED_ORDER_INDEX].type).toBe(state.shopFocus);
+  }
   expect(state.inventory.length).toBeLessThanOrEqual(TOWER_INVENTORY_CAPACITY);
   expect(new Set(state.inventory.map((entry) => entry.id)).size).toBe(state.inventory.length);
   expect(state.inventory.every((entry) => [1, 2, 3].includes(entry.tier))).toBe(true);
@@ -248,7 +248,7 @@ describe('workstation tower-defense economy', () => {
     expect(rejected.state.rngSeed).toBe(poor.rngSeed);
   });
 
-  it('provides one selectable premium order slot that refills with the chosen type', () => {
+  it('keeps a purchased focused offer sold out and only restocks after paid refresh', () => {
     const initial = createTowerDefenseState(2027);
     const unchangedFocus = setTowerShopFocus(initial, 'single');
     expect(unchangedFocus.state.shop[TOWER_FOCUSED_ORDER_INDEX].id)
@@ -279,7 +279,8 @@ describe('workstation tower-defense economy', () => {
       source: 'focused',
       cost: focusedTowerPartCost('slow'),
     });
-    expect(bought.state.shop[TOWER_FOCUSED_ORDER_INDEX].id).not.toBe(focused.id);
+    expect(bought.state.shop[TOWER_FOCUSED_ORDER_INDEX]).toMatchObject({ id: focused.id, soldOut: true });
+    expect(bought.state.nextOfferId).toBe(selected.state.nextOfferId);
     const staleRetry = buyTowerShopOffer(bought.state, focused.id);
     expect(staleRetry).toMatchObject({ ok: false, code: 'shop_offer_missing' });
     expect(staleRetry.state.credits).toBe(bought.state.credits);
@@ -296,6 +297,7 @@ describe('workstation tower-defense economy', () => {
   it('preserves premium focused-order investment through merge and sale', () => {
     let state = setTowerShopFocus(createTowerDefenseState(13), 'slow').state;
     for (let count = 0; count < 3; count += 1) {
+      if (state.shop[TOWER_FOCUSED_ORDER_INDEX].soldOut) state = refreshTowerDefenseShop(state).state;
       const focused = state.shop[TOWER_FOCUSED_ORDER_INDEX];
       state = buyTowerShopOffer(state, focused.id).state;
     }
@@ -389,16 +391,16 @@ describe('workstation tower-defense economy', () => {
 });
 
 describe('workstation tower-defense combat', () => {
-  it('configures a low-pressure first round and a four-times mixed second round', () => {
+  it('keeps the first round low pressure and raises the mixed second round to five times total HP', () => {
     const first = getTowerRoundSummary(1);
     const second = getTowerRoundSummary(2);
 
     expect(first).toMatchObject({ enemyCount: 6, totalHp: 72, hasMidboss: false });
     expect(second).toMatchObject({
       enemyCount: 24,
-      totalHp: 288,
+      totalHp: 360,
       countMultiplier: 4,
-      totalHpMultiplier: 4,
+      totalHpMultiplier: 5,
       hasMidboss: true,
     });
     expect(second.archetypes).toEqual(['swarm', 'fast', 'basic', 'elite', 'midboss']);
@@ -488,14 +490,14 @@ describe('workstation tower-defense combat', () => {
       enemies: [armored],
       towers: [tower('single', 4)],
     }));
-    expect(ordinary.enemies[0]?.hp).toBe(18);
+    expect(ordinary.enemies[0]?.hp).toBe(17);
 
     const combined = stepTowerDefense(runningState({
       hero: { ...createTowerDefenseState().hero, autoCooldown: 99 },
       enemies: [armored],
       towers: [tower('shred', 4), tower('single', 7)],
     }));
-    expect(combined.enemies[0]).toMatchObject({ hp: 16, shredStacks: 1 });
+    expect(combined.enemies[0]).toMatchObject({ hp: 15, shredStacks: 1 });
   });
 
   it('does not advance or produce money while paused, idle, or between waves', () => {
@@ -592,7 +594,7 @@ describe('workstation tower-defense deterministic balance', () => {
     expect(state.defeated).toBeLessThan(30);
   });
 
-  it('does not let a lone tier-three stapler perfect-clear the mixed second round', () => {
+  it('does not let a lone tier-three stapler perfect-clear without using skills', () => {
     let state = upgradeTowerDefensePlant(createTowerDefenseState(31)).state;
     const guaranteedIds = state.shop.slice(0, 3).map((offer) => offer.id);
     for (const offerId of guaranteedIds) state = buyTowerShopOffer(state, offerId).state;
@@ -608,6 +610,7 @@ describe('workstation tower-defense deterministic balance', () => {
     expect(state.credits).toBe(110 + TOWER_INTERMISSION_CREDIT_BONUS);
     state = setTowerShopFocus(state, 'single').state;
     for (let count = 0; count < 6; count += 1) {
+      if (state.shop[TOWER_FOCUSED_ORDER_INDEX].soldOut) state = refreshTowerDefenseShop(state).state;
       const focused = state.shop[TOWER_FOCUSED_ORDER_INDEX];
       const bought = buyTowerShopOffer(state, focused.id);
       expect(bought.ok).toBe(true);
@@ -623,11 +626,11 @@ describe('workstation tower-defense deterministic balance', () => {
     expect(state.status).toBe('won');
     expect(state.coreHp).toBe(4);
     expect(state.defeated).toBeLessThan(30);
-    expect(runningTicks * TOWER_DEFENSE_TICK_MS).toBeGreaterThanOrEqual(90_000);
+    expect(runningTicks * TOWER_DEFENSE_TICK_MS).toBeGreaterThanOrEqual(60_000);
   });
 
   it.each([0, 31, 77, 314_159, 0xffff_ffff])(
-    'lets a fair focused-order control lineup clear in 90–180 seconds (seed %s)',
+    'charges every restock and no longer lets the old three-tier-two idle template perfect-clear (seed %s)',
     (seed) => {
       let state = upgradeTowerDefensePlant(createTowerDefenseState(seed)).state;
       const heroStart = { x: state.hero.x, y: state.hero.y };
@@ -642,12 +645,17 @@ describe('workstation tower-defense deterministic balance', () => {
         runningTicks += 1;
       }
       expect(state.status).toBe('intermission');
-      expect(state.credits).toBe(160);
+      expect(state.credits).toBe(110 + TOWER_INTERMISSION_CREDIT_BONUS);
 
       state = setTowerShopFocus(state, 'slow').state;
       for (let count = 0; count < 3; count += 1) {
+        if (state.shop[TOWER_FOCUSED_ORDER_INDEX].soldOut) {
+          const refreshed = refreshTowerDefenseShop(state);
+          expect(refreshed.ok).toBe(true); state = refreshed.state;
+        }
         const focused = state.shop[TOWER_FOCUSED_ORDER_INDEX];
-        state = buyTowerShopOffer(state, focused.id).state;
+        const bought = buyTowerShopOffer(state, focused.id);
+        expect(bought.ok).toBe(true); state = bought.state;
       }
       const coffee = state.inventory.find((entry) => entry.type === 'slow' && entry.tier === 2);
       expect(coffee).toBeDefined();
@@ -655,8 +663,13 @@ describe('workstation tower-defense deterministic balance', () => {
 
       state = setTowerShopFocus(state, 'push').state;
       for (let count = 0; count < 3; count += 1) {
+        if (state.shop[TOWER_FOCUSED_ORDER_INDEX].soldOut) {
+          const refreshed = refreshTowerDefenseShop(state);
+          expect(refreshed.ok).toBe(true); state = refreshed.state;
+        }
         const focused = state.shop[TOWER_FOCUSED_ORDER_INDEX];
-        state = buyTowerShopOffer(state, focused.id).state;
+        const bought = buyTowerShopOffer(state, focused.id);
+        expect(bought.ok).toBe(true); state = bought.state;
       }
       const chair = state.inventory.find((entry) => entry.type === 'push' && entry.tier === 2);
       expect(chair).toBeDefined();
@@ -671,8 +684,9 @@ describe('workstation tower-defense deterministic balance', () => {
 
       const durationMs = runningTicks * TOWER_DEFENSE_TICK_MS;
       expect(state.status).toBe('won');
-      expect(state.coreHp).toBe(10);
-      expect(state.defeated).toBe(30);
+      expect(state.coreHp).toBeGreaterThan(0);
+      expect(state.coreHp).toBeLessThan(10);
+      expect(state.defeated).toBeLessThan(30);
       expect(state.hero).toMatchObject(heroStart);
       expect(state.towers.map((entry) => [entry.type, entry.level, entry.slotIndex])).toEqual([
         ['single', 2, 4],

@@ -47,6 +47,8 @@ const MESSAGES: Readonly<Record<string, string>> = {
   DEMON_TOWER_QUALITY_MAXIMUM: '已达到品质上限，剩余副本会保留。',
   DEMON_TOWER_NOT_ENOUGH_MATERIALS: '绑定材料不足，请先探索收集。',
   DEMON_TOWER_NOT_ENOUGH_ATTRIBUTE_POINTS: '可分配属性点不足，请同步最新成长档案。',
+  DEMON_TOWER_INVALID_INNATE: '请选择有效的心性主维。',
+  DEMON_TOWER_INNATE_ALREADY_CHOSEN: '心性已确定，永久命格不能重复选择；请同步最新档案。',
   DEMON_TOWER_ATTRIBUTES_UNCHANGED: '没有已分配的自由点，无需重置，也没有消耗操作额度。',
   DEMON_TOWER_ATTRIBUTE_RESET_COOLDOWN: '免费重置仍在冷却，请按人物档案中服务器确认的时间再试。',
   DEMON_TOWER_BOSS_DAILY_LIMIT: '今日首领协作次数已用完，明天可以继续参与。',

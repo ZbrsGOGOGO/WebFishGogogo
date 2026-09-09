@@ -19,6 +19,11 @@ import { migrations } from './migrations';
  */
 export async function createLocalDevDataSource(): Promise<DataSource> {
   const db: IMemoryDb = newDb({ autoCreateForeignKeyIndices: true });
+  // pg-mem has no concurrent snapshot isolation. Accept only this exact setup
+  // statement so local preview can exercise the export; its snapshot guarantee
+  // must additionally be verified against real PostgreSQL, never inferred here.
+  db.public.interceptQueries((sql) =>
+    /^SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;?$/i.test(sql.trim()) ? [] : null);
 
   // 注册迁移里用到的 Postgres 内建函数。
   db.public.registerFunction({

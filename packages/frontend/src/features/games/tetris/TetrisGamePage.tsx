@@ -12,7 +12,7 @@ import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
 import { useGamePrivacy } from '../GamePrivacyContext';
 import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
-import { shouldIgnoreGameKeyboard } from '../game-input';
+import { listenForOtherLocalGame, shouldIgnoreGameKeyboard } from '../game-input';
 import { useArcadeRun } from '../useArcadeRun';
 import styles from './TetrisGamePage.module.css';
 import {
@@ -154,8 +154,10 @@ export function TetrisGamePage(): JSX.Element {
     };
 
     window.addEventListener('blur', pauseForInterruption);
+    const stopListening = listenForOtherLocalGame('tetris', pauseForInterruption);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      stopListening();
       window.removeEventListener('blur', pauseForInterruption);
       document.removeEventListener(
         'visibilitychange',

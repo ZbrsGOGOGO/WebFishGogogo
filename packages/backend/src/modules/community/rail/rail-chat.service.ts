@@ -25,12 +25,20 @@ export class RailChatService {
     return { chatEnabled, chatCanWrite: chatEnabled && isChatWritesEnabled() && communityWritesEnabled() && this.moderation.isAvailable() };
   }
 
-  async list(userId: string, rawRoomId: string, query: { afterSequence?: unknown; beforeSequence?: unknown; channel?: unknown } = {}): Promise<RailChatPage> {
+  async list(userId: string, rawRoomId: string, query: { afterSequence?: unknown; beforeSequence?: unknown; channel?: unknown; limit?: unknown } = {}): Promise<RailChatPage> {
     assertCommunityChatEnabled();
     const roomId = railUuid(rawRoomId);
     const after = this.cursor(query.afterSequence);
     const before = this.cursor(query.beforeSequence);
     const channel = query.channel === undefined ? undefined : this.channel(query.channel);
+    // Clients may expand the displayed channel, but never outlive the room's
+    // existing 200-message window. Re-read the whole visible slice on polling
+    // so old withdrawals and account restrictions cannot leave cached text.
+    const limit = query.limit === undefined ? PAGE_SIZE : Number(query.limit);
+    if ((typeof query.limit !== 'undefined' && typeof query.limit !== 'string' && typeof query.limit !== 'number') ||
+      ![50, 100, 150, 200].includes(limit) || (typeof query.limit === 'string' && !/^(50|100|150|200)$/.test(query.limit))) {
+      throw new BadRequestException({ code: 'RAIL_CHAT_LIMIT_INVALID' });
+    }
     if (after !== undefined && before !== undefined) throw new BadRequestException({ code: 'RAIL_CHAT_CURSOR_INVALID' });
     return this.db.transaction(async (manager) => {
       const { room } = await this.access(manager, userId, roomId, false);
@@ -41,9 +49,9 @@ export class RailChatService {
       if (channel) builder.andWhere('message.channel = :channel', { channel });
       if (after !== undefined) builder.andWhere('message.sequence > :after', { after });
       if (before !== undefined) builder.andWhere('message.sequence < :before', { before });
-      const rows = await builder.orderBy('message.sequence', after !== undefined ? 'ASC' : 'DESC').take(PAGE_SIZE + 1).getMany();
-      const hasMore = rows.length > PAGE_SIZE;
-      const page = rows.slice(0, PAGE_SIZE);
+      const rows = await builder.orderBy('message.sequence', after !== undefined ? 'ASC' : 'DESC').take(limit + 1).getMany();
+      const hasMore = rows.length > limit;
+      const page = rows.slice(0, limit);
       if (after === undefined) page.reverse();
       const titles = await loadTitleBadges(manager, page.map((row) => row.authorId));
       return { items: page.map((row) => this.project(row, titles.get(row.authorId))), latestSequence: room.latestChatSequence, hasMore };

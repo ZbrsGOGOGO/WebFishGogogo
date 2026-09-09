@@ -141,11 +141,12 @@ describe('rail engine creation and privacy', () => {
     expect(state.players[0].survived).toBe(0);
   });
 
-  it('uses an original, bounded and well-formed card bank with no markup assets', () => {
+  it('uses the exact version-two card counts with bounded complete text and no markup assets', () => {
+    const counts = { good: 19, bad: 18, buff: 14 };
     for (const kind of ['good', 'bad', 'buff'] as const) {
-      expect(RAIL_CARDS[kind].length).toBeGreaterThanOrEqual(24);
+      expect(RAIL_CARDS[kind]).toHaveLength(counts[kind]);
       expect(new Set(RAIL_CARDS[kind].map((card) => card.title)).size).toBe(RAIL_CARDS[kind].length);
-      expect(RAIL_CARDS[kind].every((card) => card.title.length <= 20 && card.description.length <= 100 && !/[<>]/.test(card.description))).toBe(true);
+      expect(RAIL_CARDS[kind].every((card) => card.title.length > 0 && card.title.length <= 40 && card.description.length > 0 && card.description.length <= 100 && !/[<>]/.test(card.title + card.description))).toBe(true);
     }
   });
 });

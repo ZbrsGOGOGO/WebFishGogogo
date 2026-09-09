@@ -86,6 +86,26 @@ export interface DevelopmentRequestSummary {
   version: number;
   createdAt: string;
   updatedAt: string;
+  review?: DevelopmentReviewSummary;
+}
+
+export const DEVELOPMENT_CHECK_STATES = ['todo', 'in_progress', 'done', 'blocked'] as const;
+export type DevelopmentCheckState = typeof DEVELOPMENT_CHECK_STATES[number];
+export interface DevelopmentCheckItem { id: string; label: string; status: DevelopmentCheckState }
+export interface DevelopmentProgressInput { expectedVersion: number; summary: string; items: DevelopmentCheckItem[] }
+export interface DevelopmentProgress {
+  reviewedVersion: number;
+  reviewedAt: string;
+  summary: string;
+  items: DevelopmentCheckItem[];
+}
+export interface DevelopmentReviewSummary {
+  reviewedVersion: number;
+  reviewedAt: string | null;
+  hasUnreviewedChanges: boolean;
+  completedItems: number;
+  totalItems: number;
+  summary: string | null;
 }
 
 export interface DevelopmentRequestDetail extends DevelopmentRequestSummary {
@@ -93,6 +113,7 @@ export interface DevelopmentRequestDetail extends DevelopmentRequestSummary {
   attachments: DevelopmentAttachment[];
   events: DevelopmentEvent[];
   precheck: DevelopmentPrecheck;
+  progress?: DevelopmentProgress | null;
 }
 
 export interface DevelopmentRequestPage {
@@ -118,4 +139,9 @@ export interface DevelopmentReviewExport {
   generatedAt: string;
   notice: string;
   requests: DevelopmentRequestDetail[];
+  /** A complete, single-transaction snapshot; oversized exports fail visibly. */
+  scope?: DevelopmentStatus | 'all' | 'pending';
+  total?: number;
+  exportedCount?: number;
+  complete?: true;
 }

@@ -4,7 +4,16 @@ export type RailPhase = 'placement' | 'buff' | 'decision' | 'rating' | 'round_en
 export type RailCardKind = 'good' | 'bad' | 'buff';
 export type RailActionKind = 'place_good' | 'place_bad' | 'place_buff' | 'choose_track' | 'rate' | 'next_round';
 export interface RailParticipant { id: string; displayName: string; isBot: boolean }
-export interface RailCard { id: string; kind: RailCardKind; title: string; description: string }
+export interface RailCard {
+  /** Per-round/per-seat instance ID used by actions; never replace with templateId. */
+  id: string;
+  kind: RailCardKind;
+  title: string;
+  description: string;
+  /** Optional for old persisted hands, which retain their original text. */
+  templateId?: string;
+  deckVersion?: string;
+}
 export interface RailHand { good: RailCard[]; bad: RailCard[]; buff: RailCard[] }
 export interface RailPlayedCharacter {
   id: string;
@@ -54,6 +63,8 @@ export interface RailEngineResult {
 }
 export interface RailGameView {
   gameKey: 'rail';
+  /** The version actually dealt for this round; absent on legacy rounds. */
+  deckVersion?: string;
   phase: RailPhase;
   round: number;
   totalRounds: number;

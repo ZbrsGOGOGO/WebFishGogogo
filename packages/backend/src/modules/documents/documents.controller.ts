@@ -44,6 +44,17 @@ interface UploadedMultipartFile {
   buffer: Buffer;
 }
 
+// This form only has a flat ownership declaration; never allocate nested arrays.
+// Explicit extension keeps Multer 2.3 security options typed with Nest 11.2.
+type MultipartLimits = NonNullable<NonNullable<Parameters<typeof FileInterceptor>[1]>['limits']>;
+const DOCUMENT_MULTIPART_LIMITS: MultipartLimits & {
+  fieldNestingDepth: number;
+  fieldArrayIndexLimit: number;
+} = {
+  fieldNestingDepth: 0,
+  fieldArrayIndexLimit: 0,
+};
+
 /**
  * DocumentsController：文档库 REST API（design.md 6.4）。
  *
@@ -68,7 +79,7 @@ export class DocumentsController {
    * _Requirements: 2.1_
    */
   @Post()
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: DOCUMENT_MULTIPART_LIMITS }))
   async uploadDocument(
     @CurrentUserId() userId: string,
     @UploadedFile() file: UploadedMultipartFile | undefined,

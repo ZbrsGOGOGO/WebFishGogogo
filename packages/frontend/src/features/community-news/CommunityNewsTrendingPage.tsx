@@ -94,7 +94,7 @@ export function CommunityNewsTrendingPage(): JSX.Element {
         <div>
           <span className={styles.eyebrow}>DAILY SNAPSHOT / 每日快照</span>
           <h2 id="platform-notice-title">真实公开榜单，每天更新一次</h2>
-          <p>本站只保存官方公开 API 返回的标题、排名与来源元数据，不复制正文。单个数据源同步失败时，会明确显示上次快照，不伪造热度。</p>
+          <p>本站只保存公开榜单与官方 API 的标题、排名和来源信息，不复制新闻正文。单个数据源同步失败时，会明确显示上次快照；需登录授权的平台仍标为官方入口。</p>
         </div>
         <div className={styles.snapshotSummary} aria-label="热榜更新信息">
           <span>{snapshot?.schedule ?? '每天 08:10（北京时间）'}</span>
@@ -123,7 +123,7 @@ export function CommunityNewsTrendingPage(): JSX.Element {
         <section className={styles.trendingSection} aria-labelledby="synced-board-title">
           <div className={styles.groupHeading}>
             <h2 id="synced-board-title">站内榜单</h2>
-            <p>排名来自各平台官方 API，热度只在同一榜内理解。</p>
+            <p>各榜会注明公开数据来源；热度只在同一榜内理解，不能跨平台比较。</p>
           </div>
           <div className={styles.trendingBoardGrid}>
             {synchronizedBoards.map((board) => <SynchronizedBoard key={board.id} board={board} />)}

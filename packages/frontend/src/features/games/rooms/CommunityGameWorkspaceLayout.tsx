@@ -6,6 +6,7 @@ import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import { refreshCommunityWallet, synchronizeCommunityWalletSession, useCommunityWalletStore } from '../../../app/store/community-wallet-store';
 import { GamePrivacyProvider, useGamePrivacy } from '../GamePrivacyContext';
 import styles from './GameRooms.module.css';
+import { useBallpointWindow } from '../ballpoint-breach/BallpointWindow';
 
 /** Controls can stop accepting input while the mounted session is covered. */
 export function useGameWorkspaceHidden(): boolean {
@@ -13,6 +14,7 @@ export function useGameWorkspaceHidden(): boolean {
 }
 
 export function CommunityGameWorkspaceLayout(): JSX.Element {
+  const { coverWindow } = useBallpointWindow();
   const location = useLocation();
   const phase = useCommunityAuthStore((state) => state.phase);
   const user = useCommunityAuthStore((state) => state.user);
@@ -26,6 +28,7 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
   const wasCovered = useRef(false);
 
   useEffect(() => { setNotes(''); setCovered(false); }, [user?.publicId]);
+  useEffect(() => { if (covered) coverWindow(); }, [covered, coverWindow]);
 
   useEffect(() => { void restoreSession(); }, [restoreSession]);
   useEffect(() => {

@@ -23,7 +23,7 @@ export function demonTowerAction(raw: unknown): DemonTowerActionInput {
   if (Object.keys(input).length !== 4 || Object.keys(input).some((key) => !['requestId', 'expectedVersion', 'kind', 'payload'].includes(key))) fail();
   if (typeof input.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.requestId)) fail();
   if (!Number.isInteger(input.expectedVersion) || (input.expectedVersion as number) < 0 || (input.expectedVersion as number) >= 2_147_483_647) fail();
-  const kinds = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward'];
+  const kinds = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward'];
   if (typeof input.kind !== 'string' || !kinds.includes(input.kind)) fail();
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) fail();
   const pending: Array<{ item: unknown; depth: number }> = [{ item: input.payload, depth: 0 }];

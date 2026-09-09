@@ -252,6 +252,52 @@ describe('DevelopmentService', () => {
     expect(exported.requests.every((item) => item.precheck.aiReviewed === false)).toBe(true);
   });
 
+  it('records owner-only atomic sub-item reviews without closing the request and flags later comments', async () => {
+    const owner = await activeUser('progress_owner', 'admin');
+    const author = await activeUser('progress_author');
+    const other = await activeUser('progress_other');
+    await grantDirectly(author.id, owner.id);
+    await grantDirectly(other.id, owner.id);
+    const created = await service.createRequest(author.id, createInput('progress-test'));
+    const input = { expectedVersion: 1, summary: '本批完成界面，后端继续开发。', items: [
+      { id: 'ui', label: '界面验收', status: 'done' as const },
+      { id: 'backend', label: '后端验收', status: 'todo' as const },
+    ] };
+    await expect(service.saveProgress(author.id, created.id, input)).rejects.toMatchObject({ response: { code: 'DEVELOPMENT_OWNER_REQUIRED' } });
+    await expect(service.saveProgress(other.id, created.id, input)).rejects.toMatchObject({ response: { code: 'DEVELOPMENT_REQUEST_NOT_FOUND' } });
+    const saved = await service.saveProgress(owner.id, created.id, input);
+    expect(saved).toMatchObject({ status: 'submitted', version: 2, progress: { items: input.items },
+      review: { reviewedVersion: 2, hasUnreviewedChanges: false, completedItems: 1, totalItems: 2 } });
+    await expect(service.saveProgress(owner.id, created.id, input)).rejects.toMatchObject({ response: { code: 'DEVELOPMENT_VERSION_CONFLICT' } });
+    expect(await dataSource.getRepository(AdminAuditLog).count({ where: { targetId: created.id, action: 'development.request.progress_updated' } })).toBe(1);
+    expect(await dataSource.getRepository(CommunityNotification).count({ where: { userId: author.id, eventType: 'development.request.progress_updated' } })).toBe(1);
+    await service.addComment(author.id, created.id, '新的补充不能被旧审阅掩盖', 2);
+    expect((await service.detail(owner.id, created.id)).review).toMatchObject({ reviewedVersion: 2, hasUnreviewedChanges: true });
+    expect((await service.listRequests(owner.id, undefined, 1)).items[0].review).toMatchObject({ reviewedVersion: 2, hasUnreviewedChanges: true });
+  });
+
+  it('exports all statuses beyond one page and refuses overflow instead of silently truncating', async () => {
+    const owner = await activeUser('export_full_owner', 'admin');
+    const repository = dataSource.getRepository(DevelopmentRequest);
+    const seeds = Array.from({ length: 21 }, (_, i) => repository.create({
+      authorId: owner.id, clientRequestId: `full-export-${i}`, requestHash: 'b'.repeat(64),
+      title: `提案 ${i}`, category: 'feature', description: '完整范围', status: i === 0 ? 'done' : 'submitted',
+      version: 1, attachmentCount: 0, attachmentBytes: 0,
+    }));
+    await repository.save(seeds);
+    await service.addComment(owner.id, seeds[0].id, '完成以后又有新补充', 1);
+    const exported = await service.reviewExport(owner.id, 'all');
+    expect(exported).toMatchObject({ scope: 'all', complete: true, total: 21, exportedCount: 21 });
+    expect(exported.requests.find((row) => row.id === seeds[0].id)?.events.some((event) => event.body === '完成以后又有新补充')).toBe(true);
+    expect((await service.reviewExport(owner.id, 'done')).requests).toHaveLength(1);
+    await repository.insert(Array.from({ length: 180 }, (_, i) => ({
+      authorId: owner.id, clientRequestId: `overflow-export-${i}`, requestHash: 'c'.repeat(64),
+      title: `溢出 ${i}`, category: 'feature' as const, description: '范围超出单次上限', status: 'submitted' as const,
+      version: 1, attachmentCount: 0, attachmentBytes: 0,
+    })));
+    await expect(service.reviewExport(owner.id, 'all')).rejects.toMatchObject({ response: { code: 'DEVELOPMENT_EXPORT_LIMIT', total: 201, limit: 200 } });
+  });
+
   async function activeUser(
     username: string,
     communityRole: User['communityRole'] = 'user',

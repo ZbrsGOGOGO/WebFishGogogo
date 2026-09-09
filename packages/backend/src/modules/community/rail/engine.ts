@@ -4,7 +4,7 @@ import type {
   RailParticipant, RailPhase, RailPlayedCharacter, RailPlayerStats, RailRoundRating,
   RailRoundResult, RailTrack,
 } from '@stealth-reader/shared';
-import { RAIL_CARDS } from './cards';
+import { RAIL_CARDS, RAIL_DECK_VERSION } from './cards';
 
 export class RailEngineError extends Error {
   constructor(readonly code: string) { super(code); this.name = 'RailEngineError'; }
@@ -34,6 +34,8 @@ interface RailEnginePlayer extends RailParticipant {
 /** Private persisted JSON. Never spread this object (or a player) into an API response. */
 export interface RailEngineState {
   version: 1;
+  /** Missing on legacy persisted rounds; stamped only when a new round is dealt. */
+  deckVersion?: string;
   phase: RailPhase;
   round: number;
   roundToken: string;
@@ -81,6 +83,7 @@ function phase(state: RailEngineState, value: Exclude<RailPhase, 'finished'>, at
   state.botsActed = false;
 }
 function startRound(state: RailEngineState, at: number): void {
+  state.deckVersion = RAIL_DECK_VERSION;
   state.conductorId = state.players[state.round - 1].id;
   state.roundToken = createHmac('sha256', state.rngSeed).update(`round:${state.round}`).digest('hex').slice(0, 32);
   state.tracks = { A: [], B: [] };
@@ -100,7 +103,7 @@ function startRound(state: RailEngineState, at: number): void {
     player.team = index % 2 === 0 ? first : opposite(first);
     for (const kind of ['good', 'bad', 'buff'] as const) {
       player.hand[kind] = shuffle(state, RAIL_CARDS[kind]).slice(0, 3).map((template, cardIndex) => ({
-        id: `r${state.round}:p${player.seat}:${kind}:${cardIndex}`, kind, ...template,
+        ...template, id: `r${state.round}:p${player.seat}:${kind}:${cardIndex}`, kind, deckVersion: RAIL_DECK_VERSION,
       }));
     }
   });
@@ -367,6 +370,7 @@ export function view(state: RailEngineState, viewerId: string | null, now: numbe
   const player = state.players.find((candidate) => candidate.id === viewerId && !candidate.left && !candidate.isBot);
   return {
     gameKey: 'rail', phase: state.phase, round: state.round, totalRounds: state.players.length,
+    ...(state.deckVersion ? { deckVersion: state.deckVersion } : {}),
     roundToken: state.roundToken, startedAt: state.startedAt, deadlineAt: state.deadlineAt,
     endsAt: state.endsAt, serverNow: now, conductorId: state.conductorId,
     viewerRole: player ? 'participant' : 'spectator',

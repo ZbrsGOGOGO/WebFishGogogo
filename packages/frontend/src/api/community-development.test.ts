@@ -14,6 +14,7 @@ describe('communityDevelopmentApi', () => {
     await communityDevelopmentApi.getRequest('request / 1');
     await communityDevelopmentApi.downloadAttachment('request / 1', 'file / 2');
     await communityDevelopmentApi.exportReview();
+    await communityDevelopmentApi.exportReview('all');
 
     expect(get).toHaveBeenNthCalledWith(1, '/v1/development/access');
     expect(get).toHaveBeenNthCalledWith(2, '/v1/development/requests', {
@@ -28,6 +29,7 @@ describe('communityDevelopmentApi', () => {
     expect(get).toHaveBeenNthCalledWith(5, '/v1/development/review-export', {
       query: { status: undefined },
     });
+    expect(get).toHaveBeenNthCalledWith(6, '/v1/development/review-export', { query: { status: 'all' } });
   });
 
   it('sends expectedVersion and never opts writes into automatic replay', async () => {
@@ -37,6 +39,8 @@ describe('communityDevelopmentApi', () => {
     await communityDevelopmentApi.addComment('request-1', '补充', 4);
     await communityDevelopmentApi.decideRequest('request-1', 'accepted', '纳入迭代', 5);
     await communityDevelopmentApi.uploadAttachment('request-1', file, 6);
+    const progress = { expectedVersion: 7, summary: '范围', items: [{ id: 'item', label: '验收项', status: 'done' as const }] };
+    await communityDevelopmentApi.saveProgress('request / 1', progress);
 
     expect(post).toHaveBeenNthCalledWith(
       1,
@@ -55,6 +59,6 @@ describe('communityDevelopmentApi', () => {
     expect((form as FormData).get('file')).toBe(file);
     expect((form as FormData).get('expectedVersion')).toBe('6');
     expect(post.mock.calls[2]?.[2]).toEqual({ retryAfterRefresh: false });
+    expect(post).toHaveBeenNthCalledWith(4, '/v1/development/requests/request%20%2F%201/progress', progress, { retryAfterRefresh: false });
   });
 });
-

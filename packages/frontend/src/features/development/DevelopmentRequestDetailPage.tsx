@@ -20,6 +20,7 @@ import { communityDevelopmentApi } from '../../api/community-development';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Card, EmptyState, PageHeader, Tag, Textarea } from '../../components/ui';
 import { useDevelopmentAccess } from './development-access';
+import { DevelopmentProgressCard } from './DevelopmentProgressCard';
 import {
   DEVELOPMENT_CATEGORY_LABELS,
   DEVELOPMENT_STATUS_LABELS,
@@ -363,6 +364,7 @@ function DevelopmentRequestDetailContent({
 
       <div className={styles.detailGrid}>
         <section className={styles.stack}>
+          <DevelopmentProgressCard key={`${visibleDetail.id}:${visibleDetail.version}`} detail={visibleDetail} owner={role === 'owner'} onSaved={setDetail} onConflict={() => setConflict(true)} />
           <Card title="详细描述" bodyClassName={styles.cardBody}>
             <pre className={styles.plainText}>{visibleDetail.description}</pre>
           </Card>

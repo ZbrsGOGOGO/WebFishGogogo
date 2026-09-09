@@ -107,6 +107,29 @@ describe('DemonTowerAutoService bounded server worker', () => {
     expect(await db.getRepository(DemonTowerWorldFloor).find({ order: { floor: 'ASC' } })).toEqual(world);
     expect(await db.getRepository(DemonTowerDailyProgress).findOneByOrFail({ userId: a.user.id, serviceDate: '2099-09-08' })).toMatchObject({ bossDamage: 0, passageContribution: 0, bossAttempts: 0 });
   });
+  it('resumes a persisted legacy battle without activating growth mid-turn, and preserves all worker boundaries', async () => {
+    const a = await actor(); await modify(a.user.id, state => { state.rngSeed = 'a'.repeat(64); state.rngCounter = 0; });
+    const { response } = await start(a), id = response.run!.id;
+    for (let i = 0; i < 8 && !(await rawProfile(a.user.id)).state.battle; i++) { await auto.runOne(id, false); tick(); }
+    await modify(a.user.id, state => {
+      expect(state.battle).not.toBeNull(); delete state.growth;
+      for (const item of state.weapons) { delete item.star; delete item.favor; delete item.levelExempt; }
+      for (const item of state.skills) delete item.levelExempt;
+      delete state.battle!.rulesVersion; delete state.battle!.innates; delete state.battle!.feignUsed;
+      state.loadout.activeSkills = ['s1']; state.battle!.player.hp = Math.ceil(state.battle!.player.maxHp / 2);
+      state.battle!.enemies[0].hp = 1000; state.battle!.enemies[0].maxHp = 1000;
+    });
+    const before = (await rawProfile(a.user.id)).state as unknown as DemonTowerEngineState;
+    auto = new DemonTowerAutoService(db, tower, new MembershipService(), { now: () => new Date(now) });
+    await auto.runOne(id, false);
+    const after = (await rawProfile(a.user.id)).state as unknown as DemonTowerEngineState;
+    expect(after.growth).toBeUndefined(); expect(after.battle!.rulesVersion).toBeUndefined();
+    expect(after.battle!.totalDamage).toBe(before.battle!.totalDamage); expect(after.battle!.turn).toBe(before.battle!.turn + 1);
+    expect(after.weapons[0].favor).toBeUndefined();
+    expect(await job(id)).toMatchObject({ maxExplorations: 20, status: 'running' });
+    await auto.stop(a.user.id, id, {}); tick(); const stopped = await rawProfile(a.user.id);
+    expect(await auto.runOne(id, false)).toBe(false); expect(await rawProfile(a.user.id)).toEqual(stopped);
+  });
   it.each(['session_ended', 'vip_expired', 'account_inactive', 'day_changed', 'time_limit', 'maintenance'] as const)('stops for %s without consuming a step', async reason => {
     const a = await actor(); const { response } = await start(a); const before = await rawProfile(a.user.id);
     if (reason === 'session_ended') await db.getRepository(AuthSession).update(a.session.id, { revokedAt: now });

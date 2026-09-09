@@ -23,11 +23,12 @@ const dist = process.env.PLAY_REHEARSAL_BACKEND_DIST || path.join(appRoot, 'pack
 const load = (name) => fromApp(path.join(dist, name));
 const E = load('database/entities');
 const { TrendingNewsService, fetchStackOverflow } = load('modules/community/news/trending-news.service');
-const BOARDS = ['hacker_news', 'stackoverflow', 'github_rising'];
+const BOARDS = ['hacker_news', 'stackoverflow', 'github_rising', 'baidu'];
 const HOST_BOARD = {
   'hacker-news.firebaseio.com': 'hacker_news',
   'api.stackexchange.com': 'stackoverflow',
   'api.github.com': 'github_rising',
+  'top.baidu.com': 'baidu',
 };
 const NativeDate = Date;
 const nativeFetch = global.fetch;
@@ -94,6 +95,16 @@ function source(tag, options = {}) {
         ], quota_remaining: 200, ...(options.stackMetadata || {}),
       });
     }
+    if (board === 'baidu') {
+      assert.equal(url.pathname, '/board'); assert.equal(url.searchParams.get('tab'), 'realtime');
+      const content = [
+        { index: 0, word: `${tag} pinned`, isTop: true, rawUrl: 'https://www.baidu.com/s?wd=pinned' },
+        { index: 1, word: `${tag} &lt;b&gt;Baidu title&lt;/b&gt; &amp; plain`, rawUrl: 'https://www.baidu.com/s?wd=synthetic-2#remove-fragment', hotScore: '5000' },
+        { index: 2, word: `${tag} hostile host`, rawUrl: 'https://www.baidu.com.attacker.invalid/s?wd=bad' },
+        { index: 3, word: `${tag} Baidu second`, rawUrl: 'https://www.baidu.com/s?wd=synthetic-4', hotScore: '4000' },
+      ];
+      return new Response(`<!--s-data:${JSON.stringify({ data: { cards: [{ content }] } })}-->`, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    }
     assert.equal(url.pathname, '/search/repositories'); assert.equal(url.searchParams.get('sort'), 'stars');
     return json({ incomplete_results: false, items: [
       { id: 301, full_name: `${tag}/rejected`, html_url: 'https://github.com@attacker.invalid/repo' },
@@ -130,11 +141,12 @@ async function normalAndFailureChecks() {
   assert.ok(internal(unavailable).every((board) => board.status === 'unavailable' && board.items.length === 0));
   assert.deepEqual(await fingerprints(), before, 'Listing must not write any row');
   const concurrent = await Promise.all(Array.from({ length: 6 }, () => refresh(first)));
-  assert.equal(concurrent.reduce((sum, result) => sum + result.refreshedBoards.length, 0), 3);
+  assert.equal(concurrent.reduce((sum, result) => sum + result.refreshedBoards.length, 0), BOARDS.length);
   assert.equal(first.calls.filter((call) => call.path.endsWith('/topstories.json')).length, 1);
   assert.equal(first.calls.filter((call) => /\/item\//.test(call.path)).length, 4);
   assert.equal(first.calls.filter((call) => call.board === 'stackoverflow').length, 1);
   assert.equal(first.calls.filter((call) => call.board === 'github_rising').length, 1);
+  assert.equal(first.calls.filter((call) => call.board === 'baidu').length, 1);
   const snapshot = await page();
   assert.equal(snapshot.serviceDate, '2099-07-01');
   assert.ok(internal(snapshot).every((board) => board.status === 'fresh' && board.items.length === 2));
@@ -147,7 +159,7 @@ async function normalAndFailureChecks() {
     }
   }
   const external = snapshot.boards.filter((board) => !BOARDS.includes(board.id));
-  assert.ok(external.length >= 6 && external.every((board) => board.status === 'external_only' && board.items.length === 0));
+  assert.ok(external.length >= 5 && external.every((board) => board.status === 'external_only' && board.items.length === 0));
   const noFetch = source('must-not-replace');
   assert.deepEqual((await refresh(noFetch)).refreshedBoards, []); assert.equal(noFetch.calls.length, 0);
   check('six replicas fetch each official source once; daily completion is idempotent; ranks 2/4, plain text, safe URLs and honest external-only status');
@@ -157,7 +169,7 @@ async function normalAndFailureChecks() {
     at(day(`2099-07-0${index + 2}`));
     const fetcher = source(`failure-${index}`, { failBoard: failedBoard });
     const result = await refresh(fetcher);
-    assert.equal(result.refreshedBoards.length, 2); assert.ok(!result.refreshedBoards.includes(failedBoard));
+    assert.equal(result.refreshedBoards.length, BOARDS.length - 1); assert.ok(!result.refreshedBoards.includes(failedBoard));
     const current = internal(await page()); const stale = current.find((board) => board.id === failedBoard);
     assert.equal(stale.status, 'stale'); assert.equal(stale.snapshotDate, previous.snapshotDate);
     assert.equal(stale.updatedAt, previous.updatedAt); assert.deepEqual(stale.items, previous.items);
@@ -166,7 +178,7 @@ async function normalAndFailureChecks() {
     assert.equal(failedRun.status, 'failed'); assert.equal(failedRun.completedAt, null);
     assert.ok(fetcher.cancelled.includes(failedBoard), 'Failed HTTP response body must be cancelled');
   }
-  check('each source fails independently, preserves old items/ranks/timestamps, and never blocks the other two sources');
+  check('each source fails independently, preserves old items/ranks/timestamps, and never blocks the other three sources');
 }
 
 async function leaseCheck(date, sameMillisecond, lateFailure = false) {
@@ -177,10 +189,10 @@ async function leaseCheck(date, sameMillisecond, lateFailure = false) {
   const repo = db.getRepository(E.TrendingNewsBoardRun);
   await eventually(async () => (await repo.find({ where: { serviceDate: date, status: 'running' } })).length === 2, 'old two-board leases');
   const oldRuns = await repo.find({ where: { serviceDate: date, status: 'running' } });
-  // The board-worker concurrency may leave GitHub either completed already or
-  // queued behind both gates. Assert its actual ownership without assuming an
-  // implementation-specific worker count.
-  const thirdCompleted = await repo.findOneBy({ serviceDate: date, boardId: 'github_rising', status: 'completed' });
+  // Extra sources may complete or still be queued. Preserve already-completed
+  // ownership without assuming a fixed worker count or a third-source-only model.
+  const extras = BOARDS.filter(id => !['hacker_news', 'stackoverflow'].includes(id));
+  const completedExtras = new Set((await repo.find({ where: { serviceDate: date, status: 'completed' } })).map(row => row.boardId));
   if (sameMillisecond) {
     for (const row of oldRuns) await repo.update({ serviceDate: date, boardId: row.boardId }, { leaseExpiresAt: new TestDate(clock - 1) });
   } else at(clock + 10 * 60_000 + 1);
@@ -199,8 +211,15 @@ async function leaseCheck(date, sameMillisecond, lateFailure = false) {
   newGate.release(); await newer;
   const beforeRelease = await fingerprints();
   const completed = internal(await page());
-  assert.ok(completed.every((board) => board.items.length === 2 && board.items.every((item) => item.title.includes(board.id === 'github_rising' && thirdCompleted ? 'old-worker' : 'new-worker'))), 'Only a completed third source keeps its original owner; new claims publish the new owner snapshot');
-  assert.equal(newFetch.calls.filter((call) => call.board === 'github_rising').length, thirdCompleted ? 0 : 1, 'Replacement worker must not refetch a completed third source');
+  for (const board of completed) {
+    const calls = newFetch.calls.filter(call => call.board === board.id).length;
+    if (extras.includes(board.id)) {
+      assert.ok(calls <= 1, 'An extra source is fetched at most once by the new worker');
+      if (completedExtras.has(board.id)) assert.equal(calls, 0, 'A completed extra source must not be refetched');
+    }
+    const expectedOwner = extras.includes(board.id) && calls === 0 ? 'old-worker' : 'new-worker';
+    assert.ok(board.items.length === 2 && board.items.every(item => item.title.includes(expectedOwner)), 'Snapshot belongs to the actual valid source lease owner');
+  }
   oldGate.release(); await oldRefresh;
   assert.deepEqual(await fingerprints(), beforeRelease, 'Late old worker must not change any committed row or timestamp');
   check(lateFailure ? 'late old-worker failure cannot downgrade a newer completed lease or change its data' : sameMillisecond ? 'same-millisecond replacement relies on a new UUID token, not just startedAt' : 'expired lease owner cannot overwrite a newer worker snapshot');
@@ -237,18 +256,18 @@ async function backoffChecks() {
   at(day('2099-07-11'));
   const successAt = clock;
   const successful = source('successful-quota', { stackMetadata: { backoff: 172800 }, githubHeaders: { 'X-RateLimit-Remaining': '0', 'X-RateLimit-Reset': String(Math.floor((clock + 172800000) / 1000)) } });
-  assert.equal((await refresh(successful)).refreshedBoards.length, 3);
+  assert.equal((await refresh(successful)).refreshedBoards.length, BOARDS.length);
   for (const boardId of ['stackoverflow', 'github_rising']) {
     const row = await db.getRepository(E.TrendingNewsBoardRun).findOneByOrFail({ serviceDate: '2099-07-11', boardId });
     assert.equal(row.status, 'completed'); assert.equal(row.retryNotBefore.getTime(), successAt + 172800000);
   }
   at(day('2099-07-12'));
   const noQuota = source('must-wait'); await refresh(noQuota);
-  assert.ok(noQuota.calls.every((call) => call.board === 'hacker_news'));
-  const staleBoards = internal(await page()).filter((board) => board.id !== 'hacker_news');
+  assert.ok(noQuota.calls.every((call) => ['hacker_news', 'baidu'].includes(call.board)));
+  const staleBoards = internal(await page()).filter((board) => ['stackoverflow', 'github_rising'].includes(board.id));
   assert.ok(staleBoards.every((board) => board.status === 'stale' && board.snapshotDate === '2099-07-11'));
   at(day('2099-07-13'));
-  const renewed = source('renewed-quota'); assert.equal((await refresh(renewed)).refreshedBoards.length, 3);
+  const renewed = source('renewed-quota'); assert.equal((await refresh(renewed)).refreshedBoards.length, BOARDS.length);
   check('successful Stack backoff and exhausted GitHub quota still publish valid items, persist cross-day delay and resume');
 
   at(day('2099-07-14'));
@@ -257,7 +276,7 @@ async function backoffChecks() {
   await refresh(githubLimited);
   const limit = await db.getRepository(E.TrendingNewsBoardRun).findOneByOrFail({ serviceDate: '2099-07-14', boardId: 'github_rising' });
   assert.equal(limit.retryNotBefore.getTime(), resetAt);
-  at(resetAt); assert.equal((await refresh(source('github-recovered'))).refreshedBoards.length, 3);
+  at(resetAt); assert.equal((await refresh(source('github-recovered'))).refreshedBoards.length, BOARDS.length);
   check('GitHub 403 reset headers persist their deadline and recover without authentication or bypass');
 }
 
@@ -305,11 +324,11 @@ async function cleanup() {
     global.Date = TestDate;
     global.fetch = async () => { throw new Error('Unexpected non-injected network access'); };
     await normalAndFailureChecks();
-    await leaseCheck('2099-07-05', false);
-    await leaseCheck('2099-07-06', true);
     await partialSourceCheck();
     await backoffChecks();
     await leaseCheck('2099-07-16', true, true);
+    await leaseCheck('2099-07-17', false);
+    await leaseCheck('2099-07-18', true);
     await responseCleanupChecks();
   } catch (error) { failed = error; }
   finally {

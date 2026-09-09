@@ -2,11 +2,14 @@ import { BadRequestException } from '@nestjs/common';
 
 import {
   DEVELOPMENT_CATEGORIES,
+  DEVELOPMENT_CHECK_STATES,
   DEVELOPMENT_LIMITS,
   DEVELOPMENT_STATUSES,
   type DevelopmentCategory,
   type DevelopmentCreateInput,
   type DevelopmentStatus,
+  type DevelopmentProgressInput,
+  type DevelopmentCheckState,
 } from '@stealth-reader/shared';
 
 import { normalizeUsername } from '../auth/dto/auth-validation';
@@ -65,6 +68,19 @@ export function developmentDecisionInput(body: unknown): {
 export function developmentMemberInput(body: unknown): { username: string } {
   const value = strictObject(body, ['username']);
   return { username: normalizeUsername(value.username) };
+}
+
+export function developmentProgressInput(body: unknown): DevelopmentProgressInput {
+  const value = strictObject(body, ['expectedVersion', 'summary', 'items']);
+  if (!Array.isArray(value.items) || value.items.length < 1 || value.items.length > 40) throw invalid('items');
+  const items = value.items.map((raw) => {
+    const item = strictObject(raw, ['id', 'label', 'status']);
+    if (typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(item.id)) throw invalid('item.id');
+    if (!DEVELOPMENT_CHECK_STATES.includes(item.status as DevelopmentCheckState)) throw invalid('item.status');
+    return { id: item.id, label: text(item.label, 'item.label', 160), status: item.status as DevelopmentCheckState };
+  });
+  if (new Set(items.map((item) => item.id)).size !== items.length) throw invalid('items');
+  return { expectedVersion: developmentVersion(value.expectedVersion), summary: text(value.summary, 'summary', 1200), items };
 }
 
 export function developmentVersion(value: unknown): number {

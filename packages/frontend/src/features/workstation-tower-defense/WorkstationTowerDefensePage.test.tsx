@@ -1,13 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WorkstationTowerDefensePage, type WorkstationTowerDefenseCharacter } from './WorkstationTowerDefensePage';
+import { TOWER_TAUNTS, WorkstationTowerDefensePage, type WorkstationTowerDefenseCharacter } from './WorkstationTowerDefensePage';
 import * as engine from './tower-defense-logic';
 import styles from './WorkstationTowerDefensePage.module.css';
 
 const OLD_SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v1';
 const MERGE_SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v2';
-const SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v3';
+const ROUND_SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v3';
+const SETTINGS_KEY = 'momo.workstation-tower-defense.settings.v4';
 
 function renderPage(character?: WorkstationTowerDefenseCharacter) {
   return render(<WorkstationTowerDefensePage character={character} />);
@@ -114,14 +115,39 @@ describe('WorkstationTowerDefensePage two-round merging edition', () => {
     expect(within(shop).getAllByRole('button')).toHaveLength(5);
   });
 
-  it('explains sold-out slots and disables purchase until refresh', () => {
-    const initial = engine.createTowerDefenseState();
-    useInitialState({ shop: initial.shop.map((offer, index) => index === 0 ? { ...offer, soldOut: true } : offer) });
+  it('buys a real offer into the same sold-out slot, rejects another click, and requires paid refresh', () => {
     renderPage(); const before = coins();
+    const shop = screen.getByLabelText('五格零件商店');
+    const buttons = within(shop).getAllByRole('button');
+    fireEvent.click(buttons[0]);
     const soldOut = screen.getByRole('button', { name: '第 1 格已售罄，刷新后补货' });
+    expect(soldOut).toBe(buttons[0]);
+    expect(within(shop).getAllByRole('button')).toEqual(buttons);
     expect(soldOut).toBeDisabled();
-    fireEvent.click(soldOut); expect(coins()).toBe(before);
+    fireEvent.click(soldOut); expect(coins()).toBe(before - engine.TOWER_DEFINITIONS.single.partCost);
     expect(soldOut).toHaveTextContent('待刷新');
+    fireEvent.click(screen.getByRole('button', { name: /刷新零件商店/ }));
+    expect(coins()).toBe(before - engine.TOWER_DEFINITIONS.single.partCost - engine.TOWER_SHOP_REFRESH_COST);
+    expect(within(shop).getAllByRole('button')).toHaveLength(5);
+    expect(shop.querySelector('[data-sold-out="true"]')).toBeNull();
+  });
+
+  it('cannot refill a sold-out focused slot by freely changing the order type', () => {
+    renderPage();
+    const selector = screen.getByRole('combobox', { name: '定向订货塔型' });
+    fireEvent.click(screen.getByRole('button', { name: /购买第 5 格订书机零件/ }));
+    const receipt = screen.getByRole('button', { name: '第 5 格已售罄，刷新后补货' });
+    const paid = coins();
+    fireEvent.change(selector, { target: { value: 'splash' } });
+    expect(coins()).toBe(paid);
+    expect(receipt).toBeDisabled();
+    expect(receipt).toHaveAttribute('data-type', 'single');
+    expect(selector).toHaveValue('splash');
+    expect(screen.getByRole('status')).toHaveTextContent('预约打印机');
+    expect(screen.queryByRole('button', { name: /购买第 5 格/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /刷新零件商店/ }));
+    expect(screen.getByRole('button', { name: /购买第 5 格打印机/ })).toBeEnabled();
+    expect(coins()).toBe(paid - engine.TOWER_SHOP_REFRESH_COST);
   });
 
   it('keeps native order-selection arrow keys from moving the hero', () => {
@@ -139,6 +165,36 @@ describe('WorkstationTowerDefensePage two-round merging edition', () => {
     fireEvent.click(summary);
     expect(engine.TOWER_DEFINITIONS.splash.description).toContain(`穿透 ${engine.TOWER_PRINTER_ARMOR_PIERCE} 点护甲`);
     expect(screen.getByText(engine.TOWER_DEFINITIONS.splash.description)).toBeVisible();
+  });
+
+  it.each(['single', 'slow', 'splash', 'push', 'shred'] as const)('shows both actual %s evolution descriptions and distinct tier sprites', (type) => {
+    useInitialState({ towers: [{ id: `evolved-${type}`, type, level: 3, slotIndex: 0, cooldown: 0, invested: 162 }] });
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: `塔位 1，${engine.TOWER_DEFINITIONS[type].name} 3 阶` }));
+    const detail = screen.getByLabelText('当前塔进阶技能');
+    expect(detail).toHaveTextContent(engine.TOWER_EVOLUTIONS[type][3].name);
+    expect(detail).toHaveTextContent(engine.TOWER_EVOLUTIONS[type][3].description);
+    const catalog = screen.getByLabelText(`${engine.TOWER_DEFINITIONS[type].name}进阶图鉴`);
+    expect(catalog).toHaveTextContent(engine.TOWER_EVOLUTIONS[type][2].description);
+    expect(catalog).toHaveTextContent(engine.TOWER_EVOLUTIONS[type][3].description);
+    expect(catalog.querySelector(`[data-evolution="${type}-2"]`)).not.toBeNull();
+    expect(catalog.querySelector(`[data-evolution="${type}-3"]`)).not.toBeNull();
+  });
+
+  it('renders real armor-break technique feedback after the engine fires', () => {
+    const initial = engine.createTowerDefenseState();
+    useInitialState({ status: 'running', nextSpawnAt: 999,
+      hero: { ...initial.hero, autoCooldown: 999 },
+      towers: [{ id: 'stapler', type: 'single', level: 2, slotIndex: 4, cooldown: 0, invested: 54 }],
+      enemies: [{ id: 'armored', name: '护甲测试', pathIndex: 9, hp: 100, maxHp: 100, armor: 3, archetype: 'elite',
+        speedTicks: 99, slowTicks: 0, shredTicks: 0, shredStacks: 0, singleTargetDamageCap: null,
+        reward: 8, score: 100, coreDamage: 1, boss: false }],
+    });
+    renderPage(); act(() => vi.advanceTimersByTime(engine.TOWER_DEFENSE_TICK_MS));
+    const effect = document.querySelector('[data-source="single"][data-technique="pierce"]');
+    expect(effect?.textContent).toBe('破甲');
+    expect(document.querySelector('[data-armor-broken="true"]')).not.toBeNull();
+    expect(screen.getByTitle(/护甲测试.*破甲 1/)).toBeInTheDocument();
   });
 
   it('prevents unaffordable purchases and upgrades without changing the balance', () => {
@@ -264,21 +320,25 @@ describe('WorkstationTowerDefensePage two-round merging edition', () => {
   it('keeps the old high score separate and tolerates a corrupt new record', () => {
     window.localStorage.setItem(OLD_SETTINGS_KEY, JSON.stringify({ bestScore: 999999 }));
     window.localStorage.setItem(MERGE_SETTINGS_KEY, JSON.stringify({ bestScore: 888888 }));
+    window.localStorage.setItem(ROUND_SETTINGS_KEY, JSON.stringify({ bestScore: 777777 }));
     window.localStorage.setItem(SETTINGS_KEY, '{broken');
     renderPage();
-    expect(screen.getByText('两回合版 · 本机最高分').nextElementSibling).toHaveTextContent('0');
+    expect(screen.getByText('售罄挑战版 · 本机最高分').nextElementSibling).toHaveTextContent('0');
     expect(window.localStorage.getItem(OLD_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 999999 }));
     expect(window.localStorage.getItem(MERGE_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 888888 }));
+    expect(window.localStorage.getItem(ROUND_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 777777 }));
     expect(screen.getByRole('button', { name: '开始工位塔防' })).toBeEnabled();
   });
 
   it('saves a finished merging run only to the new local record key', () => {
     window.localStorage.setItem(OLD_SETTINGS_KEY, JSON.stringify({ bestScore: 999999 }));
     window.localStorage.setItem(MERGE_SETTINGS_KEY, JSON.stringify({ bestScore: 888888 }));
+    window.localStorage.setItem(ROUND_SETTINGS_KEY, JSON.stringify({ bestScore: 777777 }));
     useInitialState({ status: 'won', score: 1234 }); renderPage();
     expect(window.localStorage.getItem(SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 1234 }));
     expect(window.localStorage.getItem(OLD_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 999999 }));
     expect(window.localStorage.getItem(MERGE_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 888888 }));
+    expect(window.localStorage.getItem(ROUND_SETTINGS_KEY)).toBe(JSON.stringify({ bestScore: 777777 }));
     expect(screen.getByText('守住工位，准点下班！')).toBeInTheDocument();
   });
 

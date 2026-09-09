@@ -33,12 +33,30 @@ import {
   developmentMemberInput,
   developmentPage,
   developmentVersion,
+  developmentProgressInput,
   optionalDevelopmentStatus,
 } from './development-validation';
 
 interface HeaderResponse {
   setHeader(name: string, value: string): void;
 }
+
+// Multer 2.3's array-index bound is opt-in; both supplied form fields are flat.
+// Nest 11.2's public limits type predates these options, so extend it explicitly.
+type MultipartLimits = NonNullable<NonNullable<Parameters<typeof FileInterceptor>[1]>['limits']>;
+const DEVELOPMENT_MULTIPART_LIMITS = {
+  files: 1,
+  fileSize: DEVELOPMENT_LIMITS.fileBytes,
+  fields: 1,
+  fieldSize: 32,
+  fieldNestingDepth: 0,
+  fieldArrayIndexLimit: 0,
+  // Busboy emits partsLimit at the threshold: permit one field + one file.
+  parts: 3,
+} satisfies MultipartLimits & {
+  fieldNestingDepth: number;
+  fieldArrayIndexLimit: number;
+};
 
 @Controller('v1/development')
 @UseGuards(JwtAuthGuard)
@@ -84,13 +102,18 @@ export class DevelopmentController {
   ) {
     return this.development.reviewExport(
       userId,
-      optionalDevelopmentStatus(rawStatus),
+      rawStatus === 'all' ? 'all' : optionalDevelopmentStatus(rawStatus),
     );
   }
 
   @Get('members')
   members(@CurrentUserId() userId: string) {
     return this.development.listMembers(userId);
+  }
+
+  @Post('requests/:id/progress')
+  progress(@CurrentUserId() userId: string, @Param('id') rawId: string, @Body() body: unknown) {
+    return this.development.saveProgress(userId, developmentId(rawId), developmentProgressInput(body));
   }
 
   @Post('members')
@@ -157,15 +180,7 @@ export class DevelopmentController {
   @Post('requests/:id/attachments')
   @UseGuards(DevelopmentAttachmentAuthorGuard)
   @UseInterceptors(FileInterceptor('file', {
-    limits: {
-      files: 1,
-      fileSize: DEVELOPMENT_LIMITS.fileBytes,
-      fields: 1,
-      fieldSize: 32,
-      // Busboy emits partsLimit when the configured threshold is reached, so
-      // three is the strict sentinel that permits exactly one field + one file.
-      parts: 3,
-    },
+    limits: DEVELOPMENT_MULTIPART_LIMITS,
   }))
   attachment(
     @CurrentUserId() userId: string,

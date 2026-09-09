@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react';
 import type { RailChatChannel, RailChatPage, RailChatSendInput, RailRoomView } from '@stealth-reader/shared';
 
-import { getCommunitySessionGeneration } from '../../../api/community-http';
+import { CommunityApiError, getCommunitySessionGeneration } from '../../../api/community-http';
 import { communityRailApi, railErrorMessage } from '../../../api/community-rail';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import { useGamePrivacy } from '../GamePrivacyContext';
@@ -9,6 +9,11 @@ import { CommunityTitleBadge } from '../../community-progression/CommunityTitleB
 import styles from './Rail.module.css';
 
 export function RailRoomChat({ room }: { room: RailRoomView }): JSX.Element {
+  const user = useCommunityAuthStore((state) => state.phase === 'active' ? state.user?.publicId : null);
+  return <RailRoomChatSession key={`${getCommunitySessionGeneration()}:${user}:${room.id}:${room.me.role}`} room={room} />;
+}
+
+function RailRoomChatSession({ room }: { room: RailRoomView }): JSX.Element {
   const { covered } = useGamePrivacy();
   const userId = useCommunityAuthStore((state) => state.phase === 'active' ? state.user?.publicId ?? null : null);
   const generation = getCommunitySessionGeneration();
@@ -17,6 +22,9 @@ export function RailRoomChat({ room }: { room: RailRoomView }): JSX.Element {
   const alive = useRef(true);
   const ownChannel: RailChatChannel = room.me.role === 'participant' ? 'player' : 'spectator';
   const [channel, setChannel] = useState<RailChatChannel>(ownChannel);
+  const [visibleLimit, setVisibleLimit] = useState<50 | 100 | 150 | 200>(50);
+  const readKey = `${key}:${channel}:${visibleLimit}`;
+  const latestRead = useRef(readKey); latestRead.current = readKey;
   const [snapshot, setSnapshot] = useState<{ key: string; data: RailChatPage } | null>(null);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -30,27 +38,51 @@ export function RailRoomChat({ room }: { room: RailRoomView }): JSX.Element {
   const withdrawn = useRef(new Set<string>());
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const expandedFrom = useRef<{ height: number; top: number } | null>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const current = (requestKey: string): boolean => alive.current && latest.current === requestKey && generation === getCommunitySessionGeneration() && useCommunityAuthStore.getState().phase === 'active' && useCommunityAuthStore.getState().user?.publicId === userId;
   useEffect(() => {
-    setSnapshot(null); setText(''); setError(null); setReadError(null); setPending(false); setCooling(false); setChannel(ownChannel); busy.current = false; request.current = null; withdrawn.current = new Set(); coolingUntil.current = 0; if (coolingTimer.current) clearTimeout(coolingTimer.current);
+    return () => { if (coolingTimer.current) clearTimeout(coolingTimer.current); };
+  }, []);
+  useEffect(() => {
+    setReadError(null);
+    if (room.me.left || !room.chatEnabled) setSnapshot(null);
     if (!userId || room.me.left || !room.chatEnabled) return undefined;
     let active = true; let controller: AbortController | undefined; let timer: ReturnType<typeof setTimeout> | undefined;
     const poll = async (): Promise<void> => {
       controller = new AbortController();
       try {
         // Re-read the latest bounded page so withdrawals cannot leave stale text.
-        const data = await communityRailApi.chat(room.id, undefined, controller.signal);
-        if (active && current(key)) { setSnapshot({ key, data: { ...data, items: data.items.map((message) => withdrawn.current.has(message.id) ? { ...message, status: 'withdrawn', body: null } : message) } }); setReadError(null); }
-      } catch (reason) { if (active && current(key) && !controller.signal.aborted) setReadError(railErrorMessage(reason)); }
-      finally { if (active && current(key)) timer = setTimeout(() => { void poll(); }, document.hidden ? 4000 : 1200); }
+        const data = await communityRailApi.chat(room.id, { channel, limit: visibleLimit }, controller.signal);
+        if (active && current(key) && latestRead.current === readKey) { setSnapshot({ key: readKey, data: { ...data, items: data.items.map((message) => withdrawn.current.has(message.id) ? { ...message, status: 'withdrawn', body: null } : message) } }); setReadError(null); }
+      } catch (reason) { if (active && current(key) && latestRead.current === readKey && !controller.signal.aborted) {
+        if (reason instanceof CommunityApiError && [401, 403, 404].includes(reason.status)) setSnapshot(null);
+        setReadError(railErrorMessage(reason));
+      } }
+      finally { if (active && current(key) && latestRead.current === readKey) timer = setTimeout(() => { void poll(); }, document.hidden ? 4000 : 1200); }
     };
-    void poll(); return () => { active = false; controller?.abort(); if (timer) clearTimeout(timer); if (coolingTimer.current) clearTimeout(coolingTimer.current); };
-  }, [key, ownChannel, room.chatEnabled, room.id, room.me.left, userId]);
-  const data = snapshot?.key === key ? snapshot.data : null;
+    void poll(); return () => { active = false; controller?.abort(); if (timer) clearTimeout(timer); };
+  }, [key, readKey, channel, visibleLimit, room.chatEnabled, room.id, room.me.left, userId]);
+  const data = snapshot?.key.startsWith(`${key}:${channel}:`) && !room.me.left && room.chatEnabled ? snapshot.data : null;
+  const reading = snapshot?.key !== readKey && !readError;
   const messages = data?.items.filter((message) => message.channel === channel) ?? [];
   useEffect(() => { stickToBottom.current = true; if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [channel]);
   useEffect(() => { if (stickToBottom.current && scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [data?.latestSequence, channel]);
+  useLayoutEffect(() => {
+    if (snapshot?.key !== readKey || !expandedFrom.current || !scrollRef.current) return;
+    scrollRef.current.scrollTop = expandedFrom.current.top + scrollRef.current.scrollHeight - expandedFrom.current.height;
+    expandedFrom.current = null;
+  }, [snapshot, readKey]);
+  function switchChannel(next: RailChatChannel): void {
+    if (next === channel) return;
+    expandedFrom.current = null; setSnapshot(null); setReadError(null); setChannel(next); setVisibleLimit(50);
+  }
+  function showEarlier(): void {
+    if (visibleLimit >= 200 || reading) return;
+    if (scrollRef.current) expandedFrom.current = { height: scrollRef.current.scrollHeight, top: scrollRef.current.scrollTop };
+    stickToBottom.current = false;
+    setVisibleLimit((visibleLimit + 50) as 100 | 150 | 200);
+  }
   const canWrite = room.chatEnabled && room.chatCanWrite && !room.me.left && channel === ownChannel;
   const withdraw = async (messageId: string): Promise<void> => {
     if (busy.current || !current(key) || covered) return;
@@ -59,7 +91,7 @@ export function RailRoomChat({ room }: { room: RailRoomView }): JSX.Element {
       const message = await communityRailApi.withdrawChat(room.id, messageId);
       if (!current(key)) return;
       withdrawn.current.add(messageId);
-      setSnapshot((value) => value?.key === key ? { key, data: { ...value.data, items: value.data.items.map((item) => item.id === messageId ? message : item) } } : value);
+      setSnapshot((value) => value ? { ...value, data: { ...value.data, items: value.data.items.map((item) => item.id === messageId ? message : item) } } : value);
     } catch (reason) { if (current(key)) setError(railErrorMessage(reason)); }
     finally { if (current(key)) { busy.current = false; setPending(false); } }
   };
@@ -78,10 +110,11 @@ export function RailRoomChat({ room }: { room: RailRoomView }): JSX.Element {
     } catch (reason) { if (current(key)) setError(railErrorMessage(reason)); }
     finally { if (current(key)) { busy.current = false; setPending(false); } }
   };
-  return <section id="rail-discussion" className={styles.panel} aria-label="房间讨论"><div className={styles.panelTitle}><h2>房间讨论</h2><span className={styles.muted}>双方频道都可阅读</span><div className={styles.chatTabs} role="tablist" aria-label="讨论频道"><button type="button" role="tab" aria-selected={channel === 'player'} onClick={() => setChannel('player')}>玩家讨论</button><button type="button" role="tab" aria-selected={channel === 'spectator'} onClick={() => setChannel('spectator')}>观众讨论</button></div></div>
+  return <section id="rail-discussion" className={styles.panel} aria-label="房间讨论"><div className={styles.panelTitle}><h2>房间讨论</h2><span className={styles.muted}>双方频道都可阅读</span><div className={styles.chatTabs} role="tablist" aria-label="讨论频道"><button type="button" role="tab" aria-selected={channel === 'player'} onClick={() => switchChannel('player')}>玩家讨论</button><button type="button" role="tab" aria-selected={channel === 'spectator'} onClick={() => switchChannel('spectator')}>观众讨论</button></div></div>
     <div ref={scrollRef} className={styles.chatLog} role="log" aria-label={channel === 'player' ? '玩家消息' : '观众消息'} aria-live="polite" onScroll={() => { const element = scrollRef.current; if (element) stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 45; }}>
-      {messages.length ? messages.map((message) => <article className={styles.message} key={message.id}><small>{message.author.displayName}<CommunityTitleBadge title={message.author.title} /> · {new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}{message.author.publicId === userId && message.status === 'visible' && !room.me.left ? <button className={styles.button} style={{ minHeight: 24, padding: '2px 6px', marginLeft: 8, fontSize: 10 }} disabled={pending || covered} type="button" onClick={() => { void withdraw(message.id); }}>撤回</button> : null}</small><p>{message.status === 'withdrawn' ? '这条消息已撤回' : message.body}</p></article>) : <p className={styles.empty}>{room.chatEnabled ? '还没有消息，讨论会在这里出现。' : '当前房间未开启讨论。'}</p>}
-      {data?.hasMore ? <p className={styles.muted}>显示最近的房间消息。</p> : null}
+      {data?.hasMore && visibleLimit < 200 ? <button type="button" className={styles.button} disabled={reading || covered} onClick={showEarlier}>{reading ? '正在读取…' : '查看本频道更早消息'}</button> : null}
+      {messages.length ? messages.map((message) => <article className={styles.message} key={message.id}><small>{message.author.displayName}<CommunityTitleBadge title={message.author.title} /> · {new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}{message.author.publicId === userId && message.status === 'visible' && !room.me.left ? <button className={styles.button} style={{ minHeight: 24, padding: '2px 6px', marginLeft: 8, fontSize: 10 }} disabled={pending || covered} type="button" onClick={() => { void withdraw(message.id); }}>撤回</button> : null}</small><p>{message.status === 'withdrawn' ? '这条消息已撤回' : message.body}</p></article>) : <p className={styles.empty}>{!room.chatEnabled ? '当前房间未开启讨论。' : room.me.left ? '你已离开房间。' : readError ? '暂时无法读取本频道消息。' : reading ? '正在读取本频道消息…' : '本频道暂时没有可显示的消息。'}</p>}
+      {data ? <p className={styles.muted}>按频道显示；仅保留房间最近 200 条消息的阅读窗口。</p> : null}
     </div>
     <div className={styles.body}>{error || readError ? <p className={styles.error} role="alert">{error ?? readError}</p> : null}{canWrite ? <form onSubmit={(event) => { event.preventDefault(); void send(); }}><textarea className={styles.chatInput} aria-label={channel === 'player' ? '玩家讨论消息' : '观众讨论消息'} value={text} onChange={(event) => setText(event.target.value)} maxLength={600} disabled={pending || covered} rows={2} placeholder="聊聊你对这次选择的看法…" /><div className={styles.actions}><span className={styles.muted}>{text.length}/600 · 文明交流</span><button className={styles.primary} type="submit" disabled={pending || cooling || covered || !text.trim()}>{pending ? '发送中…' : cooling ? '请稍候…' : '发送'}</button></div></form> : <p className={styles.muted} style={{ margin: 0 }}>{room.me.left ? '你已离开房间。' : channel !== ownChannel ? `当前频道只读。你可以切换到${ownChannel === 'player' ? '玩家' : '观众'}讨论发言。` : '当前暂时不能发言。'}</p>}</div>
   </section>;

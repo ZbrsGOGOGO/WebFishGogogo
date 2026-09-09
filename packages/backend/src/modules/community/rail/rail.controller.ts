@@ -34,7 +34,7 @@ export class RailController {
   @Post('rooms/:roomId/password') @UseGuards(JwtAuthGuard)
   password(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Body() body: unknown) { return this.rail.setPassword(userId, roomId, body); }
   @Get('rooms/:roomId/chat') @UseGuards(JwtAuthGuard)
-  chatList(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Query('afterSequence') afterSequence?: string, @Query('beforeSequence') beforeSequence?: string, @Query('channel') channel?: string) { return this.chat.list(userId, roomId, { afterSequence, beforeSequence, channel }); }
+  chatList(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Query('afterSequence') afterSequence?: string, @Query('beforeSequence') beforeSequence?: string, @Query('channel') channel?: string, @Query('limit') limit?: string) { return this.chat.list(userId, roomId, { afterSequence, beforeSequence, channel, limit }); }
   @Post('rooms/:roomId/chat') @UseGuards(JwtAuthGuard)
   chatSend(@CurrentUserId() userId: string, @Param('roomId') roomId: string, @Body() body: unknown) { return this.chat.send(userId, roomId, body); }
   @Post('rooms/:roomId/chat/:messageId/withdraw') @UseGuards(JwtAuthGuard)

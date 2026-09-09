@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 
-import { shouldIgnoreGameKeyboard } from '../games/game-input';
+import { listenForOtherLocalGame, shouldIgnoreGameKeyboard } from '../games/game-input';
 import {
-  HERO_MAX_LEVEL, TOWER_DEFINITIONS, TOWER_DEFENSE_CORE_HP, TOWER_DEFENSE_HEIGHT,
+  HERO_MAX_LEVEL, TOWER_DEFINITIONS, TOWER_EVOLUTIONS, TOWER_DEFENSE_CORE_HP, TOWER_DEFENSE_HEIGHT,
   TOWER_DEFENSE_PATH, TOWER_DEFENSE_TICK_MS, TOWER_DEFENSE_WAVES, TOWER_DEFENSE_WIDTH,
   TOWER_INVENTORY_CAPACITY, TOWER_PLANT_INCOME_INTERVAL, TOWER_PLANT_MAX_LEVEL,
   TOWER_INTERMISSION_CREDIT_BONUS, TOWER_SHOP_REFRESH_COST, TOWER_SLOTS,
@@ -18,8 +18,16 @@ import {
 import { OfficeHeroArt, OfficePlantArt, OfficeTowerArt } from './OfficeTowerArt';
 import styles from './WorkstationTowerDefensePage.module.css';
 
-// Two-round scores are not comparable with either previous edition. Keep both untouched.
-const SETTINGS_STORAGE_KEY = 'momo.workstation-tower-defense.settings.v3';
+// Restock/evolution challenge scores are not comparable with V1–V3. Keep all untouched.
+const SETTINGS_STORAGE_KEY = 'momo.workstation-tower-defense.settings.v4';
+
+export const TOWER_TAUNTS = {
+  entrance: '就你也想下班？守住你的工位吧',
+  breach: '就这点实力，当一辈子牛马吧',
+  defeat: '年轻人，还得练啊，这个月的工资归公司了',
+} as const;
+const BREACH_NOTICE_MS = 3_600;
+const TECHNIQUE_LABEL = { pierce: '破甲', freeze: '冰冻', root: '定身', stun: '眩晕', taunt: '聚怪', 'true-damage': '真伤', execute: '吞噬', vulnerable: '易伤' } as const;
 
 function createNewRun(): TowerDefenseState {
   return createTowerDefenseState(Math.floor(Math.random() * 0x1_0000_0000));
@@ -40,8 +48,8 @@ const ENEMY_BRIEF: Record<TowerEnemyArchetype, { mark: string; name: string; cou
   basic: { mark: '待', name: '零散待办', counter: '先布好主力塔，留时间经营' },
   fast: { mark: '快', name: '快速催办', counter: '咖啡机减速，守卫拦漏怪' },
   swarm: { mark: '群', name: '密集群怪', counter: `成团：单体每次最多 ${TOWER_SWARM_SINGLE_TARGET_DAMAGE_CAP} 伤害，范围处理有效` },
-  elite: { mark: '精', name: '护甲精英', counter: '高阶主力配合碎纸机易伤' },
-  midboss: { mark: '会', name: '小 Boss', counter: '护甲耐打，配合控场集中输出' },
+  elite: { mark: '精', name: '护甲精英', counter: '订书机破甲，打印机穿甲/真伤，碎纸机易伤' },
+  midboss: { mark: '会', name: '小 Boss', counter: '抵抗聚怪和吞噬；短控有抗性，破甲后集中输出' },
 };
 
 function loadBestScore(): number {
@@ -76,6 +84,8 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
   const [autoPaused, setAutoPaused] = useState(false);
   const [bestScore, setBestScore] = useState(loadBestScore);
   const [mergeFlash, setMergeFlash] = useState(0);
+  const [covered, setCovered] = useState(false);
+  const [breachNotice, setBreachNotice] = useState<{ serial: number; count: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const previousGame = useRef(game);
 
@@ -128,7 +138,14 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
   }, [commit, game.status]);
   useEffect(() => {
     const previous = previousGame.current;
-    if (game.coreHp < previous.coreHp) announce(`有工作突破防线！核心剩余 ${game.coreHp} 点耐久。`, true);
+    const newBreaches = game.breached - previous.breached;
+    if (newBreaches > 0 && game.status !== 'lost') {
+      setBreachNotice((notice) => ({ serial: game.breached, count: (notice?.count ?? 0) + newBreaches }));
+      announce(`有工作突破防线！核心剩余 ${game.coreHp} 点耐久。`, true);
+    }
+    // Final defeat replaces a breach notice. Pausing/covering must not expose
+    // a taunt or replay an old event when the player returns to work.
+    if (game.status !== 'running') setBreachNotice(null);
     if (game.status !== previous.status) {
       if (game.status === 'intermission') announce(`第一回合守住了！经营回合奖励 ${TOWER_INTERMISSION_CREDIT_BONUS} 金币已到账。第二回合有快敌、群怪、精英与小 Boss；先整理阵容，准备好再开始。间歇不产币。`);
       if (game.status === 'won') announce('两个回合全部守住，今天也要准点下班！');
@@ -136,6 +153,11 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
     }
     previousGame.current = game;
   }, [game]);
+  useEffect(() => {
+    if (!breachNotice) return undefined;
+    const timer = window.setTimeout(() => setBreachNotice(null), BREACH_NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [breachNotice]);
   useEffect(() => { if (selectedItemId && !game.inventory.some((item) => item.id === selectedItemId)) setSelectedItemId(null); }, [game.inventory, selectedItemId]);
   useEffect(() => {
     if (!['won', 'lost'].includes(game.status) || game.score <= bestScore) return;
@@ -149,11 +171,13 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
       setAutoPaused(true); commit(pauseTowerDefense(gameRef.current));
     };
     const hidden = () => { if (document.hidden) pause(); };
+    const stopListening = listenForOtherLocalGame('tower-defense', pause);
     window.addEventListener('blur', pause); document.addEventListener('visibilitychange', hidden);
-    return () => { window.removeEventListener('blur', pause); document.removeEventListener('visibilitychange', hidden); };
+    return () => { stopListening(); window.removeEventListener('blur', pause); document.removeEventListener('visibilitychange', hidden); };
   }, [commit, game.status]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (covered) return;
       if (shouldIgnoreGameKeyboard(event.target)) return;
       const state = gameRef.current;
       const direction = DIRECTIONS[event.key];
@@ -163,7 +187,7 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activatePulse, moveHero, togglePause]);
+  }, [activatePulse, covered, moveHero, togglePause]);
 
   function chooseSlot(slot: number): void {
     setSelectedSlot(slot);
@@ -176,7 +200,8 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
     if (selectedItemId === itemId) { setSelectedItemId(null); announce('已取消部署选择。'); return; }
     setSelectedItemId(itemId); setSelectedSlot(null);
     announce(`已选择 ${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶，请点击地图上的空塔位部署。`);
-    boardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    boardRef.current?.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
   }
   function start(): void { setAutoPaused(false); commit(startTowerDefense(gameRef.current)); announce('第一回合开始：低压经营。绿植在战斗时产币，趁零散待办到来补齐零件、合成布阵。'); focusBoard(); }
   function nextWave(): void {
@@ -185,7 +210,7 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
     focusBoard();
   }
   function restart(): void {
-    setAutoPaused(false); setSelectedSlot(null); setSelectedItemId(null); setHoveredSlot(null); commit(createNewRun());
+    setAutoPaused(false); setBreachNotice(null); setSelectedSlot(null); setSelectedItemId(null); setHoveredSlot(null); commit(createNewRun());
     announce('新一局已准备好。优先买绿植，再凑齐三件同名零件。');
     focusBoard();
   }
@@ -205,11 +230,24 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
     : game.inventory.some((item) => item.tier >= 2) ? '③ 选择背包成品，再点击地图空塔位'
       : game.plantLevel > 0 ? '② 买三件同名零件，背包自动合成 2 阶塔' : '① 推荐先买一盆绿植，为本局持续赚金币';
 
+  if (covered) return <main className={`${styles.page} ${styles.workCover}`} aria-label="工作备忘">
+    <span className={styles.eyebrow}>WORK NOTES</span><h1>工作备忘</h1>
+    <p>本周事项整理</p><ul><li>核对待办安排</li><li>更新资料清单</li><li>整理后续计划</li></ul>
+    <button type="button" className={styles.secondaryButton} onClick={() => setCovered(false)}>返回工作台</button>
+  </main>;
+
   return <main className={styles.page}>
     <header className={styles.pageHeader}>
       <div><span className={styles.eyebrow}>MOMO COMPANY · DESK DEFENSE</span><h1>工位合成塔防<span>两回合挑战</span></h1><p>第一回合从容经营，第二回合迎接工作洪流。</p></div>
       <div className={styles.runBadge} data-state={game.status}><i />{statusLabel(game)}<small>2 回合短局 · 纯本地</small></div>
     </header>
+    <div className={styles.discretionBar}><span>全程静音 · 仅局内金币</span><button type="button" className={styles.textButton} onClick={() => {
+      setBreachNotice(null); commit(pauseTowerDefense(gameRef.current)); setCovered(true);
+    }}>收起为工作备忘</button></div>
+    {game.status === 'idle' ? <section className={styles.challengeIntro} aria-labelledby="tower-challenge-title">
+      <span>下班资格挑战 · 售罄经营版</span><h2 id="tower-challenge-title">{TOWER_TAUNTS.entrance}</h2>
+      <p>先经营，再硬仗。零件买完留空，刷新才补货。准备好了吗？</p>
+    </section> : null}
     <div className={styles.layout}>
       <section className={styles.battlePanel} aria-label="工位塔防战场">
         <div className={styles.statusBar} aria-label="当前战局">
@@ -240,17 +278,21 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
                 {slotIndex != null ? <button type="button" className={styles.towerSlot} data-selected={selectedSlot === slotIndex} data-empty={!tower} data-placement={Boolean(selectedItem)} data-firing={game.effects.some((effect) => effect.from.x === x && effect.from.y === y && effect.source !== 'hero' && effect.source !== 'pulse')} aria-label={tower ? `塔位 ${slotIndex + 1}，${TOWER_DEFINITIONS[tower.type].name} ${tower.level} 阶` : `空塔位 ${slotIndex + 1}`} aria-pressed={selectedSlot === slotIndex} onClick={() => chooseSlot(slotIndex)} onMouseEnter={() => setHoveredSlot(slotIndex)} onMouseLeave={() => setHoveredSlot(null)}>
                   {tower ? <><OfficeTowerArt kind={tower.type} tier={tower.level} /><small>{tower.level === 3 ? '★★★' : '★★'}</small></> : <><b>＋</b><small>{slotIndex + 1}</small></>}
                 </button> : null}
-                {enemies.slice(0, 2).map((enemy, index) => <span key={enemy.id} className={`${styles.enemy} ${enemy.boss ? styles.boss : ''}`} data-archetype={enemy.archetype} data-stack={index} data-hit={game.effects.some((effect) => effect.targetEnemyIds.includes(enemy.id))} title={`${enemy.name} · ${enemy.hp}/${enemy.maxHp}${enemy.armor > 0 ? ` · 护甲 ${enemy.armor}` : ''}`}><i className={styles.enemyPaper}><b>{ENEMY_BRIEF[enemy.archetype]?.mark ?? '!'}</b></i><small style={{ '--value': `${Math.max(0, enemy.hp) / enemy.maxHp * 100}%` } as React.CSSProperties} /></span>)}
+                {enemies.slice(0, 2).map((enemy, index) => <span key={enemy.id} className={`${styles.enemy} ${enemy.boss ? styles.boss : ''}`} data-archetype={enemy.archetype} data-stack={index} data-hit={game.effects.some((effect) => effect.targetEnemyIds.includes(enemy.id))} data-controlled={(enemy.freezeTicks ?? 0) + (enemy.rootTicks ?? 0) + (enemy.stunTicks ?? 0) > 0} data-armor-broken={(enemy.armorBreakTicks ?? 0) > 0} title={`${enemy.name} · ${enemy.hp}/${enemy.maxHp}${enemy.armor > 0 ? ` · 护甲 ${enemy.armor}` : ''}${(enemy.armorBreakTicks ?? 0) > 0 ? ` · 破甲 ${enemy.armorBreakPoints}` : ''}${(enemy.freezeTicks ?? 0) > 0 ? ' · 冰冻' : (enemy.rootTicks ?? 0) > 0 ? ' · 定身' : (enemy.stunTicks ?? 0) > 0 ? ' · 眩晕' : ''}`}><i className={styles.enemyPaper}><b>{ENEMY_BRIEF[enemy.archetype]?.mark ?? '!'}</b></i><small style={{ '--value': `${Math.max(0, enemy.hp) / enemy.maxHp * 100}%` } as React.CSSProperties} /></span>)}
                 {enemies.length > 2 ? <b className={styles.enemyCount}>+{enemies.length - 2}</b> : null}
                 {isHero ? <span className={styles.hero} data-avatar={character?.avatarKey || 'guest'} data-pulsing={game.hero.lastPulseTick === game.tick} data-direction={game.hero.direction}><OfficeHeroArt mark={avatarMark} /><b>YOU</b></span> : null}
               </span>;
             })}
             <svg className={styles.battleEffects} viewBox={`0 0 ${TOWER_DEFENSE_WIDTH * 64} ${TOWER_DEFENSE_HEIGHT * 64}`} aria-hidden="true" focusable="false">
-              {game.effects.map((effect) => <g key={effect.id} data-source={effect.source} className={styles.shot}><path d={`M ${effect.from.x * 64 + 32} ${effect.from.y * 64 + 32} L ${effect.to.x * 64 + 32} ${effect.to.y * 64 + 32}`} /><circle cx={effect.to.x * 64 + 32} cy={effect.to.y * 64 + 32} r={effect.source === 'pulse' ? 35 : 11} /></g>)}
+              {game.effects.map((effect) => <g key={effect.id} data-source={effect.source} data-technique={effect.technique} className={styles.shot}><path d={`M ${effect.from.x * 64 + 32} ${effect.from.y * 64 + 32} L ${effect.to.x * 64 + 32} ${effect.to.y * 64 + 32}`} /><circle cx={effect.to.x * 64 + 32} cy={effect.to.y * 64 + 32} r={effect.source === 'pulse' ? 35 : effect.technique === 'taunt' || effect.technique === 'execute' ? 22 : 11} />{effect.technique ? <text x={effect.to.x * 64 + 32} y={Math.max(16, effect.to.y * 64 + 10)} textAnchor="middle">{TECHNIQUE_LABEL[effect.technique]}</text> : null}</g>)}
             </svg>
           </div>
+          {breachNotice && game.status === 'running' ? <aside className={styles.breachPopup} role="alert" aria-label="突破提醒" key={breachNotice.serial}>
+            <div><small>防线告急 · 本次提示共 {breachNotice.count} 项突破</small><strong>{TOWER_TAUNTS.breach}</strong><span>核心剩余 {game.coreHp} 点 · 提醒会自动收起</span></div>
+            <button type="button" aria-label="收起突破提醒" onClick={() => setBreachNotice(null)}>×</button>
+          </aside> : null}
           {game.status === 'paused' ? <div className={styles.boardOverlay}><span>Ⅱ</span><h2>{autoPaused ? '已为你自动暂停' : '工位塔防已暂停'}</h2><p>战斗和绿植产币都已暂停，不会偷偷流失进度。</p><button type="button" className={styles.primaryButton} onClick={togglePause}>继续防守</button></div> : null}
-          {game.status === 'won' || game.status === 'lost' ? <div className={styles.boardOverlay} data-result={game.status}><span>{game.status === 'won' ? '✦' : '↻'}</span><h2>{game.status === 'won' ? '守住工位，准点下班！' : '工作洪流突破了防线'}</h2><p>得分 {game.score} · 清理 {game.defeated} 项工作</p><button type="button" className={styles.primaryButton} onClick={restart}>再来一局</button></div> : null}
+          {game.status === 'won' || game.status === 'lost' ? <div className={styles.boardOverlay} data-result={game.status} role={game.status === 'lost' ? 'alert' : undefined} aria-label={game.status === 'lost' ? '防线失守结算' : undefined}><span>{game.status === 'won' ? '✦' : '下班申请 · 驳回'}</span><h2>{game.status === 'won' ? '守住工位，准点下班！' : TOWER_TAUNTS.defeat}</h2><p>得分 {game.score} · 清理 {game.defeated} 项工作{game.status === 'lost' ? <small className={styles.fictionNote}>仅游戏吐槽，不扣账号办公币</small> : null}</p><button type="button" className={styles.primaryButton} onClick={restart}>再来一局</button></div> : null}
         </div>
         {game.status === 'lost' ? <section className={styles.recoveryCard} aria-labelledby="recovery-title"><h2 id="recovery-title">下一局，试试这样调整</h2><p>{recoveryAdvice(game)}</p></section> : null}
         <div className={styles.battleToolbar}>
@@ -272,8 +314,8 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
         <section className={styles.plantCard} aria-labelledby="plant-title"><OfficePlantArt /><div><span className={styles.eyebrow}>你的第一份被动收入</span><h2 id="plant-title">办公桌绿植 <small>Lv.{game.plantLevel}</small></h2><p aria-label="绿植产币">{game.plantLevel > 0 ? `每 ${Number(intervalSeconds.toFixed(1))} 秒 +${plantIncomePerPayout(game.plantLevel)} G` : '买一盆绿植，战斗时持续产金币'}</p><small>{game.plantLevel === 0 ? '不占塔位，只影响本局' : game.status === 'running' ? `约 ${secondsUntilIncome} 秒后产币` : '等待战斗开始后产币'}</small></div><button type="button" className={styles.plantButton} aria-label={game.plantLevel === 0 ? '购买办公桌绿植' : '升级办公桌绿植'} disabled={!editable || game.plantLevel >= TOWER_PLANT_MAX_LEVEL || game.credits < plantUpgradeCost(game.plantLevel)} onClick={() => runAction(upgradeTowerDefensePlant)}>{game.plantLevel >= TOWER_PLANT_MAX_LEVEL ? '绿植已满级' : `${game.plantLevel === 0 ? '种下' : '升级'} · ${plantUpgradeCost(game.plantLevel)} G`}</button></section>
         <section className={styles.workCard} aria-labelledby="shop-title">
           <p className={styles.shopBalance} aria-label="商店可用局内金币"><span>本局可用金币</span><strong>{game.credits} <small>G</small></strong><small>仅本局使用</small></p>
-          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>SUPPLY ROOM</span><h2 id="shop-title">零件补给站</h2></div><button type="button" className={styles.refreshButton} aria-label={`刷新零件商店，${TOWER_SHOP_REFRESH_COST} 金币`} disabled={!editable || game.credits < TOWER_SHOP_REFRESH_COST} onClick={() => runAction(refreshTowerDefenseShop)}>↻ 刷新 <b>{TOWER_SHOP_REFRESH_COST} G</b></button></div><p className={styles.sectionHint}>四格随机补给 + 一格定向订货。同名同阶满 3 件自动合成。</p>
-          <div className={styles.focusOrder}><div><label htmlFor="tower-order-type">定向订货塔型</label><span>选择免费 · 单件价格含定向溢价</span></div><select id="tower-order-type" value={game.shopFocus} disabled={!editable} onChange={(event) => runAction((state) => setTowerShopFocus(state, event.target.value as TowerType))}>{Object.values(TOWER_DEFINITIONS).map((tower) => <option key={tower.type} value={tower.type}>{tower.name} · {focusedTowerPartCost(tower.type)} G</option>)}</select></div>
+          <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>SUPPLY ROOM</span><h2 id="shop-title">零件补给站</h2></div><button type="button" className={styles.refreshButton} aria-label={`刷新零件商店，${TOWER_SHOP_REFRESH_COST} 金币`} disabled={!editable || game.credits < TOWER_SHOP_REFRESH_COST} onClick={() => runAction(refreshTowerDefenseShop)}>↻ 刷新 <b>{TOWER_SHOP_REFRESH_COST} G</b></button></div><p className={styles.sectionHint}>四格随机补给 + 一格定向订货。买后原格售罄，花 {TOWER_SHOP_REFRESH_COST} G 刷新才补货。</p>
+          <div className={styles.focusOrder}><div><label htmlFor="tower-order-type">定向订货塔型</label><span>选择免费 · 售罄后只预约下次刷新 · 单件含定向溢价</span></div><select id="tower-order-type" value={game.shopFocus} disabled={!editable} onChange={(event) => runAction((state) => setTowerShopFocus(state, event.target.value as TowerType))}>{Object.values(TOWER_DEFINITIONS).map((tower) => <option key={tower.type} value={tower.type}>{tower.name} · {focusedTowerPartCost(tower.type)} G</option>)}</select></div>
           <div className={styles.shopGrid} aria-label="五格零件商店">{game.shop.map((offer, index) => <button type="button" key={offer.id} className={styles.shopOffer} data-type={offer.type} data-focused={offer.source === 'focused'} data-sold-out={Boolean(offer.soldOut)} aria-label={offer.soldOut ? `第 ${index + 1} 格已售罄，刷新后补货` : `购买第 ${index + 1} 格${TOWER_DEFINITIONS[offer.type].name}零件，${offer.cost} 金币${offer.source === 'focused' ? '，定向订货' : ''}`} disabled={!editable || Boolean(offer.soldOut) || game.credits < offer.cost} onClick={() => runAction((state) => buyTowerShopOffer(state, offer.id))}><small>{offer.source === 'focused' ? '定向订货' : '1 阶零件'}</small><OfficeTowerArt kind={offer.type} tier={1} /><strong>{offer.soldOut ? '已售罄' : TOWER_DEFINITIONS[offer.type].name}</strong><span>{offer.soldOut ? '待刷新' : <>{offer.cost} <small>G</small></>}</span></button>)}</div>
           <div className={styles.mergeRecipe} aria-label="合成规则"><span>同名 1 阶 ×3</span><b>→</b><strong>2 阶可部署</strong><b>→</b><span>同名 2 阶 ×3<br /><strong>3 阶满级</strong></span></div>
         </section>
@@ -282,9 +324,11 @@ export function WorkstationTowerDefensePage({ character }: WorkstationTowerDefen
           {selectedItem ? <p className={styles.placementHint}>已选 {TOWER_DEFINITIONS[selectedItem.type].name} {selectedItem.tier} 阶 · 点击上方空塔位部署<button type="button" onClick={() => setSelectedItemId(null)}>取消</button></p> : <p className={styles.sectionHint}>点击 2 / 3 阶成品，再点地图空塔位。1 阶不能部署。</p>}
           {game.inventory.length ? <div className={styles.inventoryGrid} aria-label="背包物品">{game.inventory.map((item) => <article key={item.id} data-tier={item.tier} data-selected={selectedItemId === item.id}><button type="button" className={styles.inventoryItem} disabled={!editable || item.tier === 1} aria-label={`${item.tier === 1 ? '待合成' : '选择部署'}${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶`} aria-pressed={selectedItemId === item.id} onClick={() => chooseItem(item.id)}><OfficeTowerArt kind={item.type} tier={item.tier} /><strong>{TOWER_DEFINITIONS[item.type].name}</strong><small>{item.tier === 1 ? '1 阶 · 等待合成' : `${item.tier} 阶 · 点击部署`}</small></button><button type="button" className={styles.sellItem} disabled={!editable} aria-label={`出售背包${TOWER_DEFINITIONS[item.type].name} ${item.tier} 阶`} onClick={() => runAction((state) => sellInventoryTower(state, item.id))}>出售</button></article>)}</div> : <div className={styles.emptyInventory}><span>▧</span><strong>零件会在这里集合</strong><p>先从上方购买三个同名零件，试试第一次合成。</p></div>}
           {selectedTower ? <div className={styles.selectedTower} aria-label="选中的防御塔"><OfficeTowerArt kind={selectedTower.type} tier={selectedTower.level} /><div><strong>塔位 {selectedTower.slotIndex + 1} · {TOWER_DEFINITIONS[selectedTower.type].name}</strong><small>{selectedTower.level} 阶 · {selectedTower.level === 3 ? '已到最高阶' : '背包再备 2 个同名 2 阶可原地升阶'}</small></div><button type="button" className={styles.secondaryButton} disabled={!editable || selectedTower.level >= 3} onClick={() => runAction((state) => mergeDeployedTower(state, selectedTower.slotIndex))}>合成升阶</button><button type="button" className={styles.textButton} disabled={!editable} onClick={() => runAction((state) => sellDeployedTower(state, selectedTower.slotIndex))}>卖出防御塔</button></div> : null}
+          {selectedTower && selectedTower.level >= 2 ? <p className={styles.evolutionDetail} aria-label="当前塔进阶技能"><strong>{TOWER_EVOLUTIONS[selectedTower.type][selectedTower.level === 3 ? 3 : 2].name}</strong>{TOWER_EVOLUTIONS[selectedTower.type][selectedTower.level === 3 ? 3 : 2].description}</p> : null}
         </section>
-        <details className={styles.guide}><summary>五条防线 · 玩法说明 <span>＋</span></summary><div className={styles.towerGuide}>{Object.values(TOWER_DEFINITIONS).map((tower) => <div key={tower.type}><OfficeTowerArt kind={tower.type} tier={2} /><p><strong>{tower.name}</strong><span>{tower.description}</span></p></div>)}</div><p>只买零件，不直接买塔；三件同名同阶自动合成。已部署的 2 阶塔可以消耗背包内两座同名 2 阶塔原地升至 3 阶。卖出返还部分局内金币。需要特定零件时选择定向订货，单价略高，但不用反复随机刷新碰运气。</p><p>第一回合低压经营，第二回合混合敌群突袭。准备、暂停和回合间歇不产币。切出窗口会自动暂停。本版是纯本地两回合短局，只保存本机最高分；刷新页面将重新开局，没有账号奖励、离线收益或付费抽卡。</p></details>
-        <footer className={styles.localRecord}><span>两回合版 · 本机最高分</span><strong>{Math.max(bestScore, ['won', 'lost'].includes(game.status) ? game.score : 0)}</strong><small>不读取或覆盖旧版记录</small></footer>
+        <details className={styles.guide}><summary>五条防线 · 玩法说明 <span>＋</span></summary><div className={styles.towerGuide}>{Object.values(TOWER_DEFINITIONS).map((tower) => <div key={tower.type}><OfficeTowerArt kind={tower.type} tier={2} /><p><strong>{tower.name}</strong><span>{tower.description}</span></p></div>)}</div><p>只买零件，不直接买塔；三件同名同阶自动合成。已部署的 2 阶塔消耗两座同名 2 阶塔原地进阶。买后原格留空；切换定向只改偏好，不会补回售罄格，必须花局内金币刷新。卖出返还零件投入的六成，刷新费不退。</p><p>一拍约 0.28 秒。冰冻、定身、眩晕共享短暂抗性，Boss 停顿更短且不会被聚怪或吞噬。第一回合经营，第二回合要配合进阶技能、脉冲与临场补阵。</p><p>准备、暂停和间歇不产币。切出窗口自动暂停。本版是纯本地两回合短局，只保存本机最高分；刷新页面重新开局，没有账号奖励、离线收益或付费抽卡。</p></details>
+        <details className={styles.guide}><summary>进阶图鉴 · 二阶与三阶 <span>＋</span></summary><div className={styles.evolutionCatalog}>{Object.entries(TOWER_EVOLUTIONS).map(([type, tiers]) => <section key={type} aria-label={`${TOWER_DEFINITIONS[type as TowerType].name}进阶图鉴`}>{([2, 3] as const).map((tier) => <article key={tier}><OfficeTowerArt kind={type} tier={tier} /><div><strong>{tier} 阶 · {tiers[tier].name}</strong><p>{tiers[tier].description}</p></div></article>)}</section>)}</div></details>
+        <footer className={styles.localRecord}><span>售罄挑战版 · 本机最高分</span><strong>{Math.max(bestScore, ['won', 'lost'].includes(game.status) ? game.score : 0)}</strong><small>V1–V3 记录原样保留，不混分</small></footer>
       </aside>
     </div>
   </main>;

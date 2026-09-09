@@ -1,0 +1,1257 @@
+// Vendored from Ballpoint Breach (Apache-2.0), commit 96290df3fba1c2b64abac684510155d916117903.
+// Modified for WebFish integration (2026-09-09); see third_party/ballpoint-breach/README.md.
+import * as THREE from 'three';
+import { disposeObjectResources } from '../render/disposeResources';
+import { getEnemySharedResources } from '../enemies/doodleRig';
+import { AudioSystem, type GameSound } from '../audio/AudioSystem';
+import {
+  WEAPON_DEFINITIONS,
+  WEAPON_IDS,
+  WeaponSystem,
+  type KatanaSlashVariant,
+  type HitscanRequest,
+  type MeleeRequest,
+  type MuzzleRequest,
+  type PelletsRequest,
+  type ReflectRequest,
+  type WeaponEffect,
+  type WeaponId,
+} from '../combat';
+import { EffectPool } from '../effects/EffectPool';
+import {
+  EnemyManager,
+  type EnemyDamageType,
+  type EnemyEvent,
+  type EnemyKind,
+  type PlayerDamageEvent,
+} from '../enemies';
+import { InputManager, type InputFrame } from '../input/InputManager';
+import { ArenaBuilder, type EnemySpawnPoint } from '../level';
+import { PhysicsWorld } from '../physics/PhysicsWorld';
+import { PlayerController } from '../player/PlayerController';
+import { Hud, type HudSnapshot } from '../ui/Hud';
+import { DEFAULT_WAVES, WaveDirector, type SpawnPointTag, type WaveEvent, type WaveRecovery } from '../waves';
+import { ArenaQueries } from './ArenaQueries';
+import { GameState, type GameMode } from './GameState';
+import { GrappleSystem } from './GrappleSystem';
+import { SupplySystem, type SupplyPickupEvent } from './SupplySystem';
+import { createGameScene } from './createGameScene';
+
+const BASE_FOV = 68;
+const PLAYER_CENTER_HEIGHT = 0.95;
+const SHOWCASE_SLASH_TIMES = [1.45, 1.88, 3.45, 3.88, 5.1, 5.53] as const;
+
+export interface GameOptions {
+  root?: HTMLElement;
+  onModeChange?: (mode: GameMode) => void;
+  onPrivacyPause?: () => void;
+  capture?: boolean;
+  stress?: boolean;
+  demoAim?: boolean;
+  autoplay?: boolean;
+  defeat?: boolean;
+  damageDemo?: boolean;
+  fireDemo?: boolean;
+  inkDemo?: boolean;
+  showcase?: boolean;
+  demoReel?: boolean;
+  katanaReviewProgress?: number;
+  katanaReviewVariant?: KatanaSlashVariant;
+  renderSize?: Readonly<{ width: number; height: number }>;
+  reviewView?: 'rear' | 'west';
+}
+
+export interface PublicGameSnapshot {
+  mode: GameMode;
+  score: number;
+  wave: number;
+  enemies: number;
+  playerHealth: number;
+  activeWeapon: WeaponId;
+  rendererObjects: number;
+  effects: ReturnType<EffectPool['getSnapshot']>;
+}
+
+function weaponSound(id: Exclude<WeaponId, 'katana'>): GameSound {
+  return id;
+}
+
+function damageType(id: Exclude<WeaponId, 'katana'>): EnemyDamageType {
+  if (id === 'shotgun') return 'shotgun';
+  if (id === 'sniper') return 'sniper';
+  return 'bullet';
+}
+
+function spawnTags(point: EnemySpawnPoint): SpawnPointTag[] {
+  const tags: SpawnPointTag[] = [point.elevation === 'ground' ? 'ground' : 'high'];
+  if (point.id === 'enemy-spawn-8') tags.push('boss');
+  if (point.preferredFor.includes('heavy')) tags.push('covered');
+  return tags;
+}
+
+function scoreForEnemy(kind: EnemyKind): number {
+  const scores: Record<EnemyKind, number> = {
+    grunt: 100,
+    rusher: 125,
+    heavy: 250,
+    marksman: 175,
+    boss: 2000,
+  };
+  return scores[kind];
+}
+
+export class Game {
+  readonly renderer: THREE.WebGLRenderer;
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.PerspectiveCamera;
+  readonly arena;
+  readonly player: PlayerController;
+  readonly weapons: WeaponSystem;
+  readonly enemies: EnemyManager;
+  readonly waves: WaveDirector;
+
+  private readonly state = new GameState();
+  private readonly physics: PhysicsWorld;
+  private readonly input: InputManager;
+  private readonly hud: Hud;
+  private readonly audio = new AudioSystem();
+  private readonly effects: EffectPool;
+  private readonly queries: ArenaQueries;
+  private readonly grapple: GrappleSystem;
+  private readonly supplies: SupplySystem;
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly weaponMount = new THREE.Group();
+  private readonly aimOrigin = new THREE.Vector3();
+  private readonly aimDirection = new THREE.Vector3();
+  private readonly aimUp = new THREE.Vector3();
+  private readonly playerCenter = new THREE.Vector3();
+  private readonly temporary = new THREE.Vector3();
+  private readonly overlay: HTMLElement;
+  private readonly lastHit = new Map<string, { headshot: boolean; time: number; direction?: THREE.Vector3 }>();
+  private readonly captureMode: boolean;
+  private readonly stressMode: boolean;
+  private readonly demoAim: boolean;
+  private readonly autoplay: boolean;
+  private readonly qaDefeat: boolean;
+  private readonly qaDamageDemo: boolean;
+  private readonly qaFireDemo: boolean;
+  private readonly qaInkDemo: boolean;
+  private readonly showcaseMode: boolean;
+  private readonly demoReelMode: boolean;
+  private readonly katanaReviewProgress?: number;
+  private readonly katanaReviewVariant: KatanaSlashVariant;
+  private readonly renderSize?: Readonly<{ width: number; height: number }>;
+  private readonly reviewView?: 'rear' | 'west';
+  private requestId = 0;
+  private previousTime = performance.now();
+  private roundStarted = false;
+  private capturePlayback = false;
+  private smoothedFps = 60;
+  private stageUpdateAt = 0;
+  private autoplayTimer = 0;
+  private defeatTimer = 0;
+  private qaDefeatConsumed = false;
+  private damageDemoTimer = 0;
+  private qaDamageDemoConsumed = false;
+  private fireDemoTimer = 0;
+  private inkDemoTimer = 0;
+  private qaInkDemoConsumed = false;
+  private showcaseTimer = 0;
+  private showcaseSlashIndex = 0;
+  private demoReelTimer = 0;
+  private demoReelSegment = -1;
+  private demoSpawnSerial = 0;
+  private controlRequest = 0;
+  private wasPointerLocked = false;
+  private deathFlashTimeout: number | null = null;
+  private readonly root: HTMLElement;
+  private readonly onModeChange?: (mode: GameMode) => void;
+  private readonly onPrivacyPause?: () => void;
+  private readonly resizeObserver: ResizeObserver;
+  private disposed = false;
+  private active = true;
+
+  constructor(readonly canvas: HTMLCanvasElement, options: GameOptions = {}) {
+    const root = options.root ?? canvas.parentElement;
+    if (!root) throw new Error('Missing local game surface');
+    this.root = root;
+    this.onModeChange = options.onModeChange;
+    this.onPrivacyPause = options.onPrivacyPause;
+    this.captureMode = options.capture ?? false;
+    this.stressMode = options.stress ?? false;
+    this.demoAim = options.demoAim ?? false;
+    this.autoplay = options.autoplay ?? false;
+    this.qaDefeat = options.defeat ?? false;
+    this.qaDamageDemo = options.damageDemo ?? false;
+    this.qaFireDemo = options.fireDemo ?? false;
+    this.qaInkDemo = options.inkDemo ?? false;
+    this.showcaseMode = options.showcase ?? false;
+    this.demoReelMode = options.demoReel ?? false;
+    this.katanaReviewProgress = options.katanaReviewProgress;
+    this.katanaReviewVariant = options.katanaReviewVariant ?? 'forward';
+    this.renderSize = options.renderSize;
+    this.reviewView = options.reviewView;
+    try {
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'low-power',
+      preserveDrawingBuffer: this.captureMode,
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.shadowMap.enabled = false;
+
+    this.scene = createGameScene();
+    this.camera = new THREE.PerspectiveCamera(BASE_FOV, 1, 0.025, 150);
+    this.camera.rotation.order = 'YXZ';
+    this.scene.add(this.camera);
+
+    this.arena = new ArenaBuilder().build();
+    this.scene.add(this.arena.root);
+    this.arena.syncColliderBounds();
+    this.physics = new PhysicsWorld(this.arena.colliders);
+    this.player = new PlayerController(this.camera, this.physics, this.arena.safePlayerSpawn);
+    this.hud = new Hud(root);
+    this.effects = new EffectPool(this.scene, 80, 32, 72, 40, 24, 18);
+    this.queries = new ArenaQueries(this.arena);
+
+    this.enemies = new EnemyManager(this.scene, {
+      getPlayer: () => ({
+        position: this.getPlayerCenter(),
+        velocity: this.player.body.velocity,
+        radius: 0.48,
+        alive: this.player.health > 0,
+      }),
+      hasLineOfSight: (from, to) => this.queries.hasLineOfSight(from, to),
+      resolveMovement: (enemy, proposed) => this.resolveEnemyMovement(enemy, proposed),
+      groundHeight: (position, enemy) => this.queries.groundHeight(position, enemy),
+      navigationTarget: (enemy, target) => this.queries.navigationTarget(enemy, target),
+      isProjectileBlocked: (from, to) => this.queries.segmentBlocked(from, to),
+      onPlayerDamage: (event) => this.handlePlayerDamage(event),
+      onEvent: (event) => this.handleEnemyEvent(event),
+      fallDeathY: this.arena.killY,
+      maxEnemies: 24,
+      bossSummonPoints: this.arena.enemySpawnPoints
+        .filter((point) => point.elevation === 'ground')
+        .map((point) => point.position),
+    });
+
+    this.weapons = new WeaponSystem({
+      baseFov: BASE_FOV,
+      callbacks: {
+        onHitscan: (request) => this.handleHitscan(request),
+        onPellets: (request) => this.handlePellets(request),
+        onMelee: (request) => this.handleMelee(request),
+        onReflect: (request) => this.handleReflection(request),
+        onMuzzle: (request) => this.handleMuzzle(request),
+        onEffect: (effect) => this.handleWeaponEffect(effect),
+        onWeaponChanged: (_id, slot) => this.hud.showTip(`已切换至 ${slot} 号工具`, 1.05),
+      },
+    });
+    // Keep every stock safely in front of the near plane. The extra mount is a
+    // deliberate first-person projection transform, separate from weapon animation.
+    this.weaponMount.name = 'first-person-viewmodel-mount';
+    this.weaponMount.position.set(0.35, -0.19, -0.8);
+    this.weaponMount.scale.setScalar(0.72);
+    this.camera.add(this.weaponMount);
+    this.weaponMount.add(this.weapons.viewmodelRoot);
+    this.weaponMount.traverse((object) => object.layers.set(1));
+    this.grapple = new GrappleSystem(this.camera, this.player, this.arena, this.enemies, this.effects);
+    this.supplies = new SupplySystem(this.arena, (event) => this.handleSupply(event));
+
+    this.waves = new WaveDirector({
+      spawnPoints: this.arena.enemySpawnPoints.map((point) => ({
+        id: point.id,
+        position: point.position,
+        tags: spawnTags(point),
+        weight: point.elevation === 'ground' ? 1.1 : 0.9,
+      })),
+      spawnEnemy: (kind, position) => this.enemies.spawn(kind, position),
+      getActiveEnemyCount: () => this.enemies.livingCount,
+      getPlayerPosition: () => this.player.body.position,
+      clearEnemies: () => this.enemies.reset(),
+      onEvent: (event) => this.handleWaveEvent(event),
+      onRecovery: (recovery) => this.handleRecovery(recovery),
+      definitions: this.autoplay
+        ? DEFAULT_WAVES.map((definition) => ({ ...definition, spawnInterval: 0.025 }))
+        : undefined,
+      announcementDuration: this.autoplay ? 0.06 : undefined,
+      intermissionDuration: this.autoplay ? 0.08 : undefined,
+    });
+
+    const overlay = root.querySelector<HTMLElement>('[data-bp="game-overlay"]');
+    if (!overlay) throw new Error('Missing #game-overlay');
+    this.overlay = overlay;
+    this.resizeObserver = new ResizeObserver(this.resize);
+    this.resizeObserver.observe(root);
+    this.input = new InputManager(canvas);
+    this.installEvents();
+    this.resize();
+    this.state.reset();
+    this.setMode('start');
+    this.renderHud();
+    this.renderFrame();
+    if (this.captureMode) {
+      this.startForCapture();
+      if (this.reviewView) this.applyReviewView(this.reviewView);
+      if (this.stressMode) this.populateStressScene();
+      if (this.showcaseMode) this.populateShowcaseScene();
+      if (this.demoReelMode) this.populateDemoReelScene();
+      if (this.katanaReviewProgress !== undefined) {
+        this.weapons.reset('katana');
+        this.weapons.setKatanaReviewProgress(this.katanaReviewProgress);
+        this.weapons.setKatanaReviewVariant(this.katanaReviewVariant);
+      }
+    }
+    } catch {
+      this.abortConstruction();
+      throw new Error('Local game initialization unavailable');
+    }
+  }
+
+  /** Also runs when construction fails part way through (no orphan input/GPU owners). */
+  private abortConstruction(): void {
+    this.disposed = true;
+    cancelAnimationFrame(this.requestId);
+    this.resizeObserver?.disconnect();
+    this.input?.dispose();
+    window.removeEventListener('resize', this.resize);
+    window.removeEventListener('blur', this.handleBlur);
+    document.removeEventListener('visibilitychange', this.handleVisibility);
+    document.removeEventListener('focusin', this.handleFocusChange);
+    document.removeEventListener('pointerdown', this.handleOutsidePointer);
+    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    this.root.removeEventListener('keydown', this.handleEscape);
+    this.hud?.startButton.removeEventListener('click', this.handleStartClick);
+    this.hud?.restartButton.removeEventListener('click', this.handleRestartClick);
+    this.overlay?.removeEventListener('click', this.handleOverlayClick);
+    try {
+      if (this.scene) disposeObjectResources(this.scene);
+      this.effects?.disposeOwnedResources();
+      this.arena?.dispose();
+    } finally {
+      this.renderer?.dispose();
+      this.renderer?.forceContextLoss();
+    }
+  }
+
+  startForCapture(): void {
+    this.capturePlayback = true;
+    this.beginRound();
+    this.setMode('playing');
+  }
+
+  getSnapshot(): PublicGameSnapshot {
+    const weapon = this.weapons.getSnapshot();
+    return {
+      mode: this.state.mode,
+      score: this.state.score,
+      wave: this.state.wave,
+      enemies: this.enemies.livingCount,
+      playerHealth: this.player.health,
+      activeWeapon: weapon.activeWeapon,
+      rendererObjects: this.renderer.info.render.calls,
+      effects: this.effects.getSnapshot(),
+    };
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.pause();
+    this.disposed = true;
+    cancelAnimationFrame(this.requestId);
+    if (this.deathFlashTimeout !== null) window.clearTimeout(this.deathFlashTimeout);
+    this.root.classList.remove('death-hit');
+    this.hud.clearDamageFeedback();
+    window.removeEventListener('resize', this.resize);
+    window.removeEventListener('blur', this.handleBlur);
+    document.removeEventListener('visibilitychange', this.handleVisibility);
+    document.removeEventListener('focusin', this.handleFocusChange);
+    document.removeEventListener('pointerdown', this.handleOutsidePointer);
+    this.root.removeEventListener('keydown', this.handleEscape);
+    this.resizeObserver.disconnect();
+    document.removeEventListener('pointerlockchange', this.handlePointerLockChange);
+    this.hud.startButton.removeEventListener('click', this.handleStartClick);
+    this.hud.restartButton.removeEventListener('click', this.handleRestartClick);
+    this.overlay.removeEventListener('click', this.handleOverlayClick);
+    this.input.dispose();
+    this.audio.dispose();
+    this.enemies.reset();
+    this.effects.disposeOwnedResources();
+    disposeObjectResources(this.scene);
+    const shared = getEnemySharedResources();
+    for (const geometry of shared.geometries) geometry.dispose();
+    for (const material of shared.materials) material.dispose();
+    this.arena.dispose();
+    this.scene.clear();
+    this.renderer.renderLists.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
+  }
+
+  setActive(active: boolean): void {
+    this.active = active;
+    if (!active) this.pause();
+    // Never auto-resume on restore: require a fresh user gesture.
+  }
+
+  pause(): void {
+    if (this.disposed) return;
+    this.controlRequest += 1;
+    this.input.setPointerFallback(false);
+    this.input.setEnabled(false);
+    this.audio.suspend();
+    cancelAnimationFrame(this.requestId);
+    this.requestId = 0;
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    if (this.state.mode === 'playing') this.setMode('paused');
+    if (this.deathFlashTimeout !== null) window.clearTimeout(this.deathFlashTimeout);
+    this.deathFlashTimeout = null;
+    this.root.classList.remove('death-hit');
+    this.hud.clearDamageFeedback();
+  }
+
+  private readonly handleBlur = (): void => this.pause();
+  private readonly handleVisibility = (): void => { if (document.hidden) this.pause(); };
+  private readonly handleFocusChange = (event: FocusEvent): void => {
+    if (this.state.mode === 'playing' && event.target !== this.canvas) this.pause();
+  };
+  private readonly handleOutsidePointer = (event: PointerEvent): void => {
+    if (this.state.mode === 'playing' && event.target instanceof Node && !this.root.contains(event.target)) this.pause();
+  };
+  private readonly handleEscape = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') this.pause(); // Deliberately bubbles to the site's discreet-mode handler.
+  };
+
+  private installEvents(): void {
+    window.addEventListener('resize', this.resize);
+    window.addEventListener('blur', this.handleBlur);
+    document.addEventListener('visibilitychange', this.handleVisibility);
+    document.addEventListener('focusin', this.handleFocusChange);
+    document.addEventListener('pointerdown', this.handleOutsidePointer);
+    this.root.addEventListener('keydown', this.handleEscape);
+    document.addEventListener('pointerlockchange', this.handlePointerLockChange);
+    this.hud.startButton.addEventListener('click', this.handleStartClick);
+    this.hud.restartButton.addEventListener('click', this.handleRestartClick);
+    this.overlay.addEventListener('click', this.handleOverlayClick);
+  }
+
+  private readonly resize = (): void => {
+    if (this.disposed) return;
+    const width = Math.max(1, Math.min(1600, this.root.clientWidth));
+    const height = Math.max(1, Math.min(1000, this.root.clientHeight));
+    this.renderer.setSize(width, height, false);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    if (this.state.mode !== 'playing') this.renderFrame();
+  };
+
+  private readonly handleStartClick = (event: MouseEvent): void => {
+    event.stopPropagation();
+    if (!this.active || this.disposed || document.hidden) return;
+    this.audio.resume();
+    if (!this.roundStarted) this.beginRound();
+    this.requestGameplayControl();
+  };
+
+  private readonly handleRestartClick = (event: MouseEvent): void => {
+    event.stopPropagation();
+    if (!this.active || this.disposed || document.hidden) return;
+    this.audio.resume();
+    this.beginRound();
+    if (this.captureMode) {
+      this.capturePlayback = true;
+      this.setMode('playing');
+      if (this.stressMode) this.populateStressScene();
+      if (this.showcaseMode) this.populateShowcaseScene();
+      return;
+    }
+    this.requestGameplayControl();
+  };
+
+  private readonly handleOverlayClick = (): void => { /* Resume requires the explicit accessible button. */ };
+
+  private requestGameplayControl(): void {
+    if (!this.active || this.disposed || document.hidden) return;
+    const request = ++this.controlRequest;
+    this.input.setPointerFallback(false);
+    void this.input.requestPointerLock().then((locked) => {
+      if (request !== this.controlRequest || this.disposed || !this.active || document.hidden) {
+        if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+        return;
+      }
+      if (locked) {
+        this.wasPointerLocked = true;
+        this.input.setPointerFallback(false);
+        if (this.state.mode === 'start' || this.state.mode === 'paused') this.setMode('playing');
+        return;
+      }
+      if (this.state.mode !== 'start' && this.state.mode !== 'paused') return;
+      this.input.setPointerFallback(true);
+      this.capturePlayback = false;
+      this.setMode('playing');
+      this.hud.showTip('鼠标锁定不可用：在画布内移动鼠标转向；Esc 暂停', 5.5);
+    });
+  }
+
+  private readonly handlePointerLockChange = (): void => {
+    const locked = document.pointerLockElement === this.canvas;
+    if (locked && (this.disposed || !this.active || document.hidden)) {
+      document.exitPointerLock();
+      return;
+    }
+    const wasLocked = this.wasPointerLocked;
+    this.wasPointerLocked = locked;
+    if (locked) {
+      if ((this.state.mode === 'start' || this.state.mode === 'paused') && !this.roundStarted) this.beginRound();
+      this.input.setPointerFallback(false);
+      this.capturePlayback = false;
+      if (this.state.mode === 'start' || this.state.mode === 'paused') this.setMode('playing');
+    } else if (wasLocked && !locked && this.state.mode === 'playing' && !this.capturePlayback && !this.input.usingPointerFallback) {
+      this.pause();
+      // Some browsers consume Escape while releasing Pointer Lock and never
+      // dispatch keydown. The window must still switch to its opaque note cover.
+      this.onPrivacyPause?.();
+    }
+  };
+
+  private beginRound(): void {
+    this.state.reset();
+    this.input.setPointerFallback(false);
+    this.player.yaw = 0;
+    this.player.pitch = -0.035;
+    this.player.restore();
+    this.weapons.reset();
+    this.enemies.reset();
+    this.waves.reset();
+    this.effects.clear();
+    this.grapple.reset();
+    this.supplies.reset();
+    this.arena.resetBreakables();
+    this.lastHit.clear();
+    if (this.deathFlashTimeout !== null) window.clearTimeout(this.deathFlashTimeout);
+    this.deathFlashTimeout = null;
+    this.root.classList.remove('death-hit');
+    this.hud.clearDamageFeedback();
+    this.autoplayTimer = 0;
+    this.defeatTimer = 0;
+    this.damageDemoTimer = 0;
+    this.fireDemoTimer = 0;
+    this.inkDemoTimer = 0;
+    this.showcaseTimer = 0;
+    this.showcaseSlashIndex = 0;
+    this.demoReelTimer = 0;
+    this.demoReelSegment = -1;
+    this.demoSpawnSerial = 0;
+    this.qaInkDemoConsumed = false;
+    this.qaDamageDemoConsumed = false;
+    this.roundStarted = true;
+    this.waves.start();
+    this.hud.showTip('Q：抓钩 · 1–5：切换工具 · R：装填', 5.5);
+    this.setMode('paused');
+  }
+
+  private setMode(mode: GameMode): void {
+    this.state.mode = mode;
+    const active = mode === 'playing';
+    this.input.setEnabled(active);
+    this.player.enabled = active && (this.capturePlayback || this.input.controlsActive);
+    this.weapons.setEnabled(active);
+    this.hud.setMode(mode);
+    this.onModeChange?.(mode);
+    if (active && !this.disposed && this.active && !this.requestId) {
+      this.previousTime = performance.now();
+      this.requestId = requestAnimationFrame(this.frame);
+    } else if (!active) {
+      cancelAnimationFrame(this.requestId);
+      this.requestId = 0;
+    }
+  }
+
+  private readonly frame = (time: number): void => {
+    this.requestId = 0;
+    if (this.disposed || !this.active || document.hidden || this.state.mode !== 'playing') return;
+    // Small-window mode limits work to 30 simulation/render frames per second.
+    if (time - this.previousTime < 1000 / 30) {
+      this.requestId = requestAnimationFrame(this.frame);
+      return;
+    }
+    const realDelta = Math.min(0.05, Math.max(0, (time - this.previousTime) / 1000));
+    this.previousTime = time;
+    this.smoothedFps = THREE.MathUtils.lerp(this.smoothedFps, realDelta > 0 ? 1 / realDelta : 60, 0.045);
+    if (this.state.mode === 'playing') {
+      this.updatePlaying(realDelta);
+    } else {
+      this.input.consumeFrame();
+      this.arena.update(realDelta);
+      this.effects.update(realDelta);
+    }
+    this.hud.update(realDelta);
+    this.updateStage(time);
+    this.renderFrame();
+    if (this.state.mode === 'playing' && this.active && !this.disposed) this.requestId = requestAnimationFrame(this.frame);
+  };
+
+  private updatePlaying(realDelta: number): void {
+    let input = this.input.consumeFrame();
+    if (this.demoReelMode) input = this.updateDemoReel(realDelta, input);
+    const controlActive = input.controlsActive || this.capturePlayback;
+    this.player.enabled = controlActive && (!this.capturePlayback || this.demoReelMode);
+    this.weapons.setEnabled(controlActive);
+    if (input.pausePressed && !this.capturePlayback) {
+      this.controlRequest += 1;
+      this.input.setPointerFallback(false);
+      if (document.pointerLockElement === this.canvas) void document.exitPointerLock();
+      this.setMode('paused');
+      return;
+    }
+    this.state.update(realDelta);
+    if (this.qaInkDemo && !this.qaInkDemoConsumed) {
+      this.inkDemoTimer += realDelta;
+      if (this.inkDemoTimer >= 0.28) {
+        this.qaInkDemoConsumed = true;
+        this.populateInkDemo();
+      }
+    }
+    if (this.qaDamageDemo && !this.qaDamageDemoConsumed) {
+      this.damageDemoTimer += realDelta;
+      if (this.damageDemoTimer >= 0.55) {
+        this.qaDamageDemoConsumed = true;
+        this.handlePlayerDamage({
+          amount: 21,
+          sourceEnemyId: 'qa-damage-source',
+          sourceKind: 'marksman',
+          attack: 'projectile',
+          origin: this.getPlayerCenter().add(new THREE.Vector3(0, 0.2, -8)),
+          direction: new THREE.Vector3(0, 0, 1),
+          projectileId: 'qa-damage-projectile',
+        });
+      }
+    }
+    if (this.qaDefeat && !this.qaDefeatConsumed) {
+      this.defeatTimer += realDelta;
+      if (this.defeatTimer >= 0.45) {
+        this.qaDefeatConsumed = true;
+        this.player.applyDamage(this.player.maxHealth);
+        this.finish('defeat');
+        this.renderHud();
+        return;
+      }
+    }
+    const simulationDelta = realDelta * this.state.timeScale;
+
+    this.applyInputActions(input, controlActive);
+    this.player.update(realDelta, input);
+    this.camera.getWorldPosition(this.aimOrigin);
+    this.camera.getWorldDirection(this.aimDirection).normalize();
+    this.aimUp.set(0, 1, 0).applyQuaternion(this.camera.quaternion).normalize();
+    const playerSnapshot = this.player.getSnapshot();
+    this.weapons.setAimRay(this.aimOrigin, this.aimDirection, this.aimUp);
+    this.weapons.setLookDelta(input.lookX, input.lookY);
+    this.weapons.setMotion({
+      strafe: input.moveX,
+      forward: input.moveZ,
+      speed: playerSnapshot.speed,
+      grounded: playerSnapshot.grounded,
+      sprinting: playerSnapshot.sprinting,
+      gaitPhase: playerSnapshot.gaitPhase,
+      gaitWeight: playerSnapshot.gaitWeight,
+    });
+    let showcaseSlash = false;
+    if (this.showcaseMode && this.katanaReviewProgress === undefined) {
+      this.showcaseTimer += simulationDelta;
+      const slashAt = SHOWCASE_SLASH_TIMES[this.showcaseSlashIndex];
+      if (slashAt !== undefined && this.showcaseTimer >= slashAt && this.weapons.getSnapshot().phase === 'idle') {
+        showcaseSlash = true;
+        this.showcaseSlashIndex += 1;
+      }
+    }
+    this.fireDemoTimer += realDelta;
+    const fireDemoTrigger = this.qaFireDemo && this.fireDemoTimer >= 0.55 && this.fireDemoTimer <= 0.63;
+    this.weapons.setTrigger(controlActive && (input.primary || showcaseSlash || fireDemoTrigger));
+    this.weapons.setAimHeld(controlActive && (input.secondary || this.demoAim));
+    this.weapons.update(simulationDelta);
+    const weaponSnapshot = this.weapons.getSnapshot();
+    this.weaponMount.visible = weaponSnapshot.scopeState !== 'active';
+    this.player.setFovTarget(weaponSnapshot.desiredFov);
+
+    this.grapple.update(simulationDelta);
+    this.tryReflectProjectile(weaponSnapshot.katana.blocking);
+    this.waves.update(simulationDelta);
+    if (this.state.mode === 'playing') this.enemies.update(simulationDelta);
+    if (this.autoplay && this.state.mode === 'playing') this.updateAutoplay(simulationDelta);
+    this.arena.update(simulationDelta);
+    this.effects.update(simulationDelta);
+    this.supplies.update(realDelta, this.player.body.position, this.state.mode === 'playing');
+    this.renderHud();
+  }
+
+  private applyInputActions(input: InputFrame, active: boolean): void {
+    if (!active) return;
+    if (input.weaponSelection !== null) this.weapons.selectSlot(input.weaponSelection);
+    if (input.weaponWheel !== 0) this.weapons.cycleWeapon(input.weaponWheel);
+    if (input.reloadPressed) this.weapons.requestReload();
+    if (input.grapplePressed) {
+      const result = this.grapple.fire();
+      if (result.fired) this.audio.play('grapple');
+    }
+    if (input.restartPressed && (this.state.mode === 'defeat' || this.state.mode === 'victory')) this.beginRound();
+  }
+
+  private tryReflectProjectile(blocking: boolean): void {
+    if (!blocking) return;
+    const center = this.getPlayerCenter();
+    const incoming = this.enemies.findIncomingProjectile(center, 1.55);
+    if (!incoming) return;
+    this.camera.getWorldDirection(this.aimDirection).normalize();
+    this.weapons.requestReflection({
+      projectileId: incoming.id,
+      sourcePosition: incoming.position,
+      incomingDirection: incoming.velocity,
+      staminaCost: 14,
+    });
+  }
+
+  private handleHitscan(request: HitscanRequest): void {
+    this.resolveBallisticRay(
+      request.weaponId,
+      request.origin,
+      request.direction,
+      request.damage,
+      request.range,
+      request.knockback,
+    );
+  }
+
+  private handlePellets(request: PelletsRequest): void {
+    let registeredHit = false;
+    let headshot = false;
+    for (const ray of request.rays) {
+      const result = this.resolveBallisticRay(
+        'shotgun',
+        request.origin,
+        ray.direction,
+        ray.damage,
+        request.range,
+        request.knockback,
+        false,
+      );
+      registeredHit ||= result.hit;
+      headshot ||= result.headshot;
+    }
+    if (registeredHit) this.hud.flashHit(headshot);
+  }
+
+  private resolveBallisticRay(
+    weaponId: Exclude<WeaponId, 'katana'>,
+    origin: THREE.Vector3,
+    direction: THREE.Vector3,
+    damage: number,
+    range: number,
+    knockback: number,
+    flashHud = true,
+  ): { hit: boolean; headshot: boolean } {
+    this.raycaster.set(origin, direction);
+    this.raycaster.far = range;
+    const worldHit = this.queries.firstWorldHit(this.raycaster, range);
+    const enemyHit = this.enemies.raycast(this.raycaster, range);
+    if (enemyHit && (!worldHit || enemyHit.distance < worldHit.distance - 0.025)) {
+      const result = this.enemies.applyDamage(enemyHit, {
+        amount: damage,
+        type: damageType(weaponId),
+        hitZone: enemyHit.hitZone,
+        point: enemyHit.point,
+        direction,
+        impulse: knockback,
+        sourceId: `player-${weaponId}`,
+      });
+      if (result && flashHud) this.hud.flashHit(result.headshot);
+      return { hit: Boolean(result), headshot: result?.headshot ?? false };
+    }
+
+    if (worldHit) {
+      const breakableId = worldHit.object.userData.breakableId as string | undefined;
+      if (breakableId) {
+        const multiplier = weaponId === 'shotgun' ? 1.55 : weaponId === 'sniper' ? 1.3 : 1;
+        const result = this.arena.damageBreakable(breakableId, damage * multiplier, worldHit.point, direction);
+        this.effects.spawnBurst(worldHit.point, 'orange', result?.destroyed ? 0.42 : 0.18, 0.28);
+        if (result?.destroyed) this.effects.spawnDebris(worldHit.point, direction, 'orange', 10);
+      } else {
+        this.effects.spawnBurst(worldHit.point, 'blue', 0.13, 0.34);
+      }
+    }
+    return { hit: false, headshot: false };
+  }
+
+  private handleMelee(request: MeleeRequest): void {
+    const threshold = Math.cos(request.arcRadians * 0.5);
+    let hit = false;
+    let bloodGain = 0;
+    for (const enemy of this.enemies.getLivingEnemies()) {
+      const target = enemy.position.clone().add(new THREE.Vector3(0, enemy.kind === 'boss' ? 1.7 : 1.05, 0));
+      const delta = target.sub(request.origin);
+      const distance = delta.length();
+      if (distance > request.range + enemy.collisionRadius || distance <= 0.001) continue;
+      const direction = delta.multiplyScalar(1 / distance);
+      if (direction.dot(request.direction) < threshold || !this.queries.hasLineOfSight(request.origin, enemy.position.clone().setY(enemy.position.y + 1))) continue;
+      const result = this.enemies.applyDamage(enemy.id, {
+        amount: request.damage,
+        type: 'melee',
+        point: enemy.position.clone().add(new THREE.Vector3(0, 1.05, 0)),
+        direction: request.direction,
+        impulse: request.knockback,
+        sourceId: 'player-katana',
+      });
+      hit ||= Boolean(result);
+      if (result) bloodGain += result.killed ? 2 : 1;
+    }
+    if (hit) {
+      this.weapons.addKatanaBlood(bloodGain);
+      this.hud.flashHit(false);
+    }
+    this.raycaster.set(request.origin, request.direction);
+    this.raycaster.far = request.range;
+    const worldHit = this.queries.firstWorldHit(this.raycaster, request.range);
+    const breakableId = worldHit?.object.userData.breakableId as string | undefined;
+    if (worldHit && breakableId) {
+      const result = this.arena.damageBreakable(breakableId, 58, worldHit.point, request.direction);
+      this.effects.spawnBurst(worldHit.point, 'orange', result?.destroyed ? 0.42 : 0.2, 0.28);
+    }
+  }
+
+  private handleReflection(request: ReflectRequest): void {
+    const projectileId = request.projectileId === undefined ? undefined : String(request.projectileId);
+    const result = this.enemies.reflectProjectiles(this.getPlayerCenter(), 1.7, request.direction, projectileId);
+    if (result.count > 0) {
+      this.audio.play('katana');
+      this.effects.spawnBurst(request.origin, 'green', request.perfect ? 0.34 : 0.24, 0.2);
+      if (request.perfect) this.hud.showTip('完美反弹', 0.8);
+    }
+  }
+
+  private handleMuzzle(request: MuzzleRequest): void {
+    request.anchor.updateWorldMatrix(true, false);
+    request.anchor.getWorldPosition(this.temporary);
+    this.effects.spawnBurst(this.temporary, 'orange', 0.18 + request.intensity * 0.055, 0.09);
+    this.effects.spawnFirearmAftermath(
+      this.temporary,
+      request.direction,
+      this.aimUp,
+      request.weaponId,
+      request.shotId,
+    );
+  }
+
+  private handleWeaponEffect(effect: WeaponEffect): void {
+    if (effect.kind === 'fire' && effect.weaponId !== 'katana') {
+      this.audio.play(weaponSound(effect.weaponId));
+      this.player.addRecoil(Math.min(1.35, (effect.strength ?? 0.5) * 0.58), Math.sin(effect.timestamp * 41.7) * 0.06);
+    } else if (effect.kind === 'reload-start') {
+      this.audio.play('reload');
+    } else if (effect.kind === 'slash') {
+      this.audio.play('katana');
+    } else if (effect.kind === 'block-break') {
+      this.audio.play('hurt');
+      this.hud.showTip('格挡耗尽', 1.1);
+    }
+  }
+
+  private handlePlayerDamage(event: PlayerDamageEvent): void {
+    if (this.state.mode !== 'playing') return;
+    const weapon = this.weapons.getSnapshot();
+    const blocked = weapon.activeWeapon === 'katana' && weapon.katana.blocking && event.projectileId !== undefined;
+    const mitigatedDamage = event.amount * (blocked ? 0.24 : 0.72);
+    const amount = this.capturePlayback ? 0 : mitigatedDamage;
+    const dead = this.player.applyDamage(amount);
+    this.audio.play('hurt');
+    const incomingYaw = Math.atan2(event.direction.x, event.direction.z);
+    const relative = Math.atan2(Math.sin(incomingYaw - this.player.yaw), Math.cos(incomingYaw - this.player.yaw));
+    this.hud.flashDamage(relative, mitigatedDamage);
+    if (blocked) this.hud.showTip('已格挡', 0.55);
+    if (dead) this.finish('defeat');
+  }
+
+  private handleEnemyEvent(event: EnemyEvent): void {
+    if (event.type === 'hit') {
+      this.lastHit.set(event.enemyId, {
+        headshot: Boolean(event.headshot),
+        time: performance.now(),
+        direction: event.direction?.clone(),
+      });
+      if (event.damageType === 'melee' && !event.killed) {
+        this.state.triggerHitStop();
+        this.flashImpactFrame();
+      }
+    } else if (event.type === 'ink-impact') {
+      const away = event.position.clone().sub(this.getPlayerCenter()).normalize();
+      this.effects.spawnInkSplatter(event.position, away, 'red', event.headshot ? 8 : 5);
+    } else if (event.type === 'death') {
+      const recent = this.lastHit.get(event.enemyId);
+      const headshot = Boolean(recent?.headshot && performance.now() - recent.time < 2200);
+      this.state.awardKill(scoreForEnemy(event.kind), {
+        headshot,
+        fall: event.deathCause === 'fall',
+        reflected: event.deathCause === 'reflected',
+        boss: event.kind === 'boss',
+      });
+      if (event.deathCause !== 'fall') this.flashImpactFrame();
+      const direction = event.direction?.clone()
+        ?? recent?.direction?.clone()
+        ?? event.position.clone().sub(this.getPlayerCenter()).normalize();
+      const intensity = event.kind === 'boss'
+        ? 1.35
+        : event.deathCause === 'melee'
+          ? 0.82
+          : event.deathCause === 'shotgun'
+            ? 1.12
+          : event.deathCause === 'sniper'
+            ? 1.14
+            : event.deathCause === 'fall'
+              ? 0.82
+              : 1;
+      this.effects.spawnEnemyDeath(event.position, direction, {
+        intensity,
+        boss: event.kind === 'boss',
+        headshot,
+      });
+      if (event.deathCause !== 'fall') {
+        const wallOrigin = event.position.clone().add(new THREE.Vector3(0, event.kind === 'boss' ? 1.6 : 1.05, 0));
+        this.raycaster.set(wallOrigin, direction);
+        this.raycaster.far = 4.8;
+        const wallHit = this.queries.firstWorldHit(this.raycaster, 4.8);
+        if (wallHit) {
+          const normal = wallHit.face?.normal.clone().transformDirection(wallHit.object.matrixWorld)
+            ?? direction.clone().multiplyScalar(-1);
+          this.effects.spawnSurfaceSplat(wallHit.point, normal, event.kind === 'boss' ? 3.2 : 1.25, 58);
+        }
+      }
+      this.waves.notifyEnemyRemoved(event.enemyId);
+      this.lastHit.delete(event.enemyId);
+    } else if (event.type === 'attack-telegraph') {
+      this.effects.spawnBurst(event.position, 'red', event.kind === 'boss' ? 0.55 : 0.22, event.telegraphDuration ?? 0.35);
+    } else if (event.type === 'projectile-impact') {
+      this.effects.spawnBurst(event.position, 'red', 0.13, 0.26);
+    } else if (event.type === 'boss-phase') {
+      this.hud.showBanner('涂鸦大师', '第二阶段 · 笔触加快', 2.1);
+      this.audio.play('boss');
+    } else if (event.type === 'boss-summon') {
+      this.hud.showTip('涂鸦大师画出了新帮手', 2.1);
+    } else if (event.type === 'cleanup') {
+      this.lastHit.delete(event.enemyId);
+    }
+  }
+
+  private flashImpactFrame(): void {
+    this.root.classList.remove('death-hit');
+    void this.root.offsetWidth;
+    this.root.classList.add('death-hit');
+    if (this.deathFlashTimeout !== null) window.clearTimeout(this.deathFlashTimeout);
+    this.deathFlashTimeout = window.setTimeout(() => {
+      this.root.classList.remove('death-hit');
+      this.deathFlashTimeout = null;
+    }, 84);
+  }
+
+  private handleWaveEvent(event: WaveEvent): void {
+    if (event.wave > 0) this.state.wave = event.wave;
+    if (event.type === 'announcement') {
+      const subtitles = ['落下第一笔', '墨迹的回击', '留白越来越少', '划去每个难点', '涂鸦大师登场'];
+      this.hud.showBanner(`第 ${event.wave} 轮`, subtitles[event.wave - 1] ?? '继续练习', event.duration ?? 2.15);
+      this.audio.play(event.wave === 5 ? 'boss' : 'wave');
+    } else if (event.type === 'wave-clear') {
+      this.hud.showBanner('本轮完成', '稍作休息 · 补充状态与弹药', 2.8);
+    } else if (event.type === 'victory') {
+      this.finish('victory');
+    }
+  }
+
+  private handleRecovery(recovery: WaveRecovery): void {
+    this.player.heal(this.player.maxHealth * recovery.healthFraction);
+    for (const id of WEAPON_IDS) {
+      if (id === 'katana') continue;
+      const reserve = WEAPON_DEFINITIONS[id].initialReserve ?? 0;
+      this.weapons.addReserveAmmo(id, Math.max(1, Math.round(reserve * recovery.ammoFraction)));
+    }
+  }
+
+  private handleSupply(event: SupplyPickupEvent): void {
+    if (event.health > 0) this.player.heal(event.health);
+    if (event.ammo > 0) {
+      this.weapons.addReserveAmmo('rifle', event.ammo);
+      this.weapons.addReserveAmmo('shotgun', Math.max(2, Math.round(event.ammo * 0.22)));
+      this.weapons.addReserveAmmo('revolver', Math.max(3, Math.round(event.ammo * 0.3)));
+      this.weapons.addReserveAmmo('sniper', Math.max(2, Math.round(event.ammo * 0.18)));
+    }
+    this.effects.spawnBurst(this.player.body.position.clone().add(new THREE.Vector3(0, 0.7, 0)), 'green', 0.34, 0.42);
+    this.hud.showTip(event.kind === 'mixed' ? '状态与弹药已补充' : '补给已领取', 1.25);
+  }
+
+  private finish(mode: 'defeat' | 'victory'): void {
+    if (this.state.mode === mode) return;
+    this.controlRequest += 1;
+    this.input.setPointerFallback(false);
+    this.capturePlayback = false;
+    this.setMode(mode);
+    this.weapons.setTrigger(false);
+    this.weapons.setAimHeld(false);
+    this.enemies.projectilePool.clear();
+    if (mode === 'victory') this.enemies.reset();
+    if (document.pointerLockElement === this.canvas) void document.exitPointerLock();
+  }
+
+  private populateStressScene(): void {
+    const kinds: readonly Exclude<EnemyKind, 'boss'>[] = ['grunt', 'rusher', 'heavy', 'marksman'];
+    for (let index = 0; index < 20; index += 1) {
+      const point = this.arena.enemySpawnPoints[index % this.arena.enemySpawnPoints.length];
+      const kind = kinds[index % kinds.length];
+      if (!point || !kind) continue;
+      this.enemies.spawn(kind, point.position.clone(), { id: `stress-${index + 1}` });
+    }
+  }
+
+  private populateInkDemo(): void {
+    // QA-only close view: the rear perimeter is a real raycast wall, so this
+    // exercises the same death event, world hit, wall decal and floor trail as
+    // normal play without changing gameplay placement or camera behaviour.
+    const reviewPlayer = new THREE.Vector3(0, 0.32, -40.65);
+    const position = new THREE.Vector3(-0.68, 0, -44.15);
+    const direction = position.clone().sub(reviewPlayer).setY(0.035).normalize();
+    this.player.yaw = Math.atan2(-direction.x, -direction.z) - 0.12;
+    this.player.pitch = -0.15;
+    this.player.teleport(reviewPlayer);
+    this.camera.rotation.set(this.player.pitch, this.player.yaw, 0, 'YXZ');
+    const enemy = this.enemies.spawn('grunt', position, { id: 'qa-ink-death' });
+    this.enemies.applyDamage(enemy.id, {
+      amount: enemy.maxHealth * 3,
+      type: 'shotgun',
+      point: position.clone().add(new THREE.Vector3(0, 1.05, 0)),
+      direction,
+      impulse: 7,
+      sourceId: 'qa-ink-demo',
+    });
+    // Settle only the review capture so the persistent wall/floor composition is
+    // readable in a single still instead of being hidden by flying body pieces.
+    this.effects.update(1.65);
+  }
+
+  private populateShowcaseScene(): void {
+    this.waves.reset();
+    this.enemies.reset();
+    this.weapons.reset('katana');
+    this.showcaseTimer = 0;
+    this.showcaseSlashIndex = 0;
+    this.player.yaw = 0;
+    this.player.pitch = -0.025;
+    this.player.teleport(this.arena.safePlayerSpawn);
+    this.camera.rotation.set(this.player.pitch, this.player.yaw, 0, 'YXZ');
+    const player = this.arena.safePlayerSpawn;
+    this.enemies.spawn('grunt', new THREE.Vector3(player.x, 0, player.z - 4.02), { id: 'showcase-front', yaw: 0 });
+    this.enemies.spawn('grunt', new THREE.Vector3(player.x - 1.65, 0, player.z - 5.25), { id: 'showcase-left', yaw: 0 });
+    this.enemies.spawn('marksman', new THREE.Vector3(player.x + 1.75, 0, player.z - 5.7), { id: 'showcase-right', yaw: 0 });
+  }
+
+  private populateDemoReelScene(): void {
+    this.enemies.reset();
+    this.weapons.reset('rifle');
+    this.demoReelTimer = 0;
+    this.demoReelSegment = -1;
+    this.demoSpawnSerial = 0;
+    this.player.yaw = 0;
+    this.player.pitch = -0.02;
+    this.player.teleport(this.arena.safePlayerSpawn);
+    this.spawnDemoTarget('grunt', 8, -1.5);
+    this.spawnDemoTarget('marksman', 13, 2.4);
+    this.spawnDemoTarget('rusher', 17, -4.2);
+  }
+
+  private spawnDemoTarget(kind: EnemyKind, distance: number, lateral: number): void {
+    const player = this.player.body.position;
+    const forward = new THREE.Vector3(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw));
+    const right = new THREE.Vector3(Math.cos(this.player.yaw), 0, -Math.sin(this.player.yaw));
+    const position = player.clone().addScaledVector(forward, distance).addScaledVector(right, lateral);
+    position.y = 0;
+    this.demoSpawnSerial += 1;
+    this.enemies.spawn(kind, position, { id: `demo-${this.demoSpawnSerial}` });
+  }
+
+  private updateDemoReel(delta: number, base: InputFrame): InputFrame {
+    this.demoReelTimer += delta;
+    const t = this.demoReelTimer;
+    const boundaries = [0, 18, 34, 48, 62, 75];
+    let segment = 0;
+    while (segment + 1 < boundaries.length && t >= boundaries[segment + 1]) segment += 1;
+    if (segment !== this.demoReelSegment) {
+      this.demoReelSegment = segment;
+      const weapons: readonly WeaponId[] = ['rifle', 'shotgun', 'revolver', 'sniper', 'katana', 'rifle'];
+      this.weapons.selectWeapon(weapons[segment]);
+      const positions = [
+        this.arena.safePlayerSpawn,
+        new THREE.Vector3(-14, 0.25, 5),
+        new THREE.Vector3(14, 0.25, -7),
+        new THREE.Vector3(-32, 0.32, 20),
+        new THREE.Vector3(0, 0.32, -40.65),
+        new THREE.Vector3(-24, 0.25, -28),
+      ];
+      this.player.teleport(positions[segment]);
+      const kind: EnemyKind = segment === 5 ? 'boss' : segment === 1 ? 'heavy' : segment === 3 ? 'marksman' : 'grunt';
+      const count = segment === 4 ? 4 : segment === 5 ? 1 : 3;
+      for (let index = 0; index < count; index += 1) this.spawnDemoTarget(kind, segment === 4 ? 3.4 + index * 0.8 : 8 + index * 3, (index - 1) * 2.1);
+      if (segment === 1 || segment === 3) {
+        this.handlePlayerDamage({
+          amount: 18,
+          sourceEnemyId: 'demo-director',
+          sourceKind: 'marksman',
+          attack: 'projectile',
+          origin: this.player.body.position.clone().add(new THREE.Vector3(4, 1, -5)),
+          direction: new THREE.Vector3(-0.7, 0, 0.7),
+          projectileId: `demo-hit-${segment}`,
+        });
+      }
+    }
+
+    if (this.enemies.livingCount < (segment === 4 ? 2 : 3) && t < 86) {
+      const kind: EnemyKind = segment === 4 ? (this.demoSpawnSerial % 2 ? 'rusher' : 'grunt') : segment === 5 ? 'heavy' : segment === 1 ? 'heavy' : 'grunt';
+      this.spawnDemoTarget(kind, segment === 4 ? 3.5 : 8 + (this.demoSpawnSerial % 3) * 2.4, ((this.demoSpawnSerial % 3) - 1) * 2.2);
+    }
+
+    const player = this.player.body.position;
+    const target = [...this.enemies.getLivingEnemies()]
+      .sort((a, b) => a.position.distanceToSquared(player) - b.position.distanceToSquared(player))[0];
+    if (target) {
+      const targetPoint = target.position.clone().add(new THREE.Vector3(0, target.kind === 'boss' ? 1.8 : 1.05, 0));
+      const deltaAim = targetPoint.sub(this.camera.position);
+      const desiredYaw = Math.atan2(-deltaAim.x, -deltaAim.z);
+      const desiredPitch = THREE.MathUtils.clamp(-Math.atan2(deltaAim.y, Math.hypot(deltaAim.x, deltaAim.z)), -0.42, 0.34);
+      const turn = 1 - Math.exp(-4.6 * delta);
+      this.player.yaw += Math.atan2(Math.sin(desiredYaw - this.player.yaw), Math.cos(desiredYaw - this.player.yaw)) * turn;
+      this.player.pitch = THREE.MathUtils.lerp(this.player.pitch, desiredPitch, turn);
+    }
+
+    const local = t - boundaries[segment];
+    const katana = segment === 4;
+    const triggerPeriod = katana ? 0.78 : segment === 1 ? 1.05 : segment === 2 ? 0.72 : segment === 3 ? 1.3 : 0.19;
+    const firing = t > 3 && (local % triggerPeriod) < (katana ? 0.09 : segment === 0 || segment === 5 ? 0.12 : 0.08);
+    const move = katana ? 0.16 : segment === 3 ? 0.08 : 0.32;
+    return {
+      ...base,
+      moveX: Math.sin(t * 0.72) * (katana ? 0.18 : 0.32),
+      moveZ: move,
+      sprint: segment === 0 && local < 6,
+      primary: firing,
+      secondary: (segment === 3 && local > 3 && local < 12) || (katana && local > 8 && local < 11),
+      controlsActive: true,
+      pointerLocked: false,
+      lookX: Math.sin(t * 1.7) * 0.35,
+      lookY: Math.cos(t * 1.3) * 0.18,
+    };
+  }
+
+  private applyReviewView(view: 'rear' | 'west'): void {
+    if (view === 'rear') {
+      this.player.yaw = -Math.PI / 2;
+      this.player.pitch = -0.035;
+      this.player.teleport(new THREE.Vector3(-33, 0.32, -32));
+    } else {
+      this.player.yaw = -0.69;
+      this.player.pitch = -0.025;
+      this.player.teleport(new THREE.Vector3(-32, 0.32, 20));
+    }
+    this.camera.rotation.set(this.player.pitch, this.player.yaw, 0, 'YXZ');
+  }
+
+  private updateAutoplay(delta: number): void {
+    this.autoplayTimer += delta;
+    if (this.autoplayTimer < 0.11) return;
+    this.autoplayTimer = 0;
+    for (const enemy of this.enemies.getLivingEnemies()) {
+      this.enemies.applyDamage(enemy.id, {
+        amount: enemy.maxHealth * 4,
+        type: 'environment',
+        point: enemy.position.clone().add(new THREE.Vector3(0, 1, 0)),
+        sourceId: 'qa-autoplay',
+      });
+    }
+  }
+
+  private resolveEnemyMovement(
+    enemy: ReturnType<EnemyManager['getLivingEnemies']>[number],
+    proposed: THREE.Vector3,
+  ): THREE.Vector3 {
+    const resolved = this.queries.resolveEnemyMovement(enemy, proposed);
+    const playerPosition = this.player.body.position;
+    if (Math.abs(resolved.y - playerPosition.y) > 2.4) return resolved;
+    const separation = resolved.clone().sub(playerPosition).setY(0);
+    const minimum = enemy.kind === 'rusher'
+      ? enemy.collisionRadius + 0.52
+      : Math.max(2, enemy.collisionRadius + 1.35);
+    if (separation.lengthSq() >= minimum * minimum) return resolved;
+    if (separation.lengthSq() < 0.0001) separation.set(Math.sin(enemy.id.length * 2.3), 0, Math.cos(enemy.id.length * 2.3));
+    separation.normalize().multiplyScalar(minimum);
+    const pushed = resolved.clone().set(playerPosition.x + separation.x, resolved.y, playerPosition.z + separation.z);
+    return this.queries.resolveEnemyMovement(enemy, pushed);
+  }
+
+  private renderHud(): void {
+    const weapon = this.weapons.getSnapshot();
+    const enemies = this.enemies.getSnapshot();
+    const wave = this.waves.getSnapshot();
+    const playerSpeed = Math.hypot(this.player.body.velocity.x, this.player.body.velocity.z);
+    const reticleSpread = playerSpeed <= 8.4
+      ? 22 + THREE.MathUtils.clamp(playerSpeed / 8.4, 0, 1) * 16
+      : 38 + THREE.MathUtils.clamp((playerSpeed - 8.4) / 1.8, 0, 1) * 39;
+    const snapshot: HudSnapshot = {
+      score: this.state.score,
+      wave: Math.max(1, wave.wave || this.state.wave),
+      enemiesLeft: wave.enemiesRemaining,
+      health: this.player.health,
+      maxHealth: this.player.maxHealth,
+      grappleRatio: this.grapple.readyRatio,
+      blockRatio: weapon.activeWeapon === 'katana' ? weapon.katana.stamina / weapon.katana.maxStamina : undefined,
+      scoped: weapon.scopeState === 'active' || weapon.scopeState === 'entering',
+      reticleSpread,
+      boss: enemies.bossHealth !== null && enemies.bossMaxHealth !== null
+        ? { name: 'THE DOODLER', health: enemies.bossHealth, maxHealth: enemies.bossMaxHealth }
+        : null,
+      weapons: WEAPON_IDS.map((id) => ({
+        slot: WEAPON_DEFINITIONS[id].slot,
+        name: WEAPON_DEFINITIONS[id].label,
+        description: WEAPON_DEFINITIONS[id].hint,
+        ammo: weapon.ammo[id].magazine ?? 0,
+        reserve: weapon.ammo[id].reserve ?? 0,
+        selected: weapon.activeWeapon === id,
+      })),
+    };
+    this.hud.render(snapshot);
+  }
+
+  private renderFrame(): void {
+    this.renderer.autoClear = true;
+    this.camera.layers.set(0);
+    this.renderer.render(this.scene, this.camera);
+    this.renderer.autoClear = false;
+    this.renderer.clearDepth();
+    this.camera.layers.set(1);
+    const background = this.scene.background;
+    this.scene.background = null;
+    this.renderer.render(this.scene, this.camera);
+    this.scene.background = background;
+    this.camera.layers.enableAll();
+    this.renderer.autoClear = true;
+  }
+
+  private getPlayerCenter(): THREE.Vector3 {
+    return this.playerCenter.copy(this.player.body.position).add(new THREE.Vector3(0, PLAYER_CENTER_HEIGHT, 0));
+  }
+
+  private updateStage(time: number): void {
+    if (time < this.stageUpdateAt) return;
+    this.stageUpdateAt = time + 500;
+    const stage = this.root.querySelector<HTMLElement>('[data-bp="stage"]');
+    if (!stage) return;
+    const wave = Math.max(1, this.waves.wave || this.state.wave);
+    stage.textContent = `第 ${wave} 轮 · ${Math.round(this.smoothedFps)} FPS · 本地单机 / 静音`;
+  }
+}

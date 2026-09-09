@@ -46,6 +46,23 @@ export function OfficeTowerArt({ kind, tier = 2, className }: OfficeTowerArtProp
       <path d="M22 6h20v19H22z" fill="#fff9e7" stroke="#c9b482" strokeWidth="2" /><path d="M27 12h10m-10 5h7" stroke="#cdbf99" strokeWidth="2" strokeLinecap="round" /><path d="M23 37h18v11H23z" fill="#6d662f" />
       <path d="m27 38 1 8m5-8-1 8m5-8 1 8" stroke="#eee2ab" strokeWidth="2" strokeLinecap="round" /><circle cx="47" cy="26" r="2" fill="#fff1c7" />
     </>}
+    {tier >= 2 ? <g data-evolution={`${kind}-${tier}`}>
+      {kind === 'single' ? tier === 3
+        ? <><path d="M40 25h18v6H40zM39 34h17v5H39z" fill="#d8e2dc" stroke="#754c44" strokeWidth="2" /><path d="m45 44 5-3 5 3-2 7h-6z" fill="#ffe4a7" stroke="#9b5d42" /></>
+        : <path d="m40 37 5-4 6 3-2 8h-7l-2-7Zm5-3-2 8" fill="#e8ded0" stroke="#875c4f" strokeWidth="2" />
+        : kind === 'slow' ? tier === 3
+          ? <><path d="M36 27h21v7H36z" fill="#f7ecd5" stroke="#326c60" strokeWidth="2" /><path d="m56 24 5-4m-5 10h6m-6 7 5 4" stroke="#58ae9d" strokeWidth="2" strokeLinecap="round" /></>
+          : <><rect x="23" y="36" width="8" height="8" rx="2" fill="#c5edfa" stroke="#77b2c2" transform="rotate(-15 27 40)" /><rect x="30" y="40" width="7" height="7" rx="2" fill="#dff7ff" stroke="#77b2c2" /></>
+          : kind === 'splash' ? tier === 3
+            ? <><path d="m20 14 12-7 12 7v13l-12 7-12-7V14Z" fill="#bcd5ee" stroke="#395e83" strokeWidth="2" /><path d="m20 14 12 7 12-7m-12 7v13" stroke="#395e83" strokeWidth="2" /></>
+            : <><path d="M16 34h31" stroke="#d4f4ff" strokeWidth="3" /><path d="m45 30 13-3m-13 7h15" stroke="#68bddc" strokeWidth="2" /></>
+            : kind === 'push' ? tier === 3
+              ? <><path d="M17 11 14 5l10 3 8-5 8 5 10-3-4 9" fill="#e9d08b" stroke="#86638f" strokeWidth="2" /><path d="M22 21h20M26 18v12m12-12v12" stroke="#dfc7ed" strokeWidth="2" /></>
+              : <path d="M23 21h18M24 26h16" stroke="#e6d4f1" strokeWidth="3" strokeLinecap="round" />
+              : tier === 3
+                ? <><path d="M7 19C-1 37 7 56 24 57M54 45c10-18 4-31-9-36" stroke="#c49333" strokeWidth="2" strokeDasharray="3 3" /><path d="m5 29 7-2 2 8-7 2zM49 11l7 2-2 8-7-2z" fill="#fff5c9" stroke="#bd9b54" /></>
+                : <path d="m22 33 4 5 4-5 4 5 4-5 4 5" stroke="#f7edb9" strokeWidth="2" />}
+    </g> : null}
     {tier >= 3 ? <><path d="m24 6 3-5 5 5 5-5 3 5-2 6H26l-2-6Z" fill="#f3ce6c" stroke="#b28337" strokeWidth="1.5" /><path d="m54 10 1.5 4.5L60 16l-4.5 1.5L54 22l-1.5-4.5L48 16l4.5-1.5L54 10Z" fill="#f7d16e" /></> : null}
   </svg>;
 }

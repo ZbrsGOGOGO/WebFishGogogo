@@ -295,8 +295,11 @@ function DevelopmentDashboardContent({
     setExporting(true);
     setExportError(undefined);
     try {
-      const exported = await communityDevelopmentApi.exportReview();
+      const exported = await communityDevelopmentApi.exportReview(status);
       if (!canAcceptOperation(generation)) return;
+      if (exported.complete !== true || exported.total !== exported.requests.length || exported.exportedCount !== exported.total) {
+        throw new Error('服务器未确认导出完整性，请刷新后重试；没有下载不完整文件。');
+      }
       const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
       downloadPrivateBlob(blob, `development-review-${new Date().toISOString().slice(0, 10)}.json`);
     } catch (requestError) {
@@ -370,6 +373,11 @@ function DevelopmentDashboardContent({
                       <small>v{item.version}</small>
                     </span>
                     <strong>{item.title}</strong>
+                    {item.review ? <span className={styles.requestMeta}>
+                      {item.review.totalItems > 0 ? `分项完成 ${item.review.completedItems}/${item.review.totalItems} · ` : ''}
+                      {item.review.hasUnreviewedChanges ? item.review.reviewedVersion > 0 ? '审阅后有新补充，需跟进' : '尚未记录审阅结果' : `已审阅至 v${item.review.reviewedVersion}`}
+                    </span> : null}
+                    {item.review?.summary ? <span className={styles.reviewExcerpt}>{item.review.summary}</span> : null}
                     <span className={styles.requestMeta}>
                       {developmentPersonName(item.author)} · 附件 {item.attachmentCount} · {developmentTime(item.updatedAt)}
                     </span>
@@ -423,9 +431,9 @@ function DevelopmentDashboardContent({
 
           {access.role === 'owner' ? (
             <Card title="手动交给 Codex" bodyClassName={styles.cardBody}>
-              <p className={styles.muted}>导出最多 20 条待审或待补充详情为 JSON，便于负责人手动提供给 Codex 阅读。导出不会自动启动任何 AI。</p>
+              <p className={styles.muted}>按左侧状态筛选完整导出正文、全部评论、分项进度与附件预览。“全部状态”包含已完成提案。单次最多 200 条，超过会明确提示，不截断导出；原附件仍需单独下载。不会自动启动任何 AI。</p>
               {exportError ? <p className={styles.error} role="alert">{exportError}</p> : null}
-              <Button variant="secondary" loading={exporting} onClick={() => void exportReview()} fullWidth>导出待审 JSON</Button>
+              <Button variant="secondary" loading={exporting} onClick={() => void exportReview()} fullWidth>导出当前筛选 JSON</Button>
             </Card>
           ) : null}
         </aside>

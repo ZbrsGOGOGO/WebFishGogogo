@@ -11,7 +11,7 @@ import { Button, Card, PageHeader, Tag } from '../../../components/ui';
 import { GameBackLink } from '../GameBackLink';
 import { useGamePrivacy } from '../GamePrivacyContext';
 import { ArcadeLeaderboard } from '../ArcadeLeaderboard';
-import { shouldIgnoreGameKeyboard } from '../game-input';
+import { listenForOtherLocalGame, shouldIgnoreGameKeyboard } from '../game-input';
 import { useArcadeRun } from '../useArcadeRun';
 import {
   TANK_BOARD_HEIGHT,
@@ -102,8 +102,10 @@ export function TankBattlePage(): JSX.Element {
     };
 
     window.addEventListener('blur', pauseForInterruption);
+    const stopListening = listenForOtherLocalGame('tank', pauseForInterruption);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
+      stopListening();
       window.removeEventListener('blur', pauseForInterruption);
       document.removeEventListener(
         'visibilitychange',

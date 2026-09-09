@@ -59,7 +59,7 @@
 .character small { font-size: 10px; color: #7b8278; }
 .buff { color: #655a76 !important; border-top: 1px dashed #ded8e6; padding-top: 7px; }
 .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 12px 0; }
-.card { font: inherit; text-align: left; border: 1px solid #d3dccc; color: #304b3a; background: #fafcf6; border-radius: 8px; padding: 12px; min-width: 0; cursor: pointer; }
+.card { font: inherit; text-align: left; border: 1px solid #d3dccc; color: #304b3a; background: #fafcf6; border-radius: 8px; padding: 12px; min-width: 0; overflow-wrap: anywhere; white-space: normal; cursor: pointer; }
 .card[aria-pressed="true"] { border-color: #537a5c; background: #e7f0e1; box-shadow: inset 0 0 0 1px #537a5c; }
 .card strong { display: block; font-size: 13px; line-height: 1.5; }
 .card span { display: block; margin-top: 7px; font-size: 11px; color: #60705d; line-height: 1.6; }
