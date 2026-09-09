@@ -399,7 +399,7 @@ grep -Fq 'FEATURE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER
 grep -Fq 'VITE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER_ENABLED:-false}' \
   "$ROOT_DIR/deploy/docker-compose.community.yml" ||
   fail "demon-tower frontend and server must use the same feature flag"
-for growth_flag in COMMUNITY_PROGRESSION DEMON_TOWER_AUTO_EXPLORE; do
+for growth_flag in COMMUNITY_PROGRESSION DEMON_TOWER_AUTO_EXPLORE WORKSTATION_CAMPAIGN OFFICE_HUB DEMON_TOWER_EXPANSION PAPER_ARENA; do
   grep -Fq "FEATURE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
     "$ROOT_DIR/$COMPOSE_FILE" || fail "$growth_flag must default to disabled on the API"
   grep -Fq "VITE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
@@ -753,9 +753,17 @@ fi
 if grep -q '^FEATURE_COMMUNITY_DEMON_TOWER_ENABLED=' "$ENV_FILE"; then
   check_boolean FEATURE_COMMUNITY_DEMON_TOWER_ENABLED
 fi
-for growth_flag in FEATURE_COMMUNITY_PROGRESSION_ENABLED FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED; do
+for growth_flag in FEATURE_COMMUNITY_PROGRESSION_ENABLED FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED FEATURE_WORKSTATION_CAMPAIGN_ENABLED FEATURE_OFFICE_HUB_ENABLED FEATURE_DEMON_TOWER_EXPANSION_ENABLED FEATURE_EXPANDED_TRENDING_ENABLED FEATURE_PAPER_ARENA_ENABLED; do
   if grep -q "^${growth_flag}=" "$ENV_FILE"; then check_boolean "$growth_flag"; fi
 done
+# Feature visibility may remain enabled during read-only maintenance. Each
+# mutation still enforces the independent community writes gate at runtime.
+if [ "$(env_value FEATURE_DEMON_TOWER_EXPANSION_ENABLED)" = true ]; then
+  [ "$(env_value FEATURE_COMMUNITY_DEMON_TOWER_ENABLED)" = true ] || fail "demon expansion requires demon tower"
+fi
+if [ "$(env_value FEATURE_EXPANDED_TRENDING_ENABLED)" = true ]; then
+  [ "$(env_value FEATURE_COMMUNITY_NEWS_ENABLED)" = true ] || fail "expanded trending requires community news"
+fi
 if [ "$(env_value FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED)" = true ]; then
   [ "$(env_value FEATURE_COMMUNITY_PROGRESSION_ENABLED)" = true ] &&
     [ "$(env_value FEATURE_COMMUNITY_DEMON_TOWER_ENABLED)" = true ] ||

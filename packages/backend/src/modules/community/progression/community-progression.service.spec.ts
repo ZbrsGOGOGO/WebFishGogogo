@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { randomUUID } from 'node:crypto';
 import type { DataSource, QueryRunner } from 'typeorm';
-import { COMMUNITY_ACHIEVEMENTS } from '@stealth-reader/shared';
+import { COMMUNITY_ACHIEVEMENTS, OFFICE_COLLECTION } from '@stealth-reader/shared';
 import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../../database/entities/community-progression.entity';
 import { DeskPlant, PlayerProgression, RailPlayerStats, RailDailyAward, PlayDailyAward, User, WalletBalance } from '../../../database/entities';
 import { DemonTowerContribution, DemonTowerDailyAward, DemonTowerProfile, DemonTowerWorldFloor } from '../../../database/entities/demon-tower.entity';
@@ -39,9 +39,10 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
   }
   const titleInput = (titleKey: string | null = 'farm_first', expectedVersion = 0) => ({ requestId: randomUUID(), expectedVersion, titleKey });
 
-  it('has exactly twelve fixed, unique, plain-text title definitions and guarded private endpoints', () => {
-    const catalog = service.catalog(); expect(catalog.achievements).toHaveLength(12);
-    expect(new Set(catalog.achievements.map((item) => item.key)).size).toBe(12);
+  it('has a fixed, unique, plain-text expanded title catalog and guarded private endpoints', () => {
+    const catalog = service.catalog(); expect(catalog.achievements).toHaveLength(COMMUNITY_ACHIEVEMENTS.length);
+    expect(new Set(catalog.achievements.map((item) => item.key)).size).toBe(COMMUNITY_ACHIEVEMENTS.length);
+    expect(catalog.achievements.map(item => item.key)).toEqual(expect.arrayContaining(['workstation_three', 'career_8', 'demon_nine_bosses', 'demon_five_star']));
     for (const item of catalog.achievements) {
       expect(item.title.key).toBe(item.key); expect(item.title.label).not.toMatch(/[<>]/); expect(item.title.label.length).toBeLessThan(20);
       expect(titleBadge(item.key)).toEqual(item.title);
@@ -103,6 +104,29 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     state.weapons[0].spareCopies = 9999; state.weapons.push({ ...state.weapons[0] });
     await db.getRepository(DemonTowerProfile).save(db.getRepository(DemonTowerProfile).create({ userId: a.id, version: 1, state: state as unknown as Record<string, unknown>, createdAt: now, updatedAt: now }));
     expect((await service.me(a.id)).achievements.find((item) => item.key === 'tower_collection')).toMatchObject({ progress: 9, eligible: false });
+  });
+  it('projects new server-owned campaign, company and demon counters without creating assets or privileges', async () => {
+    process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED = 'true'; process.env.FEATURE_OFFICE_HUB_ENABLED = 'true';
+    const a = await user('expanded_history'); const stranger = await user('expanded_stranger');
+    await db.query('INSERT INTO tower_defense_profiles(user_id,promotion_tier,stats) VALUES ($1,7,$2)', [a.id, JSON.stringify({ achievements: ['tower_first_three', 'tower_perfect', 'tower_speed', 'tower_overtime', 'tower_score_10000'] })]);
+    const owned = Object.fromEntries(OFFICE_COLLECTION.slice(0, 8).map(item => [item.id, 1])); owned.forged_admin = 999;
+    await db.query('INSERT INTO office_hub_profiles(user_id,state) VALUES ($1,$2)', [a.id, JSON.stringify({ owned, stats: { stories: 3, drawings: 3, departmentWins: 3, bossDays: 7, weeklyWins: 3 } })]);
+    const state = createDemonTowerState(now.getTime(), '2099-09-09', 'expanded-private-seed') as unknown as Record<string, unknown>;
+    state.expansion = { claimedBossFloors: [1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, '9'], arena: { skinUnlocked: true } };
+    state.weapons = [{ id: 'w1', star: 5 }];
+    await db.getRepository(DemonTowerProfile).save(db.getRepository(DemonTowerProfile).create({ userId: a.id, version: 1, state, createdAt: now, updatedAt: now }));
+    const before = await service.me(a.id);
+    for (const key of ['workstation_three', 'workstation_perfect', 'workstation_speed', 'workstation_overtime', 'workstation_ten_thousand', 'career_8', 'demon_first_boss', 'demon_nine_bosses', 'demon_honor_skin', 'demon_five_star', 'office_collector', 'office_storyteller', 'office_artist', 'office_detective', 'office_relief', 'office_guard']) {
+      expect(before.achievements.find(item => item.key === key)).toMatchObject({ eligible: true, unlockedAt: null });
+    }
+    expect(before.achievements.find(item => item.key === 'office_collector')?.progress).toBe(8);
+    expect(before.achievements.find(item => item.key === 'demon_nine_bosses')?.progress).toBe(9);
+    expect((await service.me(stranger.id)).achievements.some(item => item.eligible)).toBe(false);
+    expect(await db.getRepository(CommunityAchievementUnlock).count()).toBe(0);
+    await service.refresh(a.id, {}); expect((await service.refresh(a.id, {})).newlyUnlocked).toEqual([]);
+    for (const entity of [WalletBalance, CommunityMembershipGrant]) expect(await db.getRepository(entity).count()).toBe(0);
+    expect((await db.getRepository(User).findOneByOrFail({ id: a.id })).communityRole).toBe('user');
+    expect(JSON.stringify(before)).not.toMatch(/expanded-private-seed|forged_admin|userId|rngSeed/);
   });
   it('uses each module\'s settled paid champion record, not temporary rankings or another user\'s award', async () => {
     const a = await user('play_winner'); const b = await user('rail_winner'); const c = await user('tower_winner'); const other = await user('not_winner');

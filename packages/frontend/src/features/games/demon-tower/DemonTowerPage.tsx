@@ -12,16 +12,19 @@ import { DemonTowerAttributeReset } from './DemonTowerAttributeReset';
 import { DemonTowerAttributeAllocate } from './DemonTowerAttributeAllocate';
 import { DemonTowerInventory } from './DemonTowerInventory';
 import { DemonTowerGrowth } from './DemonTowerGrowth';
+import { DemonTowerExpansion, demonTowerExpansionUIEnabled } from './DemonTowerExpansion';
+import { DemonTowerSocial } from './DemonTowerSocial';
 import { DemonTowerWorld } from './DemonTowerWorld';
 import { TowerMeter, TowerModal, TowerPanel, revealTowerControl, towerDuration } from './TowerElements';
 import { useDemonTower } from './useDemonTower';
 import styles from './DemonTower.module.css';
 
-type TowerTab = 'profile' | 'explore' | 'loadout' | 'world' | 'journal';
+type TowerTab = 'profile' | 'explore' | 'loadout' | 'world' | 'journal' | 'expansion';
 const TABS: Array<{ id: TowerTab; label: string; icon: TowerIconName }> = [
   { id: 'profile', label: '人物档案', icon: 'profile' }, { id: 'explore', label: '探索任务', icon: 'explore' },
   { id: 'loadout', label: '装备技能', icon: 'loadout' }, { id: 'world', label: '协作世界', icon: 'world' },
   { id: 'journal', label: '行动战报', icon: 'journal' },
+  ...(demonTowerExpansionUIEnabled ? [{ id: 'expansion' as const, label: '秘境工坊', icon: 'loadout' as const }] : []),
 ];
 const ATTRIBUTE_DETAILS = {
   STR: '力量影响重兵与力量技能的伤害。', SPD: '速度影响先后手、命中、长兵和速度技能。', AGI: '敏捷影响轻兵伤害与闪避。',
@@ -82,7 +85,7 @@ export function DemonTowerPage(): JSX.Element {
     if (target === null) return;
     event.preventDefault(); changeTab(TABS[target].id); document.getElementById('tower-tab-' + TABS[target].id)?.focus();
   };
-  return <section className={styles.page} aria-label="九层妖塔工作台" onFocusCapture={(event) => { if (!pointerFocus.current && event.target instanceof HTMLElement) revealTowerControl(event.target); }}>
+  return <section className={styles.page} data-expanded={demonTowerExpansionUIEnabled} data-arena-skin={demonTowerExpansionUIEnabled && profile?.expansion?.arena?.skinUnlocked} data-skin={demonTowerExpansionUIEnabled ? profile?.expansion?.skin : 'field'} aria-label="九层妖塔工作台" onFocusCapture={(event) => { if (!pointerFocus.current && event.target instanceof HTMLElement) revealTowerControl(event.target); }}>
     <header className={styles.heading} id="tower-section-heading"><div><span className={styles.eyebrow}>COOPERATIVE FIELD NOTES / VOL. 09</span><h1>九层妖塔</h1><p>一份缓慢成长的角色档案，一段可以和同事共同推进的探索。随时收起画面，进度由服务器保存。</p></div><div className={styles.headingTools}><span className={styles.badge} data-tone={state.stale ? 'warning' : 'muted'}>{state.busy ? '行动提交中' : state.stale ? '状态待同步' : state.refreshing ? '正在同步' : '联网档案'}</span><button type="button" className={styles.iconButton} aria-label="刷新妖塔状态" disabled={state.refreshing || state.busy} onClick={() => { void state.refresh(); }}><TowerIcon name="refresh" /></button><button type="button" className={styles.iconButton} aria-label="查看九层妖塔帮助" onClick={() => setHelp(true)}><TowerIcon name="help" /></button></div></header>
     {state.error ? <div className={styles.error} role="alert"><p>{state.error}</p>{state.pending ? <><p>上次操作结果尚未确认。确认期间不能开始新动作，重试沿用原操作编号，不重复扣除或领奖。</p><button className={styles.button} type="button" disabled={state.busy} onClick={() => { void state.retry(); }}>{state.busy ? '确认处理中…' : '确认上次操作'}</button></> : <button className={styles.button} type="button" disabled={state.refreshing} onClick={() => { void state.refresh(); }}>同步最新状态</button>}</div> : null}
     {state.loading ? <div className={styles.loading} role="status"><TowerIcon name="journal" /><p>正在读取角色与世界档案…</p><span className={styles.muted}>首次打开不会自动创建角色或扣除资源。</span></div> : null}
@@ -104,7 +107,8 @@ export function DemonTowerPage(): JSX.Element {
         {profile.lastReport && !profile.battle ? <DemonTowerReport report={profile.lastReport} catalog={catalog} compact /> : null}
       </div></div></div>
       <div role="tabpanel" id="tower-panel-loadout" aria-labelledby="tower-tab-loadout" hidden={tab !== 'loadout'}><DemonTowerInventory key={state.ownerId} profile={profile} catalog={catalog} disabled={disabled} onAction={state.act} /></div>
-      <div role="tabpanel" id="tower-panel-world" aria-labelledby="tower-tab-world" hidden={tab !== 'world'}>{tab === 'world' ? <DemonTowerWorld world={overview.world} profile={profile} catalog={catalog} ownerId={state.ownerId} disabled={disabled} onAction={state.act} /> : null}</div>
+      {demonTowerExpansionUIEnabled ? <div role="tabpanel" id="tower-panel-expansion" aria-labelledby="tower-tab-expansion" hidden={tab !== 'expansion'}><DemonTowerExpansion key={`expansion-${state.ownerId}`} profile={profile} world={overview.world} disabled={disabled} onAction={state.act} onContinueBattle={() => changeTab('explore')} /></div> : null}
+      <div role="tabpanel" id="tower-panel-world" aria-labelledby="tower-tab-world" hidden={tab !== 'world'}>{tab === 'world' ? <><DemonTowerWorld world={overview.world} profile={profile} catalog={catalog} ownerId={state.ownerId} disabled={disabled} onAction={state.act} />{demonTowerExpansionUIEnabled ? <DemonTowerSocial key={`social-${state.ownerId}`} profile={profile} ownerId={state.ownerId} disabled={disabled} onAction={state.act} /> : null}</> : null}</div>
       <div role="tabpanel" id="tower-panel-journal" aria-labelledby="tower-tab-journal" hidden={tab !== 'journal'}><div className={styles.stack}><TowerPanel title="最近行动档案" detail={<span className={styles.muted}>角色版本 {profile.version}</span>}><p className={styles.muted}>这里展示服务器保留的最近一场战报。每一条伤害、恢复与状态变化都来自实际结算；世界首领的有效贡献另见回执和贡献榜。</p>{profile.battle ? <p className={styles.notice}>你有一场探索仍在进行。<button type="button" className={styles.textButton} onClick={() => changeTab('explore')}>返回现场</button></p> : null}<Link to="/games/demon-tower/leaderboard" className={styles.button}>首领讨伐日榜<TowerIcon name="arrow" /></Link></TowerPanel>{profile.lastReport ? <DemonTowerReport report={profile.lastReport} catalog={catalog} /> : <p className={styles.empty}>档案还是空白。完成首次探索战斗或世界首领协作后，战报会保存在这里。</p>}</div></div>
     </> : null}
     {help ? <TowerModal title="九层妖塔使用说明" onClose={() => setHelp(false)}><div className={styles.helpList}><section><h3>你的角色、共同的世界</h3><p>独自完成探索和培养，按自己的时间参与共同首领和通道建设。普通战斗没有实时倒计时，Esc 便签只收起界面，不会回滚服务端已经完成的行动。</p></section>{catalog ? <><section><h3>配装与战斗</h3><p>主手 1 件（可选择法器）、辅助法器 1 件，同件武器不能重复占位；主动技能最多 {catalog.rules.activeSkillSlots} 个、被动技能最多 {catalog.rules.passiveSkillSlots} 个。首领协作按主动技能排序自动行动，普通战斗由你逐回合选择。冷却、治疗和持续回合均真实结算。</p></section><section><h3>体力与恢复</h3><p>每 {towerDuration(catalog.rules.staminaRestoreMs)} 恢复 1 点体力。普通战斗外生命会逐步恢复；休整消耗 {catalog.rules.restCost} 体力，恢复 {catalog.rules.restHealingPercent}% 最大生命。以服务器时间为准，关闭页面不影响自然恢复。</p></section><section><h3>短时日常与奖励边界</h3><p>从零活跃开始，完成 {catalog.rules.dailyActivityTarget} 次修炼，共消耗 {catalog.rules.dailyActivityTarget * catalog.rules.trainCost} 体力，即可达到今日活跃目标；手动领取最多 {catalog.rules.dailyActivityCoins} 办公币，仍受当日剩余额度限制。{catalog.rules.dailyOfficeCoinCap} 办公币是日常奖励总上限，不是短时间必定拿满的奖励。</p><p>妖塔日常按北京时间 00:00 切换自然日，不要求连续在线。全部 {catalog.floors.length} 层联通后不再出现新的世界首领；没有有效首领伤害的日期，不产生讨伐冠军或冠军奖励，仍可继续个人探索。</p></section><section><h3>服务规则</h3><ul>{catalog.rules.rulesText.map((text) => <li key={text}>{text}</li>)}</ul></section></> : <p>规则资料正在同步，请稍后重试。</p>}<section><h3>网络中断时</h3><p>出现“确认上次操作”时，先确认原操作结果，再进行其他动作。重试沿用同一编号，不会重复扣除或发奖；重新登录或切换账号后不会显示上个账号的私人档案。</p></section></div></TowerModal> : null}

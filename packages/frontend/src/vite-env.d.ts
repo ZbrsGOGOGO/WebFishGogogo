@@ -12,6 +12,10 @@ interface ImportMetaEnv {
   readonly VITE_COMMUNITY_DEMON_TOWER_ENABLED?: string;
   readonly VITE_COMMUNITY_PROGRESSION_ENABLED?: string;
   readonly VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED?: string;
+  readonly VITE_WORKSTATION_CAMPAIGN_ENABLED?: string;
+  readonly VITE_OFFICE_HUB_ENABLED?: string;
+  readonly VITE_DEMON_TOWER_EXPANSION_ENABLED?: string;
+  readonly VITE_PAPER_ARENA_ENABLED?: string;
   readonly VITE_COMMUNITY_LEDOU_ENABLED?: string;
   readonly VITE_COMMUNITY_BATTLE_SERVER_ENABLED?: string;
   readonly VITE_COMMUNITY_PROFILE_ENABLED?: string;

@@ -72,6 +72,14 @@ const WorkstationTowerDefensePage = lazy(() =>
   })),
 );
 const CommunityGamesPage = lazy(() => import('../features/games/rooms/CommunityGamesPage').then((module) => ({ default: module.CommunityGamesPage })));
+const WorkstationCampaignPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationCampaignPage })));
+const WorkstationLeaderboardPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationLeaderboardPage })));
+const OfficeHubPage = lazy(() => import('../features/office-hub/OfficeHubPage').then(module => ({ default: module.OfficeHubPage })));
+const OfficeBossPage = lazy(() => import('../features/office-hub/OfficeHubPage').then(module => ({ default: module.OfficeBossPage })));
+const PaperArenaPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaPage })));
+const PaperArenaRoomPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaRoomPage })));
+const Office2048Page = lazy(() => import('../features/games/office-2048').then(module => ({ default: module.Office2048Page })));
+const UnderrunPage = lazy(() => import('../features/games/underrun').then(module => ({ default: module.UnderrunPage })));
 const CommunityGameRoomsPage = lazy(() => import('../features/games/rooms/CommunityGameRoomsPage').then((module) => ({ default: module.CommunityGameRoomsPage })));
 const CommunityGameRoomPage = lazy(() => import('../features/games/rooms/CommunityGameRoomPage').then((module) => ({ default: module.CommunityGameRoomPage })));
 const CommunityGameLeaderboardPage = lazy(() => import('../features/games/rooms/CommunityGameLeaderboardPage').then((module) => ({ default: module.CommunityGameLeaderboardPage })));
@@ -170,10 +178,13 @@ export function CommunityModeRouter(): JSX.Element {
             path="/tower-defense"
             element={
               COMMUNITY_FEATURE_FLAGS.towerDefense
-                ? loading(<CommunityWorkstationTowerDefensePage />)
+                ? loading(COMMUNITY_FEATURE_FLAGS.workstationCampaign ? <WorkstationCampaignPage /> : <CommunityWorkstationTowerDefensePage />)
                 : <CommunityUnavailablePage system="towerDefense" />
             }
           />
+          <Route path="/tower-defense/practice" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<CommunityWorkstationTowerDefensePage />) : <CommunityUnavailablePage system="towerDefense" />} />
+          <Route path="/tower-defense/leaderboard" element={COMMUNITY_FEATURE_FLAGS.towerDefense && COMMUNITY_FEATURE_FLAGS.workstationCampaign ? loading(<WorkstationLeaderboardPage />) : <CommunityUnavailablePage system="towerDefense" title="正式塔防榜暂未开放" />} />
+          <Route path="/office" element={COMMUNITY_FEATURE_FLAGS.officeHub ? loading(<OfficeHubPage />) : <CommunityUnavailablePage system="officeHub" title="公司协作暂未开放" />} />
           <Route path="/ledou" element={<Navigate to={COMMUNITY_FEATURE_FLAGS.demonTower ? '/games/demon-tower' : '/tower-defense'} replace />} />
           <Route path="/battle" element={<Navigate to={COMMUNITY_FEATURE_FLAGS.demonTower ? '/games/demon-tower' : '/tower-defense'} replace />} />
         </Route>
@@ -322,7 +333,12 @@ export function CommunityModeRouter(): JSX.Element {
       <Route path="/games" element={<CommunityGameWorkspaceLayout />}>
         <Route index element={loading(<CommunityGamesPage />)} />
         <Route path="ballpoint-breach" element={<BallpointBreachEntryPage />} />
+        <Route path="office-2048" element={loading(<Office2048Page />)} />
+        <Route path="underrun" element={loading(<UnderrunPage />)} />
         <Route element={<RequireCommunityAccount />}>
+          <Route path="office-boss" element={COMMUNITY_FEATURE_FLAGS.officeHub ? loading(<OfficeBossPage />) : <CommunityUnavailablePage system="officeHub" title="轻松工单暂未开放" />} />
+          <Route path="ballpoint-breach/arena" element={COMMUNITY_FEATURE_FLAGS.paperArena ? loading(<PaperArenaPage />) : <CommunityUnavailablePage system="games" title="纸上突围联机暂未开放" />} />
+          <Route path="ballpoint-breach/arena/:roomId" element={COMMUNITY_FEATURE_FLAGS.paperArena ? loading(<PaperArenaRoomPage />) : <CommunityUnavailablePage system="games" title="纸上突围联机暂未开放" />} />
           <Route path="rooms" element={loading(<CommunityGameRoomsPage />)} />
           <Route path="rooms/:roomId" element={loading(<CommunityGameRoomPage />)} />
           <Route path="rail" element={loading(<RailLobbyPage />)} />

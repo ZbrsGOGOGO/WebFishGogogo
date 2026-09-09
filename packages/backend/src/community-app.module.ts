@@ -13,6 +13,9 @@ import { RailModule } from './modules/community/rail/rail.module';
 import { DemonTowerModule } from './modules/community/demon-tower/demon-tower.module';
 import { CommunityProgressionModule } from './modules/community/progression/community-progression.module';
 import { DevelopmentModule } from './modules/development/development.module';
+import { TowerDefenseModule } from './modules/community/tower-defense/tower-defense.module';
+import { OfficeHubModule } from './modules/community/office-hub/office-hub.module';
+import { PaperArenaModule } from './modules/community/paper-arena/paper-arena.module';
 
 /**
  * 正式社区的 API 白名单根模块。
@@ -35,6 +38,9 @@ import { DevelopmentModule } from './modules/development/development.module';
     DemonTowerModule,
     CommunityProgressionModule,
     DevelopmentModule,
+    TowerDefenseModule,
+    OfficeHubModule,
+    PaperArenaModule,
   ],
   controllers: [CommunityHealthController],
 })

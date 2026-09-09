@@ -12,6 +12,8 @@ export class DemonTowerController {
   @Get('catalog') catalog() { return this.tower.catalog(); }
   @Get('overview') @UseGuards(JwtAuthGuard)
   overview(@CurrentUserId() userId: string) { return this.tower.overview(userId); }
+  @Get('social') @UseGuards(JwtAuthGuard)
+  social(@CurrentUserId() userId: string) { return this.tower.social(userId); }
   @Post('actions') @UseGuards(JwtAuthGuard)
   action(@CurrentUserId() userId: string, @Body() body: unknown) { return this.tower.action(userId, body); }
   @Get('leaderboard') @UseGuards(OptionalJwtAuthGuard)

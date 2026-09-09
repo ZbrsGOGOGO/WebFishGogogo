@@ -104,8 +104,13 @@ export function create(gameKey: ArcadeGameKey, participants: ArcadeParticipant[]
   if (gameKey === 'undercover') {
     const pairIndex = Math.floor(random(state) * UNDERCOVER_WORDS.length);
     const undercover = Math.floor(random(state) * players.length);
+    const undercoverIndices = new Set([undercover]);
+    if (players.length >= 6) {
+      const other = Math.floor(random(state) * (players.length - 1));
+      undercoverIndices.add(other >= undercover ? other + 1 : other);
+    }
     const words: Record<string, string> = {}; const roles: UndercoverState['roles'] = {};
-    players.forEach((p, i) => { roles[p.id] = i === undercover ? 'undercover' : 'civilian'; words[p.id] = UNDERCOVER_WORDS[pairIndex].words[i === undercover ? 1 : 0]; });
+    players.forEach((p, i) => { roles[p.id] = undercoverIndices.has(i) ? 'undercover' : 'civilian'; words[p.id] = UNDERCOVER_WORDS[pairIndex].words[undercoverIndices.has(i) ? 1 : 0]; });
     state.undercover = { round: 1, phase: 'describe', phaseEndsAt: now + 30_000, alivePlayerIds: players.map((p) => p.id), descriptions: [], eliminatedPlayerIds: [], outcome: null, practicePartner: mode === 'solo', words, roles, votes: {}, pairIndex, correctVotes: {}, contributions: {} };
     botDescriptions(state);
   }

@@ -1,6 +1,7 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
+import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
 import type { BallpointBreachStatus } from './BallpointBreachGame';
 import { announceLocalGameForeground } from '../game-input';
 import './ballpoint-window.css';
@@ -103,8 +104,9 @@ export function BallpointBreachEntryPage() {
     <h1>纸上突围</h1>
     <p>纸笔风格的五轮生存练习，五种工具与抓钩。通过右下角工作稿小窗打开，浏览站内页面时保留本轮。</p>
     <p>默认静音，点击开始后才操作游戏。Esc、切换页面或隐藏浏览器都会暂停；需手动返回继续。关闭、刷新页面、退出或切换账号会结束本轮。</p>
-    <p>需要支持 WebGL 2 的桌面浏览器与键盘鼠标，暂未提供触屏玩法。这是本地单机，不支持建房，也不计排行榜、成就或办公币奖励。</p>
+    <p>需要支持 WebGL 2 的桌面浏览器与键盘鼠标，暂未提供触屏玩法。下方生存练习为本地单机，不计排行榜、成就或办公币奖励。</p>
     <button type="button" onClick={openWindow}>{isOpen ? '恢复工作稿小窗' : '打开工作稿小窗'}</button>
+    {COMMUNITY_FEATURE_FLAGS.paperArena && <p><Link to="/games/ballpoint-breach/arena">红蓝房间对战 →</Link> · 4–8 席，AI 补齐，20–100 击败目标，房主可设密码。联机为独立公平步枪模式；收起后整局继续，不与本地五轮练习混算。</p>}
     <p>基于开源项目 <a href="https://github.com/promptwhisper/ballpoint-breach" target="_blank" rel="noreferrer noopener">Ballpoint Breach</a> 本地改编，Apache-2.0；Three.js 为 MIT 许可。</p>
     <p>开源许可：<a href="/licenses/ballpoint-breach-Apache-2.0.txt" target="_blank" rel="noreferrer noopener">Apache-2.0 原文</a> · <a href="/licenses/ballpoint-breach-THIRD-PARTY.txt" target="_blank" rel="noreferrer noopener">第三方归属</a> · <a href="/licenses/ballpoint-breach-video2threejs-MIT.txt" target="_blank" rel="noreferrer noopener">video2threejs MIT</a> · <a href="/licenses/ballpoint-breach-three-MIT.txt" target="_blank" rel="noreferrer noopener">Three.js MIT</a></p>
   </section>;

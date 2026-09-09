@@ -31,6 +31,9 @@ import { AddRailRoomsAndPasswords1700000000029 } from './1700000000029-AddRailRo
 import { AddDemonTower1700000000030 } from './1700000000030-AddDemonTower';
 import { AddCommunityProgression1700000000031 } from './1700000000031-AddCommunityProgression';
 import { AddDemonTowerAutoExplore1700000000032 } from './1700000000032-AddDemonTowerAutoExplore';
+import { AddWorkstationCampaign1700000000033 } from './1700000000033-AddWorkstationCampaign';
+import { AddDemonTowerSquads1700000000034 } from './1700000000034-AddDemonTowerSquads';
+import { AddOfficeHub1700000000035 } from './1700000000035-AddOfficeHub';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -67,4 +70,7 @@ export const migrations = [
   AddDemonTower1700000000030,
   AddCommunityProgression1700000000031,
   AddDemonTowerAutoExplore1700000000032,
+  AddWorkstationCampaign1700000000033,
+  AddDemonTowerSquads1700000000034,
+  AddOfficeHub1700000000035,
 ];

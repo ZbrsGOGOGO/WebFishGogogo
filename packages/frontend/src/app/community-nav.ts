@@ -6,6 +6,7 @@ export type CommunitySystemId =
   | 'farm'
   | 'games'
   | 'tools'
+  | 'officeHub'
   | 'towerDefense'
   | 'demonTower'
   | 'leaderboards'
@@ -51,6 +52,10 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
   demonTower: envFlag(import.meta.env.VITE_COMMUNITY_DEMON_TOWER_ENABLED, false),
   communityProgressionEnabled: envFlag(import.meta.env.VITE_COMMUNITY_PROGRESSION_ENABLED, false),
   demonTowerAuto: envFlag(import.meta.env.VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED, false),
+  workstationCampaign: envFlag(import.meta.env.VITE_WORKSTATION_CAMPAIGN_ENABLED, false),
+  officeHub: envFlag(import.meta.env.VITE_OFFICE_HUB_ENABLED, false),
+  demonTowerExpansion: envFlag(import.meta.env.VITE_DEMON_TOWER_EXPANSION_ENABLED, false),
+  paperArena: envFlag(import.meta.env.VITE_PAPER_ARENA_ENABLED, false),
   battleServer: envFlag(import.meta.env.VITE_COMMUNITY_BATTLE_SERVER_ENABLED, false),
   feed: envFlag(import.meta.env.VITE_COMMUNITY_FEED_ENABLED, false),
   invite: envFlag(import.meta.env.VITE_COMMUNITY_INVITE_ENABLED, false),
@@ -127,6 +132,11 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: COMMUNITY_FEATURE_FLAGS.demonTower,
     requiresAccount: true,
     description: '免费角色养成、文字探索与异步协作攻坚',
+  },
+  {
+    id: 'officeHub', label: '公司协作', path: '/office',
+    enabled: COMMUNITY_FEATURE_FLAGS.officeHub, requiresAccount: true,
+    description: '部门周常、免费收藏、故事与异步互动',
   },
   {
     id: 'towerDefense',

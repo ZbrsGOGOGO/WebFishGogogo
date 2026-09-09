@@ -26,6 +26,12 @@ export async function createLocalDevDataSource(): Promise<DataSource> {
     /^SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;?$/i.test(sql.trim()) ? [] : null);
 
   // 注册迁移里用到的 Postgres 内建函数。
+  // JSON constraints remain identical on PostgreSQL; this is a local adapter
+  // implementation of its built-in, not a bypass of the constraint itself.
+  db.public.registerFunction({
+    name: 'jsonb_typeof', args: [DataType.jsonb], returns: DataType.text,
+    implementation: (value: unknown) => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+  });
   db.public.registerFunction({
     name: 'gen_random_uuid',
     returns: 'uuid' as never,

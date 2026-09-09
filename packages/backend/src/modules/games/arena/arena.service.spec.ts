@@ -350,6 +350,10 @@ async function createArenaTestDataSource(): Promise<DataSource> {
     name: 'transaction_timestamp', returns: 'timestamptz' as never,
     implementation: () => new Date(), impure: true,
   });
+  db.public.registerFunction({
+    name: 'jsonb_typeof', args: ['jsonb' as never], returns: 'text' as never,
+    implementation: (value: unknown) => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value,
+  });
   // This fixture runs every migration, including the private attachment CHECK.
   db.public.registerFunction({
     name: 'octet_length',

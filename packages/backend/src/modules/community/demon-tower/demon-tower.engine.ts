@@ -2,13 +2,18 @@ import { createHash, createHmac } from 'node:crypto';
 import {
   DEMON_TOWER_ATTRIBUTE_KEYS, DEMON_TOWER_CATALOG, DEMON_TOWER_FLOORS, DEMON_TOWER_SKILLS,
   DEMON_TOWER_WEAPONS, DEMON_TOWER_INNATES, DEMON_TOWER_RARITY_ORDER, demonTowerLootPool, demonTowerUpgradeCost,
+  DEMON_TOWER_EXPANSION_RULES, DEMON_TOWER_AFFIXES, DEMON_TOWER_ULTIMATES, demonTowerItemRarity, demonTowerQualityLimit,
+  DEMON_TOWER_ARENA_SKILLS,
 } from '@stealth-reader/shared';
 import type {
   DemonTowerAction, DemonTowerActionKind, DemonTowerAttribute, DemonTowerAttributes, DemonTowerBattleReport,
   DemonTowerBattleView, DemonTowerCombatantView, DemonTowerCombatLog, DemonTowerEffectView,
   DemonTowerLoadout, DemonTowerMaterials, DemonTowerOwnedSkill, DemonTowerOwnedWeapon,
   DemonTowerProfileView, DemonTowerSkillId, DemonTowerWeaponId, DemonTowerWorldView, DemonTowerInnateId, DemonTowerRarity,
+  DemonTowerExpansionView, DemonTowerLootSource, DemonTowerAffix, DemonTowerSkin,
+  DemonTowerArenaSkillId,
 } from '@stealth-reader/shared';
+import { demonTowerArenaRank, simulateDemonTowerDuel, type DemonTowerSocialBuild } from './demon-tower-social.engine';
 
 const RULES = DEMON_TOWER_CATALOG.rules;
 const MAX_RESOURCE = 1_000_000;
@@ -22,6 +27,7 @@ interface Fighter {
   effects: Effect[]; elite: boolean; boss: boolean; mechanic?: EnemyMechanic;
 }
 interface Battle {
+  expansionVersion?: 1; source?: 'rift' | 'weekly_boss'; ultimateUsed?: boolean; divineGuardUsed?: boolean;
   /** Absent means the persisted pre-growth rules; never change a battle in flight. */
   rulesVersion?: 2; innates?: DemonTowerInnateId[]; feignUsed?: boolean;
   id: string; kind: 'explore' | 'boss'; floor: number; turn: number; roundLimit: number;
@@ -31,6 +37,8 @@ interface Battle {
 }
 /** Private JSON only. Never spread state or battle into API responses. */
 export interface DemonTowerEngineState {
+  expansion?: DemonTowerExpansionView;
+  arenaOpponentsToday?: string[]; arenaBestRank?: number;
   growth?: { rulesVersion: 2; chosenAttribute: DemonTowerAttribute | null; innates: DemonTowerInnateId[]; misses: { ling: number; xian: number } };
   schemaVersion: 1; createdAt: number; lastActionAt: number; rngSeed: string; rngCounter: number;
   level: number; experience: number; totalExperience: number; attributes: DemonTowerAttributes; unspentPoints: number;
@@ -42,7 +50,8 @@ export interface DemonTowerEngineState {
   lootPity: { stepsSinceGuarantee: number; nextKind: 'weapon' | 'skill' };
   daily: { serviceDate: string; activity: number; bossAttempts: number; rewardClaimed: boolean };
 }
-export interface DemonTowerEngineContext { now: number; serviceDate: string; world: DemonTowerWorldView }
+export interface DemonTowerEngineContext { now: number; serviceDate: string; world: DemonTowerWorldView; expansionEnabled?: boolean; contributedFloors?: number[];
+  arenaOpponent?: { publicId: string; displayName: string; build: DemonTowerSocialBuild } }
 export interface DemonTowerWorldEffect { kind: 'boss_damage' | 'construction'; floor: number; amount: number }
 export interface DemonTowerEngineResult {
   state: DemonTowerEngineState; events: string[]; worldEffect: DemonTowerWorldEffect | null;
@@ -89,10 +98,11 @@ function identifier(state: DemonTowerEngineState, kind: string): string {
 }
 const weaponOwned = (state: DemonTowerEngineState, id: DemonTowerWeaponId) => state.weapons.find((item) => item.id === id) ?? fail('WEAPON_NOT_OWNED');
 const skillOwned = (state: DemonTowerEngineState, id: DemonTowerSkillId) => state.skills.find((item) => item.id === id) ?? fail('SKILL_NOT_OWNED');
+const combatSkillOwned = (state: DemonTowerEngineState, id: DemonTowerSkillId): DemonTowerOwnedSkill => state.skills.find(item => item.id === id) ?? (state.expansion && boundSkills(state).includes(id) ? { id, quality: 0, spareCopies: 0, star: 1 } : fail('SKILL_NOT_OWNED'));
 const hasWeapon = (state: DemonTowerEngineState, id: DemonTowerWeaponId): boolean => state.loadout.mainHand === id || state.loadout.artifact === id;
 const hasPassive = (state: DemonTowerEngineState, id: DemonTowerSkillId): boolean => state.loadout.passiveSkills.includes(id);
 const weaponScale = (state: DemonTowerEngineState, id: DemonTowerWeaponId): number => 1 + weaponOwned(state, id).quality * 0.15;
-const skillScale = (state: DemonTowerEngineState, id: DemonTowerSkillId): number => 1 + skillOwned(state, id).quality * 0.12;
+const skillScale = (state: DemonTowerEngineState, id: DemonTowerSkillId): number => (1 + combatSkillOwned(state, id).quality * 0.12) * (state.expansion && (!state.battle || state.battle.expansionVersion) ? 1 + ((combatSkillOwned(state, id).star ?? 1) - 1) * 0.08 : 1);
 const battleInnate = (battle: Battle, id: DemonTowerInnateId): boolean => battle.rulesVersion === 2 && Boolean(battle.innates?.includes(id));
 function unlockInnates(state: DemonTowerEngineState): void {
   const growth = state.growth;
@@ -130,6 +140,10 @@ export function demonTowerEffectiveAttributes(state: DemonTowerEngineState): Dem
     if (!id) continue;
     const item = weaponDefinition(id), owned = weaponOwned(state, id);
     result[item.attribute] += Math.round(item.baseBonus * (1 + owned.quality * 0.1));
+    if (state.expansion && owned.breakthrough) {
+      result[item.attribute] += owned.breakthrough * 3;
+      result[DEMON_TOWER_ATTRIBUTE_KEYS[(DEMON_TOWER_ATTRIBUTE_KEYS.indexOf(item.attribute) + 1) % 5]] += owned.breakthrough * 4;
+    }
   }
   if (hasWeapon(state, 'w8')) result.AGI += Math.round(15 * weaponScale(state, 'w8'));
   if (hasWeapon(state, 'w20')) result.LUCK += Math.round(15 * weaponScale(state, 'w20'));
@@ -173,6 +187,7 @@ function gainXp(state: DemonTowerEngineState, amount: number, events: string[]):
   }
   if (state.level === RULES.maxLevel) state.experience = 0;
   unlockInnates(state);
+  if (state.expansion && !state.battle) settleQualityExperience(state, events);
   return granted;
 }
 function gainMaterials(state: DemonTowerEngineState, materials: Partial<DemonTowerMaterials>): DemonTowerMaterials {
@@ -210,6 +225,8 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
     (input.growth.chosenAttribute !== null && !DEMON_TOWER_ATTRIBUTE_KEYS.includes(input.growth.chosenAttribute)) || !Array.isArray(input.growth.innates) ||
     input.growth.innates.some(id => !DEMON_TOWER_INNATES.some(item => item.id === id)))) fail('INVALID_GROWTH_STATE');
   if (input.battle?.rulesVersion !== undefined && input.battle.rulesVersion !== 2) fail('INVALID_GROWTH_STATE');
+  if (input.battle?.expansionVersion !== undefined && input.battle.expansionVersion !== 1) fail('INVALID_EXPANSION_STATE');
+  if (input.expansion) validateExpansionState(input);
   const state = clone(input);
   const elapsed = Math.max(0, now - state.staminaAt);
   const restored = Math.floor(elapsed / RULES.staminaRestoreMs);
@@ -227,7 +244,34 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
     state.healingAt = state.hp === maxHp ? now : state.healingAt + points * interval;
   }
   if (state.daily.serviceDate !== serviceDate) state.daily = { serviceDate, activity: 0, bossAttempts: 0, rewardClaimed: false };
+  if (state.expansion) {
+    if (input.daily.serviceDate !== serviceDate) {
+      state.expansion.riftsToday = 0; state.expansion.meditationsToday = 0; state.expansion.squadReadyToday = 0;
+      state.arenaOpponentsToday = [];
+      if (state.expansion.arena) { state.expansion.arena.attemptsToday = 0; state.expansion.arena.winsToday = 0; }
+    }
+    if (state.expansion.week !== expansionWeek(serviceDate)) { state.expansion.week = expansionWeek(serviceDate); state.expansion.weeklyBossAttempts = 0; }
+  }
   return state;
+}
+function validateExpansionState(state: DemonTowerEngineState): void {
+  const value = state.expansion!;
+  if (value.version !== 1 || !integer(value.skillPages, 0, MAX_RESOURCE) || !integer(value.essences, 0, MAX_RESOURCE) || !integer(value.weaponBoxes, 0, MAX_RESOURCE) ||
+    !integer(value.weaponBoxPity, 0, 9) || !integer(value.riftsToday, 0, 5) || !integer(value.meditationsToday, 0, 10) || !integer(value.weeklyBossAttempts, 0, 3) ||
+    !integer(value.passageTokens, 0, MAX_RESOURCE) || !/^\d{4}-\d{2}-\d{2}$/.test(value.week) || !['field', 'ledger', 'memo'].includes(value.skin) ||
+    !Array.isArray(value.unlockedSkins) || value.unlockedSkins.length > 3 || !value.unlockedSkins.includes(value.skin) || value.unlockedSkins.some(skin => !['field', 'ledger', 'memo'].includes(skin)) ||
+    !Array.isArray(value.claimedBossFloors) || value.claimedBossFloors.length > 9 || new Set(value.claimedBossFloors).size !== value.claimedBossFloors.length || value.claimedBossFloors.some(floor => !integer(floor, 1, 9)) ||
+    !Array.isArray(value.titles) || value.titles.length > 16 || value.titles.some(title => typeof title !== 'string' || title.length > 80) || !integer(value.squadReadyToday ?? 0, 0, 3) ||
+    value.squadId != null && (typeof value.squadId !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.squadId))) fail('INVALID_EXPANSION_STATE');
+  for (const owned of [...state.weapons, ...state.skills]) if (!integer(owned.qualityExperience ?? 0, 0, MAX_RESOURCE) || !integer(owned.star ?? 1, 1, 5) || !integer(owned.favor ?? 0, 0, 60)) fail('INVALID_EXPANSION_STATE');
+  for (const owned of state.weapons) if (!integer(owned.breakthrough ?? 0, 0, 3) || !Array.isArray(owned.affixes ?? []) || (owned.affixes?.length ?? 0) > 3 || new Set(owned.affixes ?? []).size !== (owned.affixes?.length ?? 0) || owned.affixes?.some(key => !Object.prototype.hasOwnProperty.call(DEMON_TOWER_AFFIXES, key))) fail('INVALID_EXPANSION_STATE');
+  if (value.arena) {
+    const arena = value.arena;
+    if (typeof arena.enabled !== 'boolean' || !integer(arena.rating, 0, 100_000) || !integer(arena.honor, 0, MAX_RESOURCE) || !integer(arena.skillPoints, 0, 1000) ||
+      !integer(arena.attemptsToday, 0, 5) || !integer(arena.winsToday, 0, 5) || !Array.isArray(arena.learned) || arena.learned.length > 15 || new Set(arena.learned).size !== arena.learned.length ||
+      arena.learned.some(id => !DEMON_TOWER_ARENA_SKILLS.some(skill => skill.id === id)) || !Array.isArray(arena.loadout) || arena.loadout.length > 4 || arena.loadout.some(id => !arena.learned.includes(id)) ||
+      !Array.isArray(state.arenaOpponentsToday ?? []) || (state.arenaOpponentsToday?.length ?? 0) > 5) fail('INVALID_EXPANSION_STATE');
+  }
 }
 function spendStamina(state: DemonTowerEngineState, cost: number, now: number): void {
   if (state.stamina < cost) fail('NOT_ENOUGH_STAMINA');
@@ -273,32 +317,45 @@ function revive(battle: Battle): void {
     log(battle, 'player', 'heal', '续命丹心触发，恢复至50%生命。', battle.player.hp, 'player');
   }
 }
+function affixBonus(state: DemonTowerEngineState, battle: Battle, key: DemonTowerAffix): number {
+  if (!battle.expansionVersion) return 0;
+  return [state.loadout.mainHand, state.loadout.artifact].reduce((sum, id) => sum + (id ? (weaponOwned(state, id).affixes ?? []).slice(0, Math.floor(weaponOwned(state, id).quality / 3)).filter(value => value === key).length * DEMON_TOWER_AFFIXES[key].value : 0), 0);
+}
+function divineWeapon(state: DemonTowerEngineState, battle: Battle, id: DemonTowerWeaponId): boolean {
+  return Boolean(battle.expansionVersion && hasWeapon(state, id) && (weaponOwned(state, id).star ?? 1) >= 5);
+}
 function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter, target: Fighter, base: number, label: string, forcedCritical = false): number {
   if (source.hp <= 0 || target.hp <= 0) return 0;
   const playerSource = source.id === 'player', attributes = dimensions(source), defensive = dimensions(target);
   const illusion = effect(target, 'illusion')?.magnitude ?? 0;
   const confuse = hasWeapon(state, 'w17') ? 0.15 * weaponScale(state, 'w17') : 0;
-  const evade = bound(defensive.AGI * 0.0015 + illusion * 0.8 - (playerSource ? confuse : 0), 0, 0.6);
+  const evade = bound(defensive.AGI * 0.0015 + illusion * 0.8 - (playerSource ? confuse : 0) + (!playerSource ? affixBonus(state, battle, 'dodge') : 0), 0, 0.6);
   const accuracy = bound(0.96 + attributes.SPD * 0.0005 - (playerSource ? 0 : confuse), 0.55, 0.99);
-  if (!chance(state, accuracy) || chance(state, evade)) {
+  const guaranteed = playerSource && label === '镇魂钺' && divineWeapon(state, battle, 'w4') && !battle.ultimateUsed;
+  if (!guaranteed && (!chance(state, accuracy) || chance(state, evade))) {
     log(battle, playerSource ? 'player' : 'enemy', 'dodge', `${target.name}避开了${label}。`, 0, target.id);
     if (!playerSource && hasWeapon(state, 'w7') && target.hp > 0) damage(battle, source, defensive.AGI * weaponScale(state, 'w7'), 'player', '残影反击');
     return 0;
+  }
+  if (!playerSource && divineWeapon(state, battle, 'w16') && !battle.divineGuardUsed) {
+    battle.divineGuardUsed = true; log(battle, 'player', 'shield', '真·不动金身完全抵消首次直接攻击。', 0, 'player'); return 0;
   }
   if (!playerSource && hasWeapon(state, 'w16') && chance(state, 0.1 * weaponScale(state, 'w16'))) {
     log(battle, 'player', 'shield', '绝对防御完全抵消此次攻击。', 0, 'player');
     return 0;
   }
-  const penetration = playerSource && hasWeapon(state, 'w11') ? Math.min(0.65, 0.25 * weaponScale(state, 'w11')) : 0;
+  const penetration = playerSource ? Math.min(0.75, (hasWeapon(state, 'w11') ? 0.25 * weaponScale(state, 'w11') : 0) + affixBonus(state, battle, 'penetration')) : 0;
   let value = Math.max(1, base - defensive.DEF * 0.45 * (1 - penetration));
   if (playerSource && hasWeapon(state, 'w1') && defensive.DEF >= attributes.STR) value *= 1 + 0.15 * weaponScale(state, 'w1');
-  const critical = forcedCritical || chance(state, Math.min(0.75, 0.05 + attributes.LUCK * 0.001 + (effect(source, 'illusion')?.magnitude ?? 0) + (playerSource && battleInnate(battle, 'agility') ? 0.05 : 0)));
+  const critical = forcedCritical || chance(state, Math.min(0.75, 0.05 + attributes.LUCK * 0.001 + (effect(source, 'illusion')?.magnitude ?? 0) + (playerSource && battleInnate(battle, 'agility') ? 0.05 : 0) + (playerSource ? affixBonus(state, battle, 'critical') : 0)));
   value *= (0.95 + random(state) * 0.1) * (critical ? 1.6 : 1);
   if (!playerSource && hasWeapon(state, 'w13')) value *= 1 - Math.min(0.6, 0.2 * weaponScale(state, 'w13'));
   if (!playerSource && battleInnate(battle, 'defense')) value *= 0.9;
+  if (playerSource && target.boss) value *= 1 + affixBonus(state, battle, 'boss_damage');
   const actual = damage(battle, target, value, playerSource ? 'player' : 'enemy', `${label}${critical ? '·暴击' : ''}`);
   if (playerSource) battle.landedPlayerHits += 1;
   if (playerSource && actual > 0) {
+    if (affixBonus(state, battle, 'leech')) heal(battle, source, actual * affixBonus(state, battle, 'leech'), '汲取词条');
     if (hasWeapon(state, 'w4')) heal(battle, source, actual * Math.min(0.6, 0.2 * weaponScale(state, 'w4')), '镇魂钺');
     if (hasWeapon(state, 'w2') && target.hp > 0 && chance(state, 0.2 * weaponScale(state, 'w2'))) {
       putEffect(target, 'stun', 1, 2);
@@ -334,6 +391,19 @@ function mainAttack(state: DemonTowerEngineState, battle: Battle, target: Fighte
     for (const enemy of battle.enemies.filter((candidate) => candidate.id !== target.id && candidate.hp > 0)) directHit(state, battle, player, enemy, base * 0.4 * weaponScale(state, 'w12'), '龙吟溅射');
   }
   if (target.hp > 0 && battleInnate(battle, 'speed') && chance(state, 0.3)) directHit(state, battle, player, target, attributes.SPD * mastery, '疾如雷电·追击');
+  if (battle.expansionVersion && !battle.ultimateUsed) {
+    battle.ultimateUsed = true;
+    for (const id of [state.loadout.mainHand, state.loadout.artifact]) {
+      if (!id || (weaponOwned(state, id).star ?? 1) < 5 || !DEMON_TOWER_ULTIMATES[id]) continue;
+      const alive = () => battle.enemies.find(enemy => enemy.hp > 0);
+      const current = target.hp > 0 ? target : alive();
+      log(battle, 'player', 'effect', `${DEMON_TOWER_ULTIMATES[id]!.name}已觉醒，本场仅触发一次。`);
+      if (id === 'w4' && current) { const actual = damage(battle, current, attributes.STR, 'player', '真·镇魂归元'); heal(battle, player, actual * 0.3, '真·镇魂归元'); }
+      if (id === 'w8') for (let index = 0; index < 3; index += 1) { const foe = alive(); if (foe) damage(battle, foe, attributes.AGI * 0.6, 'player', `真·无影绝式·${index + 1}`); }
+      if (id === 'w12') for (const foe of battle.enemies.filter(enemy => enemy.hp > 0)) { damage(battle, foe, attributes.SPD * 1.2, 'player', '真·龙吟万象'); if (foe.hp > 0 && !foe.boss) putEffect(foe, 'stun', 1, 2); }
+      if (id === 'w20' && current) { damage(battle, current, attributes.LUCK * 1.5, 'player', '真·混元改命'); if (current.hp > 0) putEffect(current, 'shred', 0.2, 2); }
+    }
+  }
   if (battle.rulesVersion === 2) {
     // Count normal-attack actions, never individual hits or targets. Attached healing attack counts once.
     for (const id of [state.loadout.mainHand, state.loadout.artifact]) {
@@ -350,16 +420,35 @@ function mainAttack(state: DemonTowerEngineState, battle: Battle, target: Fighte
 }
 function cooldown(state: DemonTowerEngineState, id: DemonTowerSkillId): number {
   const definition = skillDefinition(id);
-  return definition.cooldown === 0 ? 0 : Math.max(1, definition.cooldown - Math.floor(skillOwned(state, id).quality / 3));
+  return definition.cooldown === 0 ? 0 : Math.max(1, definition.cooldown - Math.floor(combatSkillOwned(state, id).quality / 3));
 }
 function usableSkill(state: DemonTowerEngineState, battle: Battle, id: DemonTowerSkillId): boolean {
-  return state.loadout.activeSkills.includes(id) && (battle.cooldowns[id] ?? 0) === 0 && !(id === 's13' && battle.usedRevive);
+  return (state.loadout.activeSkills.includes(id) || Boolean(battle.expansionVersion && boundSkills(state).includes(id))) && (battle.cooldowns[id] ?? 0) === 0 && !(id === 's13' && battle.usedRevive);
+}
+function boundSkills(state: DemonTowerEngineState): DemonTowerSkillId[] {
+  const bindings: Partial<Record<DemonTowerWeaponId, DemonTowerSkillId>> = { w3: 's16', w4: 's10', w7: 's7', w8: 's5', w11: 's2', w12: 's5', w15: 's3', w16: 's3', w19: 's4', w20: 's15' };
+  return [...new Set([state.loadout.mainHand, state.loadout.artifact].flatMap(id => {
+    if (!id) return [];
+    const definition = weaponDefinition(id), rarity = demonTowerItemRarity(definition.rarity, weaponOwned(state, id).breakthrough);
+    if (DEMON_TOWER_RARITY_ORDER.indexOf(rarity) < 3) return [];
+    return [bindings[id] ?? ({ STR: 's16', SPD: 's5', AGI: 's7', DEF: 's3', LUCK: 's15' } as const)[definition.attribute]];
+  }))];
+}
+function combatActiveSkills(state: DemonTowerEngineState, battle: Battle): DemonTowerSkillId[] {
+  return [...new Set([...state.loadout.activeSkills, ...(battle.expansionVersion ? boundSkills(state) : [])])];
 }
 function castSkill(state: DemonTowerEngineState, battle: Battle, id: DemonTowerSkillId, target: Fighter): void {
   if (!usableSkill(state, battle, id)) fail('SKILL_NOT_READY');
   const attributes = dimensions(battle.player), scale = skillScale(state, id), player = battle.player;
   battle.cooldowns[id] = cooldown(state, id) + 1;
   log(battle, 'player', 'info', `施展${skillDefinition(id).name}。`);
+  if (battle.expansionVersion) {
+    const owned = combatSkillOwned(state, id);
+    if ((owned.star ?? 1) < 5) {
+      owned.favor = (owned.favor ?? 0) + 1;
+      if (owned.favor >= (owned.star ?? 1) * 15) { owned.star = (owned.star ?? 1) + 1; owned.favor = 0; log(battle, 'player', 'reward', `${skillDefinition(id).name}免费熟练度升至${owned.star}星。`); }
+    }
+  }
   switch (id) {
     case 's1': heal(battle, player, (20 + 2 * attributes.LUCK) * scale, '回春术'); break;
     case 's2': {
@@ -370,7 +459,7 @@ function castSkill(state: DemonTowerEngineState, battle: Battle, id: DemonTowerS
       putEffect(player, 'slow', 0.25, 2); break;
     }
     case 's3': {
-      const shield = Math.round(1.5 * attributes.DEF * scale);
+      const shield = Math.round((1.5 + (battle.expansionVersion && combatSkillOwned(state, id).quality >= 6 ? 0.5 : 0)) * attributes.DEF * scale);
       player.shield += shield; putEffect(player, 'shield', shield, 2);
       log(battle, 'player', 'shield', `铁壁获得${shield}护盾，持续2回合。`, shield, 'player'); break;
     }
@@ -486,6 +575,12 @@ function resolveTurn(state: DemonTowerEngineState, battle: Battle, selected: { s
     if (enemy) damage(battle, enemy, dimensions(battle.player).LUCK * 0.5 * weaponScale(state, 'w18'), 'player', '召灵');
   }
   if (battle.player.hp > 0 && hasPassive(state, 's9')) heal(battle, battle.player, dimensions(battle.player).LUCK * 0.5 * skillScale(state, 's9'), '疗伤真气');
+  if (battle.expansionVersion && battle.player.hp > 0) for (const id of state.loadout.passiveSkills) {
+    const owned = skillOwned(state, id), star = owned.star ?? 1;
+    if (star >= 5) continue;
+    owned.favor = (owned.favor ?? 0) + 1;
+    if (owned.favor >= star * 15) { owned.star = star + 1; owned.favor = 0; log(battle, 'player', 'reward', `${skillDefinition(id).name}被动熟练度升至${owned.star}星。`); }
+  }
   battle.untouchedTurns = battle.playerDamageTaken === playerDamageTaken ? battle.untouchedTurns + 1 : 0;
   for (const fighter of [battle.player, ...battle.enemies]) {
     for (const item of fighter.effects) {
@@ -502,6 +597,7 @@ function newBattle(state: DemonTowerEngineState, kind: Battle['kind'], floor: nu
   const player: Fighter = { id: 'player', name: '我', hp: state.hp, maxHp: hp, shield: 0, attributes, effects: [], elite: false, boss: false };
   if (hasWeapon(state, 'w15')) player.shield = Math.round(1.5 * attributes.DEF * weaponScale(state, 'w15'));
   if (state.growth?.innates.includes('shield')) player.shield += attributes.DEF;
+  if (state.expansion && hasWeapon(state, 'w16') && (weaponOwned(state, 'w16').star ?? 1) >= 5) player.shield += attributes.DEF * 2;
   const count = kind === 'boss' ? 1 : random(state) < 0.22 && floor > 1 ? 2 : 1;
   const enemies: Fighter[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -522,6 +618,7 @@ function newBattle(state: DemonTowerEngineState, kind: Battle['kind'], floor: nu
     enemies.push(enemy);
   }
   return { id: identifier(state, 'battle'), kind, floor, turn: 0, roundLimit: kind === 'boss' ? RULES.bossRoundLimit : RULES.combatRoundLimit,
+    ...(state.expansion ? { expansionVersion: 1 as const, ultimateUsed: false, divineGuardUsed: false } : {}),
     ...(state.growth ? { rulesVersion: 2 as const, innates: [...state.growth.innates], feignUsed: false } : {}),
     player, enemies, cooldowns: {}, usedRevive: false, reviveArmed: false, firstAttack: true, untouchedTurns: 0,
     totalDamage: 0, bossDamage: 0, playerDamageTaken: 0, landedPlayerHits: 0, log: [] };
@@ -533,10 +630,75 @@ function weighted<T extends { weight: number }>(items: readonly T[], roll: numbe
   return items[items.length - 1];
 }
 /** Pure two-stage draw shared by the engine's real loot path and frequency/eligibility tests. */
-export function demonTowerWeightedLoot(kind: 'weapon' | 'skill', level: number, minimum: DemonTowerRarity, rarityRoll: number, itemRoll: number, unowned?: readonly string[]) {
-  const group = weighted(demonTowerLootPool(kind, level, minimum), rarityRoll);
+export function demonTowerWeightedLoot(kind: 'weapon' | 'skill', level: number, minimum: DemonTowerRarity, rarityRoll: number, itemRoll: number, unowned?: readonly string[], source: DemonTowerLootSource = 'normal') {
+  const group = weighted(demonTowerLootPool(kind, level, minimum, source), rarityRoll);
   const missing = unowned ? group.items.filter(item => unowned.includes(item.id)) : [];
   return weighted(missing.length ? missing : group.items, itemRoll);
+}
+function expansionWeek(date: string): string {
+  const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() - (value.getUTCDay() + 6) % 7);
+  return value.toISOString().slice(0, 10);
+}
+function ensureAffixes(state: DemonTowerEngineState, owned: DemonTowerOwnedWeapon): void {
+  owned.affixes ??= [];
+  const choices = Object.keys(DEMON_TOWER_AFFIXES) as DemonTowerAffix[];
+  while (owned.affixes.length < Math.min(3, Math.floor(owned.quality / 3))) {
+    const missing = choices.filter(key => !owned.affixes!.includes(key));
+    owned.affixes.push(missing[Math.floor(random(state) * missing.length)]);
+  }
+}
+function settleQualityExperience(state: DemonTowerEngineState, events: string[]): void {
+  if (!state.expansion || state.battle) return;
+  for (const [kind, items] of [['weapon', state.weapons], ['skill', state.skills]] as const) for (const owned of items) {
+    const definition = kind === 'weapon' ? weaponDefinition(owned.id) : skillDefinition(owned.id);
+    const rarity = kind === 'weapon' ? demonTowerItemRarity(definition.rarity, (owned as DemonTowerOwnedWeapon).breakthrough) : definition.rarity;
+    const cap = demonTowerQualityLimit(rarity, state.level), before = owned.quality;
+    const gained = Math.min(owned.qualityExperience ?? 0, Math.max(0, cap - owned.quality));
+    owned.quality += gained; owned.qualityExperience = (owned.qualityExperience ?? 0) - gained;
+    if (owned.quality > before) events.push(`${definition.name}已兑现${gained}品质经验，提升至+${owned.quality}。`);
+    if (kind === 'weapon') ensureAffixes(state, owned as DemonTowerOwnedWeapon);
+  }
+}
+function enableExpansion(state: DemonTowerEngineState, events: string[]): void {
+  if (state.battle || state.expansion) return;
+  state.expansion = { version: 1, skillPages: 0, essences: 0, weaponBoxes: 0, weaponBoxPity: 0, riftsToday: 0, meditationsToday: 0,
+    weeklyBossAttempts: 0, week: expansionWeek(state.daily.serviceDate), claimedBossFloors: [], passageTokens: 0, titles: [], skin: 'field', unlockedSkins: ['field', 'ledger', 'memo'] };
+  for (const owned of [...state.weapons, ...state.skills]) {
+    owned.qualityExperience = Math.min(MAX_RESOURCE, (owned.qualityExperience ?? 0) + owned.spareCopies);
+    owned.spareCopies = 0; owned.star ??= 1; owned.favor ??= 0;
+  }
+  settleQualityExperience(state, events);
+  events.push('免费扩展已开启：旧副本完整转存为品质经验，符合境界时自动兑现；既有强化和星级不降低。');
+}
+function grantLootItem(state: DemonTowerEngineState, kind: 'weapon' | 'skill', id: string, events: string[]): void {
+  const definition = kind === 'weapon' ? weaponDefinition(id) : skillDefinition(id);
+  const owned = (kind === 'weapon' ? state.weapons : state.skills).find(item => item.id === id);
+  if (owned) {
+    if (state.expansion) owned.qualityExperience = Math.min(MAX_RESOURCE, (owned.qualityExperience ?? 0) + 1);
+    else owned.spareCopies = Math.min(MAX_RESOURCE, owned.spareCopies + 1);
+  } else if (kind === 'weapon') state.weapons.push({ id: definition.id as DemonTowerWeaponId, quality: 0, spareCopies: 0, star: 1, favor: 0, qualityExperience: 0, breakthrough: 0, affixes: [] });
+  else state.skills.push({ id: definition.id as DemonTowerSkillId, quality: 0, spareCopies: 0, star: 1, favor: 0, qualityExperience: 0 });
+  events.push(`获得${definition.rarity}·${definition.name}${owned ? state.expansion ? '，同名转为品质经验（超境界暂存，不丢失）' : '副本' : ''}。`);
+  settleQualityExperience(state, events);
+}
+function sourceLoot(state: DemonTowerEngineState, source: DemonTowerLootSource, kind: 'weapon' | 'skill', events: string[], minimum: DemonTowerRarity = '凡'): void {
+  if (!demonTowerLootPool(kind, state.level, minimum, source).length) fail('LOOT_LEVEL_REQUIRED');
+  const item = demonTowerWeightedLoot(kind, state.level, minimum, random(state), random(state), undefined, source);
+  grantLootItem(state, kind, item.id, events);
+}
+/** Only call after the locked world/contribution check; all grants are bound to this persisted character. */
+export function grantDemonTowerBossClear(state: DemonTowerEngineState, floor: number, events: string[]): void {
+  const expansion = state.expansion;
+  if (!expansion || expansion.claimedBossFloors.includes(floor)) return;
+  expansion.claimedBossFloors.push(floor); expansion.passageTokens = Math.min(MAX_RESOURCE, expansion.passageTokens + 1);
+  expansion.essences = Math.min(MAX_RESOURCE, expansion.essences + 2);
+  const title = `${floorDefinition(floor).name}先锋`;
+  if (!expansion.titles.includes(title)) expansion.titles.push(title);
+  const guaranteed = DEMON_TOWER_WEAPONS.filter(item => item.rarity === '精');
+  grantLootItem(state, 'weapon', guaranteed[Math.floor(random(state) * guaranteed.length)].id, events);
+  if (demonTowerLootPool('weapon', state.level, '灵', 'boss_first').length) sourceLoot(state, 'boss_first', 'weapon', events, '灵');
+  else { expansion.essences = Math.min(MAX_RESOURCE, expansion.essences + 1); events.push('未达灵武器获取等级，额外奖励保留为精魄×1，可用于突破。'); }
+  events.push(`本层首杀贡献奖励：通行凭证×1、精魄×2及称号「${title}」，每层每账号仅领取一次。`);
 }
 function growthLoot(state: DemonTowerEngineState, events: string[]): void {
   const growth = state.growth!, misses = growth.misses;
@@ -555,12 +717,8 @@ function growthLoot(state: DemonTowerEngineState, events: string[]): void {
     const definitions = kind === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS;
     const missing = definitions.filter(item => !owned.some(existing => existing.id === item.id)).map(item => item.id);
     const item = demonTowerWeightedLoot(kind, state.level, minimum, random(state), random(state), scheduled ? missing : undefined);
-    const existing = owned.find(entry => entry.id === item.id);
-    if (existing) existing.spareCopies = Math.min(MAX_RESOURCE, existing.spareCopies + 1);
-    else if (kind === 'weapon') state.weapons.push({ id: item.id as DemonTowerWeaponId, quality: 0, spareCopies: 0, star: 1, favor: 0 });
-    else state.skills.push({ id: item.id as DemonTowerSkillId, quality: 0, spareCopies: 0 });
+    grantLootItem(state, kind, item.id, events);
     rank = DEMON_TOWER_RARITY_ORDER.indexOf(item.rarity);
-    events.push(`获得${item.rarity}·${item.name}${existing ? '副本，保留用于免费升阶' : ''}。`);
     if (minimum !== '凡') events.push(`已兑现${minimum}以上免费保底（仅统计达到获取等级后的探索结算）。`);
     if (scheduled) {
       state.lootPity.stepsSinceGuarantee = 0; state.lootPity.nextKind = kind === 'weapon' ? 'skill' : 'weapon';
@@ -608,18 +766,192 @@ function finishBattle(state: DemonTowerEngineState, battle: Battle, outcome: Dem
   if (outcome === 'victory' && battle.kind === 'explore') {
     experience = gainXp(state, 32 + battle.floor * 13, events);
     materials = gainMaterials(state, { ore: 2 + battle.floor, herb: 1, soul: 1 + Math.floor(battle.floor / 3), clue: random(state) < 0.25 ? 1 : 0 });
-    coins = 3 + Math.floor(battle.floor / 3); loot(state, events); activity(state);
+    coins = 3 + Math.floor(battle.floor / 3);
+    if (battle.expansionVersion && battle.source && state.expansion) {
+      sourceLoot(state, battle.source === 'rift' ? 'rift' : 'boss_weekly', 'weapon', events);
+      sourceLoot(state, battle.source === 'rift' ? 'rift' : 'boss_weekly', 'skill', events);
+      state.expansion.skillPages = Math.min(MAX_RESOURCE, state.expansion.skillPages + (battle.source === 'rift' ? 2 : 3));
+      state.expansion.essences = Math.min(MAX_RESOURCE, state.expansion.essences + (battle.source === 'rift' ? 1 : 3));
+      events.push(battle.source === 'rift' ? '小秘境通关：独立偏高稀有池各得武器/技能×1、残页×2、精魄×1。' : '周常讨伐通关：独立首领池武器/技能各×1、残页×3、精魄×3；不影响共享血池。');
+    } else loot(state, events);
+    activity(state);
   } else if (battle.kind === 'boss' && battle.bossDamage > 0) {
     experience = gainXp(state, 20 + battle.floor * 8, events);
     materials = gainMaterials(state, { soul: 2 + battle.floor, ore: 2, clue: 1 });
     coins = 5; activity(state);
   }
   state.lastReport = { id: battle.id, kind: battle.kind, floor: battle.floor, outcome, turns: battle.turn,
+    ...(battle.source ? { source: battle.source } : {}),
     damage: battle.kind === 'boss' ? battle.bossDamage : battle.totalDamage, experience, materials,
     log: clone(battle.log), completedAt: now };
   state.battle = null;
+  settleQualityExperience(state, events);
   events.push(outcome === 'victory' ? '本次探索获胜。' : outcome === 'contributed' ? '本次讨伐已完成，伤害将计入共享进度。' : outcome === 'fled' ? '已安全撤离，未获得战斗奖励。' : '本次战斗结束，可以休整后再出发。');
   return coins;
+}
+const EXPANSION_ACTIONS = ['expedition', 'market', 'star_up', 'breakthrough', 'select_skin', 'claim_boss_loot', 'arena_enroll', 'arena_learn', 'arena_equip', 'arena_challenge', 'honor_exchange'] as const;
+const SQUAD_ACTIONS = ['squad_create', 'squad_join', 'squad_leave', 'squad_ready', 'squad_step', 'squad_claim'] as const;
+function expansionAction(state: DemonTowerEngineState, kind: string, raw: unknown, context: DemonTowerEngineContext, events: string[]): void {
+  if (!context.expansionEnabled || !state.expansion) fail('EXPANSION_DISABLED');
+  const expansion = state.expansion, rules = DEMON_TOWER_EXPANSION_RULES;
+  const spendSoul = (amount: number) => { if (state.materials.soul < amount) fail('NOT_ENOUGH_MATERIALS'); state.materials.soul -= amount; };
+  if (kind === 'arena_enroll') {
+    const value = exact(raw, ['enabled']); if (typeof value.enabled !== 'boolean') fail('INVALID_ARENA');
+    if (expansion.arena?.enabled === value.enabled) fail('ARENA_UNCHANGED');
+    expansion.arena ??= { enabled: false, rating: 0, rank: '青铜', honor: 0, skillPoints: 3, learned: [], loadout: [], attemptsToday: 0, winsToday: 0, lastReport: null, skinUnlocked: false };
+    expansion.arena.enabled = value.enabled;
+    events.push(value.enabled ? '已自愿加入异步论道池：公开昵称/等级/段位，其他人仅与当前配装快照切磋，不改变你的血量或资产。' : '已退出论道对手池，段位/技能/荣誉保留。'); return;
+  }
+  if (kind === 'arena_learn' || kind === 'arena_equip' || kind === 'arena_challenge' || kind === 'honor_exchange') {
+    const arena = expansion.arena; if (!arena) fail('ARENA_ENROLL_REQUIRED');
+    if (kind === 'arena_learn') {
+      const value = exact(raw, ['skillId']);
+      const skill = DEMON_TOWER_ARENA_SKILLS.find(item => item.id === value.skillId) ?? fail('INVALID_ARENA_SKILL');
+      if (arena.learned.includes(skill.id)) fail('ARENA_SKILL_OWNED');
+      if (state.level < skill.requiredLevel) fail('SKILL_LEVEL_REQUIRED');
+      const previous = `${skill.id.slice(0, -1)}${Number(skill.id.at(-1)) - 1}`;
+      if (!skill.id.endsWith('1') && !arena.learned.includes(previous as DemonTowerArenaSkillId)) fail('ARENA_PREREQUISITE_REQUIRED');
+      if (arena.skillPoints < skill.cost) fail('ARENA_SP_REQUIRED');
+      arena.skillPoints -= skill.cost; arena.learned.push(skill.id); events.push(`已用${skill.cost}SP领悟${skill.name}；不会自动更换配装。`); return;
+    }
+    if (kind === 'arena_equip') {
+      const value = exact(raw, ['skills']);
+      if (!Array.isArray(value.skills) || value.skills.length > 4 || new Set(value.skills).size !== value.skills.length || value.skills.some(id => !arena.learned.includes(id as DemonTowerArenaSkillId))) fail('INVALID_ARENA_LOADOUT');
+      const skills = value.skills.map(id => DEMON_TOWER_ARENA_SKILLS.find(item => item.id === id)!);
+      if (skills.filter(item => item.kind === 'ultimate').length > 1 || skills.filter(item => item.kind === 'active').length > 2 || skills.filter(item => item.kind === 'passive').length > 1) fail('INVALID_ARENA_LOADOUT');
+      if (JSON.stringify(value.skills) === JSON.stringify(arena.loadout)) fail('LOADOUT_UNCHANGED');
+      arena.loadout = value.skills as DemonTowerArenaSkillId[]; events.push('论道配装已保存：最多1终极、2主动、1被动，按排列优先施放。'); return;
+    }
+    if (kind === 'honor_exchange') {
+      const value = exact(raw, ['offer']); if (!['skin', 'essence', 'materials'].includes(value.offer as string)) fail('INVALID_HONOR_OFFER');
+      const cost = value.offer === 'skin' ? 60 : value.offer === 'essence' ? 20 : 10;
+      if (value.offer === 'skin' && arena.skinUnlocked) fail('SKIN_ALREADY_OWNED');
+      if (arena.honor < cost) fail('ARENA_HONOR_REQUIRED');
+      arena.honor -= cost;
+      if (value.offer === 'skin') { arena.skinUnlocked = true; expansion.titles.push('论道雅士'); }
+      else if (value.offer === 'essence') expansion.essences = Math.min(MAX_RESOURCE, expansion.essences + 1);
+      else gainMaterials(state, { ore: 5, herb: 5 });
+      events.push(`荣誉兑换完成，消耗${cost}荣誉；${value.offer === 'skin' ? '获得论道外观徽记和「论道雅士」称号' : value.offer === 'essence' ? '获得精魄×1' : '获得矿石/药草各5'}，没有付费货币或扣取对手资源。`); return;
+    }
+    const value = exact(raw, ['opponentPublicId']);
+    if (!arena.enabled || typeof value.opponentPublicId !== 'string' || value.opponentPublicId !== context.arenaOpponent?.publicId) fail('ARENA_OPPONENT_UNAVAILABLE');
+    if (arena.attemptsToday >= 5) fail('ARENA_DAILY_LIMIT');
+    if (state.arenaOpponentsToday?.includes(value.opponentPublicId)) fail('ARENA_OPPONENT_ALREADY_CHALLENGED');
+    const opponent = context.arenaOpponent!;
+    const report = simulateDemonTowerDuel(demonTowerSocialBuild(state), opponent.build, () => random(state));
+    arena.attemptsToday += 1; (state.arenaOpponentsToday ??= []).push(opponent.publicId);
+    arena.lastReport = { opponentPublicId: opponent.publicId, opponentName: opponent.displayName.slice(0, 80), ...report, completedAt: context.now };
+    const win = report.outcome === 'victory', firstWin = win && arena.winsToday === 0;
+    if (win) arena.winsToday += 1;
+    arena.rating = bound(arena.rating + (win ? 20 : report.outcome === 'defeat' ? -10 : 0), 0, 100_000);
+    arena.honor = Math.min(MAX_RESOURCE, arena.honor + (win ? 10 : 3) + (firstWin ? 10 : 0));
+    arena.skillPoints = Math.min(1000, arena.skillPoints + (win ? 2 : 1) + (firstWin ? 2 : 0));
+    arena.rank = demonTowerArenaRank(arena.rating);
+    const rankIndex = ['青铜', '白银', '黄金', '妖王'].indexOf(arena.rank);
+    if (rankIndex > (state.arenaBestRank ?? 0)) { arena.skillPoints = Math.min(1000, arena.skillPoints + (rankIndex - (state.arenaBestRank ?? 0)) * 3); state.arenaBestRank = rankIndex; }
+    events.push(`论道${win ? '获胜' : report.outcome === 'draw' ? '平局' : '落败'}，${report.rounds}回合；荣誉/SP已到账，对手原始档案未被修改。每天最多5位不同对手。`); return;
+  }
+  if (kind === 'expedition') {
+    const value = exact(raw, ['mode']);
+    if (!['rift', 'meditate', 'weekly_boss'].includes(value.mode as string)) fail('INVALID_EXPEDITION');
+    if (state.selectedFloor > context.world.unlockedFloor || state.selectedFloor > demonTowerPersonalUnlockedFloor(state.level)) fail('FLOOR_LOCKED');
+    if (value.mode === 'meditate') {
+      if (expansion.meditationsToday >= rules.meditationsPerDay) fail('EXPEDITION_DAILY_LIMIT');
+      spendStamina(state, rules.meditationCost, context.now); expansion.meditationsToday += 1;
+      expansion.skillPages = Math.min(MAX_RESOURCE, expansion.skillPages + 1 + Math.floor(random(state) * 3));
+      sourceLoot(state, 'meditation', 'skill', events); gainXp(state, 20 + state.selectedFloor * 8, events); activity(state);
+      events.push('灵气点修炼：专属技能池×1、残页1—3张，不掉武器；不动普通探索保底。'); return;
+    }
+    if (state.hp <= 0) fail('REST_REQUIRED');
+    if (value.mode === 'rift' && expansion.riftsToday >= rules.riftsPerDay) fail('EXPEDITION_DAILY_LIMIT');
+    if (value.mode === 'weekly_boss' && expansion.weeklyBossAttempts >= rules.weeklyBossPerWeek) fail('EXPEDITION_WEEKLY_LIMIT');
+    spendStamina(state, value.mode === 'rift' ? rules.riftCost : rules.weeklyBossCost, context.now);
+    if (value.mode === 'rift') expansion.riftsToday += 1; else expansion.weeklyBossAttempts += 1;
+    const battle = newBattle(state, 'explore', state.selectedFloor, context.world);
+    battle.source = value.mode as 'rift' | 'weekly_boss';
+    for (const enemy of battle.enemies) {
+      enemy.hp = enemy.maxHp = Math.round(enemy.maxHp * (value.mode === 'rift' ? 1.35 : 2));
+      enemy.attributes.STR = Math.round(enemy.attributes.STR * 1.15); enemy.elite = true;
+      enemy.mechanic = 'charge'; enemy.name = `${value.mode === 'rift' ? '秘境' : '周常守关'}·${enemy.name}`;
+      enemy.boss = value.mode === 'weekly_boss';
+    }
+    if (value.mode === 'rift' && battle.enemies.length < 2) {
+      const minion = clone(battle.enemies[0]); minion.id = 'rift-minion'; minion.name = '秘境助灵';
+      minion.hp = minion.maxHp = Math.ceil(minion.maxHp * 0.45); minion.attributes.STR = Math.ceil(minion.attributes.STR * 0.5);
+      minion.elite = false; delete minion.mechanic; battle.enemies.push(minion);
+    }
+    state.battle = battle; events.push(`${value.mode === 'rift' ? '小秘境' : '周常讨伐'}已开启，战斗保存到账号；只有胜利发放装备，撤离不退次数。`); return;
+  }
+  if (kind === 'market') {
+    const value = record(raw, ['offer', 'itemId']);
+    if (!['weapon_box', 'skill_box', 'enlightenment', 'skill_selection', 'recycle_quality'].includes(value.offer as string)) fail('INVALID_MARKET_OFFER');
+    if (value.offer === 'weapon_box' || value.offer === 'skill_box') {
+      exact(raw, ['offer']);
+      if (value.offer === 'weapon_box') {
+        // Buying a guaranteed 灵 box at Lv1 would create an empty pool. Wait rather than consume the guarantee.
+        if (state.level < 16) fail('LOOT_LEVEL_REQUIRED');
+        spendSoul(rules.weaponBoxSoul);
+        const minimum = expansion.weaponBoxPity >= 9 ? '灵' : '凡';
+        sourceLoot(state, 'weapon_box', 'weapon', events, minimum);
+        expansion.weaponBoxes = Math.min(MAX_RESOURCE, expansion.weaponBoxes + 1);
+        expansion.weaponBoxPity = expansion.weaponBoxPity >= 9 ? 0 : expansion.weaponBoxPity + 1;
+        if (minimum === '灵') events.push('第10个武器箱保底已兑现：灵或以上。');
+      } else { spendSoul(rules.skillBoxSoul); sourceLoot(state, 'skill_box', 'skill', events); expansion.skillPages = Math.min(MAX_RESOURCE, expansion.skillPages + 1); }
+      return;
+    }
+    if (value.offer === 'enlightenment') {
+      exact(raw, ['offer']);
+      const missing = DEMON_TOWER_SKILLS.filter(item => item.requiredLevel <= state.level && !state.skills.some(owned => owned.id === item.id));
+      if (!missing.length) fail('ALL_ELIGIBLE_SKILLS_OWNED');
+      spendSoul(rules.enlightenmentSoul); grantLootItem(state, 'skill', missing[Math.floor(random(state) * missing.length)].id, events); return;
+    }
+    exact(raw, ['offer', 'itemId']); if (typeof value.itemId !== 'string') fail('INVALID_ITEM');
+    if (value.offer === 'skill_selection') {
+      const definition = skillDefinition(value.itemId);
+      if (definition.rarity !== '仙' || definition.requiredLevel > state.level) fail('SKILL_LEVEL_REQUIRED');
+      if (expansion.skillPages < rules.selectionPages) fail('NOT_ENOUGH_SKILL_PAGES');
+      expansion.skillPages -= rules.selectionPages; grantLootItem(state, 'skill', definition.id, events); events.push('30张残页已兑换指定仙级技能；没有随机选项。'); return;
+    }
+    const owned = [...state.weapons, ...state.skills].find(item => item.id === value.itemId) ?? fail('ITEM_NOT_OWNED');
+    if ((owned.qualityExperience ?? 0) < 1) fail('NOT_ENOUGH_QUALITY_EXPERIENCE');
+    if (state.materials.soul > MAX_RESOURCE - 3) fail('RESOURCE_FULL');
+    owned.qualityExperience = (owned.qualityExperience ?? 0) - 1; state.materials.soul += 3;
+    events.push('自愿将1点暂存品质经验兑换残魂×3，装备与已强化品质保留。'); return;
+  }
+  if (kind === 'star_up') {
+    const value = exact(raw, ['itemType', 'itemId']);
+    if (!['weapon', 'skill'].includes(value.itemType as string) || typeof value.itemId !== 'string') fail('INVALID_ITEM');
+    const owned = value.itemType === 'weapon' ? weaponOwned(state, weaponDefinition(value.itemId).id) : skillOwned(state, skillDefinition(value.itemId).id);
+    const star = owned.star ?? 1; if (star >= 5) fail('STAR_MAXIMUM');
+    spendSoul(rules.starCharmSoul);
+    if (chance(state, rules.starSuccess[star - 1])) { owned.star = star + 1; owned.favor = 0; events.push(`升星符成功：${value.itemId}提升至${owned.star}星。`); }
+    else events.push('免费残魂升星符未触发升星；保留原星级、熟练度和品质，不降星。');
+    return;
+  }
+  if (kind === 'breakthrough') {
+    const value = exact(raw, ['itemId']); if (typeof value.itemId !== 'string') fail('INVALID_WEAPON');
+    const definition = weaponDefinition(value.itemId), owned = weaponOwned(state, definition.id), current = demonTowerItemRarity(definition.rarity, owned.breakthrough);
+    if (current === '神') fail('BREAKTHROUGH_MAXIMUM');
+    const nextRank = DEMON_TOWER_RARITY_ORDER.indexOf(current) + 1, requiredLevel = nextRank * 15 + 1;
+    if (state.level < requiredLevel) fail('BREAKTHROUGH_LEVEL_REQUIRED');
+    if (owned.quality < Math.min(5, demonTowerQualityLimit(current, state.level))) fail('BREAKTHROUGH_QUALITY_REQUIRED');
+    const cost = nextRank * 2;
+    if (expansion.essences < cost || state.materials.ore < nextRank * 10) fail('NOT_ENOUGH_MATERIALS');
+    expansion.essences -= cost; state.materials.ore -= nextRank * 10; owned.breakthrough = (owned.breakthrough ?? 0) + 1;
+    settleQualityExperience(state, events); events.push(`${definition.name}突破至${DEMON_TOWER_RARITY_ORDER[nextRank]}，品质上限提高；主维+3，第二主维+4。`); return;
+  }
+  if (kind === 'select_skin') {
+    const value = exact(raw, ['skin']); if (!expansion.unlockedSkins.includes(value.skin as DemonTowerSkin)) fail('INVALID_SKIN');
+    if (expansion.skin === value.skin) fail('SKIN_UNCHANGED'); expansion.skin = value.skin as DemonTowerSkin; events.push('伪装皮肤已保存；仅改变界面，不改变角色战力。'); return;
+  }
+  if (kind === 'claim_boss_loot') {
+    const value = exact(raw, ['floor']); if (!integer(value.floor, 1, 9)) fail('INVALID_FLOOR');
+    if (expansion.claimedBossFloors.includes(value.floor)) fail('BOSS_LOOT_CLAIMED');
+    const defeated = value.floor < context.world.currentFloor || value.floor === context.world.currentFloor && context.world.phase !== 'boss';
+    if (!defeated || !context.contributedFloors?.includes(value.floor)) fail('BOSS_CONTRIBUTION_REQUIRED');
+    grantDemonTowerBossClear(state, value.floor, events); return;
+  }
+  fail('INVALID_ACTION');
 }
 function validateWorld(world: DemonTowerWorldView): void {
   if (!world || !integer(world.currentFloor, 1, 9) || !integer(world.unlockedFloor, 1, 9) || world.currentFloor > world.unlockedFloor ||
@@ -657,7 +989,7 @@ export function demonTowerAutomaticAction(state: DemonTowerEngineState): DemonTo
   const battle = state.battle;
   if (battle.kind !== 'explore') fail('INVALID_BATTLE');
   const targetId = battle.enemies.find(enemy => enemy.hp > 0)?.id ?? fail('INVALID_TARGET');
-  const skillId = state.loadout.activeSkills.find(id => usableSkill(state, battle, id) &&
+  const skillId = combatActiveSkills(state, battle).find(id => usableSkill(state, battle, id) &&
     (id !== 's1' || battle.player.hp < battle.player.maxHp * 0.75) &&
     (id !== 's13' || battle.player.hp < battle.player.maxHp * 0.5) &&
     (id !== 's4' || !effect(battle.player, 'strength')) && (id !== 's7' || !effect(battle.player, 'illusion')));
@@ -666,11 +998,13 @@ export function demonTowerAutomaticAction(state: DemonTowerEngineState): DemonTo
 export function actDemonTower(input: DemonTowerEngineState, raw: unknown, context: DemonTowerEngineContext): DemonTowerEngineResult {
   const root = exact(raw, ['kind', 'payload']);
   if (typeof root.kind !== 'string') fail('INVALID_ACTION');
-  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward'];
+  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
   if (!allowed.includes(root.kind as DemonTowerActionKind)) fail('INVALID_ACTION');
   validateWorld(context.world);
   const state = advanceDemonTowerState(input, context.now, context.serviceDate), events: string[] = [];
   enableGrowth(state);
+  const hadExpansion = Boolean(state.expansion);
+  if (context.expansionEnabled) enableExpansion(state, events);
   const result: DemonTowerEngineResult = { state, events, worldEffect: null, officeCoinIntent: 0 };
   if (root.kind === 'enroll') fail('ALREADY_ENROLLED');
   if (state.battle && !['attack', 'skill', 'flee'].includes(root.kind)) fail('BATTLE_IN_PROGRESS');
@@ -774,12 +1108,18 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       if (!['weapon', 'skill'].includes(value.itemType as string) || typeof value.itemId !== 'string') fail('INVALID_ACTION');
       const type = value.itemType as 'weapon' | 'skill';
       const owned = type === 'weapon' ? weaponOwned(state, weaponDefinition(value.itemId).id) : skillOwned(state, skillDefinition(value.itemId).id);
-      const cost = demonTowerUpgradeCost(type, owned.id, owned.quality, owned.spareCopies, state.level, owned.levelExempt);
+      const previousOwned = (type === 'weapon' ? input.weapons : input.skills).find(item => item.id === owned.id);
+      if (!hadExpansion && state.expansion && previousOwned && owned.quality > previousOwned.quality) {
+        events.push('本次请求所需的升阶已由旧副本免费兑现，不再额外消耗材料继续升下一阶。'); break;
+      }
+      const definition = type === 'weapon' ? weaponDefinition(owned.id) : skillDefinition(owned.id);
+      const cost = demonTowerUpgradeCost(type, owned.id, owned.quality, owned.spareCopies, state.level, owned.levelExempt, state.expansion ? type === 'weapon' ? demonTowerItemRarity(definition.rarity, (owned as DemonTowerOwnedWeapon).breakthrough) : definition.rarity : undefined);
       if (!cost.available) fail(cost.reason === 'max_quality' ? 'QUALITY_MAXIMUM' : 'UPGRADE_LEVEL_REQUIRED');
       for (const key of Object.keys(cost.materials) as Array<keyof DemonTowerMaterials>) if (state.materials[key] < cost.materials[key]) fail('NOT_ENOUGH_MATERIALS');
       owned.spareCopies -= cost.spareCopies;
       for (const key of Object.keys(cost.materials) as Array<keyof DemonTowerMaterials>) state.materials[key] -= cost.materials[key];
-      owned.quality += 1; events.push(`升阶成功，品质提升至+${owned.quality}；没有随机失败或副本丢失。`); break;
+      owned.quality += 1; if (state.expansion && type === 'weapon') ensureAffixes(state, owned as DemonTowerOwnedWeapon);
+      events.push(`升阶成功，品质提升至+${owned.quality}；没有随机失败或副本丢失。`); break;
     }
     case 'select_floor': {
       const value = exact(root.payload, ['floor']);
@@ -800,7 +1140,7 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       spendStamina(state, RULES.bossCost, context.now); state.daily.bossAttempts += 1;
       const battle = newBattle(state, 'boss', floor, context.world);
       while (battle.turn < battle.roundLimit && battle.player.hp > 0 && battle.enemies.some((enemy) => enemy.hp > 0)) {
-        const skillId = state.loadout.activeSkills.find((id) => usableSkill(state, battle, id) &&
+        const skillId = combatActiveSkills(state, battle).find((id) => usableSkill(state, battle, id) &&
           (id !== 's1' || battle.player.hp < battle.player.maxHp * 0.75) &&
           (id !== 's13' || battle.player.hp < battle.player.maxHp * 0.5) &&
           (id !== 's4' || !effect(battle.player, 'strength')) && (id !== 's7' || !effect(battle.player, 'illusion')));
@@ -831,6 +1171,16 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       state.daily.rewardClaimed = true; result.officeCoinIntent = RULES.dailyActivityCoins;
       events.push('每日修行奖励已申请，由统一钱包按妖塔日常上限结算。'); break;
     }
+    case 'expedition': case 'market': case 'star_up': case 'breakthrough': case 'select_skin': case 'claim_boss_loot':
+    case 'arena_enroll': case 'arena_learn': case 'arena_equip': case 'arena_challenge': case 'honor_exchange':
+      expansionAction(state, root.kind, root.payload, context, events); break;
+    case 'squad_create': case 'squad_join': case 'squad_leave': case 'squad_ready': case 'squad_step': case 'squad_claim':
+      if (!context.expansionEnabled || !state.expansion) fail('EXPANSION_DISABLED');
+      if (root.kind === 'squad_create') { const value = exact(root.payload, ['floor']); if (!integer(value.floor, 1, 9)) fail('INVALID_FLOOR'); }
+      else if (root.kind === 'squad_join') { const value = exact(root.payload, ['squadId']); if (typeof value.squadId !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.squadId)) fail('INVALID_SQUAD'); }
+      else exact(root.payload, []);
+      // The service resolves membership/locks and applies the private squad row in this SAME action transaction.
+      break;
     default: fail('INVALID_ACTION');
   }
   state.lastActionAt = context.now;
@@ -844,6 +1194,7 @@ function logView(entries: DemonTowerCombatLog[]): DemonTowerCombatLog[] {
 }
 function reportView(report: DemonTowerBattleReport): DemonTowerBattleReport {
   return { id: report.id, kind: report.kind, floor: report.floor, outcome: report.outcome, turns: report.turns,
+    ...(report.source ? { source: report.source } : {}),
     damage: report.damage, experience: report.experience, materials: copyMaterials(report.materials),
     log: logView(report.log), completedAt: report.completedAt };
 }
@@ -855,15 +1206,18 @@ function battleView(state: DemonTowerEngineState): DemonTowerBattleView | null {
   const battle = state.battle;
   if (!battle) return null;
   return { id: battle.id, kind: 'explore', floor: battle.floor, turn: battle.turn, roundLimit: battle.roundLimit,
+    ...(battle.source ? { source: battle.source } : {}),
     player: fighterView(battle.player), enemies: battle.enemies.map(fighterView),
-    availableSkills: state.loadout.activeSkills.map((id) => ({ id, cooldownRemaining: battle.cooldowns[id] ?? 0, usable: usableSkill(state, battle, id) })), log: logView(battle.log) };
+    availableSkills: combatActiveSkills(state, battle).map((id) => ({ id, cooldownRemaining: battle.cooldowns[id] ?? 0, usable: usableSkill(state, battle, id) })), log: logView(battle.log) };
 }
-export function demonTowerProfileView(state: DemonTowerEngineState, now: number, version: number, officeCoinsEarned = 0): DemonTowerProfileView {
+export function demonTowerProfileView(state: DemonTowerEngineState, now: number, version: number, officeCoinsEarned = 0, expansionEnabled = false): DemonTowerProfileView {
   clock(now);
   if (!integer(version, 0, Number.MAX_SAFE_INTEGER) || !integer(officeCoinsEarned, 0, RULES.dailyOfficeCoinCap)) fail('INVALID_VIEW_CONTEXT');
   const availableActions: DemonTowerActionKind[] = state.battle ? ['attack', 'skill', 'flee'] : ['explore', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward'];
   if (!state.battle && !state.growth?.chosenAttribute) availableActions.push('choose_innate');
+  if (expansionEnabled && !state.battle) availableActions.push(...EXPANSION_ACTIONS, ...SQUAD_ACTIONS);
   return {
+    ...(expansionEnabled ? { expansion: expansionView(state) } : {}),
     growth: { rulesVersion: 2, pendingLegacyBattle: Boolean(state.battle && state.battle.rulesVersion !== 2),
       chosenAttribute: state.growth?.chosenAttribute ?? null, innates: [...(state.growth?.innates ?? [])],
       unlockedCount: Math.min(8, 1 + Math.floor((state.level - 1) / 15)), nextInnateLevel: state.level >= 106 ? null : (Math.floor((state.level - 1) / 15) + 1) * 15 + 1,
@@ -875,8 +1229,10 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
     hp: state.hp, maxHp: demonTowerMaxHp(state), stamina: state.stamina, staminaMax: RULES.staminaCap,
     nextStaminaAt: state.stamina >= RULES.staminaCap ? null : state.staminaAt + RULES.staminaRestoreMs,
     materials: copyMaterials(state.materials), weapons: state.weapons.map((item) => ({ id: item.id, quality: item.quality, spareCopies: item.spareCopies,
-      star: item.star ?? 1, favor: item.favor ?? 0, levelExempt: !state.growth || item.levelExempt === true })),
-    skills: state.skills.map((item) => ({ id: item.id, quality: item.quality, spareCopies: item.spareCopies, levelExempt: !state.growth || item.levelExempt === true })),
+      star: item.star ?? 1, favor: item.favor ?? 0, levelExempt: !state.growth || item.levelExempt === true,
+      ...(expansionEnabled ? { qualityExperience: item.qualityExperience ?? item.spareCopies, breakthrough: item.breakthrough ?? 0, affixes: [...(item.affixes ?? [])] } : {}) })),
+    skills: state.skills.map((item) => ({ id: item.id, quality: item.quality, spareCopies: item.spareCopies, levelExempt: !state.growth || item.levelExempt === true,
+      ...(expansionEnabled ? { qualityExperience: item.qualityExperience ?? item.spareCopies, star: item.star ?? 1, favor: item.favor ?? 0 } : {}) })),
     loadout: { mainHand: state.loadout.mainHand, artifact: state.loadout.artifact, activeSkills: [...state.loadout.activeSkills], passiveSkills: [...state.loadout.passiveSkills] },
     selectedFloor: state.selectedFloor, personalUnlockedFloor: demonTowerPersonalUnlockedFloor(state.level),
     daily: { serviceDate: state.daily.serviceDate, activity: state.daily.activity, activityTarget: RULES.dailyActivityTarget,
@@ -884,4 +1240,22 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
       officeCoinsEarned, officeCoinCap: RULES.dailyOfficeCoinCap },
     battle: battleView(state), lastReport: state.lastReport ? reportView(state.lastReport) : null, availableActions, createdAt: state.createdAt,
   };
+}
+function expansionView(state: DemonTowerEngineState): DemonTowerExpansionView {
+  const value = state.expansion;
+  return { version: 1, skillPages: value?.skillPages ?? 0, essences: value?.essences ?? 0, weaponBoxes: value?.weaponBoxes ?? 0,
+    weaponBoxPity: value?.weaponBoxPity ?? 0, riftsToday: value?.riftsToday ?? 0, meditationsToday: value?.meditationsToday ?? 0,
+    weeklyBossAttempts: value?.weeklyBossAttempts ?? 0, week: value?.week ?? expansionWeek(state.daily.serviceDate),
+    claimedBossFloors: [...(value?.claimedBossFloors ?? [])], passageTokens: value?.passageTokens ?? 0, titles: [...(value?.titles ?? [])],
+    skin: value?.skin ?? 'field', unlockedSkins: [...(value?.unlockedSkins ?? ['field', 'ledger', 'memo'])],
+    ...(value?.arena ? { arena: { enabled: value.arena.enabled, rating: value.arena.rating, rank: demonTowerArenaRank(value.arena.rating), honor: value.arena.honor, skillPoints: value.arena.skillPoints,
+      learned: [...value.arena.learned], loadout: [...value.arena.loadout], attemptsToday: value.arena.attemptsToday, winsToday: value.arena.winsToday, skinUnlocked: value.arena.skinUnlocked,
+      lastReport: value.arena.lastReport ? { opponentPublicId: value.arena.lastReport.opponentPublicId, opponentName: value.arena.lastReport.opponentName, outcome: value.arena.lastReport.outcome,
+        rounds: value.arena.lastReport.rounds, log: value.arena.lastReport.log.slice(-100), completedAt: value.arena.lastReport.completedAt } : null } } : {}),
+    squadId: value?.squadId ?? null, squadReadyToday: value?.squadReadyToday ?? 0 };
+}
+export function demonTowerSocialBuild(state: DemonTowerEngineState): DemonTowerSocialBuild {
+  return { level: state.level, maxHp: demonTowerMaxHp(state), attributes: demonTowerEffectiveAttributes(state),
+    weapons: [state.loadout.mainHand, state.loadout.artifact].flatMap(id => id ? [clone(weaponOwned(state, id))] : []),
+    active: [...state.loadout.activeSkills], passive: [...state.loadout.passiveSkills], innates: [...(state.growth?.innates ?? [])], arenaSkills: [...(state.expansion?.arena?.loadout ?? [])] };
 }

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
-import { COMMUNITY_ACHIEVEMENTS, type CommunityAchievementMetric, type CommunityAchievementRefreshReceipt, type CommunityProgressionCatalog, type CommunityProgressionView, type CommunityTitleInput, type CommunityTitleReceipt } from '@stealth-reader/shared';
+import { COMMUNITY_ACHIEVEMENTS, OFFICE_COLLECTION, type CommunityAchievementMetric, type CommunityAchievementRefreshReceipt, type CommunityProgressionCatalog, type CommunityProgressionView, type CommunityTitleInput, type CommunityTitleReceipt } from '@stealth-reader/shared';
 import { CommunityAchievementUnlock, CommunityUserPresentation } from '../../../database/entities/community-progression.entity';
 import { DeskPlant } from '../../../database/entities/desk-plant.entity';
 import { PlayerProgression } from '../../../database/entities/player-progression.entity';
@@ -17,6 +17,7 @@ import { titleBadge } from './title-projection';
 
 type Metrics = Record<CommunityAchievementMetric, number>;
 const safeCount = (value: unknown, cap = 1_000_000_000): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? Math.min(cap, value) : 0;
+const objectValue = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function strictObject(raw: unknown, keys: readonly string[]): Record<string, unknown> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw) || Object.getPrototypeOf(raw) !== Object.prototype || Object.keys(raw).length !== keys.length || keys.some((key) => !Object.prototype.hasOwnProperty.call(raw, key)) || Object.keys(raw).some((key) => !keys.includes(key))) throw new BadRequestException({ code: 'PROGRESSION_REQUEST_INVALID' });
@@ -107,12 +108,40 @@ export class CommunityProgressionService {
       manager.getRepository(DevelopmentRequest).countBy({ authorId: userId, status: 'done' }),
     ]);
     const state = tower?.state;
+    const expansion = objectValue(state?.expansion);
+    const arena = objectValue(expansion.arena);
+    const bossFloors = new Set(Array.isArray(expansion.claimedBossFloors) ? expansion.claimedBossFloors.filter(floor => Number.isInteger(floor) && floor >= 1 && floor <= 9) : []);
+    let workstation: Record<string, unknown> = {};
+    let workstationWins = 0;
+    if (process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED === 'true') {
+      const profiles = await manager.query('SELECT promotion_tier,stats FROM tower_defense_profiles WHERE user_id=$1', [userId]);
+      workstation = profiles[0] ?? {};
+      const awards = await manager.query('SELECT count(*) total FROM tower_defense_daily_awards WHERE user_id=$1 AND coins>0', [userId]);
+      workstationWins = Number(awards[0]?.total ?? 0);
+    }
+    const stats = objectValue(workstation.stats);
+    const achievements = new Set(Array.isArray(stats.achievements) ? stats.achievements : []);
+    let office: Record<string, unknown> = {};
+    if (process.env.FEATURE_OFFICE_HUB_ENABLED === 'true') {
+      const profiles = await manager.query('SELECT state FROM office_hub_profiles WHERE user_id=$1', [userId]);
+      office = objectValue(profiles[0]?.state);
+    }
+    const officeStats = objectValue(office.stats), officeOwned = objectValue(office.owned);
     const ids = new Set<string>();
     for (const [field, pattern] of [['weapons', /^w(?:[1-9]|1\d|20)$/], ['skills', /^s(?:[1-9]|1[0-6])$/]] as const) {
       const values: unknown = state?.[field];
       if (Array.isArray(values)) for (const value of values.slice(0, 36)) if (value && typeof value === 'object' && typeof value.id === 'string' && pattern.test(value.id)) ids.add(value.id);
     }
     return { farmHarvests: safeCount(farm?.totalHarvests), platformLevel: safeCount(progression?.level), railCompleted: safeCount(rail?.completedGames), towerLevel: safeCount(state?.level), towerCollection: ids.size,
-      towerContribution: contribution.reduce((sum, row) => sum + safeCount(row.bossDamage) + safeCount(row.passageContribution), 0), dailyChampionships: playWins + railWins + towerWins, developmentCompleted: development };
+      towerContribution: contribution.reduce((sum, row) => sum + safeCount(row.bossDamage) + safeCount(row.passageContribution), 0), dailyChampionships: playWins + railWins + towerWins + safeCount(workstationWins), developmentCompleted: development,
+      workstationFirstThree: Number(achievements.has('tower_first_three')), workstationPerfect: Number(achievements.has('tower_perfect')),
+      workstationSpeed: Number(achievements.has('tower_speed')), workstationOvertime: Number(achievements.has('tower_overtime')),
+      workstationTenThousand: Number(achievements.has('tower_score_10000')), workstationTier: Object.keys(workstation).length ? safeCount(workstation.promotion_tier, 7) + 1 : 0,
+      demonFirstBoss: Number(bossFloors.has(1)), demonBossFloors: bossFloors.size, demonHonorSkin: Number(arena.skinUnlocked === true),
+      demonFiveStar: Number(Array.isArray(state?.weapons) && state.weapons.some(weapon => /^w(?:[1-9]|1\d|20)$/.test(String(objectValue(weapon).id)) && safeCount(objectValue(weapon).star, 5) >= 5)),
+      officeCollection: OFFICE_COLLECTION.filter(item => safeCount(officeOwned[item.id]) > 0).length,
+      officeStories: safeCount(officeStats.stories), officeDrawings: safeCount(officeStats.drawings), officeDepartmentWins: safeCount(officeStats.departmentWins),
+      officeBossDays: safeCount(officeStats.bossDays), officeWeeklyWins: safeCount(officeStats.weeklyWins),
+    };
   }
 }

@@ -10,6 +10,7 @@ import { RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDaily
 import { DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward } from './demon-tower.entity';
 import { CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation } from './community-progression.entity';
 import { DemonTowerAutoRun } from './demon-tower-auto-run.entity';
+import { DemonTowerSquad } from './demon-tower-squad.entity';
 import { TrendingNewsBoardRun, TrendingNewsItemRecord } from './trending-news.entity';
 import { AccountAppeal } from './account-appeal.entity';
 import { AccountDeletionRequest } from './account-deletion-request.entity';
@@ -133,6 +134,7 @@ import { UserFarm } from './user-farm.entity';
 import { UserBlock } from './user-block.entity';
 
 export {
+  DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,
@@ -254,6 +256,7 @@ export {
 
 /** 所有实体的集合，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const entities = [
+  DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,

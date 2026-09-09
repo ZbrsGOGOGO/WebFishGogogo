@@ -7,6 +7,7 @@ import { toBusinessLocalDate } from '../../platform/platform-time';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { consumeRoomPasswordAttempt, consumeRoomPasswordMutation, hashRoomPassword, normalizeRoomPassword, roomPasswordFingerprint, verifyRoomPassword } from '../room-password';
 import * as engine from './engines';
+import { recordOfficeRealtimeUndercover } from '../office-hub/office-hub-realtime';
 import { boundedPayload, gameKey, hash, object, person, PLAY_CATALOG, RANKING_RULES, uuid } from './play.rules';
 
 /** All engine JSON and join codes are private. Only viewer-specific projections leave this service. */
@@ -341,6 +342,7 @@ export class PlayService implements OnModuleInit, OnModuleDestroy {
         SET score = EXCLUDED.score, mode = EXCLUDED.mode, room_id = EXCLUDED.room_id, achieved_at = EXCLUDED.achieved_at
         WHERE play_daily_scores.score < EXCLUDED.score`, [room.leaderboardDate, room.gameKey, member.userId, member.score, room.mode, room.id, now]);
     }
+    await recordOfficeRealtimeUndercover(manager,room,members);
   }
   private summary(room: PlayRoom, members: PlayRoomMember[]): PlayRoomSummary {
     const host = room.host ?? members.find((member) => member.userId === room.hostUserId)?.user;

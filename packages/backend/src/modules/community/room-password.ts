@@ -39,7 +39,7 @@ export async function verifyRoomPassword(password: string | null, stored: string
  * These keyed PostgreSQL buckets survive wrong-password errors and API replicas.
  * No room-wide bucket: an attacker must not lock every other colleague out.
  */
-export async function consumeRoomPasswordAttempt(db: DataSource, module: 'play' | 'rail', userId: string, roomId: string, now = new Date()): Promise<void> {
+export async function consumeRoomPasswordAttempt(db: DataSource, module: 'play' | 'rail' | 'paper', userId: string, roomId: string, now = new Date()): Promise<void> {
   await new AuthRateLimitService(db).consume([
     { scope: `room-password:${module}:user`, dimension: userId, limit: 30, windowMs: 600_000, blockMs: 600_000 },
     { scope: `room-password:${module}:room-user`, dimension: `${roomId}:${userId}`, limit: 5, windowMs: 600_000, blockMs: 600_000 },

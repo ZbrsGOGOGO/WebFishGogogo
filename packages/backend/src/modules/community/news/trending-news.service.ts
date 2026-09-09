@@ -36,7 +36,7 @@ const MAX_UPSTREAM_BACKOFF_MS = 7 * 24 * 60 * 60 * 1_000;
 
 export const TRENDING_NEWS_FETCH = Symbol('TRENDING_NEWS_FETCH');
 
-type InternalBoardId = 'hacker_news' | 'stackoverflow' | 'github_rising' | 'baidu';
+type InternalBoardId = TrendingNewsBoardId;
 
 interface InternalBoardConfig {
   id: InternalBoardId;
@@ -47,7 +47,7 @@ interface InternalBoardConfig {
 }
 
 interface ExternalBoardConfig {
-  id: Exclude<TrendingNewsBoardId, InternalBoardId>;
+  id: TrendingNewsBoardId;
   label: string;
   group: TrendingNewsBoardGroup;
   sourceUrl: string;
@@ -128,6 +128,22 @@ export const INTERNAL_TRENDING_BOARDS: readonly InternalBoardConfig[] = [
     note: '每日读取百度公开榜单页面中的标题、排名与热度，非官方开放 API；不保存摘要、图片或新闻正文。来源结构变化时保留最近快照并标记更新失败。',
   },
 ] as const;
+
+/** Public metadata, not an authenticated scraping proxy. Released independently. */
+export const EXPANDED_TRENDING_BOARDS: readonly InternalBoardConfig[] = [
+  { id: 'bilibili', label: '哔哩哔哩全站榜', group: 'entertainment',
+    sourceUrl: 'https://www.bilibili.com/v/popular/rank/all',
+    note: '每日记录公开全站榜的标题、顺序和播放数，不抓取视频或评论。平台风控时保留上次真实快照，播放数不是跨平台热度。' },
+  { id: 'douban', label: '豆瓣新片榜', group: 'entertainment',
+    sourceUrl: 'https://movie.douban.com/chart',
+    note: '每日记录公开电影排行榜内“豆瓣新片榜”的顺序、片名及评分；不混入口碑榜、票房榜或 TOP250，不复制影评、剧照或简介。' },
+];
+
+function activeInternalBoards(): readonly InternalBoardConfig[] {
+  return process.env.FEATURE_EXPANDED_TRENDING_ENABLED === 'true'
+    ? [...INTERNAL_TRENDING_BOARDS, ...EXPANDED_TRENDING_BOARDS]
+    : INTERNAL_TRENDING_BOARDS;
+}
 
 export const EXTERNAL_TRENDING_BOARDS: readonly ExternalBoardConfig[] = [
   {
@@ -213,7 +229,7 @@ export class TrendingNewsService
   async listDaily(now = new Date()): Promise<TrendingNewsSnapshot> {
     const expectedDate = expectedTrendingServiceDate(now);
     const boards = await Promise.all(
-      INTERNAL_TRENDING_BOARDS.map((board) => this.listBoard(board, expectedDate)),
+      activeInternalBoards().map((board) => this.listBoard(board, expectedDate)),
     );
     const completedBoards = boards.filter((board) => board.snapshotDate !== null);
     const serviceDate = completedBoards
@@ -231,7 +247,7 @@ export class TrendingNewsService
       schedule: '每天 08:10（北京时间）',
       boards: [
         ...boards,
-        ...EXTERNAL_TRENDING_BOARDS.map((board): TrendingNewsBoard => ({
+        ...EXTERNAL_TRENDING_BOARDS.filter((board) => !activeInternalBoards().some((internal) => internal.id === board.id)).map((board): TrendingNewsBoard => ({
           ...board,
           status: 'external_only',
           snapshotDate: null,
@@ -244,13 +260,14 @@ export class TrendingNewsService
 
   /** Public for deterministic operational and lease-race tests. */
   async refresh(now = new Date()): Promise<{ refreshedBoards: InternalBoardId[]; itemCount: number }> {
+    const configuredBoards = activeInternalBoards();
     const results = await mapWithConcurrency(
-      INTERNAL_TRENDING_BOARDS,
+      configuredBoards,
       BOARD_FETCH_CONCURRENCY,
       (board) => this.refreshBoard(board, now),
     );
     return {
-      refreshedBoards: INTERNAL_TRENDING_BOARDS
+      refreshedBoards: configuredBoards
         .filter((_, index) => results[index].refreshed)
         .map((board) => board.id),
       itemCount: results.reduce((total, result) => total + result.itemCount, 0),
@@ -426,6 +443,9 @@ export class TrendingNewsService
       case 'stackoverflow': return collectStackOverflow(this.fetcher);
       case 'github_rising': return collectGitHubRising(serviceDate, this.fetcher);
       case 'baidu': return { items: await fetchBaiduTrending(this.fetcher), retryAfterMs: null, retryAtMs: null };
+      case 'bilibili': return collectBilibili(this.fetcher);
+      case 'douban': return collectDouban(this.fetcher);
+      default: throw new Error('Source requires an authorized data connection');
     }
   }
 
@@ -656,6 +676,78 @@ export async function fetchBaiduTrending(fetcher: typeof fetch = globalThis.fetc
   const result = uniqueItems(items).sort((a, b) => a.sourceRank - b.sourceRank).slice(0, MAX_ITEMS_PER_BOARD);
   if (!result.length) throw new Error('public board has no valid ranked items');
   return result;
+}
+
+export async function fetchBilibiliTrending(fetcher: typeof fetch = globalThis.fetch): Promise<CollectedTrendingItem[]> {
+  return (await collectBilibili(fetcher)).items;
+}
+
+async function collectBilibili(fetcher: typeof fetch): Promise<CollectedBoardSnapshot> {
+  const result = await fetchOfficialJson(
+    'https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all',
+    ['api.bilibili.com'], {}, fetcher,
+  );
+  const raw = result.body;
+  if (!isRecord(raw) || raw.code !== 0 || !isRecord(raw.data) || !Array.isArray(raw.data.list)) {
+    // HTTP 200 can still carry a platform denial (-352/-412). Never solve a
+    // challenge, obtain guest cookies, or retry against another identity.
+    throw new UpstreamRetryError('Bilibili public ranking unavailable', Math.max(result.retryAfterMs ?? 0, 60 * 60_000), result.retryAtMs);
+  }
+  const items = uniqueItems(raw.data.list.slice(0, 20).flatMap((value, index): CollectedTrendingItem[] => {
+    if (!isRecord(value) || typeof value.bvid !== 'string' || !/^BV[A-Za-z0-9]{10}$/.test(value.bvid)) return [];
+    const title = cleanExternalTitle(value.title);
+    if (!title) return [];
+    const views = isRecord(value.stat) ? positiveInteger(value.stat.view) : null;
+    return [{ sourceItemId: value.bvid, sourceRank: index + 1, title,
+      originalUrl: `https://www.bilibili.com/video/${value.bvid}/`,
+      heatText: views === null ? null : `${views.toLocaleString('zh-CN')} 次播放`, publishedAt: unixDate(value.pubdate) }];
+  })).slice(0, MAX_ITEMS_PER_BOARD);
+  if (!items.length) throw new Error('Bilibili ranking has no valid items');
+  return { items, retryAfterMs: result.retryAfterMs, retryAtMs: result.retryAtMs };
+}
+
+export async function fetchDoubanChart(fetcher: typeof fetch = globalThis.fetch): Promise<CollectedTrendingItem[]> {
+  return (await collectDouban(fetcher)).items;
+}
+
+async function collectDouban(fetcher: typeof fetch): Promise<CollectedBoardSnapshot> {
+  const response = await fetcher('https://movie.douban.com/chart', {
+    headers: { Accept: 'text/html', 'User-Agent': 'MomoCompany-Trending/1.0 (+https://zbrshyyzxx.top)' },
+    redirect: 'manual', signal: AbortSignal.timeout(8_000),
+  });
+  const retry = retryDirective(response);
+  if (!response.ok) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new UpstreamRetryError(`Douban public chart returned HTTP ${response.status}`, retry.retryAfterMs, retry.retryAtMs);
+  }
+  if (!/^text\/html(?:\s*;|$)/i.test(response.headers.get('content-type') ?? '')) {
+    await response.body?.cancel().catch(() => undefined);
+    throw new Error('Douban public chart was not HTML');
+  }
+  const html = await readLimitedText(response, MAX_JSON_BYTES);
+  // Remove inert scripts/comments before finding the one explicitly named
+  // section. Do not evaluate scripts or collect adjacent, differently ranked lists.
+  const document = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+  const heading = /<h2\b[^>]*>\s*豆瓣新片榜[^<]*<\/h2\s*>/i.exec(document);
+  if (!heading) throw new Error('Douban new-release chart section missing');
+  const afterHeading = document.slice(heading.index + heading[0].length);
+  const section = afterHeading.split(/<h2\b|<div\s+class=["']aside["']/i, 1)[0];
+  const rows = [...section.matchAll(/<tr\b[^>]*class=["']item["'][^>]*>([\s\S]*?)<\/tr\s*>/gi)].slice(0, 20);
+  const items = uniqueItems(rows.flatMap((row, index): CollectedTrendingItem[] => {
+    const anchor = row[1].match(/<a\b[^>]*class=["']nbg["'][^>]*>/i)?.[0];
+    if (!anchor) return [];
+    const href = anchor.match(/\bhref\s*=\s*(["'])(.*?)\1/i)?.[2];
+    const title = cleanExternalTitle(anchor.match(/\btitle\s*=\s*(["'])(.*?)\1/i)?.[2]);
+    const originalUrl = safeSourceUrl(href, ['movie.douban.com']);
+    if (!title || !originalUrl || new URL(originalUrl).hostname !== 'movie.douban.com') return [];
+    const subject = /^\/subject\/(\d{1,18})\/$/.exec(new URL(originalUrl).pathname);
+    if (!subject || new URL(originalUrl).search) return [];
+    const rating = row[1].match(/<span\b[^>]*class=["']rating_nums["'][^>]*>\s*(\d(?:\.\d)?|10(?:\.0)?)\s*<\/span>/i)?.[1];
+    return [{ sourceItemId: subject[1], sourceRank: index + 1, title, originalUrl,
+      heatText: rating ? `${rating} 分（豆瓣）` : null, publishedAt: null }];
+  })).slice(0, MAX_ITEMS_PER_BOARD);
+  if (!items.length) throw new Error('Douban chart has no valid items');
+  return { items, retryAfterMs: retry.retryAfterMs, retryAtMs: retry.retryAtMs };
 }
 
 async function fetchOfficialJson(

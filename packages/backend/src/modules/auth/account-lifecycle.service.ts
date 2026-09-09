@@ -56,6 +56,8 @@ import { AuthEmailOutboxService } from './auth-email-outbox.service';
 import { AuthSensitiveDataService } from './auth-sensitive-data.service';
 import { assertFeatureEnabled } from './auth-security-validation';
 import { DUMMY_PASSWORD_HASH } from './password.util';
+import { cleanupOfficeHubUser } from '../community/office-hub/office-hub.cleanup';
+import { cleanupDemonTowerExpansionUser } from '../community/demon-tower/demon-tower-expansion-cleanup';
 
 const COOLING_OFF_MS = 7 * 24 * 60 * 60_000;
 const PUMP_INTERVAL_MS = 60_000;
@@ -582,6 +584,11 @@ export class AccountLifecycleService
           { grantedByUserId: null },
         );
         await this.anonymizeRail(manager, user, now);
+        await cleanupOfficeHubUser(manager, user.id);
+        await cleanupDemonTowerExpansionUser(manager, user.id, user.publicId);
+        await manager.query('DELETE FROM tower_defense_runs WHERE user_id=$1', [user.id]);
+        await manager.query('DELETE FROM tower_defense_profiles WHERE user_id=$1', [user.id]);
+        await manager.query('UPDATE tower_defense_daily_awards SET user_id=NULL WHERE user_id=$1', [user.id]);
         // Account erasure is a soft deletion, so FK cascades alone cannot
         // remove private game state. Keep aggregate world/financial history,
         // but erase this person's saves, action receipts and ranked identity.

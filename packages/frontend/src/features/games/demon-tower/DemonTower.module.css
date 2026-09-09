@@ -300,3 +300,9 @@
   .attribute { grid-template-columns: 32px minmax(0, 1fr) 38px 44px; gap: 7px; }
   .battleHeader, .panelHeading { flex-wrap: wrap; }
 }
+.page[data-skin='ledger'] { --tower-accent: #426075; filter: saturate(.28); background: #f5f7f9; }
+.page[data-skin='memo'] { --tower-accent: #5c635a; filter: saturate(.12); background: #fffef9; }
+.page[data-skin='ledger'] svg, .page[data-skin='memo'] svg { opacity: .55; }
+.page[data-skin='ledger'] .panel, .page[data-skin='memo'] .panel { box-shadow: none; border-radius: 5px; }
+.page[data-arena-skin='true'] .heading { border-left: 3px solid #a58a55; padding-left: 12px; }
+.page[data-expanded='true'] .tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); }

@@ -5,6 +5,7 @@ import type { ArcadeGameKey, PlayCreateInput, PlayRoomList, PlayRoomSummary } fr
 import { communityGameErrorMessage, communityGameRoomsApi, createPlayRequestId } from '../../../api/community-game-rooms';
 import { getCommunitySessionGeneration } from '../../../api/community-http';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
+import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
 import { GAME_NAMES, gameKeyFrom, ROOM_STATUS, usePlayCatalog } from './play-ui-state';
 import styles from './GameRooms.module.css';
 
@@ -68,6 +69,7 @@ export function CommunityGameRoomsPage(): JSX.Element {
   };
   return <section aria-label="玩家建房专区"><div className={styles.sectionHeading}><div><span className={styles.eyebrow}>TEAM SESSIONS</span><h1>玩家建房</h1><p>六款游戏都能由玩家建房。经典棋盘采用同题竞速、独立操作；你画我猜和谁是卧底实时协作。</p></div></div><nav className={styles.tabs} aria-label="小游戏模式"><Link to="/games">单机挑战</Link><Link to="/games/rooms" aria-current="page">玩家建房</Link></nav>
     <p className={styles.info}><Link to="/games/rail">轨道难题 · 3–9 人 / 可观战 →</Link></p>
+    {COMMUNITY_FEATURE_FLAGS.paperArena && <p className={styles.info}><Link to="/games/ballpoint-breach/arena">纸上突围 · 红蓝对战 · 4–8 席 / AI 补齐 →</Link></p>}
     {!userId ? <p className={styles.info}><Link to="/login">登录账号</Link>后可查看房间、邀请同事与参加日榜挑战。</p> : <>
       {page?.activeRoom ? <p className={styles.info}>你有一个{ROOM_STATUS[page.activeRoom.status]}的赛局：<Link to={`/games/rooms/${page.activeRoom.id}`}>{page.activeRoom.title} · 返回房间 →</Link></p> : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}

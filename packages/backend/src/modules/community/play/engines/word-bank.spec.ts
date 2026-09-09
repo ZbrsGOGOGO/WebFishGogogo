@@ -124,12 +124,12 @@ describe('expanded word bank through the real play engine', () => {
     }
   });
 
-  it('naturally selects all 48 pairs for 3–8 people with exactly one private undercover and no new settlement rule', () => {
+  it('selects all 48 pairs with one undercover for 3–5 and two for 6–8, keeping private words and settlement boundaries', () => {
     for (const [pairIndex, seed] of coveringSeeds('undercover', 48)) {
       for (let count = 3; count <= 8; count += 1) {
         const state = create('undercover', PEOPLE.slice(0, count), 'room', NOW, seed);
         const u = state.undercover!; expect(u.pairIndex).toBe(pairIndex);
-        expect(Object.values(u.roles).filter((role) => role === 'undercover')).toHaveLength(1);
+        expect(Object.values(u.roles).filter((role) => role === 'undercover')).toHaveLength(count >= 6 ? 2 : 1);
         for (const person of PEOPLE.slice(0, count)) {
           const scoped = view(state, person.id, NOW);
           if (scoped.gameKey !== 'undercover') throw new Error('wrong board');

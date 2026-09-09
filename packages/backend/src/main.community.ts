@@ -5,6 +5,7 @@ import { NestFactory } from '@nestjs/core';
 
 import { CommunityAppModule } from './community-app.module';
 import { ChatWebSocketGateway } from './modules/chat/chat-websocket.gateway';
+import { PaperArenaGateway } from './modules/community/paper-arena/paper-arena.gateway';
 
 const bootstrapLogger = new Logger('CommunityBootstrap');
 
@@ -44,6 +45,7 @@ async function bootstrap(): Promise<void> {
     throw new Error('PORT must be an integer between 1 and 65535');
   }
   app.get(ChatWebSocketGateway).attach(app.getHttpServer());
+  app.get(PaperArenaGateway).attach(app.getHttpServer());
   await app.listen(port);
   bootstrapLogger.log(`Community API listening on port ${port}`);
 }

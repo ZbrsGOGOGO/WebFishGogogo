@@ -34,6 +34,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   farm: '种',
   games: '游',
   tools: '具',
+  officeHub: '司',
   towerDefense: '守',
   demonTower: '塔',
   leaderboards: '榜',

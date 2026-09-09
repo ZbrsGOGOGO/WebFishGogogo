@@ -8,3 +8,7 @@ export * from './rail-game';
 export * from './rail-rooms';
 export * from './demon-tower';
 export * from './community-progression';
+export * from './tower-defense-engine';
+export * from './tower-defense-campaign';
+export * from './office-hub';
+export * from './paper-arena';

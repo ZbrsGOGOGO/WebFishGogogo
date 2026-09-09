@@ -26,10 +26,13 @@ describe('community achievements, titles and VIP', () => {
     vi.spyOn(communityProgressionApi, 'refresh').mockResolvedValue({ newlyUnlocked: [], overview: overview() });
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
-  it('renders 12 actual milestones, private reads only, fixed gift explanation and no checkout', async () => {
+  it('renders the complete fixed milestone catalog, private reads only, fixed gift explanation and no checkout', async () => {
     const view = wrap(<CommunityAchievementsPage />);
     expect(await screen.findByRole('heading', { name: '第一批收获' })).toBeVisible();
-    expect(screen.getAllByRole('progressbar')).toHaveLength(12);
+    expect(screen.getAllByRole('progressbar')).toHaveLength(COMMUNITY_ACHIEVEMENTS.length);
+    expect(screen.getByRole('heading', { name: '第一次三星合成' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '职业晋升 · 大老板' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: '九层纪念' })).toBeVisible();
     expect(screen.getByText(/新注册账号不自动获赠/)).toBeVisible();
     expect(screen.getByText(/没有收费、购买或自动续费入口/)).toBeVisible();
     expect(communityProgressionApi.refresh).not.toHaveBeenCalled(); expect(communityProgressionApi.title).not.toHaveBeenCalled();

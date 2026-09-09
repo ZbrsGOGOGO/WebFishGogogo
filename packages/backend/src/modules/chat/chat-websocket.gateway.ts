@@ -107,6 +107,9 @@ export class ChatWebSocketGateway implements OnModuleDestroy {
       this.rejectUpgrade(socket, 400, 'Bad Request');
       return;
     }
+    // The separate team-arena gateway owns only this explicit path, including
+    // rejection while its flag is closed. Unknown socket paths still fail here.
+    if (url.pathname === '/ws/paper-arena') return;
     if (url.pathname !== '/ws/chat' || url.search !== '') {
       this.rejectUpgrade(socket, 404, 'Not Found');
       return;

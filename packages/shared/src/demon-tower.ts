@@ -40,8 +40,88 @@ export interface DemonTowerCatalog {
     lootGuaranteeEvery: number; attributeResetCooldownMs: number;
     resetTimezone: 'Asia/Shanghai'; rulesText: readonly string[] };
 }
-export interface DemonTowerOwnedWeapon { id: DemonTowerWeaponId; quality: number; spareCopies: number; star?: number; favor?: number; levelExempt?: boolean }
-export interface DemonTowerOwnedSkill { id: DemonTowerSkillId; quality: number; spareCopies: number; levelExempt?: boolean }
+export type DemonTowerAffix = 'critical' | 'dodge' | 'leech' | 'boss_damage' | 'penetration';
+export interface DemonTowerOwnedWeapon { id: DemonTowerWeaponId; quality: number; spareCopies: number; star?: number; favor?: number; levelExempt?: boolean; qualityExperience?: number; breakthrough?: number; affixes?: DemonTowerAffix[] }
+export interface DemonTowerOwnedSkill { id: DemonTowerSkillId; quality: number; spareCopies: number; levelExempt?: boolean; qualityExperience?: number; star?: number; favor?: number }
+export type DemonTowerLootSource = 'normal' | 'rift' | 'meditation' | 'boss_first' | 'boss_weekly' | 'weapon_box' | 'skill_box';
+export type DemonTowerSkin = 'field' | 'ledger' | 'memo';
+export interface DemonTowerExpansionView {
+  version: 1; skillPages: number; essences: number; weaponBoxes: number; weaponBoxPity: number;
+  riftsToday: number; meditationsToday: number; weeklyBossAttempts: number; week: string;
+  claimedBossFloors: number[]; passageTokens: number; titles: string[]; skin: DemonTowerSkin;
+  unlockedSkins: DemonTowerSkin[];
+  arena?: DemonTowerArenaView;
+  squadId?: string | null; squadReadyToday?: number;
+}
+export type DemonTowerArenaSkillId = `${'str' | 'spd' | 'agi' | 'def' | 'luck'}${1 | 2 | 3}`;
+export interface DemonTowerArenaSkillDefinition { id: DemonTowerArenaSkillId; name: string; attribute: DemonTowerAttribute; kind: 'active' | 'passive' | 'ultimate'; cost: number; requiredLevel: number; description: string }
+export const DEMON_TOWER_ARENA_SKILLS: readonly DemonTowerArenaSkillDefinition[] = [
+  { id: 'str1', name: '裂地斩', attribute: 'STR', kind: 'active', cost: 1, requiredLevel: 1, description: '2倍力量伤害，自身短暂减速。' },
+  { id: 'str2', name: '武道根基', attribute: 'STR', kind: 'passive', cost: 3, requiredLevel: 16, description: '力量+8，普通攻击伤害+10%。' },
+  { id: 'str3', name: '崩山绝式', attribute: 'STR', kind: 'ultimate', cost: 5, requiredLevel: 31, description: '3倍力量伤害，破防30%持续2回合。' },
+  { id: 'spd1', name: '疾影连刺', attribute: 'SPD', kind: 'active', cost: 1, requiredLevel: 1, description: '3段0.6倍速度伤害。' },
+  { id: 'spd2', name: '风步', attribute: 'SPD', kind: 'passive', cost: 3, requiredLevel: 16, description: '先手速度+12，闪避+15个百分点。' },
+  { id: 'spd3', name: '风驰绝式', attribute: 'SPD', kind: 'ultimate', cost: 5, requiredLevel: 31, description: '2.8倍速度伤害，并获得一回合先手。' },
+  { id: 'agi1', name: '毒刃', attribute: 'AGI', kind: 'active', cost: 1, requiredLevel: 1, description: '0.8倍敏捷伤害，随后2回合0.3倍敏捷毒伤。' },
+  { id: 'agi2', name: '幻身', attribute: 'AGI', kind: 'passive', cost: 3, requiredLevel: 16, description: '暴击+20、闪避+10个百分点。' },
+  { id: 'agi3', name: '万影归一', attribute: 'AGI', kind: 'ultimate', cost: 5, requiredLevel: 31, description: '2.8倍敏捷必中伤害。' },
+  { id: 'def1', name: '铁壁', attribute: 'DEF', kind: 'active', cost: 1, requiredLevel: 1, description: '获得1.5倍防御护盾，并反击0.8倍防御伤害。' },
+  { id: 'def2', name: '反震', attribute: 'DEF', kind: 'passive', cost: 3, requiredLevel: 16, description: '反射实际损失生命的30%，不递归。' },
+  { id: 'def3', name: '玄武绝式', attribute: 'DEF', kind: 'ultimate', cost: 5, requiredLevel: 31, description: '获得2倍防御护盾，恢复20%生命。' },
+  { id: 'luck1', name: '回春', attribute: 'LUCK', kind: 'active', cost: 1, requiredLevel: 1, description: '恢复20+2倍幸运生命并普通攻击。' },
+  { id: 'luck2', name: '闪转', attribute: 'LUCK', kind: 'passive', cost: 3, requiredLevel: 16, description: '每场一次致命伤20%概率保留1生命。' },
+  { id: 'luck3', name: '气运绝式', attribute: 'LUCK', kind: 'ultimate', cost: 5, requiredLevel: 31, description: '1—4倍幸运爆发，不使用压至1血机制。' },
+];
+export interface DemonTowerArenaReport { opponentPublicId: string; opponentName: string; outcome: 'victory' | 'defeat' | 'draw'; rounds: number; log: string[]; completedAt: number }
+export interface DemonTowerArenaView { enabled: boolean; rating: number; rank: '青铜' | '白银' | '黄金' | '妖王'; honor: number; skillPoints: number; learned: DemonTowerArenaSkillId[]; loadout: DemonTowerArenaSkillId[]; attemptsToday: number; winsToday: number; lastReport: DemonTowerArenaReport | null; skinUnlocked: boolean }
+export interface DemonTowerSocialView {
+  enabled: boolean; serverNow: number;
+  opponents: { publicId: string; displayName: string; level: number; rating: number; rank: DemonTowerArenaView['rank'] }[];
+  squads: DemonTowerSquadView[];
+}
+export interface DemonTowerSquadView { id: string; ownerPublicId: string | null; floor: number; status: 'waiting' | 'active' | 'victory' | 'defeat' | 'closed'; round: number; boss: { hp: number; maxHp: number; minions: number }; members: { publicId: string; displayName: string; ready: boolean; hp: number; maxHp: number; damage: number; claimed: boolean }[]; log: string[]; expiresAt: number }
+export const DEMON_TOWER_EXPANSION_RULES = {
+  riftCost: 3, riftsPerDay: 5, meditationCost: 2, meditationsPerDay: 10,
+  weeklyBossCost: 3, weeklyBossPerWeek: 3, weaponBoxSoul: 12, skillBoxSoul: 10,
+  starCharmSoul: 40, enlightenmentSoul: 35, selectionPages: 30,
+  /** Safe free adaptation: no paid currency, no destructive star downgrade. */
+  starSuccess: [0.8, 0.55, 0.3, 0.12] as readonly number[],
+} as const;
+export const DEMON_TOWER_AFFIXES: Record<DemonTowerAffix, { name: string; value: number; description: string }> = {
+  critical: { name: '会心', value: 0.04, description: '暴击率+4个百分点' },
+  dodge: { name: '轻身', value: 0.04, description: '闪避率+4个百分点' },
+  leech: { name: '汲取', value: 0.04, description: '直接伤害吸血4%' },
+  boss_damage: { name: '破阵', value: 0.08, description: '对首领直接伤害+8%' },
+  penetration: { name: '洞穿', value: 0.06, description: '忽略6%防御' },
+};
+export const DEMON_TOWER_ULTIMATES: Partial<Record<DemonTowerWeaponId, { name: string; description: string }>> = {
+  w4: { name: '真·镇魂归元', description: '每场首次普攻必中，追加一倍力量真实伤害，恢复追加实际伤害的30%。' },
+  w8: { name: '真·无影绝式', description: '每场首次普攻追加三段必中敏捷伤害，每段0.6倍敏捷。' },
+  w12: { name: '真·龙吟万象', description: '每场首次普攻对全部存活敌人追加1.2倍速度必中伤害，非首领停顿一次。' },
+  w16: { name: '真·不动金身', description: '每场开局增加2倍防御护盾，首次受到直接伤害完全抵消。' },
+  w20: { name: '真·混元改命', description: '每场首次普攻追加1.5倍幸运必中伤害，同时施加两回合20%破防。' },
+};
+export function demonTowerItemRarity(rarity: DemonTowerRarity, breakthrough = 0): DemonTowerRarity {
+  return DEMON_TOWER_RARITY_ORDER[Math.min(4, DEMON_TOWER_RARITY_ORDER.indexOf(rarity) + Math.max(0, Math.floor(breakthrough)))];
+}
+export function demonTowerQualityLimit(rarity: DemonTowerRarity, level: number): number {
+  const rank = DEMON_TOWER_RARITY_ORDER.indexOf(rarity);
+  const realm = Math.min(5, 1 + Math.floor((Math.max(1, level) - 1) / 15));
+  if (rank >= 2 && realm < rank + 1) return 0;
+  return Math.min(({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[rarity], realm === 1 ? 3 : realm === 2 ? 5 : realm === 3 ? 7 : 9);
+}
+/** Explicit design rubric (0–100 in each dimension), not an empirical DPS claim. */
+export function demonTowerStrengthRating(kind: 'weapon' | 'skill', id: string) {
+  const item = (kind === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS).find(entry => entry.id === id);
+  if (!item) return null;
+  const rank = DEMON_TOWER_RARITY_ORDER.indexOf(item.rarity);
+  const numeric = kind === 'weapon' ? Math.min(100, (item as DemonTowerWeaponDefinition).baseBonus / 23 * 100) : 25 + rank * 20;
+  const permanent = ['w8', 'w20', 's8', 's9', 's11', 's12'].includes(id) ? 95 : ['w13', 'w15', 'w16'].includes(id) ? 70 : 20 + rank * 10;
+  const utility = ['s13', 'w20'].includes(id) ? 100 : ['w4', 'w10', 'w12', 's15', 's16'].includes(id) ? 90 : 30 + rank * 12;
+  const breadth = ['s1', 's3', 's9', 's13', 'w15', 'w20'].includes(id) ? 95 : 60;
+  const score = Math.round(Math.round(numeric) * 0.35 + permanent * 0.25 + utility * 0.25 + breadth * 0.15);
+  return { numeric: Math.round(numeric), permanent, utility, breadth, score, tier: score >= 80 ? 0 : score >= 65 ? 1 : score >= 45 ? 2 : 3 };
+}
 export type DemonTowerInnateId = 'strength' | 'speed' | 'agility' | 'defense' | 'luck' | 'master' | 'shield' | 'feign';
 export interface DemonTowerGrowthView {
   rulesVersion: 2; pendingLegacyBattle: boolean; chosenAttribute: DemonTowerAttribute | null;
@@ -80,12 +160,14 @@ export interface DemonTowerCombatLog {
   text: string; amount?: number; targetId?: string;
 }
 export interface DemonTowerBattleView {
+  source?: 'rift' | 'weekly_boss';
   id: string; kind: 'explore'; floor: number; turn: number; roundLimit: number;
   player: DemonTowerCombatantView; enemies: DemonTowerCombatantView[];
   availableSkills: Array<{ id: DemonTowerSkillId; cooldownRemaining: number; usable: boolean }>;
   log: DemonTowerCombatLog[];
 }
 export interface DemonTowerBattleReport {
+  source?: 'rift' | 'weekly_boss';
   id: string; kind: 'explore' | 'boss'; floor: number; outcome: 'victory' | 'defeat' | 'fled' | 'timeout' | 'contributed';
   turns: number; damage: number; experience: number; materials: DemonTowerMaterials;
   /** Actual credited coins are returned by the service receipt, not this combat simulation. */
@@ -96,6 +178,7 @@ export interface DemonTowerDailyView {
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
+  expansion?: DemonTowerExpansionView;
   growth?: DemonTowerGrowthView;
   version: number; level: number; experience: number; experienceToNext: number; totalExperience: number;
   attributes: DemonTowerAttributes; effectiveAttributes: DemonTowerAttributes; unspentPoints: number;
@@ -142,6 +225,23 @@ export type DemonTowerAction =
   | { kind: 'reset_attributes'; payload: Record<string, never> }
   | { kind: 'choose_innate'; payload: { attribute: DemonTowerAttribute } }
   | { kind: 'upgrade'; payload: { itemType: 'weapon' | 'skill'; itemId: DemonTowerWeaponId | DemonTowerSkillId } }
+  | { kind: 'expedition'; payload: { mode: 'rift' | 'meditate' | 'weekly_boss' } }
+  | { kind: 'market'; payload: { offer: 'weapon_box' | 'skill_box' | 'enlightenment' | 'skill_selection' | 'recycle_quality'; itemId?: DemonTowerWeaponId | DemonTowerSkillId } }
+  | { kind: 'star_up'; payload: { itemType: 'weapon' | 'skill'; itemId: DemonTowerWeaponId | DemonTowerSkillId } }
+  | { kind: 'breakthrough'; payload: { itemId: DemonTowerWeaponId } }
+  | { kind: 'select_skin'; payload: { skin: DemonTowerSkin } }
+  | { kind: 'claim_boss_loot'; payload: { floor: number } }
+  | { kind: 'arena_enroll'; payload: { enabled: boolean } }
+  | { kind: 'arena_learn'; payload: { skillId: DemonTowerArenaSkillId } }
+  | { kind: 'arena_equip'; payload: { skills: DemonTowerArenaSkillId[] } }
+  | { kind: 'arena_challenge'; payload: { opponentPublicId: string } }
+  | { kind: 'honor_exchange'; payload: { offer: 'skin' | 'essence' | 'materials' } }
+  | { kind: 'squad_create'; payload: { floor: number } }
+  | { kind: 'squad_join'; payload: { squadId: string } }
+  | { kind: 'squad_leave'; payload: Record<string, never> }
+  | { kind: 'squad_ready'; payload: Record<string, never> }
+  | { kind: 'squad_step'; payload: Record<string, never> }
+  | { kind: 'squad_claim'; payload: Record<string, never> }
   | { kind: 'select_floor'; payload: { floor: number } }
   | { kind: 'challenge_boss'; payload: { floor: number } }
   | { kind: 'donate'; payload: { floor: number; material: 'ore' | 'clue'; amount: number } }
@@ -221,10 +321,20 @@ export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
   skill('s16', '崩山击', '伤害', 'active', '仙', 36, 4, '造成3倍力量伤害，并使目标防御降低30%，持续2回合。'),
 ];
 /** Conditional on receiving this item kind. Level filtering and guarantees are applied before normalization. */
-export function demonTowerLootPool(kind: 'weapon' | 'skill', level: number, minimum: DemonTowerRarity = '凡') {
+export const DEMON_TOWER_SOURCE_WEIGHTS: Record<DemonTowerLootSource, { weapon: Record<DemonTowerRarity, number>; skill: Record<DemonTowerRarity, number> }> = {
+  normal: DEMON_TOWER_LOOT_WEIGHTS,
+  rift: { weapon: { 凡: 0, 精: 30, 灵: 30, 仙: 25, 神: 15 }, skill: { 凡: 30, 精: 30, 灵: 25, 仙: 15, 神: 0 } },
+  meditation: { weapon: { 凡: 0, 精: 0, 灵: 0, 仙: 0, 神: 0 }, skill: { 凡: 30, 精: 30, 灵: 25, 仙: 15, 神: 0 } },
+  boss_first: { weapon: { 凡: 0, 精: 0, 灵: 60, 仙: 40, 神: 0 }, skill: { 凡: 0, 精: 0, 灵: 60, 仙: 40, 神: 0 } },
+  // Weight ×1.5 is normalized by the sampler: 40/30/20/15, not the inconsistent draft percentages.
+  boss_weekly: { weapon: { 凡: 0, 精: 40, 灵: 30, 仙: 20, 神: 15 }, skill: { 凡: 40, 精: 30, 灵: 20, 仙: 15, 神: 0 } },
+  weapon_box: { weapon: { 凡: 0, 精: 10, 灵: 35, 仙: 40, 神: 15 }, skill: DEMON_TOWER_LOOT_WEIGHTS.skill },
+  skill_box: { weapon: DEMON_TOWER_LOOT_WEIGHTS.weapon, skill: { 凡: 10, 精: 35, 灵: 40, 仙: 15, 神: 0 } },
+};
+export function demonTowerLootPool(kind: 'weapon' | 'skill', level: number, minimum: DemonTowerRarity = '凡', source: DemonTowerLootSource = 'normal') {
   const definitions = kind === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS;
   return DEMON_TOWER_RARITY_ORDER.filter(rarity => DEMON_TOWER_RARITY_ORDER.indexOf(rarity) >= DEMON_TOWER_RARITY_ORDER.indexOf(minimum))
-    .map(rarity => ({ rarity, weight: DEMON_TOWER_LOOT_WEIGHTS[kind][rarity], items: definitions.filter(item => item.rarity === rarity && item.dropLevel <= level) }))
+    .map(rarity => ({ rarity, weight: DEMON_TOWER_SOURCE_WEIGHTS[source][kind][rarity], items: definitions.filter(item => item.rarity === rarity && item.dropLevel <= level) }))
     .filter(group => group.weight > 0 && group.items.length > 0);
 }
 export function demonTowerItemDropPercent(kind: 'weapon' | 'skill', id: string, level: number): number {
@@ -286,12 +396,13 @@ export const DEMON_TOWER_CATALOG: DemonTowerCatalog = {
 };
 
 /** Display helper only. The server recomputes against locked, owned inventory. */
-export function demonTowerUpgradeCost(itemType: 'weapon' | 'skill', itemId: string, quality: number, spareCopies: number, level: number, levelExempt = false): DemonTowerUpgradeCost {
+export function demonTowerUpgradeCost(itemType: 'weapon' | 'skill', itemId: string, quality: number, spareCopies: number, level: number, levelExempt = false, expandedRarity?: DemonTowerRarity): DemonTowerUpgradeCost {
   const item = (itemType === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS).find((entry) => entry.id === itemId);
   const materials: DemonTowerMaterials = { ore: 0, herb: 0, soul: 0, clue: 0 };
   const next = quality + 1;
-  const requiredLevel = Math.max(levelExempt ? item?.legacyRequiredLevel ?? 120 : item?.requiredLevel ?? 120, Math.max(1, (next - 2) * 8));
-  const reason = !item || quality >= item.qualityCap ? 'max_quality' : level < requiredLevel ? 'level_required' : null;
+  const requiredLevel = expandedRarity ? [1, 16, 31, 46, 61].find(candidate => demonTowerQualityLimit(expandedRarity, candidate) >= next) ?? 121 : Math.max(levelExempt ? item?.legacyRequiredLevel ?? 120 : item?.requiredLevel ?? 120, Math.max(1, (next - 2) * 8));
+  const cap = expandedRarity ? ({ 凡: 3, 精: 5, 灵: 7, 仙: 9, 神: 9 })[expandedRarity] : item?.qualityCap ?? 0;
+  const reason = !item || quality >= cap ? 'max_quality' : level < requiredLevel ? 'level_required' : null;
   if (spareCopies < 1 && item) {
     if (itemType === 'weapon') materials.ore = 3 + next * 3;
     else materials.herb = 2 + next * 2;

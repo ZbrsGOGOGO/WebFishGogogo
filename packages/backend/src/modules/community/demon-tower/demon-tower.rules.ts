@@ -10,6 +10,7 @@ export const DEMON_TOWER_DAILY_ACTION_LIMIT = 2000;
 export const DEMON_TOWER_RANKING_RULES = '按服务器结算当日（北京时间00:00分日）的有效世界首领伤害总和排名；相同伤害先达到者优先。建设另计贡献，不折算伤害。每日最多3次讨伐，无有效伤害不发奖。每日00:05第一名获得100办公币，停机后补发且不重复。妖塔日常奖励另有每日200办公币上限；全程免费，无付费战力。';
 
 export function demonTowerEnabled(): boolean { return process.env.FEATURE_COMMUNITY_DEMON_TOWER_ENABLED === 'true'; }
+export function demonTowerExpansionEnabled(): boolean { return process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED === 'true'; }
 export function demonTowerWritesEnabled(): boolean { return demonTowerEnabled() && communityWritesEnabled(); }
 export function assertDemonTowerWrites(): void {
   assertCommunityWritesEnabled();
@@ -23,7 +24,7 @@ export function demonTowerAction(raw: unknown): DemonTowerActionInput {
   if (Object.keys(input).length !== 4 || Object.keys(input).some((key) => !['requestId', 'expectedVersion', 'kind', 'payload'].includes(key))) fail();
   if (typeof input.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.requestId)) fail();
   if (!Number.isInteger(input.expectedVersion) || (input.expectedVersion as number) < 0 || (input.expectedVersion as number) >= 2_147_483_647) fail();
-  const kinds = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward'];
+  const kinds = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'expedition', 'market', 'star_up', 'breakthrough', 'select_skin', 'claim_boss_loot', 'arena_enroll', 'arena_learn', 'arena_equip', 'arena_challenge', 'honor_exchange', 'squad_create', 'squad_join', 'squad_leave', 'squad_ready', 'squad_step', 'squad_claim'];
   if (typeof input.kind !== 'string' || !kinds.includes(input.kind)) fail();
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) fail();
   const pending: Array<{ item: unknown; depth: number }> = [{ item: input.payload, depth: 0 }];

@@ -59,7 +59,7 @@ export function CommunityGuildPanel({ onAssetsChanged }: CommunityGuildPanelProp
     }
   }
 
-  if (busy === 'load' || !overview) return <p role="status">正在加载帮派档案…</p>;
+  if (!overview) return error ? <div><p role="alert">{error}</p><Button disabled={Boolean(busy)} onClick={() => void refreshOverview()}>重新加载公司档案</Button></div> : <p role="status">正在加载帮派档案…</p>;
 
   const membership = overview.membership;
   return (

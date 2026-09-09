@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
-import { demonTowerItemDropPercent, demonTowerUpgradeCost, type DemonTowerAction, type DemonTowerCatalog, type DemonTowerLoadout, type DemonTowerProfileView, type DemonTowerSkillDefinition, type DemonTowerWeaponDefinition } from '@stealth-reader/shared';
+import { demonTowerItemDropPercent, demonTowerItemRarity, demonTowerUpgradeCost, type DemonTowerAction, type DemonTowerCatalog, type DemonTowerLoadout, type DemonTowerOwnedWeapon, type DemonTowerProfileView, type DemonTowerSkillDefinition, type DemonTowerWeaponDefinition } from '@stealth-reader/shared';
 
 import { DemonTowerLootGuide } from './DemonTowerGrowth';
 import { TowerIcon, TowerWeaponArt } from './DemonTowerArt';
@@ -54,7 +54,7 @@ export function DemonTowerInventory({ profile, catalog, disabled, onAction }: { 
     } else { setDraft({ ...draft, [slot]: weapon.id }); setLocalError(null); }
   };
   const currentUpgrade = upgrade ? (upgrade.type === 'weapon' ? profile.weapons : profile.skills).find((item) => item.id === upgrade.definition.id) : null;
-  const cost = upgrade && currentUpgrade ? demonTowerUpgradeCost(upgrade.type, upgrade.definition.id, currentUpgrade.quality, currentUpgrade.spareCopies, profile.level, currentUpgrade.levelExempt ?? !profile.growth) : null;
+  const cost = upgrade && currentUpgrade ? demonTowerUpgradeCost(upgrade.type, upgrade.definition.id, currentUpgrade.quality, currentUpgrade.spareCopies, profile.level, currentUpgrade.levelExempt ?? !profile.growth, profile.expansion ? demonTowerItemRarity(upgrade.definition.rarity, upgrade.type === 'weapon' ? (currentUpgrade as DemonTowerOwnedWeapon).breakthrough : 0) : undefined) : null;
   const materialsEnough = cost ? Object.entries(cost.materials).every(([key, value]) => profile.materials[key as keyof typeof profile.materials] >= value) : false;
   const main = catalog.weapons.find((weapon) => weapon.id === draft.mainHand);
   const artifact = catalog.weapons.find((weapon) => weapon.id === draft.artifact);
