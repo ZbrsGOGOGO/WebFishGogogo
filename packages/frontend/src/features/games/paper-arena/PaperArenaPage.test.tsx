@@ -60,6 +60,26 @@ describe('paper arena lobby and discreet room UI',()=>{
     Object.defineProperty(document,'pointerLockElement',{configurable:true,value:canvas});
     try{fireEvent.mouseDown(canvas,{button:2});fireEvent.mouseDown(canvas,{button:0});fireEvent.mouseUp(canvas,{button:2});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({fire:true,aim:false}));fireEvent.mouseUp(canvas,{button:0});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({fire:false,aim:false}));expect(onInput.mock.calls.some(([input])=>input.fire&&input.aim)).toBe(true);}finally{Object.defineProperty(document,'pointerLockElement',{configurable:true,value:null});}
   });
+  it('never requests pointer capture while the mouse is already locked',async()=>{
+    const onInput=vi.fn();render(<PaperArenaStage room={fixture()} enabled onInput={onInput} onError={vi.fn()}/>);await act(async()=>{await Promise.resolve();});
+    const canvas=screen.getByLabelText(/红蓝纸笔对战画面/),capture=vi.fn(()=>{throw new DOMException('Pointer capture is forbidden during pointer lock','InvalidStateError');});
+    Object.defineProperty(canvas,'setPointerCapture',{configurable:true,value:capture});Object.defineProperty(document,'pointerLockElement',{configurable:true,value:canvas});
+    try{fireEvent.pointerDown(canvas,{pointerId:1,pointerType:'mouse',button:2});fireEvent.mouseDown(canvas,{button:2});expect(capture).not.toHaveBeenCalled();expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({aim:true}));fireEvent.mouseUp(canvas,{button:2});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({aim:false}));}
+    finally{Object.defineProperty(document,'pointerLockElement',{configurable:true,value:null});}
+  });
+  it('tolerates a pointer-capture race without losing canvas or touch controls',async()=>{
+    const onInput=vi.fn();render(<PaperArenaStage room={fixture()} enabled onInput={onInput} onError={vi.fn()}/>);await act(async()=>{await Promise.resolve();});
+    const canvas=screen.getByLabelText(/红蓝纸笔对战画面/),capture=vi.fn(()=>{throw new DOMException('Pointer is no longer available','InvalidStateError');});Object.defineProperty(canvas,'setPointerCapture',{configurable:true,value:capture});
+    fireEvent.pointerDown(canvas,{pointerId:1,pointerType:'touch'});fireEvent.keyDown(canvas,{code:'Digit4'});expect(capture).toHaveBeenCalledTimes(1);expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({weapon:'sniper'}));
+    const aim=screen.getByRole('button',{name:'瞄准'});Object.defineProperty(aim,'setPointerCapture',{configurable:true,value:capture});fireEvent.pointerDown(aim,{pointerId:2,pointerType:'touch'});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({aim:true}));fireEvent.pointerUp(aim,{pointerId:2,pointerType:'touch'});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({aim:false}));expect(capture).toHaveBeenCalledTimes(2);
+  });
+  it('releases uncaptured touch actions outside their buttons on up, cancel and lost capture',async()=>{
+    vi.useFakeTimers();const onInput=vi.fn();render(<PaperArenaStage room={fixture()} enabled onInput={onInput} onError={vi.fn()}/>);await act(async()=>{await Promise.resolve();});
+    const dispatch=(target:Element,type:string,id:number)=>{const event=new Event(type,{bubbles:true});Object.defineProperty(event,'pointerId',{value:id});fireEvent(target,event);};
+    for(const [index,label]of ['前进','冲刺','瞄准'].entries()){const button=screen.getByRole('button',{name:label});Object.defineProperty(button,'setPointerCapture',{value:()=>{throw new DOMException('No capture','InvalidStateError');}});dispatch(button,'pointerdown',index+1);}
+    act(()=>vi.advanceTimersByTime(40));expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({forward:1,sprint:true,aim:true}));
+    dispatch(document.body,'pointerup',1);dispatch(document.body,'pointercancel',2);dispatch(document.body,'lostpointercapture',3);act(()=>vi.advanceTimersByTime(80));expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({forward:0,sprint:false,aim:false,fire:false,jump:false}));
+  });
   it('clears weapon, aim, jump and sprint on blur or disabled state and never catches chat typing',async()=>{
     vi.useFakeTimers();const onInput=vi.fn(),room=fixture();const rendered=render(<><input aria-label="聊天输入"/><PaperArenaStage room={room} enabled onInput={onInput} onError={vi.fn()}/></>);await act(async()=>{await Promise.resolve();});
     const canvas=screen.getByLabelText(/红蓝纸笔对战画面/);fireEvent.pointerDown(canvas,{pointerId:1,pointerType:'touch'});fireEvent.keyDown(canvas,{code:'Digit4'});fireEvent.keyDown(canvas,{code:'ShiftLeft'});fireEvent.keyDown(canvas,{code:'Space'});expect(onInput).toHaveBeenLastCalledWith(expect.objectContaining({weapon:'sniper',jump:true,sprint:true}));

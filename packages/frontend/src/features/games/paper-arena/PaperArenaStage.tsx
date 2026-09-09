@@ -5,6 +5,12 @@ import styles from './PaperArena.module.css';
 
 export type PaperArenaIntent=Omit<PaperArenaInput,'seq'>;
 export const PAPER_WEAPON_NAMES:Record<PaperWeaponId,string>={rifle:'步枪',shotgun:'霰弹枪',revolver:'左轮',sniper:'狙击枪',katana:'武士刀'};
+function capturePaperPointer(target:HTMLElement,pointerId:number):void{
+  // Firefox forbids pointer capture during mouse lock. Lock acquisition or a
+  // disappearing pointer can also race this check; in-element drag still works.
+  if(document.pointerLockElement)return;
+  try{target.setPointerCapture?.(pointerId);}catch{/* Pointer capture is optional, not input ownership. */}
+}
 export function arenaIntent(keys:Set<string>,look:{yaw:number;pitch:number},fire=false,reload=false,options:{weapon?:PaperWeaponId;aim?:boolean}={}):PaperArenaIntent{
   return {forward:Number(keys.has('KeyW')||keys.has('ArrowUp'))-Number(keys.has('KeyS')||keys.has('ArrowDown')),
     // Positive strafe is screen-left when yaw=0 (+Z), matching the server.
@@ -17,7 +23,7 @@ export function PaperArenaStage({room,enabled,onInput,onError}:{room:PaperArenaR
   const canvasRef=useRef<HTMLCanvasElement>(null),roomRef=useRef(room),enabledRef=useRef(enabled),sendRef=useRef(onInput),errorRef=useRef(onError);
   roomRef.current=room;enabledRef.current=enabled;sendRef.current=onInput;errorRef.current=onError;
   const keys=useRef(new Set<string>()),look=useRef({yaw:0,pitch:0}),activeRef=useRef(false),fireRef=useRef(false),reloadRef=useRef(false),aimRef=useRef(false),weaponRef=useRef<PaperWeaponId|undefined>(undefined);
-  const pointer=useRef<{id:number;x:number;y:number}|null>(null),graphicsFailed=useRef(false);
+  const pointer=useRef<{id:number;x:number;y:number}|null>(null),touchPointers=useRef(new Map<number,string>()),graphicsFailed=useRef(false);
   const [active,setActive]=useState(false),[graphicsError,setGraphicsError]=useState('');
   const rendererRef=useRef<import('./PaperArenaRenderer').PaperArenaRenderer|null>(null);
   const clearRef=useRef<()=>void>(()=>{}),emitRef=useRef<()=>void>(()=>{});
@@ -53,7 +59,7 @@ export function PaperArenaStage({room,enabled,onInput,onError}:{room:PaperArenaR
     const playable=()=>{const snapshot=roomRef.current;return enabledRef.current&&!graphicsFailed.current&&!document.hidden&&snapshot.status==='running'&&Boolean(snapshot.players.find(player=>player.id===snapshot.myPlayerId&&player.hp>0));};
     const emit=()=>{if(activeRef.current&&playable())sendRef.current(arenaIntent(keys.current,look.current,fireRef.current,reloadRef.current,{aim:aimRef.current,weapon:weaponRef.current}));};
     const clear=()=>{
-      keys.current.clear();fireRef.current=false;reloadRef.current=false;aimRef.current=false;weaponRef.current=undefined;pointer.current=null;activeRef.current=false;setActive(false);
+      keys.current.clear();touchPointers.current.clear();fireRef.current=false;reloadRef.current=false;aimRef.current=false;weaponRef.current=undefined;pointer.current=null;activeRef.current=false;setActive(false);
       sendRef.current(arenaIntent(new Set(),look.current));
       if(document.pointerLockElement===canvas)document.exitPointerLock?.();
     };
@@ -70,6 +76,12 @@ export function PaperArenaStage({room,enabled,onInput,onError}:{room:PaperArenaR
     const move=(event:MouseEvent)=>{if(!activeRef.current||!playable()||document.pointerLockElement!==canvas)return;look.current.yaw-=event.movementX*.0025;look.current.pitch=Math.max(-1.2,Math.min(1.2,look.current.pitch-event.movementY*.0025));};
     const mouseDown=(event:MouseEvent)=>{if(document.pointerLockElement!==canvas||!activeRef.current||!playable())return;if(event.button===0){fireRef.current=true;emit();}if(event.button===2){aimRef.current=true;emit();}};
     const mouseUp=(event:MouseEvent)=>{if(event.button===0&&fireRef.current){fireRef.current=false;emit();}if(event.button===2&&aimRef.current){aimRef.current=false;emit();}};
+    const releasePointer=(event:PointerEvent)=>{
+      if(pointer.current?.id===event.pointerId)pointer.current=null;
+      const code=touchPointers.current.get(event.pointerId);if(!code)return;
+      touchPointers.current.delete(event.pointerId);if([...touchPointers.current.values()].includes(code))return;
+      if(code==='fire')fireRef.current=false;else if(code==='aim')aimRef.current=false;else keys.current.delete(code);emit();
+    };
     let wheelAt=-Infinity;
     const wheel=(event:WheelEvent)=>{if(!interactive(event.target))return;event.preventDefault();if(!event.deltaY||performance.now()-wheelAt<120)return;wheelAt=performance.now();const player=roomRef.current.players.find(actor=>actor.id===roomRef.current.myPlayerId);const current=weaponRef.current??player?.weapon??'rifle';weaponRef.current=PAPER_ARENA_WEAPON_IDS[(PAPER_ARENA_WEAPON_IDS.indexOf(current)+(event.deltaY>0?1:4))%5];emit();};
     const visibility=()=>{if(document.hidden)clear();};
@@ -78,9 +90,10 @@ export function PaperArenaStage({room,enabled,onInput,onError}:{room:PaperArenaR
     const lockError=()=>errorRef.current('鼠标锁定不可用：可以按住画面拖动瞄准，使用下方操作按钮；Esc 释放输入。');
     const other=listenForOtherLocalGame('paper-arena',clear);
     window.addEventListener('keydown',down);window.addEventListener('keyup',up);window.addEventListener('mousemove',move);window.addEventListener('mousedown',mouseDown);window.addEventListener('mouseup',mouseUp);window.addEventListener('blur',clear);
+    for(const event of ['pointerup','pointercancel','lostpointercapture'] as const)window.addEventListener(event,releasePointer);
     canvas.addEventListener('wheel',wheel,{passive:false});document.addEventListener('visibilitychange',visibility);document.addEventListener('focusin',focus);document.addEventListener('pointerlockchange',lock);document.addEventListener('pointerlockerror',lockError);
     const timer=window.setInterval(()=>{if(!playable()){if(activeRef.current)clear();return;}emit();},40);
-    return()=>{clear();clearRef.current=()=>{};emitRef.current=()=>{};other();window.clearInterval(timer);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);window.removeEventListener('mousemove',move);window.removeEventListener('mousedown',mouseDown);window.removeEventListener('mouseup',mouseUp);window.removeEventListener('blur',clear);canvas.removeEventListener('wheel',wheel);document.removeEventListener('visibilitychange',visibility);document.removeEventListener('focusin',focus);document.removeEventListener('pointerlockchange',lock);document.removeEventListener('pointerlockerror',lockError);};
+    return()=>{clear();clearRef.current=()=>{};emitRef.current=()=>{};other();window.clearInterval(timer);window.removeEventListener('keydown',down);window.removeEventListener('keyup',up);window.removeEventListener('mousemove',move);window.removeEventListener('mousedown',mouseDown);window.removeEventListener('mouseup',mouseUp);window.removeEventListener('blur',clear);for(const event of ['pointerup','pointercancel','lostpointercapture'] as const)window.removeEventListener(event,releasePointer);canvas.removeEventListener('wheel',wheel);document.removeEventListener('visibilitychange',visibility);document.removeEventListener('focusin',focus);document.removeEventListener('pointerlockchange',lock);document.removeEventListener('pointerlockerror',lockError);};
   },[]);
   const canPlay=enabled&&alive&&!graphicsError&&room.status==='running';
   const activate=()=>{if(!canPlay||graphicsFailed.current)return;announceLocalGameForeground('paper-arena');activeRef.current=true;setActive(true);canvasRef.current?.focus({preventScroll:true});};
@@ -89,13 +102,13 @@ export function PaperArenaStage({room,enabled,onInput,onError}:{room:PaperArenaR
   const touchAction=(code:string,pressed:boolean)=>{if(pressed)activate();if(code==='fire')fireRef.current=pressed;else if(code==='aim')aimRef.current=pressed;else if(pressed)keys.current.add(code);else keys.current.delete(code);emitRef.current();};
   return <div className={styles.stage} data-exclusive-game-input="paper-arena">
     <canvas ref={canvasRef} tabIndex={0} aria-label="红蓝纸笔对战画面，点击接管，WASD 移动，鼠标瞄准，1 至 5 或滚轮切换武器，右键瞄准或格挡，空格跳跃，Shift 冲刺，R 装填，Esc 放开" onContextMenu={event=>event.preventDefault()}
-      onPointerDown={event=>{if(!canPlay)return;activate();if(event.pointerType==='mouse'&&event.button===0&&document.pointerLockElement!==event.currentTarget){try{void event.currentTarget.requestPointerLock?.()?.catch(()=>{});}catch{/* Drag-aim fallback. */}}pointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};event.currentTarget.setPointerCapture?.(event.pointerId);}}
+      onPointerDown={event=>{if(!canPlay)return;activate();if(event.pointerType==='mouse'&&event.button===0&&document.pointerLockElement!==event.currentTarget){try{void event.currentTarget.requestPointerLock?.()?.catch(()=>{});}catch{/* Drag-aim fallback. */}}pointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};capturePaperPointer(event.currentTarget,event.pointerId);}}
       onPointerMove={event=>{if(!activeRef.current||document.pointerLockElement===event.currentTarget||pointer.current?.id!==event.pointerId)return;const previous=pointer.current;look.current.yaw-=(event.clientX-previous.x)*.006;look.current.pitch=Math.max(-1.2,Math.min(1.2,look.current.pitch-(event.clientY-previous.y)*.006));pointer.current={id:event.pointerId,x:event.clientX,y:event.clientY};}}
       onPointerUp={()=>{pointer.current=null;}} onPointerCancel={()=>clearRef.current()}/>
     {scoped?<div className={styles.scope} aria-hidden="true" data-paper-scope="true"><div/></div>:<div className={styles.crosshair} aria-hidden="true">+</div>}
     <div className={styles.weaponBar} data-paper-touch="true" aria-label="武器选择">{PAPER_ARENA_WEAPON_IDS.map((id,index)=><button key={id} type="button" aria-label={`${index+1} ${PAPER_WEAPON_NAMES[id]}`} aria-pressed={me?.weapon===id} disabled={!canPlay} onPointerDown={event=>event.preventDefault()} onClick={()=>{activate();weaponRef.current=id;emitRef.current();}}><small>{index+1}</small> {PAPER_WEAPON_NAMES[id]}</button>)}</div>
     {graphicsError?<p className={styles.stageOverlay} role="alert">{graphicsError}</p>:room.status==='waiting'?<div className={styles.stageOverlay}><h2>双方待命</h2><p>房主开始后，空位由 AI 补齐。</p></div>:!alive&&room.status==='running'?<div className={styles.stageOverlay}><h2>整理中 · {Math.max(1,Math.ceil(((me?.respawnAt??0)-room.game.elapsedMs)/1000))} 秒</h2><p>随机安全点复活，回场后点击画面接管。</p></div>:room.status==='finished'?<div className={styles.stageOverlay}><h2>{room.game.winner==='draw'?'本轮平局':room.game.winner==='red'?'红组获胜':'蓝组获胜'}</h2><p>{room.game.scores.red} : {room.game.scores.blue} · 本场不发放办公币</p></div>:!active?<div className={styles.clickHint}>点击画面接管 · Esc 回到工作<br/>1–5 / 滚轮切换 · 右键瞄准 · 空格跳跃</div>:null}
     <div className={styles.hud}><span data-team={me?.team}>{me?.team==='red'?'红组':'蓝组'} · 耐久 {me?.hp??0}</span><strong role="status" aria-label="当前武器状态">{me?`${PAPER_WEAPON_NAMES[me.weapon]} · ${me.weapon==='katana'?'近战':`${me.ammo}/${PAPER_ARENA_WEAPONS[me.weapon].magazineSize} · 备用 ${me.reserve}`} ${phase}`:'待命'}</strong><small>{me&&me.protectedUntil>room.game.elapsedMs?'出生保护 · 开火后结束':''}</small></div>
-    <div className={styles.touchControls} data-paper-touch="true" aria-label="触控对战操作">{[['KeyW','前进'],['KeyA','左移'],['KeyS','后退'],['KeyD','右移'],['Space','跳跃'],['ShiftLeft','冲刺'],['aim',me?.weapon==='katana'?'格挡':'瞄准'],['fire','开火']].map(([code,label])=><button key={code} type="button" disabled={!canPlay} onPointerDown={event=>{event.preventDefault();touchAction(code!,true);event.currentTarget.setPointerCapture?.(event.pointerId);}} onPointerUp={()=>touchAction(code!,false)} onPointerCancel={()=>touchAction(code!,false)}>{label}</button>)}<button type="button" disabled={!canPlay||me?.weapon==='katana'} onPointerDown={event=>event.preventDefault()} onClick={()=>{activate();sendRef.current({...arenaIntent(keys.current,look.current,fireRef.current,false,{aim:aimRef.current,weapon:weaponRef.current}),reload:true});}}>装填</button></div>
+    <div className={styles.touchControls} data-paper-touch="true" aria-label="触控对战操作">{[['KeyW','前进'],['KeyA','左移'],['KeyS','后退'],['KeyD','右移'],['Space','跳跃'],['ShiftLeft','冲刺'],['aim',me?.weapon==='katana'?'格挡':'瞄准'],['fire','开火']].map(([code,label])=><button key={code} type="button" disabled={!canPlay} onPointerDown={event=>{event.preventDefault();touchPointers.current.set(event.pointerId,code!);touchAction(code!,true);capturePaperPointer(event.currentTarget,event.pointerId);}}>{label}</button>)}<button type="button" disabled={!canPlay||me?.weapon==='katana'} onPointerDown={event=>event.preventDefault()} onClick={()=>{activate();sendRef.current({...arenaIntent(keys.current,look.current,fireRef.current,false,{aim:aimRef.current,weapon:weaponRef.current}),reload:true});}}>装填</button></div>
   </div>;
 }
