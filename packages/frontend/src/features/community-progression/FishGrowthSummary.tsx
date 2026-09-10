@@ -14,7 +14,7 @@ export function FishGrowthSummary({ initial, compact = false }: { initial?: Fish
   }, [owner]);
   const current = live && live.owner === owner && (!initial || live.progress.experience >= initial.experience) ? live.progress : initial;
   if (!current) return null;
-  if (compact) return <Link to="/achievements" className={styles.fishCompact}>摸鱼指数 <strong>{current.experience.toLocaleString('zh-CN')}</strong> · {current.rank.label}</Link>;
+  if (compact) return <div><Link to="/achievements" className={styles.fishCompact}>成长指数 <strong>{current.experience.toLocaleString('zh-CN')}</strong> · 查看等级</Link><p>今日成长 +{current.todayExperience} / 360 点 · 有效停留 {Math.floor(current.activeSeconds / 60)} 分钟</p>{current.nextRank ? <progress className={styles.meter} aria-label="下一成长等级" max={current.nextRank.target} value={current.experience} /> : <p>已达最高等级</p>}</div>;
   return <section className={`${styles.card} ${styles.fishCard}`} aria-label="摸鱼指数">
     <div className={styles.status}><div><p className={styles.eyebrow}>工位水域 · 成长记录</p><h2>{current.rank.label}</h2></div><div><strong className={styles.fishScore}>{current.experience.toLocaleString('zh-CN')}</strong><span> 点摸鱼指数</span></div></div>
     <p>今日 +{current.todayExperience} / 360 点 · 累计有效停留 {Math.floor(current.activeSeconds / 60)} 分钟，其中游戏页面活跃 {Math.floor(current.gameSeconds / 60)} 分钟</p>

@@ -67,6 +67,29 @@ describe('DeskPlantService and FeedService integration', () => {
     process.env = originalEnv;
   });
 
+  it('reads exact daily office-coin income/spend at Shanghai midnight without mutation or another account leakage', async () => {
+    now = new Date('2026-09-10T17:00:00Z'); // Sep 11 01:00, before the separate farm 05:00 cutoff.
+    const user = await activeUser('daily-a@example.com', 'Daily A');
+    const other = await activeUser('daily-b@example.com', 'Daily B');
+    const ledger = dataSource.getRepository(WalletLedger);
+    async function entry(userId: string, delta: string, date: string, currency = 'office_coin') {
+      await ledger.save({ userId, delta, currency, balanceAfter: '1000', sourceType: 'synthetic', sourceId: randomUUID(), reason: 'test', idempotencyKey: randomUUID(), createdAt: new Date(date) });
+    }
+    await entry(user.id, '100', '2026-09-10T16:00:00Z');
+    await entry(user.id, '-30', '2026-09-10T16:30:00Z');
+    await entry(user.id, '999', '2026-09-10T15:59:59.999Z');
+    await entry(user.id, '888', '2026-09-11T16:00:00Z');
+    await entry(user.id, '777', '2026-09-10T16:10:00Z', 'inspiration');
+    await entry(other.id, '500', '2026-09-10T16:20:00Z');
+    const count = await ledger.count();
+    expect(await plants.dailyWallet(user.id)).toMatchObject({ date: '2026-09-11', income: '100', spent: '30', timeZone: 'Asia/Shanghai' });
+    expect(await ledger.count()).toBe(count);
+    expect(await dataSource.getRepository(WalletBalance).count()).toBe(0);
+    await dataSource.getRepository(User).update(user.id, { accountStatus: 'suspended' });
+    await expect(plants.dailyWallet(user.id)).rejects.toThrow('Active account required');
+    await expect(plants.dailyWallet(randomUUID())).rejects.toThrow('Active account required');
+  });
+
   it('uses a 30-second first cycle and replays harvest without duplicate rewards', async () => {
     const user = await activeUser('plant@example.com', 'Plant');
     const initial = await plants.overview(user.id);

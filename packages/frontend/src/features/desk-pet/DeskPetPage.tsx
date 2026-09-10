@@ -3,9 +3,17 @@ import { useDeskPet } from './DeskPetContext';
 import { PetAppearance } from './PetAppearance';
 import { PET_STYLES, preparePetImage, type PetPreset } from './pet-model';
 import styles from './DeskPet.module.css';
+import { PetImageEditor } from './PetImageEditor';
+import { exportPet, importPet } from './pet-backup';
+import type { PetPreferences } from './pet-model';
 
 export function DeskPetPage() {
+  const { owner } = useDeskPet();
+  return <DeskPetEditor key={owner} />;
+}
+function DeskPetEditor() {
   const { prefs, update, clear, storageError, owner } = useDeskPet();
+  const [editing, setEditing] = useState(false), [pending, setPending] = useState<PetPreferences | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirmClear, setConfirmClear] = useState(false);
   const generation = useRef(0);
   useEffect(() => () => { generation.current++; }, []);
@@ -18,11 +26,26 @@ export function DeskPetPage() {
     } catch (err) { if (token === generation.current) setError(err instanceof Error ? err.message : '图片处理失败，请重试。'); }
     finally { if (token === generation.current) setBusy(false); }
   };
+  const restore = async (file?: File): Promise<void> => {
+    if (!file) return;
+    const token = ++generation.current; setBusy(true); setError(''); setPending(null);
+    try { const imported = await importPet(file); if (generation.current === token) setPending(imported); }
+    catch (e) { if (generation.current === token) setError(e instanceof Error ? e.message : '导入失败'); }
+    finally { if (generation.current === token) setBusy(false); }
+  };
+  const download = (): void => {
+    let url: string | undefined;
+    try {
+      url = URL.createObjectURL(new Blob([exportPet(prefs)], { type: 'application/json' }));
+      const link = document.createElement('a'); link.href = url; link.download = 'desk-buddy-backup.json'; document.body.append(link); link.click(); link.remove();
+      const toRevoke = url; window.setTimeout(() => URL.revokeObjectURL(toRevoke), 1000);
+    } catch { if (url) URL.revokeObjectURL(url); setError('下载未能启动，请检查浏览器下载权限。'); }
+  };
   return <section className={styles.page} aria-labelledby="desk-pet-heading">
     <header className={styles.pageHeader}><span className={styles.eyebrow}>DESK BUDDY / 工位小陪伴</span><h1 id="desk-pet-heading">领一个工位搭子</h1><p>带上喜欢的照片，给平平无奇的工位添一点小表情。</p><span className={styles.badge}>完全免费 · 无声陪伴 · 图片不上传</span></header>
     <div className={styles.editor}>
       <section className={styles.previewCard} aria-label="搭子实时预览">
-        <div className={styles.previewDesk}><span className={styles.deskNote}>今日待办<br/>☑ 好好工作<br/>☑ 适当摸鱼</span><PetAppearance prefs={prefs} preview /><span className={styles.deskLine} /></div>
+        <div className={styles.previewDesk}><span className={styles.deskNote}>今日待办<br/>☑ 好好工作<br/>☑ 适当休息</span><PetAppearance prefs={prefs} preview /><span className={styles.deskLine} /></div>
         <h2>{prefs.name.trim() || '摸摸'}</h2><p>{PET_STYLES.find(s => s.id === prefs.style)?.description}</p>
         <button type="button" className={styles.primary} disabled={owner === 'unavailable'} onClick={() => update({ enabled: true, collapsed: false })}>{prefs.enabled ? '召回桌宠' : '领养到我的工位'}</button>
         <p className={styles.small}>{prefs.enabled ? prefs.collapsed ? '已收起，点召回即可重新出现。' : '已领养，可在页面角落拖动、摸头和喂食。' : '默认不显示，领养后才会出现在页面角落。'}</p>
@@ -35,6 +58,8 @@ export function DeskPetPage() {
         <p className={styles.small}>PNG / JPG / 静态 WebP，最多 4 MB、1600 万像素，单边不超过 4096。透明 PNG 更像贴纸；不会自动抠图或 AI 重绘。像素风对自定义图片进行 32 × 32 缩绘，内置搭子保留矢量轮廓。</p>
         {busy ? <p role="status">正在本机处理图片…</p> : null}
         {error ? <p className={styles.error} role="alert">{error}</p> : null}
+        {prefs.image && !editing ? <button type="button" disabled={busy} onClick={() => setEditing(true)}>裁剪与擦除背景</button> : null}
+        {editing && prefs.image ? <PetImageEditor key={prefs.image} image={prefs.image} onApply={images => { update(images); setEditing(false); }} onCancel={() => setEditing(false)} /> : null}
         <h2>02 / 换个风格</h2>
         <div className={styles.styleGrid}>{PET_STYLES.map(style => <button key={style.id} type="button" aria-pressed={prefs.style === style.id} onClick={() => update({ style: style.id })}><PetAppearance prefs={{ ...prefs, style: style.id, size: 54 }} preview /><strong>{style.label}</strong><small>{style.description}</small></button>)}</div>
         <h2>03 / 一起上班</h2>
@@ -43,9 +68,14 @@ export function DeskPetPage() {
         <label className={styles.check}><input type="checkbox" checked={prefs.quiet} onChange={event => update({ quiet: event.target.checked })} />安静模式：关闭装饰动画与升级祝贺，点击仍会回应</label>
         <label className={styles.check}><input type="checkbox" checked={prefs.focusMode} onChange={event => update({ focusMode: event.target.checked })} />专注避让：在聊天、私聊、游戏及纸上突围小窗打开时隐藏</label>
         <div className={styles.controls}><button type="button" onClick={() => update({ position: null })}>位置归位</button><button type="button" disabled={!prefs.enabled} onClick={() => update({ collapsed: true })}>暂时收起</button><button type="button" disabled={!prefs.enabled} onClick={() => update({ enabled: false })}>关闭桌宠</button></div>
+        <h2>04 / 本机备份</h2>
+        <button type="button" disabled={busy || owner === 'unavailable'} onClick={download}>导出桌宠备份</button>
+        <label className={styles.upload}>导入桌宠备份<input type="file" accept="application/json,.json" disabled={busy || owner === 'unavailable'} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; void restore(file); }} /></label>
+        <p className={styles.small}>备份包含图片和设置，不含账号、聊天或资产。可自行传到另一设备；请妥善保管，不要公开分享私人照片。</p>
+        {pending ? <div className={styles.imageEditor}><PetAppearance prefs={pending} preview /><p>将用「{pending.name}」覆盖当前桌宠设置和图片。导入后默认关闭，需手动召回。</p><div className={styles.controls}><button type="button" onClick={() => { update(pending); setPending(null); setEditing(false); }}>确认导入备份</button><button type="button" onClick={() => setPending(null)}>取消导入</button></div></div> : null}
         {storageError ? <p role="alert" className={styles.error}>{storageError}</p> : null}
         <p className={styles.small}>设置会自动保存在当前浏览器。{owner === 'guest' ? '当前是游客档案，登录后使用独立账号档案。' : '账号之间使用独立本机档案。'}不跨设备同步；清除浏览器网站数据会丢失，公共电脑上的本地数据并非加密保险箱。</p>
-        <details><summary>互动、隐私与清除</summary><p>点击摸头，按钮喂食、睡觉；拖动或聚焦搭子后用方向键移动，Esc 收起。无音效、无后台挂机、无额外奖励，不消耗办公币。已有摸鱼指数升级时可收到祝贺，不替你佩戴称号。</p><p>仅保存缩小重绘后的 PNG 与设置，不保存原图、文件名或拍摄信息，不发送到服务器或第三方。处理照片时不要使用敏感材料。离开网站后桌宠不会显示；本机数据需要在每台设备分别清除。</p>
+        <details><summary>互动、隐私与清除</summary><p>点击摸头，按钮喂食、睡觉；拖动靠近边缘自动吸附，或聚焦搭子后用方向键移动，Esc 收起。输入文字时暂时避让。无音效、无后台挂机、无额外奖励，不消耗办公币。成长等级提升时可收到祝贺，不替你佩戴称号。</p><p>仅保存缩小重绘后的 PNG 与设置，不保存原图、文件名或拍摄信息，不发送到服务器或第三方。处理照片时不要使用敏感材料。离开网站后桌宠不会显示；本机数据需要在每台设备分别清除。</p>
           {confirmClear ? <div className={styles.controls}><span>删除此档案的图片和全部桌宠设置？无法撤销。</span><button type="button" disabled={busy} onClick={() => { generation.current++; clear(); setConfirmClear(false); }}>确认清除桌宠数据</button><button type="button" onClick={() => setConfirmClear(false)}>取消</button></div> : <button type="button" disabled={busy} onClick={() => setConfirmClear(true)}>清除本机桌宠数据</button>}
         </details>
       </section>

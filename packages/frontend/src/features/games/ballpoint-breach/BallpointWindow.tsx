@@ -8,8 +8,8 @@ import './ballpoint-window.css';
 
 // Neither Three.js nor the runtime is imported until a user opens the window.
 const LazyGame = lazy(() => import('./BallpointBreachGame'));
-interface WindowContext { openWindow: () => void; coverWindow: () => void; isOpen: boolean }
-const BallpointWindowContext = createContext<WindowContext>({ openWindow: () => undefined, coverWindow: () => undefined, isOpen: false });
+interface WindowContext { openWindow: () => void; coverWindow: () => void; isOpen: boolean; isPlaying: boolean }
+const BallpointWindowContext = createContext<WindowContext>({ openWindow: () => undefined, coverWindow: () => undefined, isOpen: false, isPlaying: false });
 export const useBallpointWindow = () => useContext(BallpointWindowContext);
 
 /** One instance above all community layouts, including tools/game routes. */
@@ -62,7 +62,8 @@ export function BallpointWindowProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', hide);
     };
   }, [coverWindow]);
-  const value = useMemo(() => ({ openWindow, coverWindow, isOpen }), [openWindow, coverWindow, isOpen]);
+  const isPlaying = isOpen && !covered && !minimized && status === 'playing';
+  const value = useMemo(() => ({ openWindow, coverWindow, isOpen, isPlaying }), [openWindow, coverWindow, isOpen, isPlaying]);
 
   return <BallpointWindowContext.Provider value={value}>
     {children}

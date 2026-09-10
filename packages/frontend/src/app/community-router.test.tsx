@@ -45,7 +45,7 @@ describe('community mode routes', () => {
     expect(within(systemNavigation).getByRole('link', { name: '工位塔防' })).toHaveAttribute('href', '/tower-defense');
     expect(within(systemNavigation).getByRole('link', { name: '小游戏' })).toHaveAttribute('href', '/games');
     expect(within(systemNavigation).getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
-    expect(within(systemNavigation).getByRole('link', { name: '我的主页' })).toHaveAttribute('href', '/me');
+    expect(within(systemNavigation).getByRole('link', { name: '我的工作台' })).toHaveAttribute('href', '/me');
     for (const label of ['热点新闻', '经验交流', '农场', '投喂', '邀请', '好友']) {
       expect(systemNavigation).not.toHaveTextContent(label);
     }

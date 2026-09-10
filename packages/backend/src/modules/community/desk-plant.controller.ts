@@ -25,6 +25,11 @@ import { DeskPlantService } from './desk-plant.service';
 export class DeskPlantController {
   constructor(private readonly plants: DeskPlantService) {}
 
+  @Get('wallet-daily')
+  dailyWallet(@CurrentUserId() userId: string) {
+    return this.plants.dailyWallet(userId);
+  }
+
   @Get()
   overview(@CurrentUserId() userId: string) {
     return this.plants.overview(userId);

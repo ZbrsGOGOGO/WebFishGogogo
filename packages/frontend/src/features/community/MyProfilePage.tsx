@@ -18,6 +18,7 @@ import { communityRequestErrorMessage } from './request-error';
 import { getCommunitySessionGeneration } from '../../api/community-http';
 import { CommunityHonors, CommunityTitleBadge } from '../community-progression/CommunityTitleBadge';
 import { CommunityProgressionCard } from '../community-progression/CommunityProgressionCard';
+import { WorkspaceOverview } from './WorkspaceOverview';
 
 export function CommunityMyProfilePage(): JSX.Element {
   const owner = useCommunityAuthStore((state) => state.user?.publicId);
@@ -120,8 +121,8 @@ function MyProfileWorkspace(): JSX.Element {
   return (
     <main className={styles.page}>
       <PageHeader
-        title="我的主页"
-        subtitle="邮箱、身份核验信息和登录设备始终不会出现在公开主页。"
+        title="我的工作台"
+        subtitle="账户、成长与常用入口，一处查看。此工作台仅自己可见。"
         actions={(
           <div className={styles.inlineActions}>
             <Link to="/settings/privacy">隐私设置</Link>
@@ -133,6 +134,9 @@ function MyProfileWorkspace(): JSX.Element {
       {loading ? <p role="status">正在加载主页…</p> : null}
       {error ? <p className={styles.error} role="alert">{error}</p> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
+
+      {authUser?.publicId ? <WorkspaceOverview owner={authUser.publicId} /> : null}
+      {COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <CommunityProgressionCard /> : null}
 
       <div className={styles.twoColumn}>
         <Card>
@@ -174,16 +178,15 @@ function MyProfileWorkspace(): JSX.Element {
       </div>
 
       <div className={styles.grid}>
-        <Card title="摸鱼升职记 · 工位塔防">
+        <Card title="工位塔防">
           <p>
-            你的系统头像会成为场上唯一的工位守卫；当前塔防最高分只保存在这台设备。
+            你的系统头像会成为场上唯一的工位守卫；战役进度由服务器保存，本地练习记录仅保存在这台设备。
           </p>
           <Link to="/tower-defense">带角色守工位</Link>
         </Card>
         <Card title="工位绿植"><p>{plantSummary}</p></Card>
         <Card title="荣誉"><p>{profile?.honors?.length ? <CommunityHonors honors={profile.honors} /> : '还没有获得荣誉'}</p>{COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <Link to="/achievements">管理成就与称号</Link> : null}</Card>
       </div>
-      {COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <CommunityProgressionCard /> : null}
     </main>
   );
 }

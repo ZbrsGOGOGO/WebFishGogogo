@@ -64,6 +64,11 @@
 .restore { position: fixed; z-index: 90; right: 10px; bottom: calc(90px + env(safe-area-inset-bottom)); font-size: 11px; padding: 6px 9px; text-decoration: none; }
 .unsaved { display: block; background: #fff4db; color: #845b1d; padding: 2px; font-size: 10px; }
 .reaction { display: inline-flex; animation: boop .35s ease-out; }
+.mood { position: absolute; right: 0; top: -5px; font-size: 24px; color: #af5670; transform: rotate(12deg); }
+.mood[data-mood="eating"] { top: auto; bottom: 0; transform: rotate(-12deg); }
+.imageEditor { border: 1px solid #d6dfd7; border-radius: 12px; padding: 14px; margin: 14px 0; }
+.editCanvas { display: block; width: min(100%, 256px); height: auto; margin: 0 auto; touch-action: none; background: repeating-conic-gradient(#e4e8e2 0 25%, #fff 0 50%) 0 / 16px 16px; border: 1px solid #bfcabc; }
+.editorFields { min-width: 0; border: 0; padding: 0; margin: 0; }
 @keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -4px; } }
 @keyframes boop { 50% { scale: 1.08 .94; } }
 @media (max-width: 720px) { .editor { grid-template-columns: minmax(0, 1fr); gap: 16px; } .previewCard { position: static; } .previewDesk { height: 160px; } .previewCard, .settings { padding: 18px; } .page { padding-bottom: 100px; } }

@@ -1,0 +1,15 @@
+.overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 20px 0; }
+.metric { background: #fbfcfa; border: 1px solid #dce5df; border-radius: 16px; padding: 20px; min-width: 0; }
+.metric h2 { font-size: 13px; font-weight: 500; color: #65746e; margin: 0 0 12px; }
+.metric strong { display: block; font-size: clamp(24px,3vw,34px); color: #345a4a; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.metric p, .note { color: #6b7973; font-size: 12px; line-height: 1.7; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.toolbar button, .shortcuts button { border: 1px solid #dce5df; border-radius: 8px; padding: 8px 12px; background: #fff; color: #345a4a; cursor: pointer; }
+.shortcuts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding: 24px; border: 1px solid #dce5df; border-radius: 16px; background: #fff; margin-bottom: 24px; }
+.shortcuts h2 { font-size: 16px; margin-top: 0; }
+.shortcuts nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.shortcuts nav a { background: #f3f6f4; border: 1px solid #e3e9e5; padding: 8px 10px; color: #345a4a; border-radius: 8px; text-decoration: none; font-size: 13px; }
+.shortcuts summary { cursor: pointer; font-size: 12px; }
+.options { display: grid; gap: 10px; margin: 16px 0; font-size: 13px; }
+.shortcuts > .note { grid-column: 1 / -1; margin: 0; }
+@media(max-width: 640px) { .overview { grid-template-columns: minmax(0,1fr); } .metric { padding: 16px; } .shortcuts { grid-template-columns: minmax(0,1fr); padding: 18px; } }

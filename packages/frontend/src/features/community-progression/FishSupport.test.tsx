@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fishProgressView, type SupportAdminView } from '@stealth-reader/shared';
 import { communityProgressionApi } from '../../api/community-progression';
@@ -54,7 +54,32 @@ describe('fish activity and supporter management UI', () => {
   });
   it('classifies real game workspaces, not the game directory', () => {
     for (const path of ['/games/ballpoint-breach/arena', '/games/demon-tower', '/games/zhengdao', '/tower-defense', '/tower-defense/practice']) expect(isFishGamePath(path)).toBe(true);
-    for (const path of ['/', '/me', '/games', '/games/rooms', '/achievements']) expect(isFishGamePath(path)).toBe(false);
+    for (const path of ['/', '/me', '/games', '/games/rooms', '/games/leaderboards/snake', '/games/demon-tower/leaderboard', '/achievements']) expect(isFishGamePath(path)).toBe(false);
+  });
+  it('keeps one tracker across standalone tools and games, pauses at route/cover boundaries, then resumes', async () => {
+    vi.useFakeTimers();
+    let go!: ReturnType<typeof useNavigate>;
+    function Tracker() { go = useNavigate(); useFishActivity(); return null; }
+    render(<MemoryRouter initialEntries={['/tools/timer']}><Tracker /></MemoryRouter>);
+    await act(async () => { await Promise.resolve(); });
+    const spy = vi.mocked(communityProgressionApi.heartbeat), tab = spy.mock.calls[0][0].tabId;
+    expect(spy.mock.lastCall?.[0].mode).toBe('browse');
+    await act(async () => { go('/games/snake'); });
+    expect(spy.mock.lastCall?.[0].mode).toBe('pause');
+    // A second boundary while already paused must not leave needsPause stuck forever.
+    await act(async () => { go('/games/tetris'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(spy.mock.lastCall?.[0]).toMatchObject({ tabId: tab, mode: 'game' });
+    const cover = document.createElement('div'); document.body.append(cover);
+    await act(async () => { cover.setAttribute('data-activity-covered', 'true'); await Promise.resolve(); });
+    expect(spy.mock.lastCall?.[0].mode).toBe('pause');
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(spy.mock.lastCall?.[0].mode).toBe('browse');
+    await act(async () => { go('/tools/calculator'); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(spy.mock.lastCall?.[0]).toMatchObject({ tabId: tab, mode: 'browse' });
+    expect(new Set(spy.mock.calls.map(c => c[0].sequence)).size).toBe(spy.mock.calls.length);
+    cover.remove();
   });
   it('shows six ranks, exact progress, and privacy/rate-cap instructions', () => {
     render(<FishGrowthSummary initial={fishProgressView(600, 36000, 3600, 60, 60)} />, { wrapper });

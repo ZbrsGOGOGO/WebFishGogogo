@@ -17,10 +17,10 @@ export function DeskPetSession({ children }: { children: ReactNode }) {
   // The shared store deduplicates this with layout/route restore calls.
   useEffect(() => { void restoreSession(); }, [restoreSession]);
   const owner = phase === 'active' && publicId ? `user:${publicId}` : phase === 'guest' ? 'guest' : 'unavailable';
-  return <DeskPetProvider key={owner} owner={owner}>{children}{owner !== 'unavailable' ? <DeskPet /> : null}</DeskPetProvider>;
+  return <DeskPetProvider owner={owner}>{children}{owner !== 'unavailable' ? <DeskPet key={owner} /> : null}</DeskPetProvider>;
 }
 
-const phrases = ['收到，今天也要劳逸结合。', '我负责可爱，你负责准点下班。', '摸鱼有度，喝口水再继续。', '这不是发呆，是在整理思路。'];
+const phrases = ['收到，今天也要劳逸结合。', '我负责可爱，你负责准点下班。', '休息片刻，喝口水再继续。', '这不是发呆，是在整理思路。'];
 export function DeskPet() {
   const { prefs, update, storageError, owner } = useDeskPet();
   const location = useLocation();
@@ -29,6 +29,8 @@ export function DeskPet() {
   const [hidden, setHidden] = useState(document.hidden);
   const [message, setMessage] = useState('');
   const [reaction, setReaction] = useState(0);
+  const [mood, setMood] = useState<'happy' | 'eating' | null>(null);
+  const [typing, setTyping] = useState(false);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const drag = useRef<{ id: number; x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false), phrase = useRef(0), lastRank = useRef<number | null>(null);
@@ -37,8 +39,10 @@ export function DeskPet() {
   const left = dragPosition?.x ?? bounds.left + point.x * bounds.width;
   const top = dragPosition?.y ?? bounds.top + point.y * bounds.height;
   const clamp = (x: number, y: number) => ({ x: Math.min(bounds.left + bounds.width, Math.max(bounds.left, x)), y: Math.min(bounds.top + bounds.height, Math.max(bounds.top, y)) });
-  const savePoint = (x: number, y: number): void => {
+  const savePoint = (x: number, y: number, snap = true): void => {
     const p = clamp(x, y);
+    if (snap && p.x - bounds.left < 32) p.x = bounds.left;
+    if (snap && bounds.left + bounds.width - p.x < 32) p.x = bounds.left + bounds.width;
     update({ position: { x: bounds.width ? (p.x - bounds.left) / bounds.width : 0, y: bounds.height ? (p.y - bounds.top) / bounds.height : 0 } });
   };
   useEffect(() => {
@@ -49,8 +53,16 @@ export function DeskPet() {
     return () => { window.removeEventListener('resize', resize); window.visualViewport?.removeEventListener('resize', resize); document.removeEventListener('visibilitychange', visibility); };
   }, []);
   useEffect(() => {
+    const focus = (): void => {
+      const el = document.activeElement;
+      setTyping(el instanceof HTMLElement && (el.matches('input:not([type=checkbox]):not([type=range]):not([type=file]), textarea, select') || el.isContentEditable));
+    };
+    document.addEventListener('focusin', focus); document.addEventListener('focusout', focus); focus();
+    return () => { document.removeEventListener('focusin', focus); document.removeEventListener('focusout', focus); };
+  }, []);
+  useEffect(() => {
     if (!message) return;
-    const timer = window.setTimeout(() => setMessage(''), 4200);
+    const timer = window.setTimeout(() => { setMessage(''); setMood(null); }, 4200);
     return () => window.clearTimeout(timer);
   }, [message, reaction]);
   useEffect(() => {
@@ -66,8 +78,8 @@ export function DeskPet() {
   }, [owner, prefs.enabled, prefs.quiet, prefs.sleeping]);
   useEffect(() => { setMessage(''); drag.current = null; setDragPosition(null); }, [location.pathname, prefs.collapsed, prefs.enabled]);
   const focusHidden = prefs.focusMode && (petFocusPath(location.pathname) || paperOpen);
-  if (!prefs.enabled || hidden || viewport.h < 360 || viewport.w < 240 || focusHidden || /^\/(?:login|register|account|password)(?:\/|$)/.test(location.pathname)) return null;
-  const say = (text: string): void => { setMessage(text); setReaction(n => n + 1); };
+  if (!prefs.enabled || hidden || typing || viewport.h < 360 || viewport.w < 240 || focusHidden || /^\/(?:login|register|account|password)(?:\/|$)/.test(location.pathname)) return null;
+  const say = (text: string, nextMood: 'happy' | 'eating' | null = 'happy'): void => { setMessage(text); setMood(nextMood); setReaction(n => n + 1); };
   if (prefs.collapsed) return <Link className={styles.restore} to="/desk-pet" aria-label="工位搭子已收起，打开管理">搭子</Link>;
   return <aside className={styles.widget} aria-label="我的工位搭子" style={{ left, top, '--pet-size': `${prefs.size}px` } as CSSProperties} onKeyDown={event => {
     event.stopPropagation();
@@ -92,16 +104,16 @@ export function DeskPet() {
       if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     }} onPointerCancel={() => { drag.current = null; setDragPosition(null); suppressClick.current = true; }} onLostPointerCapture={() => { drag.current = null; setDragPosition(null); }} onKeyDown={event => {
       const delta: Record<string, [number, number]> = { ArrowLeft: [-16,0], ArrowRight: [16,0], ArrowUp: [0,-16], ArrowDown: [0,16] };
-      if (delta[event.key]) { event.preventDefault(); savePoint(left + delta[event.key][0], top + delta[event.key][1]); }
+      if (delta[event.key]) { event.preventDefault(); savePoint(left + delta[event.key][0], top + delta[event.key][1], false); }
     }} onClick={event => {
       if (suppressClick.current && event.detail !== 0) { suppressClick.current = false; return; }
       if (prefs.sleeping) say('嘘……让我再眯一会儿。');
       else say(phrases[phrase.current++ % phrases.length]);
     }}>
-      <span key={reaction} className={!prefs.quiet && reaction ? styles.reaction : undefined}><PetAppearance prefs={prefs} /></span>
+      <span key={reaction} className={!prefs.quiet && reaction ? styles.reaction : undefined}><PetAppearance prefs={prefs} mood={mood} /></span>
     </button>
     <div className={styles.widgetActions}>
-      <button type="button" disabled={prefs.sleeping} onClick={() => say('小饼干收到！不花办公币，心意满分。')}>喂食</button>
+      <button type="button" disabled={prefs.sleeping} onClick={() => say('小饼干收到！不花办公币，心意满分。', 'eating')}>喂食</button>
       <button type="button" onClick={() => { update({ sleeping: !prefs.sleeping }); say(prefs.sleeping ? '醒啦，今天也陪你上班。' : '午休模式，稍后再摸。'); }}>{prefs.sleeping ? '叫醒' : '睡觉'}</button>
       <Link to="/desk-pet">装扮</Link>
     </div>

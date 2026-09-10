@@ -177,7 +177,7 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
   },
   {
     id: 'profile',
-    label: '我的主页',
+    label: '我的工作台',
     path: '/me',
     enabled: COMMUNITY_FEATURE_FLAGS.profile,
     requiresAccount: true,

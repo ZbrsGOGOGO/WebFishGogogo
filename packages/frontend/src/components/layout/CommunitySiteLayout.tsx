@@ -25,7 +25,6 @@ import {
 } from '../../features/development/development-access';
 import { Button } from '../ui';
 import styles from './CommunitySiteLayout.module.css';
-import { useFishActivity } from '../../features/community-progression/useFishActivity';
 import { FishGrowthSummary } from '../../features/community-progression/FishGrowthSummary';
 
 const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
@@ -67,7 +66,6 @@ function isWorkspaceRoute(pathname: string): boolean {
 }
 
 export function CommunitySiteLayout(): JSX.Element {
-  useFishActivity();
   const location = useLocation();
   const phase = useCommunityAuthStore((state) => state.phase);
   const user = useCommunityAuthStore((state) => state.user);
@@ -334,7 +332,7 @@ export function CommunitySiteLayout(): JSX.Element {
                 : undefined}
             >
               <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
-              <small>{item.label === '我的主页' ? '我的' : item.label}</small>
+              <small>{item.id === 'profile' ? '我的' : item.label}</small>
               {item.id === 'messages' && directUnreadCount > 0 ? (
                 <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
               ) : null}

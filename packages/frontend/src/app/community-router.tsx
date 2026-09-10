@@ -66,6 +66,8 @@ import { communityAvatarMark } from '../features/community/profile-options';
 import { useCommunityAuthStore } from './store/community-auth-store';
 import { BallpointBreachEntryPage, BallpointWindowProvider } from '../features/games/ballpoint-breach/BallpointWindow';
 import { DeskPetSession } from '../features/desk-pet/DeskPet';
+import { CommunityActivityTracker } from '../features/community-progression/useFishActivity';
+import { WorkspaceVisitTracker } from '../features/community/WorkspaceShortcuts';
 
 const DeskPetPage = lazy(() => import('../features/desk-pet/DeskPetPage').then(module => ({ default: module.DeskPetPage })));
 
@@ -148,6 +150,8 @@ export function CommunityModeRouter(): JSX.Element {
   return (
     <BallpointWindowProvider>
     <DeskPetSession>
+    <CommunityActivityTracker />
+    <WorkspaceVisitTracker />
     <Routes>
       <Route element={<CommunitySiteLayout />}>
         <Route index element={<CommunityHomePage />} />

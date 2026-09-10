@@ -63,7 +63,7 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
 
   return (
     <GamePrivacyProvider value={{ covered, toggleCover }}>
-      <div className={styles.workspace}>
+      <div className={styles.workspace} data-activity-covered={covered ? 'true' : undefined}>
         <header className={styles.workspaceHeader}>
           <Link to="/" className={styles.workspaceBrand}>{SITE_NAME}<span>协作工作台</span></Link>
           <nav aria-label="工作台导航" className={styles.workspaceNav}>

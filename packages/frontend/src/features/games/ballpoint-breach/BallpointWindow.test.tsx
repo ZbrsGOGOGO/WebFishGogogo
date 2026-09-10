@@ -6,16 +6,23 @@ import { BallpointWindowProvider, useBallpointWindow } from './BallpointWindow';
 
 const mock = vi.hoisted(() => ({ identity: { phase: 'guest', user: null as { publicId: string } | null }, mounts: 0, unmounts: 0 }));
 vi.mock('../../../app/store/community-auth-store', () => ({ useCommunityAuthStore: (select: (state: typeof mock.identity) => unknown) => select(mock.identity) }));
-vi.mock('./BallpointBreachGame', () => ({ default: function FakeGame({ active, onPrivacyPause }: { active: boolean; onPrivacyPause?: () => void }) {
+vi.mock('./BallpointBreachGame', () => ({ default: function FakeGame({ active, onPrivacyPause, onStatusChange }: { active: boolean; onPrivacyPause?: () => void; onStatusChange: (value: string) => void }) {
   useEffect(() => { mock.mounts += 1; return () => { mock.unmounts += 1; }; }, []);
-  return <div aria-label="fake local game" data-active={active}><button onClick={onPrivacyPause}>simulate pointer unlock</button></div>;
+  return <div aria-label="fake local game" data-active={active}><button onClick={onPrivacyPause}>simulate pointer unlock</button><button onClick={() => onStatusChange('playing')}>simulate playing</button></div>;
 } }));
-function Content() { const state = useBallpointWindow(); return <><button onClick={state.openWindow}>open</button><Link to="/farm">farm</Link><textarea aria-label="site input" /></>; }
+function Content() { const state = useBallpointWindow(); return <><button onClick={state.openWindow}>open</button><Link to="/farm">farm</Link><textarea aria-label="site input" /><output aria-label="activity mode">{state.isPlaying ? 'game' : 'browse'}</output></>; }
 function App() { return <MemoryRouter initialEntries={['/games']}><BallpointWindowProvider><Content /></BallpointWindowProvider></MemoryRouter>; }
 beforeEach(() => { mock.identity = { phase: 'guest', user: null }; mock.mounts = 0; mock.unmounts = 0; });
 afterEach(cleanup);
 async function open() { fireEvent.click(screen.getByText('open')); await screen.findByLabelText('fake local game'); }
 describe('persistent Ballpoint window', () => {
+  it('reports only a visible running window as game activity, never idle/covered/minimized', async () => {
+    render(<App />); await open(); expect(screen.getByLabelText('activity mode')).toHaveTextContent('browse');
+    fireEvent.click(screen.getByText('simulate playing')); expect(screen.getByLabelText('activity mode')).toHaveTextContent('game');
+    fireEvent.click(screen.getByLabelText('最小化工作稿')); expect(screen.getByLabelText('activity mode')).toHaveTextContent('browse');
+    fireEvent.click(screen.getByLabelText('恢复工作稿')); expect(screen.getByLabelText('activity mode')).toHaveTextContent('game');
+    fireEvent.click(screen.getByText('便签')); expect(screen.getByLabelText('activity mode')).toHaveTextContent('browse');
+  });
   it('covers the game on pointer-lock loss even if the browser omits Escape keydown', async () => {
     render(<App />); await open(); fireEvent.click(screen.getByText('simulate pointer unlock'));
     expect(screen.getByLabelText('工作稿临时便签')).toBeInTheDocument();

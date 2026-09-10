@@ -18,6 +18,8 @@ import { FriendEncouragement } from '../../database/entities/friend-encouragemen
 import { Guild } from '../../database/entities/guild.entity';
 import { GuildMember } from '../../database/entities/guild-member.entity';
 import { User } from '../../database/entities/user.entity';
+import { WalletLedger } from '../../database/entities/wallet-ledger.entity';
+import { toBusinessLocalDate } from '../platform/platform-time';
 import { PlatformAssetsService } from '../platform';
 import { COMMUNITY_CLOCK, CommunityClock } from './community-clock';
 import {
@@ -81,6 +83,23 @@ export class DeskPlantService {
     private readonly feeds: FeedService,
     @Inject(COMMUNITY_CLOCK) private readonly clock: CommunityClock,
   ) {}
+
+  async dailyWallet(userId: string) {
+    const now = this.clock.now();
+    const date = toBusinessLocalDate(now);
+    const start = new Date(`${date}T00:00:00+08:00`);
+    const end = new Date(start.getTime() + 86_400_000);
+    const user = await this.dataSource.getRepository(User).findOneBy({ id: userId, accountStatus: 'active' });
+    if (!user) throw new NotFoundException('Active account required');
+    const totals = await this.dataSource.getRepository(WalletLedger).createQueryBuilder('entry')
+      .select('COALESCE(SUM(CASE WHEN entry.delta > 0 THEN entry.delta ELSE 0 END), 0)', 'income')
+      .addSelect('COALESCE(SUM(CASE WHEN entry.delta < 0 THEN -entry.delta ELSE 0 END), 0)', 'spent')
+      .where('entry.userId = :userId AND entry.currency = :currency', { userId, currency: 'office_coin' })
+      .andWhere('entry.createdAt >= :start AND entry.createdAt < :end', { start, end })
+      .getRawOne<{ income: string; spent: string }>();
+    // Keep bigint totals exact in the JSON contract; this endpoint never grants assets.
+    return { date, timeZone: 'Asia/Shanghai', income: String(totals?.income ?? '0'), spent: String(totals?.spent ?? '0'), serverTime: now.toISOString() };
+  }
 
   async overview(userId: string) {
     const now = this.clock.now();
