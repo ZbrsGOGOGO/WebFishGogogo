@@ -11,10 +11,12 @@ interface PetContextValue {
 const PetContext = createContext<PetContextValue | null>(null);
 export function DeskPetProvider({ owner, children }: { owner: string; children: ReactNode }) {
   const key = petStorageKey(owner);
-  const [storageError, setStorageError] = useState('');
-  const [prefs, setPrefs] = useState(() => {
-    try { return parsePet(localStorage.getItem(key)); } catch { return { ...DEFAULT_PET }; }
+  const [initial] = useState(() => {
+    try { return { prefs: parsePet(localStorage.getItem(key)), error: '' }; }
+    catch { return { prefs: { ...DEFAULT_PET }, error: '浏览器无法读取本地桌宠数据，请检查网站存储权限。原档案未被清除。' }; }
   });
+  const [storageError, setStorageError] = useState(initial.error);
+  const [prefs, setPrefs] = useState(initial.prefs);
   const current = useRef(prefs);
   const update = useCallback((patch: Partial<PetPreferences>) => {
     const next = parsePet(JSON.stringify({ ...current.current, ...patch, version: 1 }));

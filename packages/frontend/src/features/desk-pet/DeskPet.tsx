@@ -12,6 +12,10 @@ import styles from './DeskPet.module.css';
 export function DeskPetSession({ children }: { children: ReactNode }) {
   const phase = useCommunityAuthStore(s => s.phase);
   const publicId = useCommunityAuthStore(s => s.user?.publicId);
+  const restoreSession = useCommunityAuthStore(s => s.restoreSession);
+  // Standalone tools have no CommunitySiteLayout to bootstrap account identity.
+  // The shared store deduplicates this with layout/route restore calls.
+  useEffect(() => { void restoreSession(); }, [restoreSession]);
   const owner = phase === 'active' && publicId ? `user:${publicId}` : phase === 'guest' ? 'guest' : 'unavailable';
   return <DeskPetProvider key={owner} owner={owner}>{children}{owner !== 'unavailable' ? <DeskPet /> : null}</DeskPetProvider>;
 }

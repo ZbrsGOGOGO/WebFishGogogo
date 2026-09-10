@@ -60,6 +60,7 @@
 .tipWidget p { margin-bottom: 0; }
 .mobileDock { display: none; }
 .mobileUtilities { display: none; }
+.mobileUtilities b { white-space: nowrap; }
 
 @media (max-width: 1180px) {
   .workspace[data-home='true'] { grid-template-columns: 210px minmax(0, 1fr); }
@@ -92,6 +93,8 @@
 }
 
 @media (max-width: 430px) {
+  .mobileUtilities a { padding: 8px; gap: 6px; }
+  .mobileUtilities a > span:last-child { display: none; }
   .headerInner { width: calc(100% - 20px); }
   .brandMark { width: 34px; height: 34px; }
   .brand strong { font-size: 12px; }

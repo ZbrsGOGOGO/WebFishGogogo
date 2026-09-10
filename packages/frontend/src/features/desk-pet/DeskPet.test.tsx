@@ -9,6 +9,7 @@ import { DeskPetPage } from './DeskPetPage';
 import { FISH_EVENT } from '../community-progression/useFishActivity';
 import { resetCommunityAuthStoreForTests, useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { TOWER_TEST_USER } from '../games/demon-tower/test-fixtures';
+import { communityAuthApi } from '../../api/community';
 
 const png = 'data:image/png;base64,iVBORw0KGgo=';
 const show = (path = '/desk-pet', owner = 'guest') => render(<MemoryRouter initialEntries={[path]}><DeskPetProvider owner={owner}><DeskPetPage /><DeskPet /></DeskPetProvider></MemoryRouter>);
@@ -89,6 +90,19 @@ describe('desk pet privacy, settings and interactions', () => {
     show(); vi.spyOn(Storage.prototype,'setItem').mockImplementation(() => { throw new DOMException('full','QuotaExceededError'); });
     fireEvent.change(screen.getByLabelText('搭子名字'),{target:{value:'临时搭子'}});
     expect(screen.getByRole('alert')).toHaveTextContent('刷新后可能丢失'); expect(screen.getByLabelText('搭子名字')).toHaveValue('临时搭子');
+  });
+  it('reports denied initial reads without overwriting the stored archive', () => {
+    const write = vi.spyOn(Storage.prototype,'setItem');
+    vi.spyOn(Storage.prototype,'getItem').mockImplementation(() => { throw new DOMException('blocked','SecurityError'); });
+    show(); expect(screen.getByRole('alert')).toHaveTextContent('原档案未被清除'); expect(write).not.toHaveBeenCalled();
+  });
+  it('restores identity on a cold standalone tools route without blocking its content', async () => {
+    useCommunityAuthStore.setState({ phase:'bootstrapping', sessionReady:false });
+    const refresh = vi.spyOn(communityAuthApi,'refresh').mockRejectedValue(new Error('synthetic anonymous response'));
+    localStorage.setItem(petStorageKey('guest'),JSON.stringify({...DEFAULT_PET,enabled:true}));
+    render(<MemoryRouter initialEntries={['/tools']}><DeskPetSession><p>本地工具仍然可用</p></DeskPetSession></MemoryRouter>);
+    expect(screen.getByText('本地工具仍然可用')).toBeVisible();
+    expect(await screen.findByRole('complementary',{name:'我的工位搭子'})).toBeVisible(); expect(refresh).toHaveBeenCalledOnce();
   });
   it('requires confirmation and clears only this pet archive', () => {
     localStorage.setItem('other-user-data','keep'); show(); fireEvent.click(screen.getByRole('button',{name:'领养到我的工位'}));
