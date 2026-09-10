@@ -50,7 +50,7 @@
 .eyebrow {
   display: block;
   margin-bottom: 2px;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 800;
@@ -94,7 +94,7 @@
 .closeButton:hover {
   border-color: var(--color-brand);
   background: var(--color-brand-soft);
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
 }
 
 .closeButton:focus-visible {

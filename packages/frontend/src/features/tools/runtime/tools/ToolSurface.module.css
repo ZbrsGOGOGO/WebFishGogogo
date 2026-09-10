@@ -153,7 +153,7 @@
 }
 
 .outputValue {
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-family: var(--font-mono);
   font-size: clamp(18px, 3vw, 25px);
   font-weight: 800;
@@ -254,7 +254,7 @@ pre.outputValue {
 .stat dd {
   order: -1;
   margin: 0;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-family: var(--font-mono);
   font-size: 24px;
   font-weight: 800;

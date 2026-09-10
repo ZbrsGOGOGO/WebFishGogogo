@@ -348,9 +348,9 @@
     border-color: var(--color-border)
 }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .button, :global(html[data-site-mode='community'][data-color-mode='dark']) .primary, :global(html[data-site-mode='community'][data-color-mode='dark']) .iconButton, :global(html[data-site-mode='community'][data-color-mode='dark']) .dangerButton {
-    border: 1px solid var(--color-danger);
-    color: var(--color-danger);
-    background: var(--color-danger-bg)
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    background: var(--color-surface)
 }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .button:hover:not(:disabled), :global(html[data-site-mode='community'][data-color-mode='dark']) .iconButton:hover:not(:disabled) {
     background: var(--color-surface);
