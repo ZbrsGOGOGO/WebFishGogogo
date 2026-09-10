@@ -250,8 +250,8 @@ export function CommunitySiteLayout(): JSX.Element {
               </div>
             </section>
 
+            {phase === 'active' && COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <FishGrowthSummary compact /> : null}
             <nav className={styles.sideNav} aria-label="全部系统">
-              {phase === 'active' && COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <FishGrowthSummary compact /> : null}
               <p>工作台</p>
               {COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).map((item) => (
                 <Link
