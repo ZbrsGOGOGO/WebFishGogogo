@@ -1,3 +1,7 @@
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page { --ink: var(--color-text); --muted: var(--color-text-secondary); --line: var(--color-border); --paper: var(--color-surface); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page .primaryButton { background: var(--color-brand); color: white; border-color: var(--color-brand); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page .primaryButton:hover { background: var(--color-brand-hover); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .board { --ink: #29483f; --muted: #74847b; --line: #d9e2d8; --paper: #fffef9; color: #29483f; color-scheme: light; }
 .page { --ink: #29483f; --muted: #74847b; --line: #d9e2d8; --paper: #fffef9; box-sizing: border-box; width: min(100%, 1370px); margin: 0 auto; padding: 26px 24px 60px; color: var(--ink); }
 .page * { box-sizing: border-box; }
 .page button { font: inherit; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
@@ -277,3 +281,528 @@
 @keyframes snackBite{50%{transform:rotate(12deg)}}@keyframes crumbFall{0%,45%{opacity:0}50%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(9px)}}
 @keyframes phoneTap{50%{transform:rotate(-4deg)}}@keyframes glassesPush{45%,65%{transform:rotate(-8deg)}}@keyframes glassesSlide{45%,65%{transform:translateY(-2px)}}
 @media(prefers-reduced-motion:reduce){.coinFlight{display:none}.evolutionBeam,.placementBubble,.hero *,.refreshButton,.plantBroken,.boardWrap>.board{animation:none!important}}
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .eyebrow {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .pageHeader h1 {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .pageHeader h1 span {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .runBadge i {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .runBadge[data-state='running'] i {
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .runBadge small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .battlePanel {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar > div {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar > div > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar strong small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar > div > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar .gold {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar i {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .boardOverlay {
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .boardOverlay > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .boardOverlay p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .boardOverlay[data-result='lost'] {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .battleToolbar > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .primaryButton > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .secondaryButton {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .secondaryButton:hover:not(:disabled) {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .textButton {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback[data-error='true'] {
+    border-color: var(--color-danger);
+    background: var(--color-danger-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback[data-error='true'] p, :global(html[data-site-mode='community'][data-color-mode='dark']) .feedback[data-error='true'] > span {
+    color: var(--color-danger)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroPanel {
+    border-top: 1px solid var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity span, :global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .dpad button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .dpad button:active:not(:disabled) {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .dpad span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .pulseButton {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .pulseButton small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroPanel > p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .workCard {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sectionHeading h2 {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sectionHeading h2 small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .refreshButton {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .refreshButton b {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sectionHint {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-type='slow'] {
+    background: var(--color-surface);
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-type='splash'] {
+    background: var(--color-surface);
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-type='push'] {
+    background: var(--color-surface);
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-type='shred'] {
+    background: var(--color-surface);
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer:hover:not(:disabled) {
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeRecipe {
+    border-top: 1px dashed var(--color-border);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeRecipe > b {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeRecipe strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .autoMergeBadge {
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryGrid article {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryGrid article[data-tier='2'] {
+    border-color: var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryGrid article[data-tier='3'] {
+    border-color: var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryGrid article[data-selected='true'] {
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryItem > strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryItem > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sellItem {
+    border-top: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory {
+    border: 1px dashed var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .placementHint {
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .placementHint button {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectedTower {
+    border: 1px solid var(--color-brand-strong);
+    background: var(--color-brand-soft)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectedTower strong {
+    color: var(--color-brand-strong)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectedTower small {
+    color: var(--color-brand-strong)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide summary {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide summary span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide > p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .towerGuide strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .towerGuide span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .localRecord {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .localRecord strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .pageHeader p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar > div > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statusBar > div > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .battleToolbar > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .feedback p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity span, :global(html[data-site-mode='community'][data-color-mode='dark']) .heroIdentity small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heroPanel > p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sectionHint {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeRecipe {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeRecipe strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .autoMergeBadge {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryItem > strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .inventoryItem > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .sellItem {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .emptyInventory p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .placementHint {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectedTower strong {
+    color: var(--color-brand-strong)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectedTower small {
+    color: var(--color-brand-strong)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide summary {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .guide > p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .towerGuide strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .towerGuide span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopBalance {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopBalance strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopBalance > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li > b {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress i {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-danger='true'] {
+    border-color: var(--color-danger);
+    background: var(--color-danger-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-danger='true'] > b, :global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-danger='true'] strong, :global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-danger='true'] i {
+    color: var(--color-danger)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[aria-current='step'] {
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-danger='true'][aria-current='step'] {
+    box-shadow: var(--shadow-sm)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundProgress li[data-complete='true'] i {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundWarning {
+    border: 1px solid var(--color-warning);
+    background: var(--color-warning-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundWarning > span {
+    background: var(--color-warning-bg);
+    color: var(--color-warning)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundWarning h2, :global(html[data-site-mode='community'][data-color-mode='dark']) .recoveryCard h2 {
+    color: var(--color-warning)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundWarning p, :global(html[data-site-mode='community'][data-color-mode='dark']) .recoveryCard p {
+    color: var(--color-warning)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .roundWarning small {
+    color: var(--color-warning)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel > div {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel progress {
+    background: var(--color-surface);
+    accent-color: var(--color-success)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel progress::-webkit-progress-bar {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel progress::-webkit-progress-value {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel progress::-moz-progress-bar {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .bossPanel p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .recoveryCard {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .focusOrder {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .focusOrder label {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .focusOrder span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .focusOrder select {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-focused='true'] {
+    border: 2px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-focused='true'] > small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shopOffer[data-sold-out='true'] {
+    background: var(--color-surface);
+    border-color: var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .evolutionDetail {
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .evolutionDetail strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .evolutionCatalog > section {
+    border-top: 1px solid var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .evolutionCatalog strong {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .evolutionCatalog p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .challengeIntro {
+    border: 2px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .challengeIntro > span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .challengeIntro h2 {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .challengeIntro p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .boardOverlay[data-result='lost'] > span {
+    border: 1px solid var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .fictionNote {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .workCover {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .synergyPanel {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeProgress label {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .mergeProgress progress, :global(html[data-site-mode='community'][data-color-mode='dark']) .fieldProgress progress {
+    accent-color: var(--color-success)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .fieldProgress {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .fieldProgress progress {
+    accent-color: var(--color-success)
+}

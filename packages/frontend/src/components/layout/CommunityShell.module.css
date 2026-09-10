@@ -10,9 +10,9 @@
 .navigationTrigger:hover { background: var(--color-surface-2); color: var(--color-text); }
 .topNav { min-width: 0; display: flex; flex: 1; align-self: stretch; align-items: center; overflow-x: auto; scrollbar-width: thin; }
 .topNav a { height: 100%; padding: 0 12px; display: inline-flex; flex: 0 0 auto; align-items: center; border-bottom: 2px solid transparent; color: var(--color-text-secondary); font-size: 13px; }
-.topNav a:hover { background: #eaeef2; color: var(--color-text); }
+.topNav a:hover { background: var(--color-nav-current); color: var(--color-text); }
 .topNav a[data-current='true'] { border-bottom-color: #fd8c73; color: var(--color-text); font-weight: 600; }
-.unreadBadge { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; color: white; background: var(--color-danger); font-size: 11px; font-style: normal; line-height: 1; }
+.unreadBadge { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; color: white; background: var(--color-danger-emphasis); font-size: 11px; font-style: normal; line-height: 1; }
 .topNav .unreadBadge { margin-left: 6px; }
 .accountActions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .walletLink { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 2px 7px; max-width: 160px; min-height: 34px; padding: 5px 9px; border: 1px solid var(--color-border); border-radius: 6px; color: var(--color-text-secondary); background: var(--color-surface); }
@@ -41,7 +41,7 @@
 .sideNav > a > span { display: grid; place-items: center; color: var(--color-text-secondary); }
 .sideNav b { font-size: 13px; font-weight: 400; }
 .sideNav > a:hover { background: var(--color-surface-2); }
-.sideNav > a[data-current='true'] { background: #eaeef2; }
+.sideNav > a[data-current='true'] { background: var(--color-nav-current); }
 .sideNav > a[data-current='true']::before { content: ''; position: absolute; left: -6px; top: 8px; bottom: 8px; width: 3px; border-radius: 3px; background: var(--color-link); }
 .sideNav > a[data-current='true'] b { font-weight: 600; }
 .railFoot { margin: 20px 10px 0; padding-top: 16px; display: grid; gap: 10px; border-top: 1px solid var(--color-border); }

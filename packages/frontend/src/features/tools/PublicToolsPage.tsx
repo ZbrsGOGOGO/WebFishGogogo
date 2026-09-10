@@ -2,6 +2,7 @@ import { useMemo, useState, type JSX } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { SITE_NAME } from '../../app/site-config';
+import { ThemeSwitch } from '../../components/layout/ThemeSwitch';
 import { ToolRunnerModal } from './runtime/ToolRunnerModal';
 import styles from './PublicToolsPage.module.css';
 
@@ -147,6 +148,7 @@ export function PublicToolsPage(): JSX.Element {
           </span>
         </Link>
         <nav className={styles.nav} aria-label="公开页面">
+          <ThemeSwitch />
           <Link to="/">首页</Link>
           <Link className={styles.currentLink} to="/tools" aria-current="page">
             实用工具

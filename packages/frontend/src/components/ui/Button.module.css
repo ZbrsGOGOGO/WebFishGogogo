@@ -23,7 +23,7 @@
 .button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--color-brand-soft);
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
 }
 
 /* ---------- 尺寸 ---------- */
@@ -43,7 +43,7 @@
 .primary {
   background: var(--color-brand);
   color: #fff;
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
 }
 .primary:hover:not(:disabled) {
   background: var(--color-brand-hover);
@@ -56,8 +56,8 @@
   border-color: var(--color-border);
 }
 .secondary:hover:not(:disabled) {
-  border-color: var(--color-brand);
-  color: var(--color-brand);
+  border-color: var(--color-brand-strong);
+  color: var(--color-brand-strong);
 }
 
 .ghost {
@@ -71,9 +71,9 @@
 }
 
 .danger {
-  background: var(--color-danger);
+  background: var(--color-danger-emphasis, var(--color-danger));
   color: #fff;
-  border-color: var(--color-danger);
+  border-color: var(--color-danger-emphasis, var(--color-danger));
 }
 .danger:hover:not(:disabled) {
   filter: brightness(0.92);

@@ -105,7 +105,7 @@
 }
 
 .tagFilters button[data-selected='true'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
 }
@@ -281,7 +281,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
 }
 
 .reportBox {
@@ -399,4 +399,10 @@
   .postCard {
     padding: 18px;
   }
+}
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .warning {
+    color: var(--color-warning);
+    background: var(--color-warning-bg)
 }

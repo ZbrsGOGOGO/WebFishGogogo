@@ -120,3 +120,33 @@
   .inlineForm { flex-wrap: wrap; }
   .inlineForm .input { flex-basis: 100%; }
 }
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .workspaceHeader {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .quietButton {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .notes textarea {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .tabs [aria-current="page"], :global(html[data-site-mode='community'][data-color-mode='dark']) .tabs [aria-selected="true"] {
+    color: var(--color-brand-strong)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .panel {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .info {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .error {
+    color: var(--color-danger);
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .field input, :global(html[data-site-mode='community'][data-color-mode='dark']) .field select, :global(html[data-site-mode='community'][data-color-mode='dark']) .field textarea, :global(html[data-site-mode='community'][data-color-mode='dark']) .input {
+    background: var(--color-surface)
+}

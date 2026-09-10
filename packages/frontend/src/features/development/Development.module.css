@@ -138,3 +138,48 @@
 .progressRow { display: grid; grid-template-columns: minmax(0, 1fr) 90px auto; gap: 8px; align-items: start; }
 .progressRow input, .progressRow select { box-sizing: border-box; min-width: 0; max-width: 100%; border: 1px solid var(--color-border); border-radius: 6px; padding: 7px; background: white; }
 @media (max-width: 480px) { .progressRow { grid-template-columns: minmax(0, 1fr) 86px; } .progressRow button { grid-column: 2; } }
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .error {
+    color: var(--color-danger);
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .notice {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+    border: 1px solid var(--color-success)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .statsGrid > div {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .selectField select, :global(html[data-site-mode='community'][data-color-mode='dark']) .filterBar select {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .requestRow {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .backLink {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .conflict {
+    border: 1px solid var(--color-danger);
+    color: var(--color-danger);
+    background: var(--color-danger-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .precheckBlock ul, :global(html[data-site-mode='community'][data-color-mode='dark']) .warningList {
+    color: var(--color-warning)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .attachment {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .warningList {
+    color: var(--color-warning);
+    background: var(--color-warning-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .timelineEvent > span {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .progressRow input, :global(html[data-site-mode='community'][data-color-mode='dark']) .progressRow select {
+    background: var(--color-surface)
+}

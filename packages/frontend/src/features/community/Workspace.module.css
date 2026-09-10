@@ -13,3 +13,11 @@
 .options { display: grid; gap: 10px; margin: 16px 0; font-size: 13px; }
 .shortcuts > .note { grid-column: 1 / -1; margin: 0; }
 @media(max-width: 640px) { .overview { grid-template-columns: minmax(0,1fr); } .metric { padding: 16px; } .shortcuts { grid-template-columns: minmax(0,1fr); padding: 18px; } }
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .toolbar button, :global(html[data-site-mode='community'][data-color-mode='dark']) .shortcuts button {
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .shortcuts {
+    background: var(--color-surface)
+}

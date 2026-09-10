@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const css = readFileSync(resolve(process.cwd(), 'src/styles/community-theme.css'), 'utf8');
-function color(name: string): string {
-  const value = css.match(new RegExp(`--color-${name}:\\s*(#[a-f0-9]{6});`))?.[1];
+function color(name: string, mode = 'light'): string {
+  const source = mode === 'dark' ? css.split("[data-color-mode='dark'] {")[1].split('\n}')[0] : css;
+  const value = source.match(new RegExp(`--color-${name}:\\s*(#[a-f0-9]{6});`))?.[1];
   if (!value) throw new Error(`Missing semantic color: ${name}`);
   return value;
 }
@@ -20,6 +21,12 @@ function contrast(a: string, b: string): number {
   return (values[0] + .05) / (values[1] + .05);
 }
 describe('community interface palette', () => {
+  it.each(['light', 'dark'])('%s semantic colours remain readable', (mode) => {
+    for (const text of ['text', 'text-secondary', 'text-muted', 'link', 'danger', 'warning', 'success']) {
+      for (const background of ['surface', 'surface-2']) expect(contrast(color(text, mode), color(background, mode))).toBeGreaterThanOrEqual(4.5);
+    }
+    for (const background of ['brand', 'brand-hover', 'danger-emphasis']) expect(contrast('#ffffff', color(background, mode))).toBeGreaterThanOrEqual(4.5);
+  });
   it.each(['text', 'text-secondary', 'text-muted', 'link', 'danger', 'warning', 'success'])('%s remains readable on both surfaces', (name) => {
     for (const surface of ['surface', 'surface-2']) expect(contrast(color(name), color(surface))).toBeGreaterThanOrEqual(4.5);
   });

@@ -16,7 +16,7 @@
 /* ---------- 颜色 ---------- */
 .brand {
   background: var(--color-brand-soft);
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
 }
 
 .neutral {

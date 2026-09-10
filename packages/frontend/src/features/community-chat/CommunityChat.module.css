@@ -26,7 +26,7 @@
 }
 
 .experienceNav a[aria-current='page'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
 }
@@ -175,7 +175,7 @@
 }
 
 .chatShortcuts a:hover {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   color: var(--color-brand-strong);
 }
 
@@ -693,7 +693,7 @@ div.error p {
   place-items: center;
   border-radius: 999px;
   color: #fff;
-  background: var(--color-danger);
+  background: var(--color-danger-emphasis, var(--color-danger));
   font-size: 12px;
 }
 

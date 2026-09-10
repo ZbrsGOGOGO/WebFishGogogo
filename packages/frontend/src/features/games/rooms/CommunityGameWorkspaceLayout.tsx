@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 
 import { SITE_NAME } from '../../../app/site-config';
+import { ThemeSwitch } from '../../../components/layout/ThemeSwitch';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import { refreshCommunityWallet, synchronizeCommunityWalletSession, useCommunityWalletStore } from '../../../app/store/community-wallet-store';
 import { GamePrivacyProvider, useGamePrivacy } from '../GamePrivacyContext';
@@ -73,6 +74,7 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
             {phase === 'active' ? <Link to="/farm" className={styles.wallet}>办公币 <strong>{balance === null ? '待同步' : balance.toLocaleString('zh-CN')}</strong>{stale && balance !== null ? <small>待同步</small> : null}</Link> : <Link to="/login">登录账号</Link>}
           </nav>
           <button ref={coverButtonRef} type="button" className={styles.quietButton} onClick={() => setCovered((value) => !value)} aria-pressed={covered} aria-keyshortcuts="Escape">{covered ? '返回工作区' : '便签遮罩'}<kbd>Esc</kbd></button>
+          <ThemeSwitch />
         </header>
         <main className={styles.workspaceMain}>
           <section className={styles.notes} hidden={!covered} aria-label="临时便签">

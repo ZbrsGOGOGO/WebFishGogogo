@@ -67,7 +67,7 @@
 .nav a:hover,
 .nav a:focus-visible,
 .nav .currentLink {
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   background: var(--color-surface);
 }
 
@@ -144,7 +144,7 @@
 
 .notice a {
   flex: 0 0 auto;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-weight: 750;
 }
 
@@ -206,7 +206,7 @@
 }
 
 .searchField input:focus {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   outline: none;
   box-shadow: 0 0 0 3px var(--color-brand-soft);
 }
@@ -313,7 +313,7 @@
   gap: 14px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-weight: 600;
 }
 

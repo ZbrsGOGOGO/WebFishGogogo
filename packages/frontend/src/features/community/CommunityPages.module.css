@@ -109,7 +109,7 @@ a.systemCard:hover {
 }
 
 .systemCard span {
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -202,7 +202,7 @@ a.systemCard:hover {
 }
 
 .choiceButton[data-selected='true'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
   box-shadow: var(--shadow-sm);
@@ -318,14 +318,14 @@ a.systemCard:hover {
 }
 
 .tabButton[data-selected='true'] {
-  border-color: var(--color-brand);
+  border-color: var(--color-brand-strong);
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
 }
 
 .textButton {
   border: 0;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   background: transparent;
 }
 
@@ -432,7 +432,7 @@ a.systemCard:hover {
 
 .progressRow progress {
   width: 100%;
-  accent-color: var(--color-brand);
+  accent-color: var(--color-brand-strong);
 }
 
 .statGrid > div {
@@ -476,7 +476,7 @@ a.systemCard:hover {
 }
 
 .sectionHeading span {
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -498,7 +498,7 @@ a.systemCard:hover {
 }
 
 .summaryCard > span {
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;

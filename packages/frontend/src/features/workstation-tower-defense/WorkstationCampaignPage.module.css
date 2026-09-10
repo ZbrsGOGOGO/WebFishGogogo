@@ -1,2 +1,62 @@
 .page{max-width:1320px;margin:0 auto;padding:20px;color:#293849}.heading,.career,.resume{display:flex;gap:20px;align-items:center;justify-content:space-between}.heading{padding-bottom:20px;border-bottom:1px solid #d9e0e5}.heading h1{font-size:25px;margin:5px 0}.heading span{font-size:11px;letter-spacing:.13em;color:#778392}.heading p,.page p{line-height:1.65;color:#65717f}.heading nav{display:flex;flex-wrap:wrap;gap:12px;align-items:center}.page a{color:#326766}.page button{border:1px solid #bdcbc9;border-radius:7px;background:#f6f9f8;color:#2b5753;padding:9px 13px;cursor:pointer;font:inherit}.page button:disabled{opacity:.5;cursor:default}.page select,.page input{border:1px solid #ccd5da;border-radius:6px;background:white;padding:8px;color:#243648;max-width:100%}.career,.resume,.options,.talents,.records,.rules{padding:20px;margin:18px 0;border:1px solid #dbe2e8;border-radius:12px;background:#fff}.career>div{flex:1}.career h2{font-size:21px}.page progress{width:100%;height:8px;accent-color:#5f958b}.resume{flex-wrap:wrap}.resume h2{font-size:17px}.options{display:flex;gap:16px;flex-wrap:wrap}.options label{display:flex;flex-direction:column;gap:8px;min-width:160px}.options p{flex-basis:100%;margin:0}.chapters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.chapters article,.reports article{padding:20px;border:1px solid #d9e0e5;border-radius:12px;background:#fff}.chapters article>span{font-size:12px;color:#80928e}.chapters h2{font-size:17px}.chapters p{min-height:72px;font-size:14px}.talents label{display:inline-flex;gap:8px;align-items:center;margin:0 18px 12px 0}.talents input{width:60px}.records>div{display:flex;flex-wrap:wrap;gap:10px}.records span{border:1px solid #dfe5e8;border-radius:6px;padding:8px;color:#9aa5b0}.records span[data-unlocked=true]{color:#316e5b;background:#f0f8f3}.reports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.reports>h2{grid-column:1/-1;font-size:19px}.reports h3{font-size:16px}.reports small{color:#8c969f}.reports article>strong{display:block;margin:12px 0}.rules summary{cursor:pointer}.error{padding:13px;border:1px solid #e4bdba;border-radius:8px;background:#fff6f5;color:#985a4c!important}.ranking{padding:0;list-style:none}.ranking li{display:flex;gap:18px;padding:16px;border-bottom:1px solid #dde4e8;align-items:center}.ranking li>span{flex:1}@media(max-width:700px){.page{padding:12px}.heading,.career{align-items:flex-start;flex-direction:column}.chapters,.reports{grid-template-columns:1fr}.chapters p{min-height:0}.career>div{width:100%}.heading nav{gap:10px}.ranking li{gap:10px;flex-wrap:wrap}}
 .page[data-office-appearance]{border-top:4px solid var(--office-appearance)}.page[data-office-appearance] :global([aria-label="工位塔防战场"]){border-color:var(--office-appearance)}.page[data-office-appearance] :global([data-art="hero"]),.page[data-office-appearance] :global([data-art="single"]),.page[data-office-appearance] :global([data-art="slow"]),.page[data-office-appearance] :global([data-art="splash"]),.page[data-office-appearance] :global([data-art="push"]),.page[data-office-appearance] :global([data-art="shred"]){filter:drop-shadow(0 1px 3px var(--office-appearance))}.appearance{border-left:3px solid var(--office-appearance);padding:8px 12px;background:#ffffff99}
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heading {
+    border-bottom: 1px solid var(--color-border)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heading span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .heading p, :global(html[data-site-mode='community'][data-color-mode='dark']) .page p {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page a {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page button {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page select, :global(html[data-site-mode='community'][data-color-mode='dark']) .page input {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .career, :global(html[data-site-mode='community'][data-color-mode='dark']) .resume, :global(html[data-site-mode='community'][data-color-mode='dark']) .options, :global(html[data-site-mode='community'][data-color-mode='dark']) .talents, :global(html[data-site-mode='community'][data-color-mode='dark']) .records, :global(html[data-site-mode='community'][data-color-mode='dark']) .rules {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .page progress {
+    accent-color: var(--color-success)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .chapters article, :global(html[data-site-mode='community'][data-color-mode='dark']) .reports article {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .chapters article>span {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .records span {
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .records span[data-unlocked=true] {
+    color: var(--color-success);
+    background: var(--color-success-bg)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .reports small {
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .error {
+    border: 1px solid var(--color-danger);
+    background: var(--color-danger-bg);
+    color: var(--color-danger) !important
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .ranking li {
+    border-bottom: 1px solid var(--color-border)
+}

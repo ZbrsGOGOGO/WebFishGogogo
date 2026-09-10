@@ -25,6 +25,7 @@ import {
 } from '../../features/development/development-access';
 import { Button, Modal } from '../ui';
 import { SystemIcon } from './SystemIcon';
+import { ThemeSwitch } from './ThemeSwitch';
 import styles from './CommunityShell.module.css';
 import { FishGrowthSummary } from '../../features/community-progression/FishGrowthSummary';
 
@@ -182,6 +183,7 @@ export function CommunitySiteLayout(): JSX.Element {
           </nav>
 
           <div className={styles.accountActions}>
+            <ThemeSwitch />
             {phase === 'bootstrapping' ? (
               <span className={styles.sessionState}>连接中…</span>
             ) : signedIn ? (

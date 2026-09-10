@@ -435,3 +435,12 @@ pre.outputValue {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .display {
+    background: var(--color-surface);
+    color: var(--color-text-secondary)
+}
+:global(html[data-site-mode='community'][data-color-mode='dark']) .colorPreview {
+    box-shadow: var(--shadow-sm)
+}
