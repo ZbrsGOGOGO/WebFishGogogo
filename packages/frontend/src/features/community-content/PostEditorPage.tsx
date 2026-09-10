@@ -103,8 +103,8 @@ export function CommunityPostEditorPage(): JSX.Element {
     bodyFormat,
   }), [body, bodyFormat, channel, tagsInput, title, type]);
   const warnings = useMemo(() => communityContentLinkWarnings(body), [body]);
-  const verified = user?.socialVerificationStatus === 'verified';
-  const canWrite = verified && writeEnabled;
+  const activeAccount = user?.accountStatus === 'active';
+  const canWrite = activeAccount && writeEnabled && (!routePostId || existing?.permissions.canEdit === true);
 
   async function persist(submitForReview: boolean): Promise<void> {
     const nextErrors = validateCommunityPost(payload);
@@ -114,8 +114,12 @@ export function CommunityPostEditorPage(): JSX.Element {
       setRequestError('经验交流当前为只读，暂不能保存或提交内容');
       return;
     }
-    if (!verified) {
-      setRequestError('发布内容前需要完成适用的社交核验');
+    if (!activeAccount) {
+      setRequestError('请使用状态正常的登录账号提交帖子');
+      return;
+    }
+    if (routePostId && !existing?.permissions.canEdit) {
+      setRequestError('你没有权限编辑这篇帖子');
       return;
     }
     setBusyAction(submitForReview ? 'review' : 'draft');
@@ -173,12 +177,12 @@ export function CommunityPostEditorPage(): JSX.Element {
   return (
     <main className={styles.page}>
       <PageHeader
-        title={routePostId ? '编辑内容' : '新建内容'}
-        subtitle="首版仅支持纯文本或安全 Markdown 子集，不支持图片、附件、任意 HTML 或站外链接预览。"
+        title={routePostId ? '编辑帖子' : '发布帖子'}
+        subtitle="正常登录账号即可投稿。草稿和待审内容仅作者及审核人员可见，审核通过后再向其他成员展示。"
         actions={<Link to={workingPostId ? `/community/posts/${encodeURIComponent(workingPostId)}` : '/community'}>返回</Link>}
       />
       {loading ? <p role="status">正在加载草稿…</p> : null}
-      {!writeEnabled && !loading ? <p className={styles.warning}>经验交流当前为只读，不能保存或提交内容。</p> : !verified ? <p className={styles.warning}>当前账号尚未完成适用的社交核验，可以阅读，但不能保存或提交内容。</p> : null}
+      {!writeEnabled && !loading ? <p className={styles.warning}>经验交流当前为只读，不能保存或提交内容。</p> : !activeAccount ? <p className={styles.warning}>请使用状态正常的登录账号保存或提交帖子。</p> : null}
       {requestError ? <div className={styles.error} role="alert"><p>{requestError}</p>{conflictVersion ? <p>内容已更新：v{conflictVersion}</p> : null}{routePostId ? <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>加载最新内容</Button> : null}</div> : null}
       {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
       {existing ? <ContentStateBadges state={existing} /> : null}

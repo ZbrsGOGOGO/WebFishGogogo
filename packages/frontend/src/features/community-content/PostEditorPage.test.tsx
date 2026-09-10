@@ -33,4 +33,26 @@ describe('CommunityPostEditorPage', () => {
     expect(screen.getByText('内容已更新：v4')).toBeInTheDocument();
     expect(communityContentApi.updatePost).toHaveBeenCalledWith('p-1', expect.any(Object), 3, expect.stringContaining('post-update:p-1'));
   });
+
+  it('lets an active unverified account save and submit for review, without claiming publication', async () => {
+    const user = userEvent.setup();
+    useCommunityAuthStore.setState({ user: { ...useCommunityAuthStore.getState().user!, socialVerificationStatus: 'unverified' } });
+    vi.spyOn(communityContentApi, 'listPosts').mockResolvedValue({ items: [], availableTags: [], nextCursor: null, total: 0, writeEnabled: true });
+    vi.spyOn(communityContentApi, 'createPost').mockResolvedValue(post);
+    vi.spyOn(communityContentApi, 'submitPostReview').mockResolvedValue({ ...post, version: 4, publicationStatus: 'pending_review' });
+    render(<MemoryRouter initialEntries={['/community/new']}><Routes><Route path="/community/new" element={<CommunityPostEditorPage />} /><Route path="/community/posts/:id" element={<p>已进入帖子状态页</p>} /></Routes></MemoryRouter>);
+    await user.type(await screen.findByLabelText(/^标题/), post.title);
+    await user.type(screen.getByRole('textbox', { name: /^正文/ }), post.body);
+    await user.click(screen.getByRole('button', { name: '保存并提交审核' }));
+    expect(await screen.findByText('已进入帖子状态页')).toBeInTheDocument();
+    expect(communityContentApi.submitPostReview).toHaveBeenCalledWith('p-1', 3);
+  });
+
+  it('keeps another author’s edit form disabled', async () => {
+    vi.spyOn(communityContentApi, 'getPost').mockResolvedValue({ ...post, permissions: { ...post.permissions, canEdit: false } });
+    render(<MemoryRouter initialEntries={['/community/posts/p-1/edit']}><Routes><Route path="/community/posts/:id/edit" element={<CommunityPostEditorPage />} /></Routes></MemoryRouter>);
+    expect(await screen.findByRole('alert')).toHaveTextContent('没有权限编辑');
+    expect(screen.getByRole('button', { name: '保存草稿' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '保存并提交审核' })).toBeDisabled();
+  });
 });

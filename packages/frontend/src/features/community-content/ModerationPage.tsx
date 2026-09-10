@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type JSX } from 'react';
+import { Link } from 'react-router-dom';
 
 import {
   CommunityApiError,
@@ -117,7 +118,8 @@ export function CommunityModerationPage(): JSX.Element {
     <main className={styles.page}>
       <PageHeader
         title="内容审核台"
-        subtitle="独立 RBAC、服务端再次鉴权、expectedVersion 和不可变审计共同构成处置边界。"
+        subtitle="审核成员提交的帖子与评论。通过后展示；每次处置需填写原因，并保留审核记录。"
+        actions={<Link to="/community">返回帖子与问答</Link>}
       />
       <p className={styles.warning}>审核页面只显示最小必要内容快照；不要复制或传播举报材料中的个人信息。</p>
       {error ? <div className={styles.error} role="alert"><p>{error}</p></div> : null}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type JSX } fr
 import { Link } from 'react-router-dom';
 
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import {
   COMMUNITY_CONTENT_CHANNELS,
   communityContentApi,
@@ -60,18 +61,18 @@ export function CommunityPostsPage(): JSX.Element {
 
   useEffect(() => {
     setItems([]);
+    setWriteEnabled(false);
     void load();
-  }, [load]);
+    return () => { requestSequence.current += 1; };
+  }, [load, user?.publicId]);
 
   function search(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
     setQuery(searchInput.trim());
   }
 
-  const canPublish =
-    writeEnabled &&
-    phase === 'active' &&
-    user?.socialVerificationStatus === 'verified';
+  const canModerate = phase === 'active' && COMMUNITY_FEATURE_FLAGS.moderation &&
+    user?.roles?.some((role) => role === 'moderator' || role === 'admin');
 
   return (
     <main className={styles.page}>
@@ -79,14 +80,19 @@ export function CommunityPostsPage(): JSX.Element {
       <PageHeader
         title="经验交流"
         subtitle="分享经验、提出问题，也记录一次值得复盘的解决过程。"
-        actions={canPublish
-          ? <Link className={styles.primaryLink} to="/community/new">发布内容</Link>
-          : phase === 'guest'
-            ? <Link to="/login">登录后参与</Link>
-            : !writeEnabled
-              ? <span>当前只读</span>
-              : <Link to="/account/security">完成适用的社交核验后发布</Link>}
+        actions={<div className={styles.actions} aria-label="发帖与审核">
+          <Link className={styles.primaryLink} to="/community/new">发布帖子</Link>
+          {canModerate ? <Link to="/moderation">帖子审核</Link> : null}
+        </div>}
       />
+      <div className={styles.publishHelp} role="status">
+        <p>可以分享经验或发起问答。保存草稿后提交审核，通过后再向其他成员展示。</p>
+        {phase === 'guest' ? <p>点击“发布帖子”后先登录，草稿与审核进度保存在自己的账号下。</p>
+          : loading ? <p>正在确认发帖权限…</p>
+            : error ? <p>暂时无法确认发帖权限，请重试；已有草稿不会丢失。</p>
+              : !writeEnabled ? <p>当前内容写入暂未开放，仍可进入编辑页查看说明；暂不能保存或提交。</p>
+                : phase === 'active' ? <p>正常登录账号即可投稿，无需额外社交核验；管理员发帖同样需要审核。</p> : null}
+      </div>
 
       <Card>
         <form className={styles.searchForm} onSubmit={search}>
@@ -111,7 +117,7 @@ export function CommunityPostsPage(): JSX.Element {
         <EmptyState
           title="这里还没有帖子"
           message={query || tag || channel !== 'all' || type !== 'all' ? '没有符合当前筛选的内容，可以调整搜索条件。' : '写下第一篇经验，和大家一起开始交流。'}
-          actions={canPublish ? <Link className={styles.primaryLink} to="/community/new">写第一篇内容</Link> : undefined}
+          actions={<Link className={styles.primaryLink} to="/community/new">写第一篇帖子</Link>}
         />
       ) : (
         <section className={styles.postList} aria-label="帖子列表">

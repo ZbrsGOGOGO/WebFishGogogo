@@ -62,6 +62,52 @@ describe('ContentService review and visibility invariants', () => {
     process.env = originalEnv;
   });
 
+  it('lets an unverified active member submit, withdraw and revise without publishing or gaining moderation rights', async () => {
+    const author = await activeUser('new-writer@example.com', 'New writer');
+    author.socialVerificationStatus = 'unverified';
+    await dataSource.getRepository(User).save(author);
+    const reader = await activeUser('new-reader@example.com', 'Reader');
+    const draft = await content.createPost(author.id, postInput('An unverified member submits this private draft.'), 'active-draft');
+    const submitted = await content.submitPostReview(author.id, draft.id, draft.version);
+    expect(submitted.publicationStatus).toBe('pending_review');
+    await expect(content.getPost(draft.id, reader.id)).rejects.toMatchObject({ response: { code: 'CONTENT_NOT_FOUND' } });
+    expect((await content.listPosts(reader.id, {})).items).toHaveLength(0);
+    await expect(moderation.access(author.id)).rejects.toMatchObject({ status: 403 });
+    await expect(content.updatePost(reader.id, draft.id, postInput('Another author cannot overwrite this private draft.'), submitted.version, 'not-author')).rejects.toMatchObject({ response: { code: 'CONTENT_AUTHOR_REQUIRED' } });
+    const withdrawn = await content.withdrawPostReview(author.id, draft.id, submitted.version);
+    expect(withdrawn.publicationStatus).toBe('draft');
+    const edited = await content.updatePost(author.id, draft.id, postInput('Updated draft, still waiting for a human approval.'), withdrawn.version, 'active-edit');
+    await content.submitPostReview(author.id, draft.id, edited.version);
+    await approve('post', draft.id);
+    expect((await content.getPost(draft.id, reader.id)).body).toBe('Updated draft, still waiting for a human approval.');
+    expect(await dataSource.getRepository(User).findOneByOrFail({ id: author.id })).toMatchObject({ socialVerificationStatus: 'unverified', communityRole: 'user' });
+  });
+
+  it('always sends administrator posts to human review even with legacy local auto-publish flags enabled', async () => {
+    const admin = await activeUser('station-admin@example.com', 'Station admin', 'admin');
+    admin.socialVerificationStatus = 'unverified';
+    await dataSource.getRepository(User).save(admin);
+    process.env.CONTENT_MODERATION_STAFFED = 'true';
+    process.env.CONTENT_LOW_RISK_AUTO_PUBLISH_ENABLED = 'true';
+    try {
+      const draft = await content.createPost(admin.id, postInput('An administrator must submit this post for review too.'), 'admin-draft');
+      expect((await content.submitPostReview(admin.id, draft.id, draft.version)).publicationStatus).toBe('pending_review');
+      expect(await dataSource.getRepository(ModerationCase).countBy({ contentId: draft.id, status: 'open' })).toBe(1);
+      await expect(moderation.access(admin.id)).resolves.toMatchObject({ allowed: true, role: 'admin' });
+    } finally {
+      delete process.env.CONTENT_MODERATION_STAFFED;
+      delete process.env.CONTENT_LOW_RISK_AUTO_PUBLISH_ENABLED;
+    }
+  });
+
+  it.each(['pending_email', 'suspended', 'banned', 'deleting', 'deleted'] as const)('does not allow a %s account to submit posts', async (accountStatus) => {
+    const author = await activeUser('unavailable@example.com', 'Unavailable');
+    author.accountStatus = accountStatus;
+    await dataSource.getRepository(User).save(author);
+    await expect(content.createPost(author.id, postInput('Unavailable accounts cannot create even private drafts.'), 'blocked-draft')).rejects.toMatchObject({ response: { code: 'ACCOUNT_UNAVAILABLE' } });
+    expect(await dataSource.getRepository(CommunityPost).count()).toBe(0);
+  });
+
   it('keeps pending and superseded revisions private and returns only currentVersion on conflicts', async () => {
     const author = await activeUser('author@example.com', 'Author');
     const reader = await activeUser('reader@example.com', 'Reader');

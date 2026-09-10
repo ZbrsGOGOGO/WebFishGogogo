@@ -131,7 +131,9 @@ export class ContentService {
     assertContentWritesEnabled();
     const hash = contentHash(input);
     return this.dataSource.transaction(async (manager) => {
-      const author = await this.requirePublisher(manager, userId, true);
+      // Posts are submissions, not publication: active members may draft them;
+      // a moderator must approve the submitted revision before others see it.
+      const author = await this.requireActiveUser(manager, userId, true);
       const replay = await this.replay(manager, userId, 'content.post.create', idempotencyKey, hash);
       if (replay) return replay;
       const postRepo = manager.getRepository(CommunityPost);
@@ -168,7 +170,7 @@ export class ContentService {
     assertContentWritesEnabled();
     const hash = contentHash({ postId, input, expectedVersion });
     return this.dataSource.transaction(async (manager) => {
-      const author = await this.requirePublisher(manager, userId, true);
+      const author = await this.requireActiveUser(manager, userId, true);
       const replay = await this.replay(manager, userId, 'content.post.update', idempotencyKey, hash);
       if (replay) return replay;
       const post = await this.lockPost(manager, postId);
@@ -714,7 +716,7 @@ export class ContentService {
     const commandKey = `${postId}:${expectedVersion}`;
     const hash = contentHash({ postId, expectedVersion, action });
     return this.dataSource.transaction(async (manager) => {
-      const author = await this.requirePublisher(manager, userId, true);
+      const author = await this.requireActiveUser(manager, userId, true);
       const replay = await this.replay(manager, userId, commandType, commandKey, hash);
       if (replay) return replay;
       const post = await this.lockPost(manager, postId);
@@ -736,17 +738,8 @@ export class ContentService {
         }
         const risk = assessContentRisk(`${revision.title}\n${revision.body}`);
         revision.riskLevel = risk;
-        if (lowRiskAutoPublishEnabled(risk)) {
-          revision.publicationStatus = 'published';
-          revision.reviewDecision = 'approved';
-          revision.reviewReason = '低风险自动审核';
-          revision.effectiveAt = new Date();
-          post.activeRevisionId = revision.id;
-          post.pendingRevisionId = null;
-          post.publicationStatus = 'published';
-          post.lastReviewDecision = 'approved';
-          post.lastReviewReason = '低风险自动审核';
-        } else {
+        // All post revisions require a human decision, including staff posts.
+        {
           revision.publicationStatus = 'pending_review';
           revision.moderationStatus =
             risk === 'high' || risk === 'critical' ? 'hidden' : 'normal';
