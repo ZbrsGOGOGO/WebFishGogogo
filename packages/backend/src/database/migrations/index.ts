@@ -34,6 +34,7 @@ import { AddDemonTowerAutoExplore1700000000032 } from './1700000000032-AddDemonT
 import { AddWorkstationCampaign1700000000033 } from './1700000000033-AddWorkstationCampaign';
 import { AddDemonTowerSquads1700000000034 } from './1700000000034-AddDemonTowerSquads';
 import { AddOfficeHub1700000000035 } from './1700000000035-AddOfficeHub';
+import { AddFishGrowthAndSupport1700000000036 } from './1700000000036-AddFishGrowthAndSupport';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -73,4 +74,5 @@ export const migrations = [
   AddWorkstationCampaign1700000000033,
   AddDemonTowerSquads1700000000034,
   AddOfficeHub1700000000035,
+  AddFishGrowthAndSupport1700000000036,
 ];

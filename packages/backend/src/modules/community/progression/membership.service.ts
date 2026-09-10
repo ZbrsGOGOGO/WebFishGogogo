@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import type { CommunityMembershipView } from '@stealth-reader/shared';
-import { EntityManager } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
+import { CommunitySupportEntry } from '../../../database/entities/community-growth.entity';
 import { CommunityMembershipGrant } from '../../../database/entities/community-progression.entity';
 import { User } from '../../../database/entities/user.entity';
 
@@ -14,9 +15,22 @@ export class MembershipService {
     const row = await manager.getRepository(CommunityMembershipGrant).findOne({
       where: { userId, campaignKey: 'launch_vip_202609' },
     });
-    if (!row) return emptyMembership();
-    const active = communityProgressionEnabled() && row.startsAt.getTime() <= now.getTime() && now.getTime() < row.expiresAt.getTime();
-    return { active, startsAt: row.startsAt.toISOString(), expiresAt: row.expiresAt.toISOString(), source: 'launch_gift', benefits: active ? ['demon_tower_auto_explore'] : [] };
+    const supports = await manager.getRepository(CommunitySupportEntry).find({ where: { userId, revokedAt: IsNull() }, order: { startsAt: 'ASC' } });
+    const periods = [...(row ? [{ startsAt: row.startsAt, expiresAt: row.expiresAt, source: 'launch_gift' as const }] : []),
+      ...supports.map(entry => ({ startsAt: entry.startsAt, expiresAt: entry.expiresAt, source: 'afdian_support' as const }))].sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+    if (!periods.length) return emptyMembership();
+    const merged: typeof periods = [];
+    for (const period of periods) {
+      const tail = merged.at(-1);
+      if (tail && tail.expiresAt.getTime() >= period.startsAt.getTime()) {
+        if (period.expiresAt > tail.expiresAt) tail.expiresAt = period.expiresAt;
+        if (period.source === 'afdian_support') tail.source = period.source;
+      } else merged.push({ ...period });
+    }
+    const current = merged.find(period => period.startsAt <= now && now < period.expiresAt);
+    const visible = current ?? merged.at(-1)!;
+    const active = communityProgressionEnabled() && Boolean(current);
+    return { active, startsAt: visible.startsAt.toISOString(), expiresAt: visible.expiresAt.toISOString(), source: visible.source, benefits: active ? ['demon_tower_auto_explore'] : [] };
   }
   async requireVip(manager: EntityManager, userId: string, now: Date): Promise<CommunityMembershipView> {
     if (!communityProgressionEnabled()) throw new ServiceUnavailableException({ code: 'PROGRESSION_DISABLED' });

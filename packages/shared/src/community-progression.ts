@@ -3,13 +3,17 @@ export interface TitleBadge { key: string; label: string }
 export type CommunityAchievementMetric = 'farmHarvests' | 'platformLevel' | 'railCompleted' | 'towerLevel' | 'towerCollection' | 'towerContribution' | 'dailyChampionships' | 'developmentCompleted'
   | 'workstationFirstThree' | 'workstationPerfect' | 'workstationSpeed' | 'workstationOvertime' | 'workstationTenThousand' | 'workstationTier'
   | 'demonFirstBoss' | 'demonBossFloors' | 'demonHonorSkin' | 'demonFiveStar'
-  | 'officeCollection' | 'officeStories' | 'officeDrawings' | 'officeDepartmentWins' | 'officeBossDays' | 'officeWeeklyWins';
+  | 'officeCollection' | 'officeStories' | 'officeDrawings' | 'officeDepartmentWins' | 'officeBossDays' | 'officeWeeklyWins' | 'fishExperience';
 export interface CommunityAchievementDefinition {
   key: string; title: TitleBadge; label: string; description: string;
   category: 'farm' | 'community' | 'games' | 'tower' | 'development';
   metric: CommunityAchievementMetric; target: number;
 }
 export const COMMUNITY_ACHIEVEMENTS: readonly CommunityAchievementDefinition[] = [
+  ...([
+    ['fish_1', '初入鱼场', 1], ['fish_2', '摸鱼小将', 120], ['fish_3', '摸鱼达人', 600],
+    ['fish_4', '打窝仙人', 1800], ['fish_5', '潮汐海灵', 5400], ['fish_6', '摸鱼之王', 12000],
+  ] as const).map(([key, label, target]): CommunityAchievementDefinition => ({ key, title: { key, label }, label: `摸鱼境界 · ${label}`, description: `摸鱼指数累计达到 ${target} 点；仅为趣味成长，不影响办公币和战力。`, category: 'community', metric: 'fishExperience', target })),
   { key: 'farm_first', title: { key: 'farm_first', label: '工位园丁' }, label: '第一批收获', description: '成功收获 1 批作物；多地块同时收获计为 1 批。', category: 'farm', metric: 'farmHarvests', target: 1 },
   { key: 'farm_25', title: { key: 'farm_25', label: '绿意常驻' }, label: '二十五批绿意', description: '累计成功收获 25 批作物。', category: 'farm', metric: 'farmHarvests', target: 25 },
   { key: 'farm_100', title: { key: 'farm_100', label: '百收园艺师' }, label: '百批丰收', description: '累计成功收获 100 批作物。', category: 'farm', metric: 'farmHarvests', target: 100 },
@@ -44,7 +48,7 @@ export const COMMUNITY_ACHIEVEMENTS: readonly CommunityAchievementDefinition[] =
 ];
 export interface CommunityMembershipView {
   active: boolean; startsAt: string | null; expiresAt: string | null;
-  source: 'launch_gift' | null; benefits: ('demon_tower_auto_explore')[];
+  source: 'launch_gift' | 'afdian_support' | null; benefits: ('demon_tower_auto_explore')[];
 }
 export interface CommunityProgressionCatalog {
   enabled: boolean; achievements: readonly CommunityAchievementDefinition[];
@@ -58,9 +62,36 @@ export interface CommunityAchievementView {
 export interface CommunityProgressionView {
   serverNow: string; enabled: boolean; writesEnabled: boolean;
   vip: CommunityMembershipView;
+  /** Additive fields: older servers may omit them during rolling application updates. */
+  fish?: FishProgressView;
+  support?: SupportTotals;
   presentation: { version: number; equippedTitle: TitleBadge | null };
   achievements: CommunityAchievementView[];
 }
 export interface CommunityTitleInput { requestId: string; expectedVersion: number; titleKey: string | null }
 export interface CommunityTitleReceipt { requestId: string; replayed: boolean; overview: CommunityProgressionView }
 export interface CommunityAchievementRefreshReceipt { newlyUnlocked: string[]; overview: CommunityProgressionView }
+
+export interface FishProgressView {
+  experience: number; activeSeconds: number; gameSeconds: number;
+  todayExperience: number; todayActiveSeconds: number; todayGameSeconds: number;
+  rank: TitleBadge; nextRank: (TitleBadge & { target: number }) | null;
+}
+export const FISH_RULES = { activeSecondsPerDay: 14_400, gameBonusSecondsPerDay: 7_200, heartbeatSeconds: 30, leaseSeconds: 75, idleSeconds: 180 } as const;
+export function fishProgressView(experience = 0, activeSeconds = 0, gameSeconds = 0, todayActiveSeconds = 0, todayGameSeconds = 0): FishProgressView {
+  const ranks = COMMUNITY_ACHIEVEMENTS.filter(item => item.metric === 'fishExperience');
+  const rank = [...ranks].reverse().find(item => experience >= item.target) ?? ranks[0];
+  const next = ranks.find(item => item.target > experience);
+  return { experience, activeSeconds, gameSeconds, todayActiveSeconds, todayGameSeconds,
+    todayExperience: Math.floor(todayActiveSeconds / 60) + Math.floor(Math.min(todayGameSeconds, FISH_RULES.gameBonusSecondsPerDay) / 60),
+    rank: { ...rank.title }, nextRank: next ? { ...next.title, target: next.target } : null };
+}
+export interface FishHeartbeatInput { tabId: string; sequence: number; mode: 'browse' | 'game' | 'pause' }
+export interface SupportTotals { orders: number; months: number; amountFen: number; currency: 'CNY' }
+export interface SupportGrantInput { requestId: string; username: string; orderReference: string; months: number; amountFen: number; confirmed: true }
+export interface SupportEntryView {
+  id: string; username: string | null; displayName: string | null; orderHint: string | null;
+  months: number; amountFen: number; startsAt: string; expiresAt: string; createdAt: string;
+  revokedAt: string | null;
+}
+export interface SupportAdminView { totals: SupportTotals; grossTotals: SupportTotals; activeHolders: number; entries: SupportEntryView[]; hasMore: boolean }

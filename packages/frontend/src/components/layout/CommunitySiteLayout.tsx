@@ -25,6 +25,8 @@ import {
 } from '../../features/development/development-access';
 import { Button } from '../ui';
 import styles from './CommunitySiteLayout.module.css';
+import { useFishActivity } from '../../features/community-progression/useFishActivity';
+import { FishGrowthSummary } from '../../features/community-progression/FishGrowthSummary';
 
 const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   home: '首',
@@ -64,6 +66,7 @@ function isWorkspaceRoute(pathname: string): boolean {
 }
 
 export function CommunitySiteLayout(): JSX.Element {
+  useFishActivity();
   const location = useLocation();
   const phase = useCommunityAuthStore((state) => state.phase);
   const user = useCommunityAuthStore((state) => state.user);
@@ -248,6 +251,7 @@ export function CommunitySiteLayout(): JSX.Element {
             </section>
 
             <nav className={styles.sideNav} aria-label="全部系统">
+              {phase === 'active' && COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled ? <FishGrowthSummary compact /> : null}
               <p>工作台</p>
               {COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).map((item) => (
                 <Link

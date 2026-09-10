@@ -10,6 +10,7 @@ import { AuthRefreshToken } from '../../database/entities/auth-refresh-token.ent
 import { AuthSession } from '../../database/entities/auth-session.entity';
 import { CommunityNotification } from '../../database/entities/community-notification.entity';
 import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../database/entities/community-progression.entity';
+import { CommunityFishProgress, CommunitySupportEntry } from '../../database/entities/community-growth.entity';
 import { DemonTowerAutoRun } from '../../database/entities/demon-tower-auto-run.entity';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor } from '../../database/entities/demon-tower.entity';
 import {
@@ -263,6 +264,10 @@ describe('AccountLifecycleService', () => {
         createdAt: now, updatedAt: now, stoppedAt: null });
     }
     const tables = [CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation, DemonTowerAutoRun];
+    for (const owner of [user, peer]) {
+      await dataSource.getRepository(CommunityFishProgress).save({ userId: owner.id, experience: 120, activeSeconds: 7200, gameSeconds: 0, serviceDate: '2026-09-10', dailyActiveSeconds: 0, dailyGameSeconds: 0, mode: 'pause', lastSeenAt: now });
+      await dataSource.getRepository(CommunitySupportEntry).insert({ id: owner.id, userId: owner.id, actorId: owner.id, orderHash: owner.id.padEnd(64, 'a'), requestHash: 'b'.repeat(64), orderHint: '1234', months: 1, amountFen: 1000, startsAt: now, expiresAt: new Date(now.getTime() + 30 * 86400000), createdAt: now });
+    }
     const beforePeer = await Promise.all(tables.map((entity) => dataSource.getRepository(entity).findBy({ userId: peer.id })));
     await service.requestDeletion(user.id, session.id, 'growth-delete-idempotency');
     const request = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
@@ -273,6 +278,10 @@ describe('AccountLifecycleService', () => {
       expect(await repo.findBy({ userId: peer.id })).toEqual(beforePeer[index]);
     }
     expect((await dataSource.getRepository(User).findOneByOrFail({ id: peer.id })).communityRole).toBe('user');
+    expect(await dataSource.getRepository(CommunityFishProgress).findOneBy({ userId: user.id })).toBeNull();
+    expect((await dataSource.getRepository(CommunityFishProgress).findOneByOrFail({ userId: peer.id })).experience).toBe(120);
+    expect(await dataSource.getRepository(CommunitySupportEntry).findOneByOrFail({ id: user.id })).toMatchObject({ userId: null, actorId: null, orderHint: null, amountFen: 1000, months: 1 });
+    expect(await dataSource.getRepository(CommunitySupportEntry).findOneByOrFail({ id: peer.id })).toMatchObject({ userId: peer.id, actorId: peer.id, orderHint: '1234', amountFen: 1000 });
   });
 
   it('removes private development files and clears authored review text when account deletion completes', async () => {

@@ -14,6 +14,8 @@ import { COMMUNITY_CLOCK, type CommunityClock } from '../community-clock';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { MembershipService, communityProgressionEnabled } from './membership.service';
 import { titleBadge } from './title-projection';
+import { readFishProgress } from './fish-growth.service';
+import { supportTotals } from './support-ledger.service';
 
 type Metrics = Record<CommunityAchievementMetric, number>;
 const safeCount = (value: unknown, cap = 1_000_000_000): number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? Math.min(cap, value) : 0;
@@ -90,12 +92,13 @@ export class CommunityProgressionService {
     return keys;
   }
   private async view(manager: EntityManager, userId: string, now: Date, knownMetrics?: Metrics): Promise<CommunityProgressionView> {
-    const [metrics, unlocks, presentation, vip] = await Promise.all([
+    const [metrics, unlocks, presentation, vip, fish, support] = await Promise.all([
       knownMetrics ?? this.metrics(manager, userId), manager.getRepository(CommunityAchievementUnlock).findBy({ userId }),
       manager.getRepository(CommunityUserPresentation).findOneBy({ userId }), this.membership.view(manager, userId, now),
+      readFishProgress(manager, userId, now), supportTotals(manager, userId),
     ]);
     const owned = new Map(unlocks.map((row) => [row.achievementKey, row]));
-    return { serverNow: now.toISOString(), enabled: communityProgressionEnabled(), writesEnabled: communityProgressionEnabled() && communityWritesEnabled(), vip,
+    return { serverNow: now.toISOString(), enabled: communityProgressionEnabled(), writesEnabled: communityProgressionEnabled() && communityWritesEnabled(), vip, fish, support,
       presentation: { version: presentation?.version ?? 0, equippedTitle: presentation?.equippedTitleKey && owned.has(presentation.equippedTitleKey) ? titleBadge(presentation.equippedTitleKey) : null },
       achievements: COMMUNITY_ACHIEVEMENTS.map((item) => ({ key: item.key, progress: Math.min(item.target, metrics[item.metric]), target: item.target, eligible: owned.has(item.key) || metrics[item.metric] >= item.target, unlockedAt: owned.get(item.key)?.unlockedAt.toISOString() ?? null })) };
   }
@@ -142,6 +145,7 @@ export class CommunityProgressionService {
       officeCollection: OFFICE_COLLECTION.filter(item => safeCount(officeOwned[item.id]) > 0).length,
       officeStories: safeCount(officeStats.stories), officeDrawings: safeCount(officeStats.drawings), officeDepartmentWins: safeCount(officeStats.departmentWins),
       officeBossDays: safeCount(officeStats.bossDays), officeWeeklyWins: safeCount(officeStats.weeklyWins),
+      fishExperience: (await readFishProgress(manager, userId, this.clock.now())).experience,
     };
   }
 }

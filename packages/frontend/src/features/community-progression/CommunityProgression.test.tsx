@@ -12,8 +12,8 @@ import { CommunityVipSummary, membershipRemaining } from './CommunityVipSummary'
 import { useCommunityProgression } from './useCommunityProgression';
 
 const catalog: CommunityProgressionCatalog = { enabled: true, achievements: COMMUNITY_ACHIEVEMENTS, membership: { giftDays: 30, automaticRenewal: false, paid: false, benefit: 'demon_tower_auto_explore', existingAccountsOnly: true }, historicalDataNotice: '只读取可核验历史。' };
-const title = COMMUNITY_ACHIEVEMENTS[0].title;
-const overview = (extra: Partial<CommunityProgressionView> = {}): CommunityProgressionView => ({ serverNow: '2026-09-09T00:00:00.000Z', enabled: true, writesEnabled: true, vip: { active: true, startsAt: '2026-09-09T00:00:00.000Z', expiresAt: '2026-10-09T00:00:00.000Z', source: 'launch_gift', benefits: ['demon_tower_auto_explore'] }, presentation: { version: 0, equippedTitle: null }, achievements: COMMUNITY_ACHIEVEMENTS.map((item, index) => ({ key: item.key, progress: index ? 0 : 1, target: item.target, eligible: index === 0, unlockedAt: index ? null : '2026-09-09T00:00:00.000Z' })), ...extra });
+const title = COMMUNITY_ACHIEVEMENTS.find(item => item.key === 'farm_first')!.title;
+const overview = (extra: Partial<CommunityProgressionView> = {}): CommunityProgressionView => ({ serverNow: '2026-09-09T00:00:00.000Z', enabled: true, writesEnabled: true, vip: { active: true, startsAt: '2026-09-09T00:00:00.000Z', expiresAt: '2026-10-09T00:00:00.000Z', source: 'launch_gift', benefits: ['demon_tower_auto_explore'] }, presentation: { version: 0, equippedTitle: null }, achievements: COMMUNITY_ACHIEVEMENTS.map(item => ({ key: item.key, progress: item.key === title.key ? 1 : 0, target: item.target, eligible: item.key === title.key, unlockedAt: item.key === title.key ? '2026-09-09T00:00:00.000Z' : null })), ...extra });
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; };
 const wrap = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 describe('community achievements, titles and VIP', () => {
@@ -34,7 +34,7 @@ describe('community achievements, titles and VIP', () => {
     expect(screen.getByRole('heading', { name: '职业晋升 · 大老板' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '九层纪念' })).toBeVisible();
     expect(screen.getByText(/新注册账号不自动获赠/)).toBeVisible();
-    expect(screen.getByText(/没有收费、购买或自动续费入口/)).toBeVisible();
+    expect(screen.getByText(/没有支付或自动续费入口/)).toBeVisible();
     expect(communityProgressionApi.refresh).not.toHaveBeenCalled(); expect(communityProgressionApi.title).not.toHaveBeenCalled();
     expect(view.container.querySelector('iframe,video,audio')).toBeNull();
   });

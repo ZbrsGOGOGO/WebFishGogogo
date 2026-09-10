@@ -57,10 +57,10 @@ describe('demon tower server-owned automatic exploration UI', () => {
   });
   it('does not enable inactive VIP, and provides the real benefits link', async () => {
     vi.mocked(communityProgressionApi.me).mockResolvedValue(vip(false)); render(ui());
-    expect(await screen.findByText(/需要有效的 VIP 托管权益/)).toBeVisible(); expect(screen.getByRole('button', { name: '设置本批委托' })).toBeDisabled();
-    expect(screen.getByRole('link', { name: '查看成长档案与 VIP 权益' })).toHaveAttribute('href', '/achievements');
+    expect(await screen.findByText(/需要有效的 期权持有者 托管权益/)).toBeVisible(); expect(screen.getByRole('button', { name: '设置本批委托' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: '查看成长档案与 期权持有者 权益' })).toHaveAttribute('href', '/achievements');
   });
-  it('allows stop when VIP expired and service disabled, without moving version parameter', async () => {
+  it('allows stop when 期权持有者 expired and service disabled, without moving version parameter', async () => {
     vi.mocked(communityProgressionApi.me).mockResolvedValue(vip(false)); vi.mocked(communityDemonTowerApi.auto).mockResolvedValue(response(run(), false));
     render(ui({ overview: towerOverview({ writesEnabled: false, autoExplore: run() }) }));
     fireEvent.click(await screen.findByRole('button', { name: '停止托管并手动接管' }));

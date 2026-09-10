@@ -7,6 +7,8 @@ import { CommunityTitleBadge } from './CommunityTitleBadge';
 import { CommunityVipSummary } from './CommunityVipSummary';
 import { useCommunityProgression } from './useCommunityProgression';
 import styles from './Progression.module.css';
+import { FishGrowthSummary } from './FishGrowthSummary';
+import { SupportAdminPanel } from './SupportAdminPanel';
 
 export function CommunityAchievementsPage(): JSX.Element {
   const owner = useCommunityAuthStore((state) => state.user?.publicId);
@@ -18,6 +20,7 @@ function ConfirmTitle({ selected, onClose, onConfirm, disabled }: { selected: Co
   return <dialog ref={dialog} open={typeof HTMLDialogElement.prototype.showModal !== 'function' || undefined} className={styles.dialog} aria-labelledby="title-confirm-heading" onCancel={(event) => { event.preventDefault(); onClose(); }}><h2 id="title-confirm-heading">公开佩戴「{selected.title.label}」？</h2><p>这是主动公开的昵称后缀，会显示在个人页、聊天室和私聊中。成就收藏列表仍遵守你的荣誉隐私设置；佩戴不会改变昵称、登录账号或管理权限。</p><p>历史消息在重新加载时显示当前佩戴，已打开的旧记录不会被全部即时重写。</p><div className={styles.actions}><button className={styles.button} type="button" disabled={disabled} onClick={onConfirm}>确认公开佩戴</button><button className={styles.button} type="button" onClick={onClose}>取消</button></div></dialog>;
 }
 function AchievementsWorkspace(): JSX.Element {
+  const admin = useCommunityAuthStore(s => s.user?.roles?.includes('admin'));
   const state = useCommunityProgression(); const [selection, setSelection] = useState<CommunityAchievementDefinition | null>(null);
   const overview = state.overview;
   const disabled = state.busy || Boolean(state.pending) || !overview?.writesEnabled;
@@ -26,7 +29,8 @@ function AchievementsWorkspace(): JSX.Element {
     {state.error ? <div className={styles.error} role="alert">{state.error}{state.pending ? <><p>确认前不会提交其他佩戴操作；重试使用原编号。</p><button className={styles.button} type="button" disabled={state.busy} onClick={() => { void state.retry(); }}>确认上次佩戴操作</button></> : null}</div> : null}
     {state.notice ? <p className={styles.notice} role="status">{state.notice}</p> : null}
     {state.catalog?.enabled === false || overview?.enabled === false ? <p className={styles.notice}>成长档案暂未开放，其他账号功能不受影响。</p> : null}
-    {state.catalog?.enabled && overview?.enabled ? <><CommunityVipSummary vip={overview.vip} serverNow={overview.serverNow} giftDays={state.catalog.membership.giftDays} />
+    {state.catalog?.enabled && overview?.enabled ? <><FishGrowthSummary initial={overview.fish} /><CommunityVipSummary vip={overview.vip} support={overview.support} serverNow={overview.serverNow} giftDays={state.catalog.membership.giftDays} />
+      {admin ? <SupportAdminPanel writesEnabled={overview.writesEnabled} /> : null}
       <section className={styles.card} aria-label="佩戴状态"><div className={styles.status}><div><h2>成就与称号</h2><p>当前公开佩戴：{overview.presentation.equippedTitle ? <CommunityTitleBadge title={overview.presentation.equippedTitle} /> : '未佩戴'}</p></div><div className={styles.actions}><button className={styles.button} type="button" disabled={disabled || !overview.presentation.equippedTitle} onClick={() => { void state.equip(null); }}>卸下称号</button><button className={styles.button} type="button" disabled={disabled} onClick={() => { void state.sync(); }}>{state.busy ? '处理中…' : '同步成就进度'}</button></div></div><p className={styles.muted}>{state.catalog.historicalDataNotice} 同步会一次记录所有达标成就，不必逐个领奖。</p>{!overview.writesEnabled ? <p className={styles.notice}>当前维护只读，进度可以查看，暂不能同步或更换称号。</p> : null}</section>
       <div className={styles.grid}>{state.catalog.achievements.map((item) => {
         const progress = overview.achievements.find((value) => value.key === item.key); const unlocked = Boolean(progress?.unlockedAt); const equipped = overview.presentation.equippedTitle?.key === item.title.key;

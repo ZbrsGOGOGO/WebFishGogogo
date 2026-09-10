@@ -29,6 +29,7 @@ import { CommunityNotification } from '../../database/entities/community-notific
 import { ConsentRecord } from '../../database/entities/consent-record.entity';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile } from '../../database/entities/demon-tower.entity';
 import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPresentation } from '../../database/entities/community-progression.entity';
+import { CommunityFishProgress, CommunitySupportEntry } from '../../database/entities/community-growth.entity';
 import { DemonTowerAutoRun } from '../../database/entities/demon-tower-auto-run.entity';
 import {
   DevelopmentEvent,
@@ -597,6 +598,11 @@ export class AccountLifecycleService
         await manager.getRepository(CommunityUserPresentation).delete({ userId: user.id });
         await manager.getRepository(CommunityAchievementUnlock).delete({ userId: user.id });
         await manager.getRepository(CommunityMembershipGrant).delete({ userId: user.id });
+        await manager.getRepository(CommunityFishProgress).delete({ userId: user.id });
+        // Keep non-identifying aggregate support totals; erase member/order hints and operator links.
+        await manager.getRepository(CommunitySupportEntry).update({ userId: user.id }, { userId: null, orderHint: null });
+        await manager.getRepository(CommunitySupportEntry).update({ actorId: user.id }, { actorId: null });
+        await manager.getRepository(CommunitySupportEntry).update({ revokedBy: user.id }, { revokedBy: null });
         await manager.getRepository(DemonTowerContribution).delete({ userId: user.id });
         await manager.getRepository(DemonTowerDailyProgress).delete({ userId: user.id });
         await manager.getRepository(DemonTowerProfile).delete({ userId: user.id });

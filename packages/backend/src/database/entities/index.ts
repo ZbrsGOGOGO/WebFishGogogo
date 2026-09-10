@@ -9,6 +9,7 @@ import { PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward }
 import { RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats } from './rail-room.entity';
 import { DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward } from './demon-tower.entity';
 import { CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation } from './community-progression.entity';
+import { CommunityFishProgress, CommunitySupportEntry } from './community-growth.entity';
 import { DemonTowerAutoRun } from './demon-tower-auto-run.entity';
 import { DemonTowerSquad } from './demon-tower-squad.entity';
 import { TrendingNewsBoardRun, TrendingNewsItemRecord } from './trending-news.entity';
@@ -137,6 +138,7 @@ export {
   DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
+  CommunityFishProgress, CommunitySupportEntry,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,
   RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,
@@ -259,6 +261,7 @@ export const entities = [
   DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
+  CommunityFishProgress, CommunitySupportEntry,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,
   RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,

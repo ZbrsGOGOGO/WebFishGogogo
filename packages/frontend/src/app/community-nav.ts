@@ -189,7 +189,7 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
   {
     id: 'achievements', label: '成长档案', path: '/achievements',
     enabled: COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled, requiresAccount: true,
-    description: '成就称号与赠送 VIP 权益',
+    description: '成就称号与赠送 期权持有者 权益',
   },
 ] as const;
 
