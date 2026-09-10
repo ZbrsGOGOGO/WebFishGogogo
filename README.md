@@ -2,7 +2,7 @@
 
 一个办公室主题的轻社区：和同事聊天、照料工位绿植、参加协作任务，或者打开一个低调的小游戏小窗。
 
-[访问网站](https://zbrshyyzxx.top) · [文档导航](docs/README.md) · [开发进度](docs/PROGRESS.md) · [部署指南](deploy/COMMUNITY_DEPLOYMENT.md) · [参与开发](CONTRIBUTING.md)
+[访问网站](https://zbrshyyzxx.top) · [文档导航](docs/README.md) · [开发进度](docs/PROGRESS.md) · [部署指南](deploy/COMMUNITY_DEPLOYMENT.md) · [参与开发](CONTRIBUTING.md) · [支持项目](#支持项目)
 
 ## 当前版本
 
@@ -125,6 +125,14 @@ node packages/frontend/scripts/extract-paper-arena-map.mjs --check
 - 生产变量模板默认关闭业务闸门；前端隐藏入口不是权限边界。禁止公开服务端密钥、生产环境文件、数据库备份及真实协作附件。
 
 开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [AGENTS.md](AGENTS.md)。文档索引将当前实现、阶段设计与历史发布分开；旧乐斗、早期塔防 V1–V3 文档不再作为当前功能清单。
+
+## 支持项目
+
+如果你喜欢「摸摸公司」，欢迎通过爱发电自愿支持项目的持续开发与维护。感谢每一份支持，也欢迎通过反馈和参与开发帮助项目改进。
+
+**[前往作者的爱发电主页](https://afdian.com/a/zbrshyyzxx)**
+
+这是站外自愿支持入口，不是站内充值；不会自动兑换账号准入、VIP、办公币、游戏战力或管理权限，网站原有的准入与权限规则保持不变。
 
 ## 安全、许可与已知边界
 
