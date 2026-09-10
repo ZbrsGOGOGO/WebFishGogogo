@@ -65,6 +65,9 @@ import { DevelopmentAccessGate } from '../features/development/development-acces
 import { communityAvatarMark } from '../features/community/profile-options';
 import { useCommunityAuthStore } from './store/community-auth-store';
 import { BallpointBreachEntryPage, BallpointWindowProvider } from '../features/games/ballpoint-breach/BallpointWindow';
+import { DeskPetSession } from '../features/desk-pet/DeskPet';
+
+const DeskPetPage = lazy(() => import('../features/desk-pet/DeskPetPage').then(module => ({ default: module.DeskPetPage })));
 
 const WorkstationTowerDefensePage = lazy(() =>
   import('../features/workstation-tower-defense').then((module) => ({
@@ -144,9 +147,11 @@ function NotFoundPage(): JSX.Element {
 export function CommunityModeRouter(): JSX.Element {
   return (
     <BallpointWindowProvider>
+    <DeskPetSession>
     <Routes>
       <Route element={<CommunitySiteLayout />}>
         <Route index element={<CommunityHomePage />} />
+        <Route path="/desk-pet" element={loading(<DeskPetPage />)} />
 
         <Route element={<CommunityGuestOnlyRoute />}>
           <Route path="/login" element={<CommunityLoginPage />} />
@@ -361,6 +366,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="three-sum" element={<Navigate to="/games" replace />} />
       </Route>
     </Routes>
+    </DeskPetSession>
     </BallpointWindowProvider>
   );
 }

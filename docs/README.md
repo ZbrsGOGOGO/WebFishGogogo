@@ -19,6 +19,7 @@
 | 新闻与热榜 | [新闻分类](NEWS_CATEGORIES_2026-09-08.md)、[快照机制](TRENDING_NEWS_SNAPSHOTS_2026-09-08.md)、[最新来源验收](RELEASE_COMPLETION_20260909.md#热榜实际验收) | 快照文档为初版；后续已增加百度、B 站、豆瓣。微博、知乎、抖音仍为外链，不宣称站内同步成功 |
 | 低调本地游戏与素材 | [2048 / Underrun 源码与许可](LOWKEY_GAME_SOURCE_REVIEW_20260909.md)、[遮司导入边界](ZHENGDAO_GAME_IMPORT.md)、[Ballpoint 来源](../third_party/ballpoint-breach/README.md) | 本地练习、长期存档和正式奖励榜不是同一套数据；遮罩不隐藏网络访问 |
 | 导航入口 | [小游戏与工具直达](RELEASE_NAVIGATION_20260909.md) | 小游戏、工具、排行榜均有独立导航入口 |
+| 工位搭子 | [本机桌宠规则与隐私](DESK_PET.md) | 免费自定义图片与互动，按账号隔离本机保存，不调用 AI 或上传服务器 |
 
 ## 协作、运营与安全
 

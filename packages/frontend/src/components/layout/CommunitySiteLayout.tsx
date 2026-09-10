@@ -36,6 +36,7 @@ const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
   farm: '种',
   games: '游',
   tools: '具',
+  deskPet: '伴',
   officeHub: '司',
   towerDefense: '守',
   demonTower: '塔',
@@ -143,7 +144,7 @@ export function CommunitySiteLayout(): JSX.Element {
   const workspaceRoute = isWorkspaceRoute(location.pathname);
   const primaryNav = COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).slice(0, 5);
   const utilityNav = COMMUNITY_SYSTEM_NAV.filter((item) =>
-    item.enabled && (item.id === 'games' || item.id === 'tools'),
+    item.enabled && (item.id === 'games' || item.id === 'tools' || item.id === 'deskPet'),
   );
   const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'messages', 'friends', 'profile'];
   const mobileNav = mobileNavIds
@@ -225,7 +226,7 @@ export function CommunitySiteLayout(): JSX.Element {
         </div>
         {/* 手机首页提供直达入口；会话页保持原页头高度，避免遮挡聊天输入区。 */}
         {location.pathname === '/' ? (
-          <nav className={styles.mobileUtilities} aria-label="小游戏与工具快捷入口">
+          <nav className={styles.mobileUtilities} aria-label="小游戏、工具与搭子快捷入口">
             {utilityNav.map((item) => (
               <Link key={item.id} to={item.path}
                 aria-current={currentSystem?.id === item.id ? 'page' : undefined}>

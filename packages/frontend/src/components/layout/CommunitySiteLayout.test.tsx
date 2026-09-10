@@ -145,10 +145,11 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     'keeps the compact conversation header at %s while preserving desktop shortcuts',
     (path) => {
       renderLayout(path);
-      expect(screen.queryByRole('navigation', { name: '小游戏与工具快捷入口' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('navigation', { name: '小游戏、工具与搭子快捷入口' })).not.toBeInTheDocument();
       const sidebar = within(screen.getByRole('navigation', { name: '全部系统' }));
       expect(sidebar.getByRole('link', { name: '小游戏' })).toHaveAttribute('href', '/games');
       expect(sidebar.getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
+      expect(sidebar.getByRole('link', { name: '工位搭子' })).toHaveAttribute('href', '/desk-pet');
     },
   );
 

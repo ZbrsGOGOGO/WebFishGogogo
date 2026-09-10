@@ -6,6 +6,7 @@ export type CommunitySystemId =
   | 'farm'
   | 'games'
   | 'tools'
+  | 'deskPet'
   | 'officeHub'
   | 'towerDefense'
   | 'demonTower'
@@ -124,6 +125,10 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     enabled: true,
     requiresAccount: false,
     description: '文本、时间和数据处理工具',
+  },
+  {
+    id: 'deskPet', label: '工位搭子', path: '/desk-pet', enabled: true, requiresAccount: false,
+    description: '本机图片自定义桌宠，免费互动与装扮',
   },
   {
     id: 'demonTower',

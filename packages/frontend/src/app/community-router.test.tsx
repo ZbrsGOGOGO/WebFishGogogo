@@ -86,8 +86,10 @@ describe('community mode routes', () => {
   it.each([
     ['全部系统', '小游戏', '/games', '小游戏专区'],
     ['全部系统', '工具', '/tools', '常用的小工具，打开就能用'],
-    ['小游戏与工具快捷入口', '小游戏', '/games', '小游戏专区'],
-    ['小游戏与工具快捷入口', '工具', '/tools', '常用的小工具，打开就能用'],
+    ['小游戏、工具与搭子快捷入口', '小游戏', '/games', '小游戏专区'],
+    ['小游戏、工具与搭子快捷入口', '工具', '/tools', '常用的小工具，打开就能用'],
+    ['全部系统', '工位搭子', '/desk-pet', '领一个工位搭子'],
+    ['小游戏、工具与搭子快捷入口', '工位搭子', '/desk-pet', '领一个工位搭子'],
   ])('opens %s / %s in one click without requiring login', async (navigation, label, path, heading) => {
     renderAt('/');
     const link = within(screen.getByRole('navigation', { name: navigation })).getByRole('link', { name: label });
