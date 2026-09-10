@@ -16,7 +16,7 @@
 
 - 仓库：`ZbrsGOGOGO/WebFishGogogo`。站点所有者于 2026-09-10 授权按已上线 f46 整理 `main`，随后授权实现摸鱼指数与支持台账。以 `main` 为集成主线；原 `feat/workstation-tower-defense` 分支保留历史，不删除或强推。每次操作前仍复核当前分支、远端及协作者改动，不绕过保护规则。
 - 生产 SSH 别名：`webfish-prod`；代码目录：`/opt/webfish-review`；Compose 项目：`webfish-community`。
-- 生产固定到已验收的应用提交/镜像，不跟随 `main` 自动拉取；截至 2026-09-10 11:48，应用为 `0b991be2c3ed3aaa537e3096d8131d7045c61c09`、schema36。回滚基线 f46 不认识新支持台账，须保留新表并暂关账号注销，详见最新发布记录；不重放赠送或真实成员授权。
+- 生产固定到已验收的应用提交/镜像，不跟随 `main` 自动拉取；截至 2026-09-10 14:35，应用为 `48407006c70c5964c13ffd15e2670a322664344e`、schema36（免费本机桌宠）。本次无迁移，直接回滚基线 `754dcaf` 已认识 schema36，不照搬早期 f46 回退的账号注销关停规则；不重放赠送或真实成员授权。详情见最新发布记录。
 - 按 `deploy/COMMUNITY_DEPLOYMENT.md`、`deploy/docker-compose.community.yml` 及最近的 `docs/RELEASE_*.md` 核对配置；不把旧发布脚本中的旧提交号、成员授权或迁移步骤原样重复执行。
 
 本文件采用官方 OpenAI 文档推荐的项目级 [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) 约定机制，仅记录本站点所有者的工作偏好；不扩大系统权限或覆盖当前用户的明确限制。
