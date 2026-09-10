@@ -6,6 +6,14 @@
   --tower-accent: var(--color-brand-strong);
   color-scheme: dark;
 }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .characterName p,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .floorNumber,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .floorRow p,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .worldSummary p { color: var(--color-text-secondary); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .floorRow,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemySelect,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .modal { color: var(--color-text); background: var(--color-surface); border-color: var(--color-border); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .floorRow[data-current='true'] { background: var(--color-brand-soft); border-color: var(--color-brand-strong); }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .page .primary,
 :global(html[data-site-mode='community'][data-color-mode='dark']) .modal .primary { background: var(--color-brand); color: white; border-color: var(--color-brand); }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .page .primary:hover,
@@ -409,9 +417,9 @@
     color: var(--color-text-secondary)
 }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .notice, :global(html[data-site-mode='community'][data-color-mode='dark']) .error, :global(html[data-site-mode='community'][data-color-mode='dark']) .success {
-    border: 1px solid var(--color-danger);
-    background: var(--color-danger-bg);
-    color: var(--color-danger)
+    border: 1px solid var(--color-border);
+    background: var(--color-info-bg);
+    color: var(--color-text)
 }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .error {
     border-color: var(--color-danger);
@@ -419,6 +427,7 @@
     color: var(--color-danger)
 }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .success {
+    color: var(--color-success);
     background: var(--color-success-bg);
     border-color: var(--color-success)
 }

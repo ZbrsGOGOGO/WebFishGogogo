@@ -283,6 +283,21 @@
 @media(prefers-reduced-motion:reduce){.coinFlight{display:none}.evolutionBeam,.placementBubble,.hero *,.refreshButton,.plantBroken,.boardWrap>.board{animation:none!important}}
 
 /* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantCard,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide { background: var(--color-surface); border-color: var(--color-border); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantCard p,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantCard h2 small,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantCard > div > small,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide summary,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide summary > span,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide > p,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide article strong,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .enemyGuide article span,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .discretionBar,
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantDurability { color: var(--color-text-secondary); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantButton { color: white; background: var(--color-brand); border-color: var(--color-brand); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantButton:hover:not(:disabled) { background: var(--color-brand-hover); }
+:global(html[data-site-mode='community'][data-color-mode='dark']) .plantDurability button { color: var(--color-text); background: var(--color-surface); border-color: var(--color-border); }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .eyebrow {
     color: var(--color-text-secondary)
 }
