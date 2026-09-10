@@ -256,14 +256,15 @@ grep -Fq 'name: webfish-community' "$ROOT_DIR/$COMPOSE_FILE" ||
 if grep -Fq -- '-p webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md"; then
   fail "community deployment commands must not reuse the legacy webfish-review project"
 fi
-grep -Fq 'cd /opt/webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+grep -Fq '/opt/webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment guide must use the actual /opt/webfish-review checkout"
 grep -Fq -- '-p webfish-community' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment commands must explicitly use webfish-community"
-grep -Fq -- '-p webfish-public' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
-  fail "community rollback must explicitly restore the independent webfish-public project"
-grep -Fq '1700000000026' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
-  fail "community deployment guide must identify migration 0026 as the release target"
+grep -Fq -- 'up -d --no-deps api web' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "ordinary community deployment must preserve infrastructure and replace only api/web"
+LATEST_REGISTERED_MIGRATION=$(grep -oE '[0-9]{13}' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" | sort -u | tail -n 1)
+[ -n "$LATEST_REGISTERED_MIGRATION" ] && grep -Fq "$LATEST_REGISTERED_MIGRATION" "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "community deployment guide must review the latest registered migration"
 
 grep -Eq 'target:[[:space:]]*community-api' "$ROOT_DIR/$COMPOSE_FILE" ||
   fail "$COMPOSE_FILE must build community-api"
