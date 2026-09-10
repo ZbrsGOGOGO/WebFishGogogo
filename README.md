@@ -1,208 +1,136 @@
 # 摸摸公司
 
-摸摸公司的当前仓库主线是一个办公室主题轻社区。社区围绕首页、热点新闻、经验交流、工位绿植、《摸鱼升职记》、投喂、邀请、我的主页和好友九个系统展开；原有实用工具与浏览器本地单机游戏继续保留，但不作为社区服务端资产真源。
+一个办公室主题的轻社区：和同事聊天、照料工位绿植、参加协作任务，或者打开一个低调的小游戏小窗。
 
-> 版本边界：线上站点 <https://zbrshyyzxx.top> 已部署“摸摸公司”、账号安全、好友实时私聊、四款小游戏、《遮司》账号战力榜及私有开发协作台；生产数据库为 `0026`。当前功能提交与验收结果以 `docs/RELEASE_*.md` 对应记录为准，文档提交不等于重新部署应用。
+[访问网站](https://zbrshyyzxx.top) · [文档导航](docs/README.md) · [开发进度](docs/PROGRESS.md) · [部署指南](deploy/COMMUNITY_DEPLOYMENT.md) · [参与开发](CONTRIBUTING.md)
 
-> 塔防范围边界：当前代码为“唯一角色 + 绿植经济 + 五类合成塔 + 两回合混合稽查”的纯本地短局，含定向订货与小 Boss。塔防离线收菜、账号奖励、多职业和多人 Boss 仍是后续路线；见 [V3 约定](docs/WORKSTATION_TOWER_DEFENSE_V3.md)。
+## 当前版本
 
-> 合规边界：平台不提供盗版内容分发、赌博或博彩、充值提现、概率付费或现金返佣。原创模块不复制第三方产品的名称、角色、素材、剧情、技能文案或数值体系；用户提供的导入内容必须有单独发布依据和风险记录。用户内容、新闻摘要、社交关系和游戏结算都必须经过各自的发布与治理边界。
+截至 **2026-09-10**，仓库以 `main` 为主线，采用 `community` 前后端入口。原 `feat/workstation-tower-defense` 分支保留历史，不删除、不重写提交。
 
-## 九个用户系统
+- **主分支应用代码以已上线的 `f46a765` 为基线**，最近一次功能发布是「纸上突围：原版场景、人物与五武器联机」。[发布与验收记录](docs/RELEASE_PAPER_V2_20260909.md)
+- **数据库：schema `0035`**，完整迁移编号为 `1700000000035`；不是旧 README 中的 `0026`。
+- 本轮只把已上线代码整理到 `main` 并更新文档，**不混入未上线功能**。文档提交不等于新应用部署，生产继续按已验收的完整提交 SHA 固定镜像，不跟随分支自动重启。
+- 网站目前面向获准加入的成员；账号、写入、游戏和开发协作受各自的服务端权限与功能开关控制。
 
-| 系统 | 产品范围 | 发布约束 |
-|---|---|---|
-| 首页 | 游客查看公开入口；登录用户查看来自真实接口的摘要卡，每张卡只保留一个主行动 | 未开放模块显示真实不可用状态，不填充演示数据 |
-| 热点新闻 | 展示来源、短摘要、发布时间和 HTTPS 原文链接，支持职业/主题偏好和“不感兴趣”反馈 | 公开资讯、个性化和编辑发布台使用独立闸门；不镜像整篇原文 |
-| 经验交流 | 帖子、问答、最多两层评论、收藏、关注、采纳、举报，以及六个固定职业聊天室 | 内容发布、审核台和聊天室分别受控；普通用户权限由服务端校验 |
-| 工位绿植 | 单株工位绿植，一键开始、收获并继续，按服务端时间计算离线进度 | 好友鼓励只提供轻量反馈，不改变资产结算 |
-| 摸鱼升职记 | 一名“工位守卫”配合五类办公用品合成塔：首回合经营布阵，次回合迎战混合稽查与小 Boss | 主玩法为工位塔防；纯浏览器短局，只在本机保存最高分 |
-| 投喂 | 给好友发送轻量鼓励并查看真实额度与记录 | 无交易、提现和概率付费；写请求使用幂等键 |
-| 邀请 | Beta 准入码与推荐码明确分离，展示奖励封顶进度和归因结果 | 不承诺无限奖励；准入、推荐和奖励均由服务端判定 |
-| 我的主页 | 资料、职业、头像、简介、隐私、通知、账号安全、公开主页 | 敏感账号状态和社交实名信息不公开 |
-| 好友 | 精确账号/publicId 查找、申请、同意/拒绝/取消、删除、拉黑及好友实时私聊 | 禁止邮箱或手机号反查；拉黑后不可互发，删除好友后历史只读 |
+## 现在可以做什么
 
-“代码中存在页面或接口”不等于“生产已经开放”。生产部署模板默认关闭注册、写入、内容、审核、聊天室和新闻后台等发布闸门；只有依赖、供应商、数据迁移和安全验收完成后才应逐项开启。工位塔防 V3 不依赖服务端游戏闸门，也不得调用已退役的乐斗结算接口。关闭状态下的其他页面必须给出真实空态、受限态或不可用态，不能伪造数据和成功结果。
+| 模块 | 已实现能力 | 主要入口 |
+| --- | --- | --- |
+| 账号与个人主页 | 用户名登录、账号安全、会话管理、隐私设置、通知与公开资料 | `/me`、`/account/security` |
+| 好友与聊天 | 精确查找好友、申请与拉黑、实时群聊和好友私聊、回复、撤回、未读与历史补齐 | `/friends`、`/community`、`/messages` |
+| 热点新闻 | 分类资讯、按来源保存的每日热榜标题快照、更新时间与原文链接 | `/news`、`/news/trending` |
+| 工位绿植与钱包 | 服务端成熟时间、连续种植与收获、办公币余额和可信奖励流水 | `/farm`、`/me` |
+| 工位塔防 | 正式联网任务、六章剧情、无尽与极限模式、职业与天赋、续局和独立排行榜；另保留本地练习 | `/tower-defense` |
+| 九层妖塔 | 免费角色成长、武器与技能、探索、共享首领、榜单；有效 VIP 可解锁自动探索 | `/games/demon-tower` |
+| 公司协作 | 部门周常、免费收藏与外观、故事和异步协作 | `/office` |
+| 成就、称号与 VIP | 成就解锁、称号佩戴、个人主页与聊天展示、会员有效期 | `/achievements` |
+| 小游戏与玩家房间 | 经典单机、同条件竞分、你画我猜、谁是卧底、轨道难题、纸上突围等 | `/games`、`/games/rooms` |
+| 排行榜 | 办公币余额榜、小游戏日榜，以及塔防、妖塔、轨道等独立榜单 | `/leaderboards` |
+| 效率工具 | 文本处理、JSON 格式化、时间戳、计时器、单位换算等 11 款本地工具；汇率使用手动参考值 | `/tools` |
+| 开发协作 | 授权成员提交建议和附件、讨论、版本记录、审核与完成状态 | `/development` |
 
-## 当前社区能力
+小游戏和工具已有侧边栏入口，手机首页也有快捷入口。页面是否可见、能否操作，以当前账号状态与生产开关为准；关闭的模块不会伪造成功或演示数据。
 
-当前代码主线已经覆盖：
+### 小游戏：区分练习、正式挑战和联机
 
-- Beta 注册、邮箱验证、登录、刷新、会话查看、单会话退出和全部退出。
-- access token 仅驻浏览器内存，refresh token 使用 HttpOnly Cookie；刷新轮换、并发单飞和写请求不自动重放。
-- `guest`、`pending_email`、`active`、`suspended`、`banned`、`deleting` 及 onboarding 的路由和服务端状态分流。
-- 密码重置、社交实名、账号申诉和账号删除流程，并使用独立功能闸门控制上线。
-- 九系统页面、通知中心、内容治理、固定聊天室、好友实时私聊、新闻编辑台和《摸鱼升职记》纯浏览器工位塔防。
-- 工位塔防 V3 包含唯一角色、五类塔、绿植产币、定向订货、三合一/出售、两回合与混合敌群、暂停/重开、键盘和移动端操作；V1/V2 本机记录保留但不混分。
-- 工位塔防标准路由是 `/tower-defense`；旧 `/ledou` 和 `/battle` 只做兼容跳转。
-- 历史办公室乐斗服务端模块已从社区入口卸载；其源码、数据表与玩家资产只读保留，不迁移、不删除、不换算为塔防奖励。
-- 举报、拉黑、隐私裁剪、软删除与恢复、版本冲突、审核审计和角色权限校验。
-- 原有工具页，以及贪食蛇、俄罗斯方块、坦克大战和《遮司》命格模拟四款小游戏；浏览器本地记录不会直接写入社区正式资产。
-- 《遮司》独立静态页保持本机模式；登录用户经 React 包装页游玩时，服务端复算战力构成并只更新账号最佳成绩，不发放正式资产。
+- **经典游戏**：贪食蛇、俄罗斯方块、坦克大战、《遮司》原版与公平短局。原版存档与正式日榜分开，不把浏览器自报分数直接兑换办公币。
+- **玩家房间**：你画我猜、谁是卧底及经典游戏同条件竞分；房主可设密码，无需邀请码。经典竞分是各自棋盘，并非共享地图互相攻击。[房间规则](docs/COMMUNITY_GAME_ROOMS.md)
+- **轨道难题**：独立的单人及房间协作玩法、牌组和生存榜。[玩法说明](docs/COMMUNITY_RAIL_ROOMS.md)
+- **纸上突围**：原版纸笔画风、涂鸦人物与五种武器；联机地图扩大到 **96×102**，保留建筑、楼梯与屋顶路线。红蓝 **4–8 人**、AI 补位、可选密码、**20–100** 击败目标、随机安全复活。数字 **1–5** 或滚轮切枪，右键瞄准/格挡，**R** 换弹。[联机说明](docs/PAPER_ARENA_V2.md)
+- **低调本地练习**：纸上突围单机、数值整理（2048）和机房巡检（Underrun），保留各自来源说明与许可证。[源码与许可审查](docs/LOWKEY_GAME_SOURCE_REVIEW_20260909.md)
 
-以下项目仍是后续运维或容量验收项，不能标记为已通过：
+纸上突围联机、2048 和 Underrun **不发办公币、不进入正式奖励榜**。六款 Play 游戏的单人挑战与玩家房间共享各自日榜，昨日冠军按规则发奖；办公币余额榜本身不发奖。不同玩法的奖励上限分别见 [小游戏](docs/COMMUNITY_GAME_ROOMS.md)、[正式塔防](docs/WORKSTATION_CAMPAIGN_AND_PAPER_ARENA.md) 和 [妖塔](docs/DEMON_TOWER_PLAYER_GUIDE.md) 说明。
 
-- 定期使用生产备份完成隔离恢复演练；本次已完成 PostgreSQL 16 脱敏快照迁移/回滚演练和上线前可读备份。
-- 使用真实 Redis 完成多实例广播、在线档位、故障恢复和写入 fail-closed 验证。
-- 接入并验收真实邮件、社交实名、内容/聊天审核等 HTTPS 供应商。
-- 验证持久化卷、密钥轮换、监控告警、日志脱敏和一键回滚。
-- 对登录、内容、关系、通知、聊天室 WebSocket、重连和依赖故障做混合负载测试。
+游戏小窗支持收起或工作便签遮罩。**遮罩不暂停服务器比赛，也不隐藏浏览记录或网络访问。** 纸上突围联机暂不包含原单机的钩索、场景破坏和补给拾取。
 
-规划容量是约 4,000 个账号、1,000 人同时在线。这是容量目标，不是当前已通过的结论；真实 PostgreSQL、Redis、供应商链路和 1,000 并发必须在发布环境按容量门禁重新验收。
+## 技术与目录
 
-## 社区隔离架构
-
-社区后端使用独立入口 [`packages/backend/src/main.community.ts`](packages/backend/src/main.community.ts)，只装配社区允许的模块。它不会启动旧 `AppModule`，也不会把历史文档、阅读、旧农场、旧竞技场或其他 legacy API 暴露为社区接口。
-
-```text
-Browser
-  │ HTTPS / WSS
-  ▼
-Caddy（TLS 与入口）
-  ├── Nginx ── React community SPA
-  ├── NestJS main.community API
-  └── /ws/chat ── 原生 WebSocket
-                    │
-          ┌─────────┴─────────┐
-          ▼                   ▼
- PostgreSQL 16            Redis 7
- 业务与审计真源       广播、在线状态与短期协调
-```
-
-PostgreSQL 是账号、关系、内容、通知、新闻和绿植正式资产的持久化真源。Redis 不是资产真源；Redis 不可用时，允许从 PostgreSQL 读取可安全提供的历史数据，但依赖实时协调的写入必须 fail-closed。已有 `office_battle_*` 表和相关资产是上一版的历史记录，当前版本只读保留，不是工位塔防的数据源。
-
-社区启动链路不加载 legacy Worker。历史 Worker 的 `processed` 语义不适合社区多消费者投影，不能当作社区架构继续使用。需要异步可靠性的社区流程使用各自的安全机制：例如认证邮件使用加密 Outbox 泵，账号删除使用数据库租约。
-
-工具和浏览器本地单机游戏仍作为独立公开能力保留。工位塔防只保存本机最高分，不上传局内进度，不发放正式办公币、经验或排行榜成绩。旧乐斗本机存档保持原样，绝不自动导入或换算。
-
-## 账号安全与治理基线
-
-- 账号、关系、奖励、内容状态和游戏资产以服务端事务结果为准。
-- 写请求使用幂等键或 `expectedVersion`；401 后不自动重放非幂等写操作。
-- 公开资料按隐私设置、关系状态和账号状态裁剪，拉黑关系双向生效。
-- 内容严格区分 `publicationStatus`、`moderationStatus`、`deletedAt` 和 `version`，不把不同生命周期合并成一个“状态”。
-- moderator/admin 能力必须由服务端角色守卫执行；隐藏前端链接不构成授权。
-- 聊天 WebSocket 通过 60 秒单次 ticket 认证，token 不进入 URL；发送失败不会显示为已送达。
-- 聊天室支持慢速、只读、关闭、撤回、举报、断档补齐和受限 @ 候选，不能通过提及功能探测邮箱或手机号。
-- 新闻公开 DTO 只展示合规摘要、来源、时间和原文链接，不暴露采集证据、后台凭据或整篇正文。
-- 社交实名状态不代表公开身份；身份信息不得展示在个人主页，生产必须使用真实 HTTPS 核验供应商。
-
-## 发布闸门
-
-生产变量模板见 [`deploy/.env.community.example`](deploy/.env.community.example)。模板中的发布闸门默认均为 `false`：
-
-| 范围 | 服务端闸门 |
-|---|---|
-| 注册与账号安全 | `FEATURE_REGISTRATION_ENABLED`、`FEATURE_PASSWORD_RESET_ENABLED`、`FEATURE_SOCIAL_VERIFICATION_ENABLED`、`FEATURE_ACCOUNT_DELETION_ENABLED` |
-| 社区关系与轻养成写入 | `FEATURE_COMMUNITY_WRITES_ENABLED` |
-| 帖子与治理 | `FEATURE_COMMUNITY_CONTENT_ENABLED`、`FEATURE_COMMUNITY_CONTENT_WRITES_ENABLED`、`FEATURE_COMMUNITY_MODERATION_ENABLED` |
-| 固定聊天室 | `FEATURE_COMMUNITY_CHAT_ENABLED`、`FEATURE_COMMUNITY_CHAT_WRITES_ENABLED` |
-| 热点新闻 | `FEATURE_COMMUNITY_NEWS_ENABLED`、`FEATURE_NEWS_ADMIN_ENABLED` |
-| 历史乐斗服务 | `FEATURE_COMMUNITY_BATTLE_ENABLED` 仅为兼容配置；工位塔防版本必须保持 `false` |
-
-前端有对应的 `VITE_COMMUNITY_*` 构建变量。生产 Compose 会把有服务端写入的功能映射到同一发布决策；前端开关只控制入口和交互，不是安全边界。工位塔防 V3 的入口使用 `VITE_COMMUNITY_TOWER_DEFENSE_ENABLED`；它是静态前端能力，不得复用 `FEATURE_COMMUNITY_BATTLE_ENABLED` 的旧服务端语义。
-
-## 技术栈
-
-| 层级 | 主要技术 |
-|---|---|
-| 前端 | React、TypeScript、Vite、React Router、Zustand、Vitest、Testing Library |
-| 后端 | NestJS、TypeScript、TypeORM、原生 `ws`、Jest |
-| 数据 | PostgreSQL 16、Redis 7 |
-| 安全 | JWT、bcrypt、HttpOnly Cookie、幂等键、版本控制、服务端 RBAC |
-| 测试 | 单元/集成测试、属性测试、`pg-mem` 本地数据库、k6 发布容量门禁 |
-| 部署 | npm workspaces、Docker Compose、Nginx、Caddy |
-
-仓库仍保留 review/public/full 等历史或展示模式，但社区开发与部署必须显式选择 `community` 入口，不能用旧模式替代。
-
-## 目录
+采用 npm workspaces 管理的 TypeScript monorepo：React 18 + Vite 前端、NestJS 后端、共享类型与游戏引擎；Three.js 用于纸上突围等 3D 画面。
 
 ```text
 packages/
-  shared/                         # 跨端类型与合同
-  backend/
-    src/main.community.ts         # 社区唯一后端入口
-    src/community-app.module.ts   # 社区模块白名单
-    src/modules/auth/             # 认证、会话与账号安全
-    src/modules/community/        # 关系、资料、邀请、投喂、绿植、通知、内容与治理
-    src/modules/chat/             # 固定聊天室 REST / WebSocket
-    src/modules/news/             # 热点新闻与编辑发布台
-    src/modules/community/office-battle/ # 历史乐斗结算；当前社区入口不装配
-  frontend/
-    src/main.tsx                  # Vite 入口；community 构建绑定隔离路由
-    src/app/community-router.tsx  # 路由、守卫与功能开关
-    src/api/                      # 社区 API 合同
-    src/features/                 # 九系统及工位塔防、账号/治理界面
-deploy/                           # 社区 Compose、环境模板与验收脚本
-loadtest/k6/                      # 发布容量门禁
-docs/                             # PRD、玩法、政策与容量设计
+  shared/          # 跨端协议、确定性玩法规则与地图数据
+  backend/         # NestJS 社区 API、权限、事务与实时服务
+  frontend/        # React 工作台、游戏、工具与管理界面
+third_party/       # 锁定版本的第三方源码与许可
+deploy/            # Community Compose、环境模板和验收脚本
+loadtest/          # 容量验收脚本（不代表容量目标已通过）
+docs/              # 当前功能、历史设计与逐次发布记录
 ```
 
-## 本地 community 开发
+- 正式后端入口：[main.community.ts](packages/backend/src/main.community.ts)；模块白名单：[community-app.module.ts](packages/backend/src/community-app.module.ts)。
+- 正式前端路由：[community-router.tsx](packages/frontend/src/app/community-router.tsx)。`VITE_SITE_MODE=community` 必须在启动/构建时显式设置；默认构建不会自动选择社区模式。
+- PostgreSQL 16 保存账号、关系、内容、存档与正式资产；Redis 7 用于实时协调，不是资产真源。纸上突围房间是服务器内存短会话，API 重启会中断，不提供跨重启续局。
+- 生产链路为 Caddy → Nginx → 社区 SPA / API / WebSocket；不启动旧 `AppModule` 或 legacy Worker。
 
-要求 Node.js 22.12 或更高版本；生产镜像使用 Node.js 24。首次安装依赖：
+## 本地开发
 
-```powershell
+要求 **Node.js ≥ 22.12** 和 npm；生产应用镜像使用 Node.js 24。以下命令在仓库根目录执行，适用于 Bash：
+
+```bash
+git clone --branch main https://github.com/ZbrsGOGOGO/WebFishGogogo.git
+cd WebFishGogogo
 npm ci
+npm run build:shared
 ```
 
-提交前统一验证命令：
+终端一：启动社区后端，而不是默认的历史 `main` 入口。
 
-```powershell
-npm run verify
+```bash
+NODE_ENV=development LOCAL_DEV=true PORT=3000 \
+  npm exec --workspace @stealth-reader/backend -- \
+  nest start --watch --entryFile main.community
 ```
 
-`npm run verify` 会依次执行全仓 TypeScript 检查、测试和构建。README 不记录容易过时的用例计数，以命令实际结果为准。
+终端二：启动社区前端。
 
-在第一个 PowerShell 终端启动隔离的社区后端：
-
-```powershell
-$env:LOCAL_DEV = "true"
-$env:PORT = "3000"
-npm exec --workspace @stealth-reader/backend -- nest start --watch --entryFile main.community
+```bash
+VITE_SITE_MODE=community VITE_API_BASE_URL=http://localhost:3000/api \
+  npm run dev --workspace @stealth-reader/frontend
 ```
 
-在第二个 PowerShell 终端启动 community 前端：
+打开 `http://localhost:5173`；后端就绪检查为 `http://localhost:3000/api/health/ready`。前后端请统一使用 `localhost`，不要混用 `127.0.0.1`，以免跨站 Cookie 影响登录。
 
-```powershell
-$env:VITE_SITE_MODE = "community"
-$env:VITE_API_BASE_URL = "http://localhost:3000/api"
-npm run dev --workspace @stealth-reader/frontend
+`LOCAL_DEV=true` 使用临时 `pg-mem` 数据库和本地实时适配器，退出后数据丢失；它不是生产配置，也不能替代真实 PostgreSQL / Redis 验收。需要调试默认关闭的功能时，对照 [Compose 中的映射](deploy/docker-compose.community.yml) 同时设置后端 `FEATURE_*` 和前端 `VITE_*`，重启相应进程；不要复制生产密钥、数据库或用户附件到开发环境。
+
+PowerShell 用户可先用 `$env:变量名 = "值"` 设置上述环境变量，再运行同一 npm 命令。
+
+### 检查与构建
+
+```bash
+# 类型检查、后端与前端回归
+npm run typecheck
+npm test
+
+# 明确选择社区前端；生产仍由 Compose 注入全部配套构建开关
+VITE_SITE_MODE=community npm run build
+
+# 合并执行上述类型、测试和构建
+VITE_SITE_MODE=community npm run verify
+
+# 修改纸上突围地图时，核验共享几何与原版源码一致
+node packages/frontend/scripts/extract-paper-arena-map.mjs --check
 ```
 
-默认本地地址：
+真实 PostgreSQL 专项套件需要各自明确的测试连接及隔离授权；默认跳过的测试不算通过。测试结果、浏览器场景、恢复演练和公网验收应逐次记录在发布文档，不使用固定的「全部功能已通过」徽章。
 
-- 前端：`http://localhost:5173`
-- API：`http://localhost:3000/api`
-- 健康检查：`http://localhost:3000/api/health`
-- 聊天 WebSocket：`ws://localhost:3000/ws/chat`
+## 部署与协作
 
-`LOCAL_DEV=true` 使用的 `pg-mem` 和本地实时总线只适合开发，进程重启后数据可能丢失，也不能证明 PostgreSQL/Redis 的生产行为。调试被关闭的模块时，应为后端 `FEATURE_*` 与前端 `VITE_COMMUNITY_*` 设置对应值后重启；准确映射以 [社区 Compose](deploy/docker-compose.community.yml) 为准。热点新闻等需要外部审核/采集保证的能力即使在本地也应保持 fail-closed，除非显式配置了开发适配器。
+从 [部署导航](deploy/README.md) 和 [社区部署手册](deploy/COMMUNITY_DEPLOYMENT.md) 开始，使用 [community Compose](deploy/docker-compose.community.yml) 与 [环境模板](deploy/.env.community.example)。根目录旧 Compose 及 `review/public/full` 模式不是当前生产入口。
 
-## 社区部署
+- `main` 是后续集成主线；功能可在独立分支开发，验证后正常合并，禁止强推覆盖协作者历史。
+- 已授权的功能/修复完成验证后，按项目约定提交、推送、备份、部署和线上验收；纯文档整理不触发应用重建或生产数据库操作。
+- 发布按完整提交 SHA 固定镜像。先验证备份可完整恢复并完成异机校验，再更新 API/Web；保留回滚镜像，不重建数据库、Redis、网关或数据卷。
+- 生产变量模板默认关闭业务闸门；前端隐藏入口不是权限边界。禁止公开服务端密钥、生产环境文件、数据库备份及真实协作附件。
 
-生产部署从 [`deploy/COMMUNITY_DEPLOYMENT.md`](deploy/COMMUNITY_DEPLOYMENT.md) 开始，使用社区专用 Compose 和入口，不要启动旧 `main`、旧 Compose 或 legacy Worker。
+开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [AGENTS.md](AGENTS.md)。文档索引将当前实现、阶段设计与历史发布分开；旧乐斗、早期塔防 V1–V3 文档不再作为当前功能清单。
 
-发布流程相关文件：
+## 安全、许可与已知边界
 
-- [生产变量模板](deploy/.env.community.example)
-- [社区 Docker Compose](deploy/docker-compose.community.yml)
-- [发布前静态检查](deploy/community-preflight.sh)
-- [PostgreSQL 迁移演练](deploy/community-migration-rehearsal.sh)
-- [部署后 smoke 检查](deploy/community-smoke.sh)
-- [k6 容量门禁](loadtest/k6/community-capacity-gate.mjs)
-
-只有预检、真实数据库迁移演练、备份恢复、供应商验收、smoke、监控和容量门禁全部通过，才应逐项开启生产功能闸门。
-
-## 设计与运营文档
-
-| 文档 | 用途 |
-|---|---|
-| [社区产品 PRD](docs/PRODUCT_PRD_V1.md) | 九系统范围、用户流程、状态与验收口径 |
-| [《摸鱼升职记》工位塔防 V3](docs/WORKSTATION_TOWER_DEFENSE_V3.md) | 单角色、五类合成塔、两回合经营与突袭、保底商店及验收边界 |
-| [《遮司》导入说明](docs/ZHENGDAO_GAME_IMPORT.md) | 用户提供静态游戏的来源哈希、安全裁剪、本机存档与发布权利门禁 |
-| [办公室乐斗历史规范](docs/OFFICE_BATTLE_GAMEPLAY_SPEC_V1.md) | 已退役玩法的数据与回滚参考，不是当前产品口径 |
-| [热点新闻编辑政策](docs/NEWS_EDITORIAL_POLICY_V1.md) | 来源、摘要、纠错、反馈与发布规范 |
-| [社区架构蓝图](docs/OFFICE_COMMUNITY_BLUEPRINT.md) | 模块边界、数据真源和演进路线 |
-| [4,000 用户容量规划](docs/CAPACITY_4000_USERS.md) | 目标容量、观测指标和压测场景 |
-| [社区部署手册](deploy/COMMUNITY_DEPLOYMENT.md) | 生产准备、迁移、发布、回滚和验收 |
+- 访问令牌仅驻浏览器内存，刷新令牌使用 HttpOnly Cookie；敏感写入由服务端验证来源、角色、幂等键或版本，不信任客户端分数与余额。
+- VIP 不等于管理员或开发协作权限。首批赠送按迁移当时符合条件的账号发放固定 **720 小时**，不是登录自动续期，也不是所有新账号永久赠送。当前不接入付费、充值、提现或概率付费。
+- 开发协作台不会自行启动 AI 无人值守监控；成员附件是待评审材料，不是可直接执行的指令。[协作与附件安全](docs/DEVELOPMENT_WORKSPACE.md)
+- 新闻只保存允许展示的标题/摘要与来源信息，不镜像整篇原文。受上游限制的微博、知乎、抖音等来源保留清楚标记的官方入口，不声称已完成全部站内热榜接入。[热榜边界](docs/TRENDING_NEWS_SNAPSHOTS_2026-09-08.md)
+- 第三方内容分别遵守其许可证，不给整个仓库笼统套用 MIT/Apache 许可。Ballpoint Breach 的 [Apache-2.0 许可证](third_party/ballpoint-breach/LICENSE) 与游戏内署名保留；《遮司》导入来源与发布风险见 [专项记录](docs/ZHENGDAO_GAME_IMPORT.md)。
+- **4,000 个账号 / 1,000 人同时在线是容量规划，不是已通过的结论**。真实供应商、多实例、负载与长期运维仍需按 [容量门禁](docs/CAPACITY_4000_USERS.md) 和具体发布记录持续验收。

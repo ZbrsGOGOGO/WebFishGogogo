@@ -1,229 +1,125 @@
-# 社区版部署
+# 社区版部署与维护
 
-## Paper 原版场景联网升级：2026-09-09 当前应用
+本文面向当前「摸摸公司」的 `community` 模式。**已运行站点更新、空站初始化、历史迁移是三种不同流程，不可混用。** 旧 `full`、`review`、`public` 模式见 [部署导航](README.md)。
 
-当前应用 `f46a765271a55d5708c6f6e0299c149b4183ef11` 已正常推送至工作分支 `feat/workstation-tower-defense`，并于北京时间 **2026-09-09 21:54:52** 仅切换生产 API / Web。最终双Firefox候选30项及21张唯一截图逐张SHA256核验通过；公网普通双账号HTTPS/WSS于21:55:43通过，匿名桌面/390px浏览器18/18通过。68个候选证据文件异机校验后精确清理6容器及1内部网络，21:58再次复核生产健康、镜像、环境、schema及基础设施通过。前端164套件1188项、Paper后端100项专项、类型/社区构建、新备份/完整恢复/异机校验与只读克隆结果见 [Paper v2 发布记录](../docs/RELEASE_PAPER_V2_20260909.md)；本批只声称实际列明的验收范围，不把匿名门禁检查当作全站业务重测。
+## 1. 当前运行快照与本次文档整理
 
-旧b2候选因Firefox指针捕获异常从未上线；f46修补后重验。早期f46截图重试同名覆盖的记录也未作为最终证据，改为唯一编号后完整重跑核验。所有原失败/中断资料保留，不改写结果冒称通过。
+以下状态来自 [Paper v2 正式发布记录](../docs/RELEASE_PAPER_V2_20260909.md)，最后一次发布后复核时间为北京时间 **2026-09-09 21:58**：
 
-本轮为 **schema35 → schema35 的无迁移应用更新**：已复核完整保留36条迁移历史、146张 public 表、既有账号权限/开关/玩家数据，不重发 VIP、不改开发反馈状态。Paper 联机沿用原版人物和五武器，保留旧地标并扩展到96×102含掩体外环；只切换 API / Web。PostgreSQL、Redis、网关精确容器ID不变，数据卷未重建，环境仅 `IMAGE_TAG` 变化；API重启会结束原内存Paper临时房间。
+| 项目 | 已验收的值 |
+| --- | --- |
+| 生产 SSH / 代码目录 | `webfish-prod` / `/opt/webfish-review` |
+| Compose 项目 / 文件 | `webfish-community` / `deploy/docker-compose.community.yml` |
+| 环境文件 | `.env.community`，限权保管，不进入 Git |
+| 实际运行应用 | `f46a765271a55d5708c6f6e0299c149b4183ef11`；2026-09-09 21:54:52 上线 |
+| API 镜像 ID | `sha256:9cf9fef04f83dc314535621276f6eb81cc99ac10152480cd61313b23455907ff` |
+| Web 镜像 ID | `sha256:050f7c244282252da67903bb485e8890687fc86bcff072a37d0d11c5ac616f6a` |
+| 数据库 | schema35；最新迁移 `1700000000035`，完整 36 条迁移历史、146 张 public 表 |
+| 本次应用更新范围 | schema35 → schema35，**无迁移**；仅 API / Web，环境仅 `IMAGE_TAG` 变化 |
+| 精确应用回滚基线 | `ff6bab4ae5aa68a14f0de0204dbd34b9eb822a82` |
 
-本轮精确回滚基线为 `ff6bab4ae5aa68a14f0de0204dbd34b9eb822a82`。如需回退，排空当前 API 后恢复该版本 API / Web 和本轮备份的**完整原环境**，**保留 schema35 与所有数据，不执行生产 DOWN 或恢复旧库**。**不套用上一批回滚到 a456a8b 时的妖塔/自动探索/账号注销开关关停步骤**；下方旧发布方案只适用于其历史版本，不得原样重放。
+最终不可变候选真实双 Firefox 30 项检查、21 张唯一截图及哈希核验通过；公网普通双账号 HTTPS/WSS、匿名桌面/390px 浏览器及数据安全复核通过。详细检查范围、旧候选被拒绝原因及备份证据见正式发布记录，不把它概括为“全站所有功能重新验完”。
 
-## 协作补齐与红蓝房间：2026-09-09 历史发布 / 本轮切换前基线
+**2026-09-10 的 GitHub 主分支与 README 整理以已上线 f46a765 为应用代码基线，只追加文档，不发布新应用。** 分支整理不等于部署，不修改 `IMAGE_TAG`、环境、数据库或运行容器，不需要重启。仓库文档 HEAD 可以晚于运行镜像；不能把文档提交号写成线上应用版本，也不能据 `main` 整理宣称生产 checkout 已切换到 `main`。之后的发布须重新核对分支、源码、镜像和数据库，而非一直沿用本表。
 
-应用 `ff6bab4ae5aa68a14f0de0204dbd34b9eb822a82` 曾于北京时间 **19:40** 部署；该次公网 HTTPS/WSS、桌面及手机浏览器验收通过，见 [该批正式发布记录](../docs/RELEASE_COMPLETION_20260909.md)。**ff6bab4现为本轮回滚基线，不是当前应用；该历史验收不代替本轮f46的公网验收。** 该次 schema32 → schema35，仅新增 `0033/0034/0035` 共10张表，保留旧33条迁移及玩家数据。该次最终镜像/备份完整恢复/克隆迁移对比/异机校验均通过，只更新 API/Web，基础设施容器 ID 不变。
+## 2. 当前架构与功能边界
 
-以下仅记录该批应用回滚到 `a456a8b27027a45a7ebd10c9a4f9efd2f8ca6696` 时的特殊限制，不适用于本轮回滚到 ff6bab4：保留 schema35 与全部新数据，不执行生产 DOWN 或恢复旧库；旧 a456 引擎不能继续写新版妖塔或正确清理新个人数据，回退到它时需先排空新 API，在原环境基础上关闭妖塔整体、自动探索、账号注销，再启动旧应用。不得把这些历史步骤、旧迁移、成员授权或 VIP 发放步骤用于新的无迁移发布。
+[社区 Compose](docker-compose.community.yml) 的常驻服务为 PostgreSQL、Redis、API、Web（Nginx）、Gateway（Caddy）；`migrate` 是独立的一次性服务。API 使用 `main.community.js`，不是旧 `main.js` / 完整 `AppModule`。社区版不启动遗留 `main.worker.js` / `ActivityProjector`；认证邮件使用独立加密 Outbox，注销补偿使用数据库租约。新的异步消费者须独立评审回执、重试和积压机制，不可直接启用旧 Worker。
 
-## 小游戏与工具导航：2026-09-09 历史应用
+- Web 只映射宿主回环 `127.0.0.1:8080`（可由 `HTTP_PORT` 调整）；Caddy 对外提供 80/443。PostgreSQL、Redis、API 不映射宿主端口。不要对外开放 3000、5432、6379。
+- 数据保存在 PostgreSQL、Redis、Caddy 的命名卷。`backend`、`application` 网络为内部网络；API 另有受配置约束的外部服务访问。不要与旧 public/review/full 项目共用环境或数据卷。
+- [Nginx 白名单](community.nginx.conf) 代理已接入的账号、社交、聊天、开发协作、新闻、成长、公司及游戏 API；聊天与 Paper 使用独立 `/ws/chat`、`/ws/paper-arena`。未知 API/WS 不回落 SPA，旧文档上传和办公室乐斗 API 仍拒绝访问。前端“工具”入口不代表重新开放旧 `/api/v1/tools`。
+- 工位塔防已包含服务端权威战役、存档和正式榜（`FEATURE_WORKSTATION_CAMPAIGN_ENABLED`），同时保留 `/tower-defense/practice` 本地练习；**不能再将整个塔防描述为纯前端短局**。旧本地最高分不导入正式榜。
+- Paper v2 复用原版场景、人物和五武器，地图 `office-expanded-v2`、协议 2；保留原单机。联机临时房间在内存中，API 重启会结束对局，不会删除玩家数据库资产。本轮未增加 Paper 办公币奖励。
+- 原版“遮司”本地资源、Arcade 记录与 Play 公平短局榜各有边界；不要把原存档战力当作统一对战分数。旧办公室乐斗的后端/前端开关固定关闭，历史表和源码仅保留兼容，不删除数据。
 
-当前应用 `a456a8b27027a45a7ebd10c9a4f9efd2f8ca6696` 已于北京时间 17:26 部署，随后公网验收通过，见 [导航发布记录](../docs/RELEASE_NAVIGATION_20260909.md)。仅新增工作台侧栏直达入口及手机首页快捷入口；回滚基线为 `6085298c42485067a3f17fca54fe9904ec05d063`。后端/shared 编译产物逐文件相同，schema32 无迁移，未改功能开关、账号权限、反馈状态或玩家数据。完整恢复验证及异机备份通过后仅更新 API/Web，基础设施容器保持不变。回退本批无需执行下面旧发布的妖塔关停、VIP 发放或迁移操作。
+功能开关以 [Compose 映射](docker-compose.community.yml) 和 [.env 样例](.env.community.example) 为准；有对应前后端开关的功能必须同源构建。既有生产更新默认保留全部其他开关、外部提供方、权限及玩家数据。关闭某一个社区写入开关不等于“全站完全只读”，维护必须逐条核对受影响接口和后台任务。
 
-## 开发协作与低调游戏小窗：2026-09-09 本批发布边界
+## 3. 已运行社区站点：普通应用更新
 
-本批应用 `6085298c42485067a3f17fca54fe9904ec05d063` 已于北京时间 2026-09-09 16:54 部署，16:57 公网验收与反馈回填通过，见 [正式发布记录](../docs/RELEASE_FEEDBACK_20260909.md)；实现边界见 [补齐记录](../docs/FEEDBACK_INTEGRATION_20260909.md)。应用回退基线为 `727576bb8312889da3eae0795995848da787dc95`，**schema32 → schema32，无 SQL 迁移**；不得照搬下方历史迁移、VIP 赠送或旧成员授权步骤。
+以下是**未来获授权应用发布**的检查顺序，不是本次文档整理要执行的动作。不要照抄空站的全栈 `up`、旧迁移、成员授权或 VIP 发放步骤。
 
-- 检查完整分支/生产状态、回归/类型/社区构建、真实 PostgreSQL 的反馈快照与 CAS / 新旧妖塔存档、真实 Firefox/Chromium 小窗与组合输入隔离；保留并完整恢复验证加密备份，异机校验通过才更新 API/Web。
-- 不改任何权限、付费配置、玩家资产或数据卷；前后端现有功能开关保持同源，仅镜像标签变化。
-- 妖塔成长规则 2 不可交给旧规则引擎继续写。应急回退 727 时先让当前 API 停止接收并完成在途动作，再关闭妖塔整体开关及自动探索开关，保留全部 v2 存档/资产/数据库表后启动旧 API/Web。旧入口与只读投影可能显示，但写接口暂不可用，旧投影也不保证正确表达新机制；后续以前向兼容修复恢复，不能恢复旧库覆盖新进度。
-- 本批百度来自官方公开网页的内嵌 JSON 标题元数据，不是正式开放 API；微博/知乎受限部分继续明确标记，不绕授权或伪造。
+1. **只读盘点。** 核对干净提交、已确认的 GitHub 分支、生产源码 SHA、API/Web 不可变镜像 ID、完整环境备份、基础设施容器 ID/挂载、迁移历史、磁盘及内存余量。保留用户和协作者改动；存在冲突或证据不一致时停止。
+2. **确定发布边界。** 比较候选与实际生产迁移清单，明确是无迁移更新还是指定增量迁移；登记精确回滚版本和兼容限制。不得用“最新迁移编号相同”代替完整名称、时间戳和 schema 核验。
+3. **回归与构建。** 按影响范围跑测试、类型检查、社区功能开关下的构建。候选 `IMAGE_TAG` 使用其完整 40 位提交 SHA；构建 API/Web 并记录实际镜像 ID。真实候选验收必须复用最终不可变镜像，不用临时覆盖的源码/dist 代替。
+4. **新鲜备份与恢复。** 为该目标保留限权加密备份、完整环境和旧镜像，完整恢复到隔离副本并做内容/结构/序列/迁移历史核对，异机传输并校验。生产备份副本不得与合成浏览器账号或外部提供方测试混在同一环境。仓库旧 `backup.sh` / `restore.sh` 面向 full 文档卷，**不是当前 community 发布的一键备份/回滚工具**；沿用当批已审阅的私有发布流程，不把私有路径、凭据或备份放进仓库。
+5. **验证数据库兼容。** 无迁移更新在新鲜恢复副本上验证候选映射、无待执行迁移及全库内容不变；不执行生产 UP/DOWN。有增量迁移时，先在隔离副本验证确切起点→终点及旧数据不变；只有必要的待执行迁移可以另行批准进入生产。破坏性迁移或备份/演练失败时停止发布。
+6. **候选功能验收。** 新建隔离网络、合成数据库和普通测试账号，限制 CPU/内存；跑受影响的真实 HTTP/WSS、浏览器、权限及资产边界。账号/资产并发测试要使用真实 PostgreSQL，pg-mem 或页面可见不能替代它。记录失败，修复后在最终镜像复验。
+7. **有限切换。** 所有门禁通过后才更新已审阅的发布配置；排空在途操作，告知临时房间中断。常规应用更新仅以 `up -d --no-deps api web` 替换 API/Web，保持 PostgreSQL、Redis、网关及数据卷不变。不能无条件执行全栈 `up`、`down` 或启动旧 Worker。
+8. **线上复核与留档。** 验证健康、实际镜像、环境差分、完整迁移登记、基础设施 ID；按授权范围完成公网及匿名/手机浏览器检查。普通合成账号的资产与残留须单独核对，未知副作用停止清理；不能自动删除真实用户。隔离材料归档并逐项校验后，只按已确认 ID/挂载清理本次测试资源。
 
-## 成长档案、限时 VIP 与自动探索：2026-09-09 新增发布边界
-
-本次应用 `727576b` 已于北京时间 2026-09-09 11:36 部署，公网及数据验收通过，详见 [正式发布记录](../docs/RELEASE_GROWTH_20260909.md) 和 [成长系统说明](../docs/COMMUNITY_PROGRESSION_20260909.md)。当前应用回滚基线是 `82b84312d01cd9174441dc4a5ac45d9e56ea5a71`，已应用迁移 **`0030 → 0031 → 0032`**，仅新增会员赠送、成就解锁、佩戴展示、妖塔自动委托四表。下方旧版发布记录为历史背景，不得原样重放迁移。
-
-- `FEATURE_COMMUNITY_PROGRESSION_ENABLED`、`FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED` 默认关闭；发布时 API 与前端构建同源启用。VIP 独立于管理/协作角色，不增加权限或付费服务。
-- 迁移 `0031` 只给当时 `active` 账号赠送一次固定 720 小时 VIP；登录、刷新、重复执行已登记迁移不续期，后续新账号不自动发放。
-- 最终候选须完成全仓类型/回归/构建，既有七套与新增成长/自动探索真实 PostgreSQL 演练、真实浏览器及隔离完整生产备份迁移对比。克隆的回退仅在新表为空或精确验证的赠送数据范围内进行，不回传私人行内容。
-- 新鲜加密备份、完整恢复和异机校验通过后，只执行待应用的 `0031/0032` 并更新 API/Web；不重建数据库、Redis、网关或数据卷。线上只以精确限定的普通临时账号做零奖励验收，不冒充站长或修改真实成员权限。
-- 应用回滚保留 schema32、新 VIP/称号/自动记录及真实游戏资产；严禁生产 down 或恢复旧备份覆盖新数据。旧 `82b8431` 不认识四张新个人表，启动旧 API 前必须临时设 `FEATURE_ACCOUNT_DELETION_ENABLED=false`，保留原申请和日期，尽快以前向修复恢复完整注销清理。
-
-## 九层妖塔免费版：本轮发布边界
-
-本轮应用 `82b8431` 已于北京时间 2026-09-09 09:23 部署并通过公网验收，完整结果见 [正式发布记录](../docs/RELEASE_DEMON_TOWER_20260909.md)。以下为该次发布及后续维护必须保留的安全边界，不是要求重新执行一次迁移。
-
-本轮授权是新增免费联网玩法，目标迁移为 **`0029 → 0030`**，不是下文系统审计的无迁移更新。实施记录见 [妖塔实施与验收](../docs/DEMON_TOWER_IMPLEMENTATION_20260908.md)。`0030` 仅新增角色、世界楼层、动作回执、楼层贡献、每日进度和每日奖项六张表；不得改写旧账户、钱包、聊天、其他游戏或开发附件。读页面不自动创建角色，首次明确建立角色才初始化世界。
-
-- 发布应用回滚基线是 `2c82fddf8cf5a8bea6fec1420f081f149c4cb655`，保留其 API/Web 镜像。本次新建 `FEATURE_COMMUNITY_DEMON_TOWER_ENABLED`，默认 `false`，API 与前端构建同源；仅在最终验收后启用，不改其他开关和真实成员权限。
-- 先完成全回归、类型检查、社区构建、真实 PostgreSQL 妖塔并发/重复领取/跨日/注销清理演练及旧六套系统演练。只有静态检查或 pg-mem 通过不算迁移/并发通过。
-- 以新鲜加密生产备份完整还原到另一隔离网络，验证 `0029 → 0030 → 0029 → 0030`，每轮对全部旧业务表内容作指纹比较；新六表应为空。回退仅在该临时副本验证，绝不在生产执行 `0030 down`。
-- 生产运行候选镜像的迁移命令仅应用待执行 `0030`；核对原迁移登记完整保留，再以 `up -d --no-deps api web` 更新应用。不得重建数据库、Redis、网关或删数据卷。
-- 若应用需回滚，切回已保留镜像并关闭新功能，**保留六张新表、角色存档、贡献和已发办公币**。禁止用旧备份覆盖发布后产生的真实业务数据。
-- **旧应用的注销暂停条件**：`2c82fdd` 的注销实现是软删除用户，不认识新妖塔表；数据库外键不会因 `account_status='deleted'` 自动级联清理。因此在创建回退的旧 API 容器前，必须额外临时设置 `FEATURE_ACCOUNT_DELETION_ENABLED=false`，暂停注销入口和旧队列处理，保留原申请、冷静期和租约，不将其伪装为已完成。这是仅应急回滚的短时维护措施，正常发布不改该开关；旧前端按钮可能仍可见，接口应明确返回不可用。
-- 回退期间不得手动调用旧版注销 worker。应尽快以前向修复的新 API 恢复服务，再按原日期继续注销；若旧版已完成过漏清的注销，单纯重启新版不会补删，必须先按已删除用户关联新四张个人表及奖项做只读聚合审计，再单独审阅限定范围的前向处理。不能清空新表、恢复已注销账号或重放迁移来解决。
-
-以上为门禁要求；本轮对应的提交、备份、演练和线上验收已完成，具体结果以正式发布记录为准。下方 `0029 → 0029` 及首次建站步骤都是历史上下文，不得原样照搬。
-
-## 2026-09-08 系统审计修复：已运行站点的发布边界
-
-本轮账号、聊天、通知、资产、公会及页面恢复修复是 **`0029 → 0029` 的无迁移应用更新**，不修改实体、历史迁移或现有生产功能开关。详细验收见 [系统审计记录](../docs/SYSTEM_AUDIT_2026-09-08.md)。保留新鲜加密备份并完整恢复、异机校验；最终候选镜像须重跑账号/开发、资产、社交、Play、Rail、新闻快照隔离系统演练，并在另一个不与浏览器测试联网的生产备份副本验证无待执行迁移及全表内容不变。通过后只以 `--no-deps` 更新 API/Web，核对完整迁移登记不变，不运行历史回退、成员授权或迁移重放。
-
-本轮应用回滚基线为 `0ec2d0b`，回滚不删除新数据、不回退 schema；该旧镜像不包含本轮修复，尤其不能将关闭社区写开关误称为“全站已经只读”。以下 Rail/密码迁移说明及首次建站步骤保留作历史/新站参考，**不能直接套用到本轮无迁移发布**。
-
-## 既有 Rail/密码版本与首次部署参考
-
-本次增量版本增加《轨道难题》及房主密码（`1700000000029`），迁移目标为 `1700000000029`。只新增 7 张轨道表及原 `play_rooms.password_hash` 可空字段，不回填旧账户、房间、钱包余额、聊天记录、存档或开发附件；发布要从新鲜生产备份完整还原副本验证 `0028 → 0029 → 0028 → 0029`，逐表比较原数据内容指纹（原房间仅允许新增的空密码字段）。规则见 [轨道难题与密码](../docs/COMMUNITY_RAIL_ROOMS.md) 和 [原六款小游戏](../docs/COMMUNITY_GAME_ROOMS.md)。私有开发协作 `1700000000026` 及后续游戏/热榜均已有数据，保留原开关与授权，不重复旧成员授权或旧迁移处置步骤。协作附件随数据库备份，不启动无人值守 AI 监控。
-
-本版另有独立 `/api/v1/games/rail` Nginx 白名单及限流预算。以下完整新站初始化流程仅供新部署参考；已经运行的生产站不得照抄全栈 `up`、旧成员授权或清空新表的回滚，应沿用最近发布记录，只更新 API/Web 并执行待应用的增量迁移。
-
-社区版是独立于 `review`、`public` 和旧 `full` 站的发布模式。它启动 PostgreSQL、Redis、数据库迁移、`main.community.js` API、社区 SPA、Nginx 和 Caddy。Nginx 只代理已实现且明确列入白名单的认证、账号、关系、绿植、内容、审核、新闻、Arcade 和 `/v1/games/play` API；旧文档上传、私人阅读、便签、偏好、工具目录和已停服的办公室乐斗 API，以及尚未实现的社区前缀一律返回 404。“摸鱼升职记”工位塔防 V3 仍为纯前端短局；原版“遮司”保留 `/games/zhesi` 页面及 `/games/zhengdao/` 静态资源和旧 Arcade 记录，新版公平短局通过 Play API 单独计算每日成绩，不混入原版存档战力。
-
-这套 Compose 是阶段性单机发布骨架，不是“1000 同时在线已经通过”的证明。社区部署明确不启动遗留 `main.worker.js` / `ActivityProjector`：它会把事件级 `processed` 状态误当成多消费者投递状态。认证邮件使用独立加密 Outbox，账号注销补偿使用数据库租约；其他社区领域事件在完成逐消费者回执审计前不得接入旧 Worker，也不得把积压写成已投递。
-
-## 1. 上线前条件
-
-- 仓库为准备发布的干净提交，`IMAGE_TAG` 使用该提交完整 40 位 SHA。
-- 已准备真实 ICP、隐私处理者、专用隐私渠道和游戏发布书面依据。
-- `AUTH_EMAIL_WEBHOOK_URL` 的受保护 HTTPS 服务已验证可发送验证码、找回和安全通知。
-- 已确认数据库/Redis 数据卷、异机备份、恢复演练和监控负责人。
-- 已在 Linux Docker 隔离环境用真实 PostgreSQL 16 完成 0007 快照的迁移演练并保留证据。
-- `packages/backend/src/main.community.ts` 只装载社区模块；不能导入旧完整 `AppModule`。
-
-## 2. 准备环境文件
+准备实际候选时的预检与构建命令如下；它们不切流，不替代上述备份和验收，也不是本轮文档提交要执行的命令：
 
 ```bash
-cd /opt/webfish-review
+sh deploy/community-preflight.sh .env.community
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community config -q
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community build api web
+```
+
+预检要求 `IMAGE_TAG` 与当前干净 checkout 的完整 HEAD 一致，因此**不应用它来判断“旧运行镜像 + 新文档 HEAD”是否健康，更不能为让预检通过而擅自改生产 IMAGE_TAG**。`config -q` 只校验配置；不要把会展开密钥的完整 Compose 配置打印到公共日志。构建仍会占用 CPU/内存，需避开备份恢复及双浏览器等峰值。
+
+## 4. 当前 f46 应用回滚：保留 schema35
+
+此节只适用于上表 f46 → **ff6bab4ae5aa68a14f0de0204dbd34b9eb822a82** 的已审阅预案，不表示执行过生产回滚。后续应用需重新制定对应回滚边界。
+
+- 尚未切流且旧应用健康时，仅撤销该批准备阶段的源码/环境变动，不重启运行容器。
+- 已切流时，先排空/停止当前 API 在途请求，再恢复已保留的 ff6 源码、API/Web 不可变镜像和发布前**逐字相同的完整环境**。只恢复 API/Web，复核健康、迁移登记及基础设施不变。
+- **保留 schema35、36 条迁移历史、全部玩家进度及新旧业务数据。禁止生产 `migration:revert` / DOWN、旧备份覆盖新数据、删表或删除数据卷。** 灾难恢复不是普通应用回滚，必须单独确认数据损失范围并验证恢复方案。
+- **不要套用旧 ff6 → a456 回滚的妖塔整体、自动探索、账号注销关停措施。** ff6 已认识 schema35；历史版本的特殊限制不适用于这次回滚，环境按本次备份恢复。
+- 回退也会结束内存 Paper 临时房间；完成后重新做公网验收。不能只因容器启动成功就宣称恢复完成。
+
+完整预案和最终状态见 [Paper v2 发布记录的应用回滚章节](../docs/RELEASE_PAPER_V2_20260909.md#本轮应用回滚)。
+
+## 5. 仅新站：空环境初始化参考
+
+**当前生产不是空站，不执行此节。** 新站须使用已确认的独立 checkout、空数据库及独立项目/卷；如承接旧系统数据，应改走单独评审的数据迁移流程，不把旧库当空库初始化。
+
+上线前准备 Docker/Compose、域名与 TLS、真实隐私处理者及隐私渠道、备案与游戏发布依据、已验证的 HTTPS 认证邮件 webhook、备份/监控负责人。资源与依赖版本以当前 Compose 为准，测试报告不代表容量承诺。
+
+只在新 checkout 中创建尚不存在的环境文件；若文件已存在，停止并核对来源，**不要覆盖**：
+
+```bash
+test ! -e .env.community || { echo '已有环境文件，停止初始化' >&2; exit 1; }
+umask 077
 cp deploy/.env.community.example .env.community
 chmod 600 .env.community
 ```
 
-分别为 JWT、认证 pepper、数据库、Redis、邮件 webhook 和 Beta 引导码生成独立随机值。下面只演示安全字符格式，不要在多个字段复用同一个输出：
+分别为 JWT、认证 pepper、PostgreSQL、Redis、邮件 webhook 和 Outbox 加密准备独立随机秘密；可用 `openssl rand -hex 32` 每次生成新的值，不在多字段复用。`BETA_BOOTSTRAP_CODE` 至少 16 字符且限次；真实秘密不能写入示例、Git 或命令历史。设置正确的域名、隐私/备案/游戏依据和完整 40 位候选 SHA，再执行预检。预检验证静态配置、密钥基本条件、前后端映射等，不代替 Provider 或真实数据库验收。
 
-```bash
-openssl rand -hex 32
-```
-
-填写 `.env.community`。`BETA_BOOTSTRAP_CODE` 是首批邀请制注册的唯一引导码，至少 16 字符并严格限制使用次数；认证邮件 webhook 必须验证 Bearer token。预检会拒绝空密钥、占位域名、非 HTTPS 邮件 webhook、缺失隐私配置、`DB_LOGGING=true`、前后端功能开关不同源、认证限流缺失、ICP 号被误当游戏依据、非当前提交镜像标签和脏工作区，并且不会打印密钥。
+新站首先在隔离环境验证同一候选的完整初始化与恢复。源码 [迁移清单](../packages/backend/src/database/migrations/index.ts) 当前登记 `0000` 至 `0035`，共 36 条；成功初始化应逐条比对名称/时间戳，不只看数量。通过后，在新站独立项目中构建并启动：
 
 ```bash
 sh deploy/community-preflight.sh .env.community
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community config -q
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community build api web
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community up -d
+docker compose -p webfish-community \
+  -f deploy/docker-compose.community.yml --env-file .env.community ps --all
 ```
 
-### PostgreSQL 16 迁移发布门禁
+`migrate` 使用当前 API 镜像内的 TypeORM 清单执行尚未登记的迁移，`Exited (0)` 属正常完成；API 依赖迁移成功和 Redis 健康。迁移失败须停止排查，不能跳过依赖强启 API。确认 PostgreSQL、Redis、API、Web、Gateway 及持久卷均正确，不启动旧 Worker。
 
-`community-preflight.sh` 只做静态和 Compose 检查，不能替代真实 PostgreSQL 演练。先从已停在 `1700000000007` 的脱敏数据库制作 plain SQL 快照；快照不得包含真实邮箱、密码哈希或其他个人数据：
+新环境的服务端业务开关默认关闭，按账号、社交/内容/审核、聊天、新闻和游戏依次验收后开启；需要前端入口的开关必须重建同源前端。既有站点不执行这种“重新全关再开”。聊天室写入前验证审核、举报、重连和 Redis 故障行为；来源/新闻须有真实授权依据，不伪造榜单，不把扩大 Nginx 白名单当作功能已经实现。管理/协作角色、VIP 赠送和付费能力均不是新站初始化的隐含授权。
 
-```bash
-pg_dump \
-  --format=plain \
-  --no-owner \
-  --no-privileges \
-  --file=/secure/rehearsal/community-0007.sanitized.sql \
-  webfish_0007_sanitized
-```
+### 旧迁移演练脚本的适用范围
 
-构建待发布的 `community-api` 镜像后，在 Linux Docker 主机执行：
+[community-migration-rehearsal.sh](community-migration-rehearsal.sh) 当前硬编码 `BASELINE_TIMESTAMP=1700000000007`、`LATEST_TIMESTAMP=1700000000030`；预检也只检查其这套历史覆盖。它使用脱敏 0007 plain SQL 快照，在临时 PostgreSQL 16 中验证旧 `up/down/up`、邮箱冲突和锁超时，**不是 schema35 的当前发布门禁**。把含 0035 的最新镜像直接交给它，会与“最高迁移必须为 0030”的断言冲突；不得忽略失败或声称它已验证本次版本。本轮只整理文档，不修改该脚本。
 
-```bash
-set -o pipefail
-sh deploy/community-migration-rehearsal.sh \
-  "webfish-community-api:${IMAGE_TAG}" \
-  /secure/rehearsal/community-0007.sanitized.sql \
-  | tee "/secure/rehearsal/community-migration-${IMAGE_TAG}.log"
-```
+从旧快照升级或新站初始化，须先为真实起点和当前候选补齐独立演练并审阅；旧脚本的历史通过不能替代它。当前 f46 无迁移发布使用的是新鲜备份恢复、最终镜像只读克隆及数据不变核验，详见发布记录。其他 `community-*-rehearsal.cjs` 是会写合成数据的专项测试，也不能当作生产只读命令运行。
 
-`pipefail` 必须在同一个 Bash 会话中生效；否则 `tee` 可能掩盖迁移演练脚本的非零退出码。
+### 旧 public/full 站点转入 community
 
-脚本只会创建无公网端口的一次性 Docker 网络和 PostgreSQL `16.14-alpine` 容器，不读取 `.env.community`，也不连接现网数据库。它会依次验证：
+这不是当前生产的常规更新。迁移前须另外确认旧项目、独立卷、端口占用、备份恢复及回滚方案；不能直接执行上面的全栈启动。若下线旧办公室乐斗，需只读盘点 `office_battle_pending_rewards` 和全部 11 张旧乐斗表；存在 `pending` 奖励就暂停切换，经明确的数据处置和用户通知方案后再继续，不能清零、补领或删表来通过门禁。旧 public 与 community 会竞争 80/443/8080，停旧网关与切流必须单独安排。已有真实写入后不得只为回旧模式而恢复旧库覆盖新数据。
 
-- 干净 0007 快照 `up → down 到 0007 → up`；
-- 每次升级均必须完整登记至最新迁移 `1700000000030`：账号安全 `0013`、聊天室 `0014`、新闻 `0015`、热点索引 `0016`、用户名账号 `0017`、游戏成长字段 `0018`、统一等级/体力/货币 `0019`、帮派基础 `0020`、共享帮派首领 `0021`、每日热点与邀请币 `0022`、小游戏排行榜与聊天留存 `0023`、好友私聊 `0024`、Arcade 的 `zhesi` game key `0025`、私有开发协作 `0026`、权威小游戏房间/日榜/奖项 `0027`、来源独立热榜快照 `0028`、轨道房间与密码 `0029`、九层妖塔六张独立表 `0030`；
-- 当前脚本先回退 `0030`，验证六张妖塔表移除、回到 `0029`，且原 7 张轨道表仍保留；再回退 `0029`，验证轨道表及可空密码字段移除、回到 `0028`。随后在空新表的临时数据库分别回退 `0028` 和 `0027`，验证两张快照表及五张游戏表删除，然后继续旧 `0026/0025` 检查。以上删除仅限该一次性演练库，真实生产仅作应用回退，绝不删新表或回收已发奖资产。
-- 单独回滚 `0026` 时，四张开发协作表应删除，最新迁移回到 `0025`；仅在演练的临时数据库执行，生产回滚不得直接删除真实提案和附件。
-- 单独回滚 `0025` 时，两个 Arcade CHECK 必须恢复为仅允许 `tetris`/`tank`，重新升级后必须再次同时允许 `zhesi`；
-- 逐个回滚到 `0007` 后，上述 `0013`—`0030` 的表、字段、索引、约束和相关迁移记录必须全部消失，再次升级必须重新完整创建；
-- `trim/lower` 后邮箱冲突必须在 schema 变更前中止；
-- `user_profiles` 表锁竞争必须在 `lock_timeout` 内失败，并回滚此前已执行的 `users` DDL/数据更改；
-- 释放锁后同一快照可正常升级。
+## 6. 健康检查、烟测与容量声明
 
-只有脚本返回 0、输出最终 passed，且日志与镜像 SHA 一起归档，才能将这条从 `0007` 快照完整升级/回退的独立流程记为通过。本轮尚未记录该完整脚本在最终候选上的实际执行通过，不得把静态检查或其他隔离演练写成它的通过结果。这是首次部署或从旧快照升级时的验收流程；当前已运行站点的 `0029 → 0030` 发布须执行文首列出的最终候选、生产备份副本和异机备份门禁，实际完成状态另见本轮发布记录。
-
-## 3. 构建但不切流
-
-社区版始终使用独立 Compose 项目 `webfish-community`，不与原 `webfish-public`/review 共用容器、网络或数据卷。构建阶段不会占用线上端口：
-
-```bash
-docker compose \
-  -p webfish-community \
-  -f deploy/docker-compose.community.yml \
-  --env-file .env.community \
-  config -q
-
-docker compose \
-  -p webfish-community \
-  -f deploy/docker-compose.community.yml \
-  --env-file .env.community \
-  build
-```
-
-构建必须产出 `packages/backend/dist/main.community.js`。不要把 `main.js` 或旧 `full` 前端作为替代品。
-
-## 4. 启动与迁移
-
-首次切换前保留当前公开镜像和 `.env.public`，并对服务器做可恢复快照。下线旧办公室乐斗入口前还必须完成一次数据安全硬闸：记录当前运行镜像的 tag 与 digest，保留可直接回滚的镜像，对 PostgreSQL 做加密备份并验证备份可读。随后在只读事务中执行下列盘点，将输出、备份校验值、镜像 digest、时间和发布 SHA 一起归档：
-
-```sql
-BEGIN TRANSACTION READ ONLY;
-
-SELECT status, COUNT(*)
-FROM office_battle_pending_rewards
-GROUP BY status;
-
-SELECT 'office_battle_profiles' AS table_name, COUNT(*) AS row_count FROM office_battle_profiles
-UNION ALL SELECT 'office_battle_offer_sets', COUNT(*) FROM office_battle_offer_sets
-UNION ALL SELECT 'office_battle_offers', COUNT(*) FROM office_battle_offers
-UNION ALL SELECT 'office_battle_records', COUNT(*) FROM office_battle_records
-UNION ALL SELECT 'office_battle_equipment', COUNT(*) FROM office_battle_equipment
-UNION ALL SELECT 'office_battle_loadout_items', COUNT(*) FROM office_battle_loadout_items
-UNION ALL SELECT 'office_battle_defense_configs', COUNT(*) FROM office_battle_defense_configs
-UNION ALL SELECT 'office_battle_pending_rewards', COUNT(*) FROM office_battle_pending_rewards
-UNION ALL SELECT 'office_battle_friend_reward_claims', COUNT(*) FROM office_battle_friend_reward_claims
-UNION ALL SELECT 'office_battle_asset_ledger', COUNT(*) FROM office_battle_asset_ledger
-UNION ALL SELECT 'office_battle_inventory_ledger', COUNT(*) FROM office_battle_inventory_ledger
-ORDER BY table_name;
-
-COMMIT;
-```
-
-如果第一个查询返回任何 `status = 'pending'` 的记录，必须立即暂停切换；不得用脚本清零、标记已领取、批量兑换或删除。先将受影响的 `user_id`、`battle_id`、奖励快照和创建时间导出到加密且限权的处置文件，由业务与隐私负责人制定并签字确认人工处置、用户通知和回滚方案后，才能继续停服。11 张表的行数只用于前后校验，切换不得改名、清空或删除这些表。
-
-原 `webfish-public` 的 gateway/web 与社区版会竞争 80、443 和 8080；数据安全硬闸留档完整后，先只停服原容器（不执行 `down -v`），并确认端口已释放：
-
-```bash
-docker compose \
-  -p webfish-public \
-  -f deploy/docker-compose.public.yml \
-  --env-file .env.public \
-  stop gateway web
-
-if ss -H -ltn | awk '{print $4}' | grep -Eq '(^|:)(80|443|8080)$'; then
-  echo 'required ports are still occupied' >&2
-  exit 1
-fi
-```
-
-只有端口检查通过后才启动独立社区项目：
-
-```bash
-docker compose \
-  -p webfish-community \
-  -f deploy/docker-compose.community.yml \
-  --env-file .env.community \
-  up -d
-
-docker compose \
-  -p webfish-community \
-  -f deploy/docker-compose.community.yml \
-  --env-file .env.community \
-  ps --all
-```
-
-`migrate` 成功后显示 `Exited (0)` 是正常状态。确认 PostgreSQL、Redis、API、Web 和 Gateway 状态；不得跳过失败迁移强行启动 API。
-
-## 5. 烟测
-
-先验证本机入口：
+本机健康检查（默认 HTTP_PORT=8080）：
 
 ```bash
 curl -fsS http://127.0.0.1:8080/healthz
@@ -231,73 +127,30 @@ curl -fsS http://127.0.0.1:8080/api/health
 curl -fsS http://127.0.0.1:8080/api/health/ready
 ```
 
-再从公网执行低流量烟测：
+`/healthz` 仅证明 Web 可响应，`/api/health` 是 API 存活检查，社区 `/api/health/ready` 当前仅执行数据库连通性检查，不检查 Redis、邮件 Provider 或旧文档卷；三者均不等于登录、资产并发或真实游戏验收。
+
+经确认烟测范围后，可执行：
 
 ```bash
 sh deploy/community-smoke.sh https://zbrshyyzxx.top
 ```
 
-发布验收必须再使用一个无生产数据的专用测试账号验证刷新 Cookie：
+该脚本检查指定静态入口、旧 API 拒绝、API no-store、安全头、遮司同源静态嵌入头、部分榜单/游戏接口与 Origin 防护；**它不是全站功能测试，也不覆盖 Paper v2 的完整双用户操作**。最后会发送无效空注册请求验证带 `Retry-After` 的 429，消耗调用 IP 的注册限流预算，因此不是纯只读巡检，不应高频无人值守运行。
 
-```bash
-COMMUNITY_SMOKE_EMAIL=release-smoke@example.test \
-COMMUNITY_SMOKE_PASSWORD='replace-with-dedicated-safe-password' \
-REQUIRE_AUTH_SMOKE=1 \
-sh deploy/community-smoke.sh https://zbrshyyzxx.top
-```
+认证烟测可通过私有环境提供 `COMMUNITY_SMOKE_EMAIL`、`COMMUNITY_SMOKE_PASSWORD` 并设 `REQUIRE_AUTH_SMOKE=1`。仅使用获准的普通合成账号，不使用真实成员或管理员；脚本会登录、刷新和注销会话，验证生产 `__Host-` Cookie 的 Secure/HttpOnly/SameSite/Path/无 Domain 属性及同源限制。不要把凭据写进 Git 或终端历史；有任何资产变动须如实单独记录。实际 WSS、手机界面、输入隔离及临时账号收尾按当批受影响范围补充验证。
 
-脚本会验证安全响应头、API no-store、未登录本人接口拒绝、旧上传/文档及办公室乐斗 API 为 404、`/tower-defense` 与历史地址 `/ledou`、`/battle` 均可达、`/games/zhesi` 确实加载含“遮司”文案的 React chunk 并引用 `/games/zhengdao/` 静态 iframe、iframe 文档只返回一组 `SAMEORIGIN` / `frame-ancestors 'self'` 许可头且普通页仍保持 `DENY` / `frame-ancestors 'none'`、无登录信息的 `GET /api/v1/games/arcade/leaderboards/zhesi` 返回排行榜合约、WebSocket 不回落 SPA，login/verify-email 在缺少或伪造 `Origin` 时先返回 403，以及 register 入口在无害空请求爆发下返回带 `Retry-After` 的 429。限流探针在所有其他检查之后执行，不会查询真实账号、执行 bcrypt、发邮件或创建会话。它只耗尽独立的 register 预算，不影响随后使用专用账号的 login/refresh 验收；同一公网 IP 立即重跑时，register 探针可直接再次观察到 429。
+`loadtest/k6/capacity.mjs` 仅覆盖静态页和少量只读 API；`loadtest/k6/community-capacity-gate.mjs` 当前仍是固定失败的容量门禁，未完成混合写、1000 WebSocket、重连、实例/Redis 故障和持续运行验证。完整门禁实现、评审并在隔离环境连续通过三次前，不能宣称已支持 4000 账号或 1000 同时在线/连接。
 
-带专用测试账号运行时，脚本还会验证合法 `Origin` 登录、生产 `__Host-` 刷新 Cookie 的 `Secure`、`HttpOnly`、`SameSite=Strict`、`Path=/` 和无 `Domain` 属性，以及缺少 `Origin` 的刷新被拒绝、合法同源刷新成功并在结束时注销测试会话。不要使用真实用户账号，也不要把测试凭据写进仓库或命令历史。
+## 7. 历史发布索引：只供追溯，不重放
 
-## 6. 分阶段开启
+| 历史应用 | 当时数据库边界 | 记录与注意事项 |
+| --- | --- | --- |
+| `ff6bab4` | schema32 → 35，新增 0033/0034/0035 | [协作补齐与红蓝房间](../docs/RELEASE_COMPLETION_20260909.md)；现在仅作为 f46 的回滚基线。该次回退到 a456 的特殊关停条件不套用到 f46 → ff6 |
+| `a456a8b` | schema32 → 32，无迁移 | [小游戏与工具导航](../docs/RELEASE_NAVIGATION_20260909.md)；不是当前运行应用 |
+| `6085298` | schema32 → 32，无迁移 | [开发反馈与小窗](../docs/RELEASE_FEEDBACK_20260909.md)；该次回退到 727 的旧妖塔规则限制仅适用于当时版本 |
+| `727576b` | schema30 → 32，新增 0031/0032 | [成长/VIP/自动探索](../docs/RELEASE_GROWTH_20260909.md)；0031 对当时 active 账号的一次性 720 小时赠送不是每日任务，不补发、不重放，后续新账号不因登录自动领取 |
+| `82b8431` | schema29 → 30，新增妖塔六表 | [九层妖塔](../docs/RELEASE_DEMON_TOWER_20260909.md)；旧 2c82 注销清理限制和空表副本 DOWN 演练不是当前生产步骤 |
+| `2c82fdd` | schema29 → 29，无迁移 | [系统审计发布](../docs/RELEASE_SYSTEM_AUDIT_20260908.md) |
+| Rail / 房间密码版本 | schema28 → 29 | [轨道难题与密码](../docs/COMMUNITY_RAIL_ROOMS.md)；只记录历史迁移，不再次回填旧房间/资产 |
 
-1. 首次部署保持全部服务端写入业务开关为 `false`，只验证 health、登录安全、迁移、旧 API 拒绝和回滚路径。工位塔防的纯前端构建开关例外，生产固定为开启。
-2. 先开启注册与账号恢复；社交核验、账号注销分别使用独立开关，只有外部 Provider 与补偿任务验收后才开启。
-3. 再开启好友、邀请、投喂、工位绿植等社区事务；公开主页与这些写能力使用同一社区总闸。
-4. 内容读取、内容写入、审核操作使用三个独立开关。先由值班审核员在写入关闭状态验收审核台，再开放发帖、评论和互动。
-5. 聊天室先开读取和连接，发送保持关闭；首发可开启 `CHAT_BUILTIN_MODERATION_ENABLED=true` 使用内置基础规则，接入外部审核 Provider 后关闭该开关。审核、举报、Redis 故障只读和重连演练通过后，再按 50 → 200 → 500 → 1000 连接逐级开放写入。
-6. 新闻总闸与后台闸同时开启后，公开列表在首篇稿件通过双人复核前仍为空；只录入真实授权来源，不得使用抓取、全文镜像或虚假种子填充页面。
-7. 生产构建固定开启 `VITE_COMMUNITY_TOWER_DEFENSE_ENABLED=true`。工位塔防只在本机保存最高分，不上传进度、不接入正式排行榜也不提供正式奖励。“遮司”可在未登录时本机游玩和读取公开排行榜；只有登录账号才会创建 `zhesi` 赛局并提交经服务端校验的最佳战力，不发放正式资产。`FEATURE_COMMUNITY_BATTLE_ENABLED`、`VITE_COMMUNITY_LEDOU_ENABLED` 和 `VITE_COMMUNITY_BATTLE_SERVER_ENABLED` 必须保持 `false`，社区入口不再装配旧办公室乐斗服务；历史源码、迁移与表只供回滚，不改名也不删除数据。
-8. 社区领域若以后引入新的异步事件消费者，必须先实现逐消费者回执与积压/重试/死信监控；禁止直接启用遗留 `main.worker.js`。
-
-白名单不是实现状态说明：后端模块、授权、治理和验收必须同时完成。每次扩大白名单后重新构建并执行完整烟测。
-
-## 7. 回滚
-
-### 已运行社区版的常规更新
-
-以下为历史 `0026 → 0028` 增量更新示例，不是本轮迁移目标。本轮九层妖塔 `0029 → 0030` 的回滚基线、新表保留及旧版注销暂停条件以文首专节为准；已有社区站点不执行下面的 public 切站流程。历史示例的通用原则是：发布前保存旧 community 镜像、完整提交 SHA、限权环境文件和数据库备份。候选通过隔离数据库验收后，仅运行 `compose run --rm --no-deps migrate`；验证最新迁移、旧用户/权限/钱包/反馈数据不受迁移影响，再用 `--no-deps` 替换 API/Web。应用回退时恢复经审阅的旧 community 发布配置和 API/Web，原开发协作开关及成员权限保持不变；保持 PostgreSQL、Redis、Gateway 及其数据卷不变。保留该历史更新的 `0027/0028` 新表、已发放资产及已有 `0026` 提案附件，不在生产执行 `migration:revert`。
-
-### 首次 public 切换为 community 后的回滚
-
-应用失败时，先完整停止 `webfish-community` 容器并确认 80、443、8080 已释放，再启动保留的独立 `webfish-public` 项目：
-
-```bash
-docker compose \
-  -p webfish-community \
-  -f deploy/docker-compose.community.yml \
-  --env-file .env.community \
-  stop
-
-if ss -H -ltn | awk '{print $4}' | grep -Eq '(^|:)(80|443|8080)$'; then
-  echo 'community ports are still occupied; public rollback was not started' >&2
-  exit 1
-fi
-
-docker compose \
-  -p webfish-public \
-  -f deploy/docker-compose.public.yml \
-  --env-file .env.public \
-  up -d
-
-sh deploy/public-smoke.sh https://zbrshyyzxx.top
-```
-
-`stop` 只停容器，不会删除 `webfish-community` 的 PostgreSQL、Redis 或 Caddy 命名数据卷，因此排查后仍可恢复社区项目。不要运行 `down -v`、`docker volume prune` 或全局带卷清理。数据库迁移可能不可逆；如果已有真实社区写入，必须按演练过的数据库恢复流程处理，不能只切旧镜像。特别是 `arcade_game_runs` 或 `arcade_best_scores` 已有 `game_key='zhesi'` 时，`0025` 的 down 会因旧 CHECK 无法接纳现有行而失败；应优先保留 `0025` 做应用回滚，若必须回退 schema，则必须先按经批准的数据归档/恢复方案处理，不得直接删除真实排行榜数据。
-
-## 8. 容量声明门禁
-
-现有 `loadtest/k6/capacity.mjs` 只覆盖公开静态页和少量只读 API。它即使通过，也不能证明社区版达到 4000 账号、1000 会话或 1000 WebSocket。
-
-`loadtest/k6/community-capacity-gate.mjs` 当前会固定返回失败，直到合成数据、混合写请求、1000 WebSocket、重连、实例故障、Redis 故障和持续运行场景全部实现并评审。门禁被正式替换、隔离环境连续通过三次之前，不得对外宣称容量目标已经通过。
+迁移 `0026` 的真实开发协作与附件、`0025` 起的遮司成绩及以后各游戏进度均应保留。历史 `down` 演练只在限定隔离副本进行；不能把它、旧成员授权、VIP 发放或切回 public 的步骤复制到已运行社区站。所有发布私有证据、环境副本、备份和用户附件保持限权保管，不进入 Git。
