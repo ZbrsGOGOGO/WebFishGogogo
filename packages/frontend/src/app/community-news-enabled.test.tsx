@@ -104,7 +104,7 @@ describe('community news release flag', () => {
     ]);
     resetCommunityAuthStoreForTests();
     render(<MemoryRouter><CommunityHomePage /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: '摸鱼间隙，看看新闻' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '今日资讯，一站浏览' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '分类新闻' })).toHaveAttribute('href', '/news');
     expect(screen.getByRole('link', { name: '每日热榜' })).toHaveAttribute('href', '/news/trending');
   });

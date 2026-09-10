@@ -31,7 +31,7 @@
   color: var(--color-brand);
   font-family: var(--font-mono);
   font-size: 22px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .introStrip p {
@@ -78,8 +78,8 @@
 
 .gameLink:hover .gameCard {
   border-color: var(--game-accent, var(--color-brand));
-  box-shadow: var(--shadow-md);
-  transform: translateY(-3px);
+  box-shadow: var(--shadow-sm);
+  transform: none;
 }
 
 .gameLink:focus-visible {
@@ -115,7 +115,7 @@
   color: var(--game-accent, var(--color-brand));
   font-family: var(--font-mono);
   font-size: 24px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .gameCard > div > p,
@@ -136,7 +136,7 @@
   border-radius: 999px;
   background: var(--color-surface-2);
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .cardFooter {

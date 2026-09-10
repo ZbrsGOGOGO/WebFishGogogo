@@ -16,7 +16,7 @@ import {
 } from '../../api/community';
 import { COMMUNITY_PROFESSIONS } from './community-professions';
 import { communityRequestErrorMessage } from './request-error';
-import styles from './CommunityHomePage.module.css';
+import styles from './CommunityHome.module.css';
 
 interface HomeSummaries {
   profile?: CommunityProfile;
@@ -94,8 +94,8 @@ export function CommunityHomePage(): JSX.Element {
       <section className={styles.welcome}>
         <div>
           <span className={styles.eyebrow}>{signedIn ? '欢迎回到工位' : '下班前，轻松一会儿'}</span>
-          <h1>{signedIn ? `${user?.displayName ?? '同事'}，今天先做哪一件？` : '你的摸鱼成长社区'}</h1>
-          <p>聊经验、种绿植、守工位。每个入口都只保留一个最清楚的下一步。</p>
+          <h1>{signedIn ? `${user?.displayName ?? '同事'}，今天先做哪一件？` : '你的日常工作台'}</h1>
+          <p>消息、资讯与常用工具，都在这里。安排好手头的事，也留一点轻松的时间。</p>
           <div className={styles.heroActions}>
             <Link className={styles.primaryAction} to="/tower-defense">马上守一局</Link>
             {COMMUNITY_FEATURE_FLAGS.farm ? (
@@ -109,11 +109,10 @@ export function CommunityHomePage(): JSX.Element {
             )}
           </div>
         </div>
-        <div className={styles.deskScene} aria-hidden="true">
-          <div className={styles.window}><i /><i /><i /></div>
-          <div className={styles.monitor}><span>摸摸</span></div>
-          <div className={styles.plant}><b>✦</b><i /></div>
-          <div className={styles.desk} />
+        <div className={styles.workspaceNote} aria-hidden="true">
+          <div><span /> workspace / overview</div>
+          <p>把日常，安排得刚刚好。</p>
+          <ul><li>关注同事的最新消息</li><li>打开顺手的常用工具</li><li>留一段自己的休息时间</li></ul>
         </div>
       </section>
 
@@ -125,7 +124,7 @@ export function CommunityHomePage(): JSX.Element {
         <div className={styles.actionGrid}>
           <Link className={styles.bigAction} data-tone="battle" to="/tower-defense">
             <span className={styles.actionMark}>守</span>
-            <div><small>摸鱼升职记 · 合成塔防</small><strong>先经营布阵，再迎战突袭</strong><p>绿植产币、零件三合一，首回合养阵容，次回合用五条办公用品塔线迎战混合稽查。</p></div>
+            <div><small>工位防线 · 策略挑战</small><strong>先经营布阵，再迎战突袭</strong><p>绿植产币、零件三合一，首回合养阵容，次回合用五条办公用品塔线迎战混合稽查。</p></div>
             <b>开守 →</b>
           </Link>
           {COMMUNITY_FEATURE_FLAGS.community || COMMUNITY_FEATURE_FLAGS.chat ? (
@@ -146,7 +145,7 @@ export function CommunityHomePage(): JSX.Element {
 
       {COMMUNITY_FEATURE_FLAGS.news ? (
         <section className={styles.newsEntry} aria-labelledby="home-news-title">
-          <div><span>NEWS BREAK</span><h2 id="home-news-title">摸鱼间隙，看看新闻</h2><p>分类新闻看原文，微博知乎等榜单直达官方。</p></div>
+          <div><span>NEWS BREAK</span><h2 id="home-news-title">今日资讯，一站浏览</h2><p>分类新闻看原文，微博知乎等榜单直达官方。</p></div>
           <div className={styles.newsEntryActions}>
             <Link to="/news">分类新闻 <span aria-hidden="true">→</span></Link>
             <Link to="/news/trending">每日热榜 <span aria-hidden="true">↗</span></Link>

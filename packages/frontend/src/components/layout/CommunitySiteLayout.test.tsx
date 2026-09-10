@@ -166,6 +166,55 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     expect(communityDirectMessagesApi.listConversations).toHaveBeenCalledTimes(1);
   });
 
+  it('opens a searchable directory, hides unauthorized development, and closes on navigation', async () => {
+    renderLayout('/messages/friend-1');
+    const trigger = screen.getByRole('button', { name: '浏览全部栏目' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: '全部栏目' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(within(dialog).queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    const input = within(dialog).getByRole('searchbox', { name: '查找栏目' });
+    fireEvent.change(input, { target: { value: '不存在的栏目' } });
+    expect(within(dialog).getByRole('status')).toHaveTextContent('没有匹配的栏目');
+    fireEvent.change(input, { target: { value: '聊天室' } });
+    expect(within(dialog).getByRole('link', { name: '经验交流' })).toHaveAttribute('href', '/community');
+    fireEvent.change(input, { target: { value: ' 工具 ' } });
+    const directory = within(dialog).getByRole('navigation', { name: '栏目目录' });
+    expect(within(directory).getAllByRole('link')).toHaveLength(1);
+    fireEvent.click(within(directory).getByRole('link', { name: '工具' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('traps directory focus, restores it on Escape, and clears search when reopened', () => {
+    renderLayout();
+    const trigger = screen.getByRole('button', { name: '浏览全部栏目' });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole('dialog');
+    const close = within(dialog).getByRole('button', { name: '关闭' });
+    expect(close).toHaveFocus();
+    fireEvent.keyDown(close, { key: 'Tab', shiftKey: true });
+    expect(within(dialog).getByRole('button', { name: '退出登录' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    expect(close).toHaveFocus();
+    fireEvent.change(within(dialog).getByRole('searchbox'), { target: { value: '工具' } });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+  });
+
+  it('dismisses the directory when the account changes', () => {
+    renderLayout();
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+    act(() => useCommunityAuthStore.setState({ user: { ...ACTIVE_USER, publicId: 'other-user' } }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('refreshes the authoritative unread total for direct-message and read events', async () => {
     vi.mocked(communityDirectMessagesApi.listConversations)
       .mockResolvedValueOnce(conversationPage(2))

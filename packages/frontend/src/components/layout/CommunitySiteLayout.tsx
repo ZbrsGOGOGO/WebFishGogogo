@@ -23,29 +23,11 @@ import {
   DevelopmentAccessProvider,
   useDevelopmentAccessState,
 } from '../../features/development/development-access';
-import { Button } from '../ui';
-import styles from './CommunitySiteLayout.module.css';
+import { Button, Modal } from '../ui';
+import { SystemIcon } from './SystemIcon';
+import styles from './CommunityShell.module.css';
 import { FishGrowthSummary } from '../../features/community-progression/FishGrowthSummary';
 
-const SYSTEM_MARKS: Record<CommunitySystemId, string> = {
-  home: '首',
-  news: '热',
-  community: '聊',
-  messages: '信',
-  farm: '种',
-  games: '游',
-  tools: '具',
-  deskPet: '伴',
-  officeHub: '司',
-  towerDefense: '守',
-  demonTower: '塔',
-  leaderboards: '榜',
-  feed: '喂',
-  invite: '邀',
-  profile: '我',
-  achievements: '录',
-  friends: '友',
-};
 
 const PROFESSION_LABELS: Record<string, string> = {
   developer: '程序员',
@@ -75,6 +57,9 @@ export function CommunitySiteLayout(): JSX.Element {
   const [directUnreadCount, setDirectUnreadCount] = useState(0);
   const developmentAccess = useDevelopmentAccessState();
   const wallet = useCommunityWalletStore();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [navigationQuery, setNavigationQuery] = useState('');
+  useEffect(() => { setNavigationOpen(false); setNavigationQuery(''); }, [location.key, user?.publicId, phase]);
 
   useEffect(() => {
     void restoreSession();
@@ -154,6 +139,8 @@ export function CommunitySiteLayout(): JSX.Element {
     : '办公室新人';
   const developmentAllowed = developmentAccess.status === 'allowed';
   const developmentCurrent = location.pathname.startsWith('/development');
+  const canModerate = phase === 'active' && user?.roles?.some((role) => role === 'moderator' || role === 'admin');
+  const directoryItems = COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled && `${item.label} ${item.description}`.includes(navigationQuery.trim()));
   const walletBalance = wallet.ownerId === user?.publicId ? wallet.officeCoins : null;
   const walletUnsynced = wallet.status === 'stale' || wallet.status === 'error';
   const walletLabel = walletBalance === null
@@ -170,10 +157,11 @@ export function CommunitySiteLayout(): JSX.Element {
             <span className={styles.brandMark} aria-hidden="true">摸</span>
             <span>
               <strong>{SITE_NAME}</strong>
-              <small>摸鱼成长社区</small>
+              <small>协作 · 工具 · 工作台</small>
             </span>
           </Link>
 
+          <button type="button" className={styles.navigationTrigger} aria-label="浏览全部栏目" aria-haspopup="dialog" aria-expanded={navigationOpen} onClick={() => { setNavigationQuery(''); setNavigationOpen(true); }}><SystemIcon name="menu" /><span>全部栏目</span></button>
           <nav className={styles.topNav} aria-label="快捷导航">
             {primaryNav.map((item) => (
               <Link
@@ -228,7 +216,7 @@ export function CommunitySiteLayout(): JSX.Element {
             {utilityNav.map((item) => (
               <Link key={item.id} to={item.path}
                 aria-current={currentSystem?.id === item.id ? 'page' : undefined}>
-                <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
+                <span aria-hidden="true"><SystemIcon name={item.id} /></span>
                 <b>{item.label}</b>
                 <span aria-hidden="true">→</span>
               </Link>
@@ -262,7 +250,7 @@ export function CommunitySiteLayout(): JSX.Element {
                   data-current={currentSystem?.id === item.id}
                   aria-current={currentSystem?.id === item.id ? 'page' : undefined}
                 >
-                  <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
+                  <span aria-hidden="true"><SystemIcon name={item.id} /></span>
                   <b>{item.label}</b>
                   {item.id === 'messages' && directUnreadCount > 0 ? (
                     <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
@@ -275,7 +263,7 @@ export function CommunitySiteLayout(): JSX.Element {
                   data-current={developmentCurrent}
                   aria-current={developmentCurrent ? 'page' : undefined}
                 >
-                  <span aria-hidden="true">研</span>
+                  <span aria-hidden="true"><SystemIcon name="development" /></span>
                   <b>开发协作</b>
                 </Link>
               ) : null}
@@ -296,7 +284,7 @@ export function CommunitySiteLayout(): JSX.Element {
           <aside className={styles.rightRail} aria-label="快捷行动">
             <section className={styles.actionWidget}>
               <span>现在就玩</span>
-              <strong>摸鱼升职记</strong>
+              <strong>工位防线</strong>
               <p>首回合经营布阵，次回合迎战混合稽查与加班首领。</p>
               <Link to="/tower-defense">开始守工位 <b>→</b></Link>
             </section>
@@ -330,8 +318,9 @@ export function CommunitySiteLayout(): JSX.Element {
               aria-label={item.id === 'messages' && directUnreadCount > 0
                 ? `${item.label}，${directUnreadCount} 条未读`
                 : undefined}
+              aria-current={currentSystem?.id === item.id ? 'page' : undefined}
             >
-              <span aria-hidden="true">{SYSTEM_MARKS[item.id]}</span>
+              <span aria-hidden="true"><SystemIcon name={item.id} /></span>
               <small>{item.id === 'profile' ? '我的' : item.label}</small>
               {item.id === 'messages' && directUnreadCount > 0 ? (
                 <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
@@ -344,12 +333,28 @@ export function CommunitySiteLayout(): JSX.Element {
               data-current={developmentCurrent}
               aria-current={developmentCurrent ? 'page' : undefined}
             >
-              <span aria-hidden="true">研</span>
+              <span aria-hidden="true"><SystemIcon name="development" /></span>
               <small>开发</small>
             </Link>
           ) : null}
         </nav>
       ) : null}
+      <Modal open={navigationOpen} onClose={() => setNavigationOpen(false)} title="全部栏目" size="lg">
+        <div className={styles.navigationSearch}>
+          <label htmlFor="workspace-navigation-search">查找栏目</label>
+          <input id="workspace-navigation-search" type="search" placeholder="例如：工具、聊天室、排行榜" maxLength={80} value={navigationQuery} onChange={(event) => setNavigationQuery(event.target.value)} />
+        </div>
+        <nav className={styles.navigationGrid} aria-label="栏目目录">
+          {directoryItems.map((item) => <Link key={item.id} to={item.path} onClick={() => setNavigationOpen(false)} aria-current={currentSystem?.id === item.id ? 'page' : undefined}><SystemIcon name={item.id} /><span>{item.label}</span></Link>)}
+          {developmentAllowed && '开发协作'.includes(navigationQuery.trim()) ? <Link to="/development" onClick={() => setNavigationOpen(false)}><SystemIcon name="development" /><span>开发协作</span></Link> : null}
+        </nav>
+        {!directoryItems.length && !(developmentAllowed && '开发协作'.includes(navigationQuery.trim())) ? <p role="status">没有匹配的栏目，试试更短的关键词。</p> : null}
+        <div className={styles.navigationFooter}>
+          {canModerate && COMMUNITY_FEATURE_FLAGS.community && COMMUNITY_FEATURE_FLAGS.moderation ? <Link to="/moderation" onClick={() => setNavigationOpen(false)}>审核台</Link> : null}
+          {canModerate && COMMUNITY_FEATURE_FLAGS.news && COMMUNITY_FEATURE_FLAGS.newsAdmin ? <Link to="/news/admin" onClick={() => setNavigationOpen(false)}>资讯台</Link> : null}
+          {signedIn ? <><Link to="/account/security" onClick={() => setNavigationOpen(false)}>账号与安全</Link><Link to="/notifications" onClick={() => setNavigationOpen(false)}>通知中心</Link><Button variant="secondary" size="sm" onClick={() => { setNavigationOpen(false); void logout(); }}>退出登录</Button></> : <Link to="/login" onClick={() => setNavigationOpen(false)}>登录账号</Link>}
+        </div>
+      </Modal>
     </div>
     </DevelopmentAccessProvider>
   );

@@ -24,10 +24,10 @@
   height: 40px;
   display: grid;
   place-items: center;
-  border-radius: 13px;
+  border-radius: 8px;
   color: #fff;
-  background: linear-gradient(145deg, #6969e1, #3f3fa9);
-  box-shadow: 0 10px 26px rgba(74, 74, 190, 0.24);
+  background: var(--color-surface-strong);
+  box-shadow: none;
   font-size: 18px;
   font-weight: 850;
 }
@@ -45,7 +45,7 @@
 .brand small {
   margin-top: 4px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nav {
@@ -57,10 +57,10 @@
 
 .nav a {
   padding: 8px 11px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -72,15 +72,13 @@
 }
 
 .hero {
-  padding: clamp(42px, 7vw, 76px);
+  padding: clamp(20px, 3vw, 32px);
   overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--color-brand) 16%, var(--color-border));
-  border-radius: 30px;
+  border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 86% 12%, rgba(16, 163, 127, 0.15), transparent 24rem),
-    radial-gradient(circle at 6% 94%, rgba(91, 91, 214, 0.15), transparent 28rem),
-    var(--color-surface);
-  box-shadow: 0 24px 70px rgba(34, 40, 74, 0.09);
+    var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .eyebrow,
@@ -89,14 +87,14 @@
   margin-bottom: 13px;
   color: var(--color-accent);
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.12em;
 }
 
 .hero h1 {
   max-width: 720px;
   margin: 0 0 18px;
-  font-size: clamp(34px, 5vw, 58px);
+  font-size: clamp(24px, 3vw, 30px);
   letter-spacing: -0.045em;
   line-height: 1.08;
 }
@@ -105,7 +103,7 @@
   max-width: 690px;
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1.85;
 }
 
@@ -124,7 +122,7 @@
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .notice {
@@ -151,7 +149,7 @@
 }
 
 .catalog {
-  padding-top: 76px;
+  padding-top: 28px;
 }
 
 .sectionHeading {
@@ -168,7 +166,7 @@
 
 .sectionHeading h2 {
   margin: 0;
-  font-size: clamp(25px, 3vw, 36px);
+  font-size: 20px;
   letter-spacing: -0.025em;
 }
 
@@ -185,7 +183,7 @@
   align-items: end;
   gap: 18px;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-surface) 88%, var(--color-brand-soft));
 }
 
@@ -194,7 +192,7 @@
   gap: 7px;
   color: var(--color-text-secondary);
   font-size: 12px;
-  font-weight: 750;
+  font-weight: 600;
 }
 
 .searchField input {
@@ -202,7 +200,7 @@
   min-height: 42px;
   padding: 9px 12px;
   border: 1px solid var(--color-border-strong);
-  border-radius: 11px;
+  border-radius: var(--radius-md);
   color: var(--color-text);
   background: var(--color-surface);
 }
@@ -228,7 +226,7 @@
   color: var(--color-text-secondary);
   background: var(--color-surface);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .categoryFilters button:hover,
@@ -248,23 +246,23 @@
 }
 
 .toolCard {
-  min-height: 255px;
+  min-height: 216px;
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 22px;
-  padding: 24px;
+  gap: 16px;
+  padding: 18px;
   border: 1px solid var(--color-border);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .toolCard:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: color-mix(in srgb, var(--color-brand) 38%, var(--color-border));
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .cardTopline {
@@ -275,16 +273,16 @@
 }
 
 .toolMark {
-  width: 46px;
-  height: 46px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  color: var(--color-brand-strong);
-  background: var(--color-brand-soft);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-2);
   font-family: var(--font-mono);
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .category {
@@ -299,7 +297,7 @@
 
 .cardCopy h3 {
   margin: 0 0 9px;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .cardCopy p {
@@ -316,7 +314,7 @@
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
   color: var(--color-brand);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .openLink span {
@@ -334,7 +332,7 @@
   place-content: center;
   justify-items: center;
   border: 1px dashed var(--color-border-strong);
-  border-radius: 20px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-secondary);
   background: var(--color-surface);
   text-align: center;
@@ -353,10 +351,10 @@
   min-height: 40px;
   padding: 8px 15px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   color: #fff;
   background: var(--color-brand);
-  font-weight: 750;
+  font-weight: 600;
 }
 
 @media (max-width: 900px) {
@@ -398,16 +396,16 @@
   }
 
   .hero {
-    padding: 38px 22px;
-    border-radius: 22px;
+    padding: 20px;
+    border-radius: var(--radius-lg);
   }
 
   .hero h1 {
-    font-size: 34px;
+    font-size: 24px;
   }
 
   .catalog {
-    padding-top: 58px;
+    padding-top: 24px;
   }
 
   .sectionHeading,

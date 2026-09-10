@@ -39,7 +39,7 @@ describe('community mode routes', () => {
   it('renders the playable workbench homepage without advertising disabled systems', () => {
     renderAt('/');
 
-    expect(screen.getByRole('heading', { name: '你的摸鱼成长社区' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '你的日常工作台' })).toBeInTheDocument();
     const systemNavigation = screen.getByRole('navigation', { name: '全部系统' });
     expect(within(systemNavigation).getByRole('link', { name: '首页' })).toHaveAttribute('href', '/');
     expect(within(systemNavigation).getByRole('link', { name: '工位塔防' })).toHaveAttribute('href', '/tower-defense');

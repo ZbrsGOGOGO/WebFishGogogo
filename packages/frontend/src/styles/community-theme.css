@@ -1,0 +1,47 @@
+/* Community UI only. Game worlds and the standalone reader keep their palettes. */
+html[data-site-mode='community'] {
+  color-scheme: light;
+  --color-brand: #1f883d;
+  --color-brand-hover: #1a7f37;
+  --color-brand-strong: #116329;
+  --color-brand-soft: #dafbe1;
+  --color-accent: #0969da;
+  --color-accent-soft: #ddf4ff;
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f6f8fa;
+  --color-surface-strong: #25292e;
+  --color-border: #d1d9e0;
+  --color-border-strong: #818b98;
+  --color-text: #1f2328;
+  --color-text-secondary: #59636e;
+  --color-text-muted: #59636e;
+  --color-success: #1a7f37;
+  --color-warning: #9a6700;
+  --color-danger: #cf222e;
+  --color-link: #0969da;
+  --radius-sm: 6px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --shadow-sm: 0 1px 0 rgba(31, 35, 40, .04);
+  --shadow-md: 0 3px 8px rgba(31, 35, 40, .08);
+  --shadow-lg: 0 8px 24px rgba(31, 35, 40, .14);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+html[data-site-mode='community'] body { background: var(--color-bg); font-size: 14px; }
+html[data-site-mode='community'] h1 { font-size: clamp(22px, 2.4vw, 28px); font-weight: 600; overflow-wrap: anywhere; }
+html[data-site-mode='community'] h2 { font-size: 18px; font-weight: 600; }
+html[data-site-mode='community'] h3 { font-weight: 600; }
+html[data-site-mode='community'] :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-link); outline-offset: 3px;
+}
+html[data-site-mode='community'] button:disabled { cursor: not-allowed; }
+html[data-site-mode='community'] ::selection { background: #ddf4ff; color: #1f2328; }
+html[data-site-mode='community'] .route-loading { background: var(--color-surface-2); color: var(--color-text-secondary); }
+html[data-site-mode='community'] .auth-page { background: var(--color-surface-2); padding-block: 32px; }
+html[data-site-mode='community'] .auth-card__logo { background: var(--color-surface-strong); border-radius: 8px; box-shadow: none; font-weight: 600; }
+html[data-site-mode='community'] .site-footer { background: var(--color-surface-2); }
+@media (prefers-reduced-motion: reduce) {
+  html[data-site-mode='community'] *, html[data-site-mode='community'] *::before, html[data-site-mode='community'] *::after { scroll-behavior: auto !important; }
+}

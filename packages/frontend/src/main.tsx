@@ -1,10 +1,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { SITE_META_DESCRIPTION, SITE_NAME } from './app/site-config';
+import { SITE_META_DESCRIPTION, SITE_NAME, SITE_MODE } from './app/site-config';
 import './styles/tokens.css';
 import './styles/app-shell.css';
+import './styles/community-theme.css';
 
+document.documentElement.dataset.siteMode = SITE_MODE;
 document.title = SITE_NAME;
 document
   .querySelector('meta[name="description"]')

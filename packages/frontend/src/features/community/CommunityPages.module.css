@@ -1,7 +1,7 @@
 .page {
   width: min(100% - 40px, 1180px);
   margin: 0 auto;
-  padding: 42px 0 72px;
+  padding: 24px 0 48px;
   display: grid;
   gap: 24px;
 }
@@ -13,12 +13,10 @@
   gap: 32px;
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--color-brand) 18%, var(--color-border));
-  border-radius: 26px;
+  border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 92% 10%, rgba(16, 163, 127, 0.14), transparent 20rem),
-    radial-gradient(circle at 8% 100%, rgba(91, 91, 214, 0.14), transparent 24rem),
-    var(--color-surface);
-  box-shadow: var(--shadow-md);
+    var(--color-surface-2);
+  box-shadow: var(--shadow-sm);
 }
 
 .hero h1 {
@@ -35,7 +33,7 @@
 .heroAside {
   padding: 20px;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--color-surface) 86%, transparent);
 }
 
@@ -63,8 +61,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
-  font-weight: 750;
+  border-radius: var(--radius-md);
+  font-weight: 600;
 }
 
 .primaryLink {
@@ -95,7 +93,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   color: var(--color-text);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -103,7 +101,7 @@
 
 a.systemCard:hover {
   border-color: color-mix(in srgb, var(--color-brand) 40%, var(--color-border));
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .systemCard[data-disabled='true'] {
@@ -112,8 +110,8 @@ a.systemCard:hover {
 
 .systemCard span {
   color: var(--color-brand);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -198,7 +196,7 @@ a.systemCard:hover {
   place-items: center;
   gap: 4px;
   border: 1px solid var(--color-border);
-  border-radius: 14px;
+  border-radius: var(--radius-md);
   color: var(--color-text-secondary);
   background: var(--color-surface);
 }
@@ -207,7 +205,7 @@ a.systemCard:hover {
   border-color: var(--color-brand);
   color: var(--color-brand-strong);
   background: var(--color-brand-soft);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 18%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .choiceButton strong {
@@ -215,7 +213,7 @@ a.systemCard:hover {
 }
 
 .choiceButton small {
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .fieldLabel {
@@ -223,7 +221,7 @@ a.systemCard:hover {
   gap: 7px;
   color: var(--color-text-secondary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .select {
@@ -316,7 +314,7 @@ a.systemCard:hover {
   color: var(--color-text-secondary);
   background: var(--color-surface);
   font: inherit;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .tabButton[data-selected='true'] {
@@ -400,7 +398,7 @@ a.systemCard:hover {
   gap: 6px;
   color: var(--color-text-secondary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .readonlyField input {
@@ -443,7 +441,7 @@ a.systemCard:hover {
   display: grid;
   gap: 4px;
   border: 1px solid var(--color-border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 
@@ -479,8 +477,8 @@ a.systemCard:hover {
 
 .sectionHeading span {
   color: var(--color-brand);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -494,15 +492,15 @@ a.systemCard:hover {
   display: flex;
   flex-direction: column;
   border: 1px solid var(--color-border);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 
 .summaryCard > span {
   color: var(--color-brand);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -656,7 +654,7 @@ a.systemCard:hover {
 
   .hero {
     padding: 24px;
-    border-radius: 20px;
+    border-radius: var(--radius-lg);
   }
 
   .grid,
