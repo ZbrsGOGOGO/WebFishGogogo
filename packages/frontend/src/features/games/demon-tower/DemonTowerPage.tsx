@@ -58,6 +58,7 @@ export function DemonTowerPage(): JSX.Element {
   const catalog = state.catalog;
   const overview = state.overview;
   const profile = overview?.profile;
+  const navigationReady = Boolean(catalog?.enabled && overview && profile);
   const visibleReceipt = state.receipt && (state.receipt.replayed || state.receipt.events.length > 0 || state.receipt.officeCoinsGranted > 0 || state.receipt.effectiveBossDamage > 0 || state.receipt.passageContribution > 0) ? state.receipt : null;
   const autoRunning = overview?.autoExplore?.status === 'running';
   const disabled = state.busy || state.pending || !overview?.writesEnabled || autoRunning || Boolean(autoPending?.scope === autoScope && autoPending?.pending);
@@ -72,7 +73,11 @@ export function DemonTowerPage(): JSX.Element {
     return true;
   };
   useEffect(() => { setHelp(false); }, [state.ownerId]);
-  useEffect(() => { document.getElementById(`tower-tab-${tab}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); }, [tab]);
+  useEffect(() => {
+    // Deep links are selected before the private profile finishes loading.
+    // Scroll only after the tab strip actually exists, not on every profile poll.
+    if (navigationReady) document.getElementById(`tower-tab-${tab}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [tab, navigationReady]);
   useEffect(() => {
     // Pointer focus occurs between press and release. Moving its target here
     // would cancel a real mobile click; keyboard focus still clears fixed tabs.

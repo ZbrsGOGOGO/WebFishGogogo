@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { DemonTowerEconomyView } from '@stealth-reader/shared';
 import { DemonTowerPage } from './DemonTowerPage';
 import { useDemonTower, type DemonTowerState } from './useDemonTower';
@@ -62,5 +64,40 @@ describe('Demon tower supply navigation and account boundaries', () => {
   });
   it('falls back from unrecognized tabs without taking any action', () => {
     wrap('/games/demon-tower?tab=unknown&supply=not-real'); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore'); expect(useDemonTower().act).not.toHaveBeenCalled();
+  });
+  it.each([320, 390])('reveals a deep-linked tab after the async profile mounts at %spx, without jumping on subsequent polls', width => {
+    const value = state(); const originalWidth = window.innerWidth;
+    const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollIntoView');
+    const scrolled: Array<{ id: string; options: ScrollIntoViewOptions }> = [];
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: function(this: HTMLElement, options: ScrollIntoViewOptions) { scrolled.push({ id: this.id, options }); } });
+    try {
+      vi.mocked(useDemonTower).mockReturnValue({ ...value, catalog: null, overview: null, loading: true });
+      const view = wrap('/games/demon-tower?tab=shop&supply=market');
+      expect(screen.queryByRole('tablist')).toBeNull(); expect(scrolled).toEqual([]);
+      vi.mocked(useDemonTower).mockReturnValue({ ...value, overview: null, loading: true });
+      view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
+      expect(screen.queryByRole('tablist')).toBeNull(); expect(scrolled).toEqual([]);
+      vi.mocked(useDemonTower).mockReturnValue(value);
+      view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
+      expect(screen.getByRole('tab', { name: '物资申领' })).toHaveAttribute('aria-selected', 'true');
+      expect(scrolled).toEqual([{ id: 'tower-tab-shop', options: { block: 'nearest', inline: 'nearest' } }]);
+      vi.mocked(useDemonTower).mockReturnValue({ ...value, overview: { ...value.overview!, profile: { ...value.overview!.profile!, version: 2 } } });
+      view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
+      expect(scrolled).toHaveLength(1); expect(value.act).not.toHaveBeenCalled();
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      if (originalScroll) Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScroll);
+      else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+    }
+  });
+  it('uses semantic dark surfaces for the mobile fixed tab strip while preserving contained horizontal scrolling', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/features/games/demon-tower/DemonTower.module.css'), 'utf8');
+    const mobile = css.slice(css.indexOf("@media (max-width: 760px) {\n  .page[data-expanded='true'] .tabs"));
+    const darkStrip = mobile.match(/:global\(html\[data-site-mode='community'\]\[data-color-mode='dark'\]\) \.tabs\s*\{([^}]+)\}/)?.[1];
+    expect(darkStrip).toContain('background: var(--color-surface)');
+    expect(darkStrip).toContain('border-color: var(--color-border)');
+    expect(darkStrip).toContain('scrollbar-color: var(--color-border) var(--color-surface)');
+    expect(mobile).toContain('overflow-x: auto'); expect(mobile).toContain('overscroll-behavior-inline: contain');
   });
 });

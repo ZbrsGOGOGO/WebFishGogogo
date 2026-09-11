@@ -363,6 +363,12 @@
 @media (max-width: 760px) {
   .page[data-expanded='true'] .tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; justify-content: flex-start; scrollbar-width: thin; }
   .page[data-expanded='true'] .tab { flex: 0 0 82px; }
+  :global(html[data-site-mode='community'][data-color-mode='dark']) .tabs {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    scrollbar-color: var(--color-border) var(--color-surface);
+    box-shadow: 0 4px 22px rgb(0 0 0 / .25);
+  }
   .supplyTableHead { display: none; }
   .supplyTableRow { grid-template-columns: minmax(0, 1fr) 64px; gap: 8px; }
   .supplyTableRow > div:first-child { grid-column: 1 / -1; }
