@@ -5,6 +5,7 @@ import { officeHubApi, officeHubError } from '../../api/office-hub';
 import { getCommunitySessionGeneration } from '../../api/community-http';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { CommunityGuildPanel } from '../office-battle/CommunityGuildPanel';
+import { OfficeBossDailyPanel } from './OfficeBossDailyPanel';
 import styles from './OfficeHubPage.module.css';
 type Tab = 'company' | 'collection' | 'stories' | 'drawings' | 'spy' | 'boss';
 type Command = (action: string, data?: Record<string, unknown>) => Promise<boolean>;
@@ -93,7 +94,7 @@ function OfficeHubContent({ initialTab, requested, setTab }: {
       {tab === 'stories' && <StoryPanel stories={view.stories} busy={busy} command={command}/>}
       {tab === 'drawings' && <DrawingPanel drawings={view.drawings} busy={busy} command={command} theme={view.collection.theme}/>}
       {tab === 'spy' && <SpyPanel spies={view.spies} busy={busy} command={command} department={Boolean(view.weekly.guildId)}/>}
-      {tab === 'boss' && <BossPanel view={view} busy={busy} command={command}/>}
+      {tab === 'boss' && <><p className={styles.notice}>机会挑战、独立解压币与待领物品已集中到 <Link to="/games/office-boss">压力整理工作区</Link>。下方每日巡视照常保留，不消耗挑战机会。</p><OfficeBossDailyPanel view={view} busy={busy} command={command}/></>}
       {['stories','drawings','spy'].includes(tab)&&<div className={styles.actions} aria-label="共创历史翻页">{view.page?.historical&&<button disabled={busy} onClick={()=>void refresh()}>返回最新内容</button>}{view.page?.nextCursor&&<button disabled={busy} onClick={()=>void refresh(view.page!.nextCursor!)}>查看更早的共创记录</button>}</div>}
       {view.moderation && <ModerationPanel view={view} busy={busy} command={command}/>}
     </>}
@@ -209,19 +210,6 @@ function SpyCard({ spy, busy, command }: {
     {spy.phase === 'finished' && <p className={styles.notice}>{spy.outcome === 'cancelled' ? '本局已取消，无资源扣除' : spy.outcome === 'undercover' ? '卧底胜出，去收藏页领取互动积分' : '平民胜出，去收藏页领取互动积分'}</p>}
   </article>;
 }
-function BossPanel({ view, busy, command }: {
-    view: OfficeHubOverview;
-    busy: boolean;
-    command: Command;
-}) {
-    const [clock, setClock] = useState(Date.now()), [tool, setTool] = useState('keyboard');
-    useEffect(() => { const t = window.setInterval(() => setClock(Date.now()), 250); return () => window.clearInterval(t); }, []);
-    const serverOffset = useRef(Date.parse(view.serverTime) - Date.now());
-    useEffect(() => { serverOffset.current = Date.parse(view.serverTime) - Date.now(); }, [view.serverTime]);
-    const b = view.boss, remaining = b.endsAt ? Math.max(0, Math.ceil((Date.parse(b.endsAt) - clock - serverOffset.current) / 1000)) : 30;
-    return <section className={`${styles.panel} ${styles.boss}`}><span className={styles.kicker}>DAILY / 纸片压力整理</span><h2>暴打小老板</h2><p>这是虚构的纸片人，不影射真实个人。每天 30 秒巡视，离开后仍自动结束；手动解压只改变演出，不改变奖励。</p><div className={styles.paperBoss} data-hit={b.hits % 2}><div className={styles.bossFace}>⌐■_■</div><div>待 办 巡 视</div><small>{b.claimed ? '今天辛苦了，准点下班' : b.startedAt ? `${remaining} 秒 · 已释放 ${b.damage} 点压力` : '有一叠待办想占用你的下班时间'}</small></div>
-    <progress aria-label="巡视剩余时间" value={b.startedAt ? 30 - remaining : 0} max={30}/><div className={styles.actions}><label>解压工具<select value={tool} onChange={(e) => setTool(e.target.value)}><option value="keyboard">键盘拍打</option><option value="stapler">订书机连击</option><option value="coffee">咖啡泼洒</option></select></label>{!b.startedAt ? <button disabled={busy || b.claimed} onClick={() => void command('boss_start')}>开始今日巡视</button> : remaining > 0 ? <button disabled={busy || b.claimed} onClick={() => void command('boss_hit', { tool })}>释放压力</button> : <button disabled={busy || b.claimed} onClick={() => void command('boss_claim')}>{b.claimed ? '今日奖励已领取' : '收工：领取 20 办公币 +5 经验'}</button>}</div><p>不点也有同等奖励。北京时间 00:00 开新的一天，不连续登录也不会倒扣。</p><Link to="/games">返回小游戏</Link></section>;
-}
 function ModerationPanel({ view, busy, command }: {
     view: OfficeHubOverview;
     busy: boolean;
@@ -230,4 +218,3 @@ function ModerationPanel({ view, busy, command }: {
     const [reason, setReason] = useState('');
     return <details className={styles.panel}><summary>网站内容审核 · 仅管理员 / 版主可见</summary><label>审核说明（至少 5 字）<input minLength={5} maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)}/></label><ul>{view.moderation?.map((p) => <li key={p.id}><details><summary>{p.title} · {p.kind} · {p.reports} 次举报 · {p.hidden ? '已隐藏' : '正常'}</summary><p style={{whiteSpace:'pre-wrap'}}>{p.preview}</p>{p.strokes&&<Drawing strokes={p.strokes} label="待审核的画作"/>}<button disabled={busy || reason.trim().length < 5} onClick={() => void command('post_moderate', { postId: p.id, hidden: !p.hidden, reason })}>{p.hidden ? '恢复' : '隐藏'}</button></details></li>)}</ul></details>;
 }
-export function OfficeBossPage() { return <OfficeHubPage initialTab="boss"/>; }

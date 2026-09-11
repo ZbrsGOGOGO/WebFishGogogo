@@ -1,6 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { OFFICE_COLLECTION, OFFICE_HOURLY_EXP, OFFICE_THEMES, OFFICE_WAVE_EXP, type OfficeStroke } from '@stealth-reader/shared';
 export interface OfficeProfileState {
+    /** Permanent activity state; never reset alongside the old daily boss. */
+    relief?: import('@stealth-reader/shared').OfficeReliefState;
     version: 1;
     day: string;
     accruedAt: number;

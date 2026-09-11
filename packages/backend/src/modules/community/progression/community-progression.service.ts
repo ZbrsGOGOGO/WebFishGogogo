@@ -130,6 +130,11 @@ export class CommunityProgressionService {
       office = objectValue(profiles[0]?.state);
     }
     const officeStats = objectValue(office.stats), officeOwned = objectValue(office.owned);
+    const relief = objectValue(office.relief);
+    // Only a retained versioned, server-owned prize flag unlocks each title.
+    // A count, display label, another user's record or an unknown key cannot.
+    const reliefTitles = new Set(relief.schemaVersion === 1 && Array.isArray(relief.titles)
+      ? relief.titles.filter((key: unknown) => typeof key === 'string' && ['office_relief_fish', 'office_relief_rebel', 'office_relief_rest'].includes(key)) : []);
     const ids = new Set<string>();
     for (const [field, pattern] of [['weapons', /^w(?:[1-9]|1\d|20)$/], ['skills', /^s(?:[1-9]|1[0-6])$/]] as const) {
       const values: unknown = state?.[field];
@@ -145,6 +150,7 @@ export class CommunityProgressionService {
       officeCollection: OFFICE_COLLECTION.filter(item => safeCount(officeOwned[item.id]) > 0).length,
       officeStories: safeCount(officeStats.stories), officeDrawings: safeCount(officeStats.drawings), officeDepartmentWins: safeCount(officeStats.departmentWins),
       officeBossDays: safeCount(officeStats.bossDays), officeWeeklyWins: safeCount(officeStats.weeklyWins),
+      officeReliefFish: Number(reliefTitles.has('office_relief_fish')), officeReliefRebel: Number(reliefTitles.has('office_relief_rebel')), officeReliefRest: Number(reliefTitles.has('office_relief_rest')),
       fishExperience: (await readFishProgress(manager, userId, this.clock.now())).experience,
     };
   }

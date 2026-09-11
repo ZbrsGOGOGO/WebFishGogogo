@@ -32,6 +32,8 @@ import { AuthEmailOutboxService } from './auth-email-outbox.service';
 import { AuthSensitiveDataService } from './auth-sensitive-data.service';
 import type { EmailDeliveryService } from './email-delivery.service';
 import { hashPassword } from './password.util';
+import { newOfficeProfile } from '../community/office-hub/office-hub.rules';
+import { newOfficeRelief } from '../community/office-hub/office-relief.rules';
 
 describe('AccountLifecycleService', () => {
   let dataSource: DataSource;
@@ -267,7 +269,14 @@ describe('AccountLifecycleService', () => {
     for (const owner of [user, peer]) {
       await dataSource.getRepository(CommunityFishProgress).save({ userId: owner.id, experience: 120, activeSeconds: 7200, gameSeconds: 0, serviceDate: '2026-09-10', dailyActiveSeconds: 0, dailyGameSeconds: 0, mode: 'pause', lastSeenAt: now });
       await dataSource.getRepository(CommunitySupportEntry).insert({ id: owner.id, userId: owner.id, actorId: owner.id, orderHash: owner.id.padEnd(64, 'a'), requestHash: 'b'.repeat(64), orderHint: '1234', months: 1, amountFen: 1000, startsAt: now, expiresAt: new Date(now.getTime() + 30 * 86400000), createdAt: now });
+      const relief = { ...newOfficeRelief(now.getTime()), chances: 7, remainderSeconds: 900, trackedSeconds: 13500, tokenBalance: 1234, titles: ['office_relief_fish'] };
+      await dataSource.query('INSERT INTO office_hub_profiles(user_id,state) VALUES($1,$2::jsonb)', [owner.id, JSON.stringify({ ...newOfficeProfile(now.getTime()), relief })]);
+      await dataSource.query('INSERT INTO office_hub_receipts(user_id,request_id,request_hash,result) VALUES($1,$2,$3,$4::jsonb)', [owner.id, randomUUID(), 'c'.repeat(64), JSON.stringify({ notice: 'synthetic relief outcome', outcome: { kind: 'title', itemId: 'office_relief_fish' } })]);
+      await dataSource.getRepository(CommunityAchievementUnlock).insert({ userId: owner.id, achievementKey: 'office_relief_fish', unlockedAt: now, sourceVersion: 1 });
+      await dataSource.getRepository(CommunityUserPresentation).update({ userId: owner.id }, { equippedTitleKey: 'office_relief_fish' });
     }
+    const peerOffice = await dataSource.query('SELECT * FROM office_hub_profiles WHERE user_id=$1', [peer.id]);
+    const peerOfficeReceipts = await dataSource.query('SELECT * FROM office_hub_receipts WHERE user_id=$1 ORDER BY request_id', [peer.id]);
     const beforePeer = await Promise.all(tables.map((entity) => dataSource.getRepository(entity).findBy({ userId: peer.id })));
     await service.requestDeletion(user.id, session.id, 'growth-delete-idempotency');
     const request = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
@@ -280,6 +289,10 @@ describe('AccountLifecycleService', () => {
     expect((await dataSource.getRepository(User).findOneByOrFail({ id: peer.id })).communityRole).toBe('user');
     expect(await dataSource.getRepository(CommunityFishProgress).findOneBy({ userId: user.id })).toBeNull();
     expect((await dataSource.getRepository(CommunityFishProgress).findOneByOrFail({ userId: peer.id })).experience).toBe(120);
+    expect(await dataSource.query('SELECT * FROM office_hub_profiles WHERE user_id=$1', [user.id])).toEqual([]);
+    expect(await dataSource.query('SELECT * FROM office_hub_receipts WHERE user_id=$1', [user.id])).toEqual([]);
+    expect(await dataSource.query('SELECT * FROM office_hub_profiles WHERE user_id=$1', [peer.id])).toEqual(peerOffice);
+    expect(await dataSource.query('SELECT * FROM office_hub_receipts WHERE user_id=$1 ORDER BY request_id', [peer.id])).toEqual(peerOfficeReceipts);
     expect(await dataSource.getRepository(CommunitySupportEntry).findOneByOrFail({ id: user.id })).toMatchObject({ userId: null, actorId: null, orderHint: null, amountFen: 1000, months: 1 });
     expect(await dataSource.getRepository(CommunitySupportEntry).findOneByOrFail({ id: peer.id })).toMatchObject({ userId: peer.id, actorId: peer.id, orderHint: '1234', amountFen: 1000 });
   });

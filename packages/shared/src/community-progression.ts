@@ -3,7 +3,8 @@ export interface TitleBadge { key: string; label: string }
 export type CommunityAchievementMetric = 'farmHarvests' | 'platformLevel' | 'railCompleted' | 'towerLevel' | 'towerCollection' | 'towerContribution' | 'dailyChampionships' | 'developmentCompleted'
   | 'workstationFirstThree' | 'workstationPerfect' | 'workstationSpeed' | 'workstationOvertime' | 'workstationTenThousand' | 'workstationTier'
   | 'demonFirstBoss' | 'demonBossFloors' | 'demonHonorSkin' | 'demonFiveStar'
-  | 'officeCollection' | 'officeStories' | 'officeDrawings' | 'officeDepartmentWins' | 'officeBossDays' | 'officeWeeklyWins' | 'fishExperience';
+  | 'officeCollection' | 'officeStories' | 'officeDrawings' | 'officeDepartmentWins' | 'officeBossDays' | 'officeWeeklyWins' | 'fishExperience'
+  | 'officeReliefFish' | 'officeReliefRebel' | 'officeReliefRest';
 export interface CommunityAchievementDefinition {
   key: string; title: TitleBadge; label: string; description: string;
   category: 'farm' | 'community' | 'games' | 'tower' | 'development';
@@ -44,6 +45,9 @@ export const COMMUNITY_ACHIEVEMENTS: readonly CommunityAchievementDefinition[] =
   { key: 'office_artist', title: { key: 'office_artist', label: '便签画师' }, label: '落笔有形', description: '完成并发布至少三张有效猜词画稿。', category: 'community', metric: 'officeDrawings', target: 3 },
   { key: 'office_detective', title: { key: 'office_detective', label: '部门观察家' }, label: '默契观察', description: '完成至少三次符合部门协作条件的卧底胜利并领取记录。', category: 'community', metric: 'officeDepartmentWins', target: 3 },
   { key: 'office_relief', title: { key: 'office_relief', label: '从容应对' }, label: '七日轻松工单', description: '在七个不同服务日完成小老板挑战结算。', category: 'games', metric: 'officeBossDays', target: 7 },
+  { key: 'office_relief_fish', title: { key: 'office_relief_fish', label: '摸鱼之神' }, label: '小老板稀有纪念 · 摸鱼之神', description: '在小老板解压中实际获得此稀有称号；仅装饰，不是全站唯一，也不授予资产或权限。', category: 'games', metric: 'officeReliefFish', target: 1 },
+  { key: 'office_relief_rebel', title: { key: 'office_relief_rebel', label: '反内卷先锋' }, label: '小老板稀有纪念 · 反内卷先锋', description: '在小老板解压中实际获得此稀有称号；需主动佩戴才会公开展示。', category: 'games', metric: 'officeReliefRebel', target: 1 },
+  { key: 'office_relief_rest', title: { key: 'office_relief_rest', label: '带薪如厕宗师' }, label: '小老板稀有纪念 · 带薪如厕宗师', description: '在小老板解压中实际获得此稀有称号；不会替换当前佩戴的称号。', category: 'games', metric: 'officeReliefRest', target: 1 },
   { key: 'office_guard', title: { key: 'office_guard', label: '部门守望者' }, label: '并肩三周', description: '完成并领取三次不同周的公司协作奖励。', category: 'community', metric: 'officeWeeklyWins', target: 3 },
 ];
 export interface CommunityMembershipView {

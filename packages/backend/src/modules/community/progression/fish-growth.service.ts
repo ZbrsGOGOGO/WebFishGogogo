@@ -6,6 +6,7 @@ import { User } from '../../../database/entities/user.entity';
 import { COMMUNITY_CLOCK, type CommunityClock } from '../community-clock';
 import { assertCommunityWritesEnabled } from '../community-write-gate';
 import { communityProgressionEnabled } from './membership.service';
+import { creditOfficeReliefActivity } from '../office-hub/office-relief-activity';
 
 export const serviceDate = (now: Date): string => new Date(now.getTime() + 8 * 3_600_000).toISOString().slice(0, 10);
 export async function readFishProgress(manager: EntityManager, userId: string, now: Date): Promise<FishProgressView> {
@@ -33,8 +34,10 @@ export class FishGrowthService {
       if (row.tabId === input.tabId && input.mode !== 'pause' && elapsed < 15) return readFishProgress(manager, userId, now);
       if (row.serviceDate !== day) { row.serviceDate = day; row.dailyActiveSeconds = 0; row.dailyGameSeconds = 0; row.tabId = null; }
       const before = fishProgressView(0, 0, 0, row.dailyActiveSeconds, row.dailyGameSeconds).todayExperience;
+      let acceptedSeconds = 0;
       if (row.tabId === input.tabId && input.mode !== 'pause' && row.mode !== 'pause' && elapsed >= 15 && elapsed <= FISH_RULES.leaseSeconds) {
         const seconds = Math.min(elapsed, FISH_RULES.activeSecondsPerDay - row.dailyActiveSeconds);
+        acceptedSeconds = seconds;
         const gameSeconds = row.mode === 'game' && input.mode === 'game' ? seconds : 0;
         row.activeSeconds += seconds; row.gameSeconds += gameSeconds;
         row.dailyActiveSeconds += seconds; row.dailyGameSeconds += gameSeconds;
@@ -43,6 +46,10 @@ export class FishGrowthService {
       row.experience += after - before;
       row.tabId = input.mode === 'pause' ? null : input.tabId; row.sequence = input.sequence; row.mode = input.mode; row.lastSeenAt = now;
       await repo.save(row);
+      // No old cumulative-time backfill; both records commit or roll back as
+      // one accepted server interval while the account lock is held.
+      await creditOfficeReliefActivity(manager, userId, acceptedSeconds, now);
+      this.gates(); // Roll back both writes if maintenance changed during the downstream save.
       return readFishProgress(manager, userId, now);
     });
   }

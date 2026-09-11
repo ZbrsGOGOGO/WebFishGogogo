@@ -480,6 +480,37 @@ function initialProvisions(now: number, serviceDate: string): DemonTowerProvisio
   return { version: 1, createdAt: now, serviceDate, week: expansionWeek(serviceDate), passes: 0, fragments: 0,
     ordinaryStarted: 0, passStarted: 0, staminaBought: 0, passesBought: 0, starsBought: 0, chestsOpened: 0, historySequence: 0, history: [] };
 }
+/** Trusted office receipt settlement only, NOT a client-addressable tower action.
+ * The caller must lock the active user/save, exclude auto-runs and atomically consume the pending gift.
+ * No wallet, progression, world contribution, loot roll or quality promotion is granted here. */
+export function grantDemonTowerOfficeRelief(
+  input: DemonTowerEngineState, gift: 'ore' | 'herb' | 'clue' | 'skill_fragments' | 'weapon_manual',
+  now: number, serviceDate: string,
+): DemonTowerEngineState {
+  if (input.battle) fail('OFFICE_RELIEF_TOWER_BUSY');
+  const state = advanceDemonTowerState(input, now, serviceDate);
+  if (gift === 'ore' || gift === 'herb' || gift === 'clue') {
+    if (!integer(state.materials[gift], 0, MAX_RESOURCE)) fail('INVALID_STATE');
+    if (state.materials[gift] > MAX_RESOURCE - 3) fail('OFFICE_RELIEF_REWARD_FULL');
+    state.materials[gift] += 3;
+  } else if (gift === 'skill_fragments') {
+    state.provisions ??= initialProvisions(now, serviceDate);
+    if (state.provisions.fragments > PROVISIONS.fragmentCap - 3) fail('OFFICE_RELIEF_REWARD_FULL');
+    state.provisions.fragments += 3;
+  } else if (gift === 'weapon_manual') {
+    const weapon = state.weapons.find(item => item.id === state.loadout.mainHand);
+    if (!weapon) fail('OFFICE_RELIEF_TOWER_REQUIRED');
+    const experience = weapon.qualityExperience ?? 0;
+    if (!integer(experience, 0, MAX_RESOURCE)) fail('INVALID_STATE');
+    const legacyCopies = state.expansion ? 0 : weapon.spareCopies;
+    if (!integer(legacyCopies, 0, MAX_RESOURCE)) fail('INVALID_STATE');
+    if (experience + legacyCopies > MAX_RESOURCE - 15) fail('OFFICE_RELIEF_REWARD_FULL');
+    // Preserve legacy spareCopies. The normal expansion initializer converts them exactly once later.
+    weapon.qualityExperience = experience + 15;
+  } else fail('INVALID_ACTION');
+  state.lastActionAt = now;
+  return state;
+}
 function validateProvisions(value: DemonTowerProvisionsState, serviceDate: string): void {
   const invalid = () => fail('INVALID_PROVISIONS_STATE');
   if (!value || value.version !== 1 || typeof value.serviceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.serviceDate) ||

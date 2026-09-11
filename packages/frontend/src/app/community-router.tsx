@@ -80,7 +80,7 @@ const CommunityGamesPage = lazy(() => import('../features/games/rooms/CommunityG
 const WorkstationCampaignPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationCampaignPage })));
 const WorkstationLeaderboardPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationLeaderboardPage })));
 const OfficeHubPage = lazy(() => import('../features/office-hub/OfficeHubPage').then(module => ({ default: module.OfficeHubPage })));
-const OfficeBossPage = lazy(() => import('../features/office-hub/OfficeHubPage').then(module => ({ default: module.OfficeBossPage })));
+const OfficeBossPage = lazy(() => import('../features/office-hub/OfficeBossPage').then(module => ({ default: module.OfficeBossPage })));
 const PaperArenaPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaPage })));
 const PaperArenaRoomPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaRoomPage })));
 const Office2048Page = lazy(() => import('../features/games/office-2048').then(module => ({ default: module.Office2048Page })));

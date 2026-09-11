@@ -107,4 +107,23 @@ describe('Title metadata across public profiles and existing chat channels', () 
     expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: a.id })).toBe(2);
     expect((await db.getRepository(CommunityUserPresentation).findOneByOrFail({ userId: a.id })).equippedTitleKey).toBe('farm_first');
   });
+  it('reuses public-profile, group and private-chat projections for all three deliberately worn relief prizes', async () => {
+    const a = await user('relief_writer'), b = await user('relief_reader'); await friends(a, b);
+    const keys = ['office_relief_fish', 'office_relief_rebel', 'office_relief_rest'];
+    for (const achievementKey of keys) await db.getRepository(CommunityAchievementUnlock).insert({ userId: a.id, achievementKey, unlockedAt: new Date(), sourceVersion: 1 });
+    expect((await profiles.get(a.publicId, null)).equippedTitle).toBeNull();
+    const conversation = await direct.openConversation(a.id, b.publicId);
+    const groupMessage = await chat.send(a.id, { clientMessageId: randomUUID(), roomSlug: 'general', body: 'ordinary relief title message' });
+    const privateMessage = await direct.send(a.id, { conversationId: conversation.id, clientMessageId: randomUUID(), body: 'ordinary private title message' });
+    for (const [version, key] of keys.entries()) {
+      await equip(a, key, version);
+      expect(await profiles.get(a.publicId, null)).toMatchObject({ equippedTitle: { key } });
+      expect((await chat.messageForViewer(b.id, groupMessage.id)).author.title?.key).toBe(key);
+      expect((await direct.messageForViewer(b.id, privateMessage.id)).author.title?.key).toBe(key);
+    }
+    expect((await db.getRepository(ChatMessage).findOneByOrFail({ id: groupMessage.id })).body).toBe('ordinary relief title message');
+    await db.getRepository(UserBlock).insert({ blockerId: b.id, blockedId: a.id, reason: null });
+    expect((await chat.messageForViewer(b.id, groupMessage.id)).author).not.toHaveProperty('title');
+    await expect(profiles.get(a.publicId, b.id)).rejects.toMatchObject({ response: { code: 'USER_NOT_FOUND' } });
+  });
 });

@@ -8,6 +8,7 @@ export const WORKSPACE_LINKS = [
   ...PUBLIC_TOOLS.map(tool => ({ path: `/tools/${tool.slug}`, label: tool.name, kind: 'tool' })),
   { path: '/games/ballpoint-breach', label: '纸上突围', kind: 'game' },
   { path: '/games/demon-tower', label: '九层妖塔', kind: 'game' },
+  { path: '/games/office-boss', label: '压力整理', kind: 'game' },
   { path: '/tower-defense', label: '工位塔防', kind: 'game' },
   { path: '/games/zhesi', label: '遮司', kind: 'game' },
   { path: '/games/snake', label: '贪吃蛇', kind: 'game' },

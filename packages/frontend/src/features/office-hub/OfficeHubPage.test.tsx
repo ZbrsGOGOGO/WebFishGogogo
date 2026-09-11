@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { OfficeHubOverview, OfficeSpyView } from '@stealth-reader/shared';
 import { officeHubApi } from '../../api/office-hub';
-import { OfficeHubPage, OfficeBossPage } from './OfficeHubPage';
+import { OfficeHubPage } from './OfficeHubPage';
 const session = vi.hoisted(() => ({ generation: 0 }));
 vi.mock('../../api/office-hub', () => ({ officeHubApi: { overview: vi.fn(), action: vi.fn() }, officeHubError: (e: unknown) => e instanceof Error ? e.message : '请求失败' }));
 vi.mock('../../api/community-http', () => ({ getCommunitySessionGeneration: () => session.generation }));
@@ -95,13 +95,14 @@ describe('Office workspace functional controls', () => {
         const options = within(screen.getByLabelText('你认为谁是卧底')).getAllByRole('option');
         expect(options.map(o => o.textContent)).toEqual(['请选择', '同事甲']);
     });
-    it('provides an independent low-key boss page with actual server start/claim commands', async () => {
+    it('preserves the original daily boss commands and links to the unified chance workspace', async () => {
         const v = fixture();
         v.boss = { ...v.boss, startedAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() - 30000).toISOString() };
         vi.mocked(officeHubApi.overview).mockResolvedValue(v);
         vi.mocked(officeHubApi.action).mockResolvedValue({ ...v, boss: { ...v.boss, claimed: true } });
-        render(<MemoryRouter><OfficeBossPage /></MemoryRouter>);
+        render(<MemoryRouter><OfficeHubPage initialTab="boss" /></MemoryRouter>);
         expect(await screen.findByRole('heading', { name: '暴打小老板' })).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: '压力整理工作区' })).toHaveAttribute('href', '/games/office-boss');
         fireEvent.click(screen.getByRole('button', { name: '收工：领取 20 办公币 +5 经验' }));
         await waitFor(() => expect(officeHubApi.action).toHaveBeenCalledWith('boss_claim', {}, expect.any(String)));
         expect(await screen.findByRole('button', { name: '今日奖励已领取' })).toBeDisabled();

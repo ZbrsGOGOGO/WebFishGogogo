@@ -160,6 +160,9 @@ export interface OfficeBossView {
     rewardCoins: number;
 }
 export interface OfficeHubOverview {
+    /** Absent on older servers or when activity progression is disabled. */
+    relief?: import('./office-relief').OfficeReliefView;
+    reliefReceipt?: import('./office-relief').OfficeReliefReceipt;
     page?: { nextCursor: string | null; historical: boolean };
     serverTime: string;
     collection: OfficeCollectionView;

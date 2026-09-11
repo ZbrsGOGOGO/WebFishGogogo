@@ -7,6 +7,10 @@ import { AdminAuditLog } from '../../../database/entities/admin-audit-log.entity
 import { assertCommunityWritesEnabled } from '../community-write-gate';
 import { DRAW_WORDS, UNDERCOVER_WORDS } from '../play/engines/word-bank';
 import { accrueOffice, actOfficeSpy, creditOfficeWaves, drawOffice, newOfficeProfile, normalizedOfficeWord, officeDay, officeRateLimit, officeStrokes, officeText, officeTheme, officeWeek, startOfficeSpy, type OfficeProfileState, type OfficeSpyState } from './office-hub.rules';
+import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome, type OfficeReliefDrop } from '@stealth-reader/shared';
+import { CommunityAchievementUnlock } from '../../../database/entities/community-progression.entity';
+import { actOfficeRelief, readOfficeRelief } from './office-relief.rules';
+import { grantOfficeReliefDrop } from './office-relief-grants';
 interface Author extends OfficeAuthor {
     userId: string | null;
 }
@@ -55,6 +59,11 @@ const random = (): number => randomInt(0, 1000000) / 1000000;
 @Injectable()
 export class OfficeHubService {
     constructor(private readonly db: DataSource, private readonly assets: PlatformAssetsService) { }
+    private reliefGate(): void {
+        this.gate();
+        assertCommunityWritesEnabled();
+        if (process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED !== 'true') throw new ServiceUnavailableException({ code: 'OFFICE_RELIEF_DISABLED' });
+    }
     private gate(): void { if (!enabled())
         throw new ServiceUnavailableException({ code: 'OFFICE_DISABLED' }); }
     async overview(userId: string,cursor?:string,kind?:string): Promise<OfficeHubOverview> {
@@ -112,12 +121,18 @@ export class OfficeHubService {
         return this.db.transaction(async (m) => {
             const p = await this.profile(m, userId);
             const now = Date.now();
+            if (String(input.action).startsWith('relief_')) this.reliefGate();
             accrueOffice(p, now);
             const [receipt] = await m.query('SELECT request_hash,result FROM office_hub_receipts WHERE user_id=$1 AND request_id=$2', [userId, requestId]);
             if (receipt) {
                 if (receipt.request_hash !== hash)
                     throw new ConflictException({ code: 'OFFICE_IDEMPOTENCY_CONFLICT' });
-                return this.view(m, userId, p, receipt.result.notice);
+                const view = await this.view(m, userId, p, receipt.result.notice);
+                if (String(input.action).startsWith('relief_')) {
+                    this.reliefGate();
+                    view.reliefReceipt = { requestId, replayed: true, outcome: receipt.result.reliefOutcome ?? null };
+                }
+                return view;
             }
             const allowed: Record<string, string[]> = {
                 daily_ticket: [], collect_social: [], exchange_ticket: [], draw: ['source', 'pool'], equip: ['itemId'],
@@ -125,6 +140,8 @@ export class OfficeHubService {
                 drawing_start: [], drawing_publish: ['postId', 'strokes'], drawing_guess: ['postId', 'guess'], post_delete: ['postId'], post_report: ['postId'], post_moderate: ['postId', 'hidden', 'reason'],
                 spy_create: ['title', 'department'], spy_join: ['postId'], spy_leave: ['postId'], spy_start: ['postId'], spy_describe: ['postId', 'text'], spy_vote: ['postId', 'targetId'],
                 announcement: ['text'], weekly_claim: [], boss_start: [], boss_hit: ['tool'], boss_claim: [],
+                relief_play: ['expectedVersion', 'tool'], relief_buy: ['expectedVersion', 'skinId'],
+                relief_equip: ['expectedVersion', 'skinId'], relief_claim: ['expectedVersion', 'dropId'],
             };
             const action = input.action as string;
             if (!Object.prototype.hasOwnProperty.call(allowed,action) || Object.keys(input).some((k) => !['requestId', 'action', ...allowed[action]].includes(k)))
@@ -150,9 +167,30 @@ export class OfficeHubService {
                         throw new ForbiddenException({ code: 'OFFICE_RELATIONSHIP_BLOCKED' });
                 }
             }
-            officeRateLimit(p, 'all', now, 1500, 100);
+            if (!action.startsWith('relief_')) officeRateLimit(p, 'all', now, 1500, 100);
             let notice = '已保存';
-            if (action === 'daily_ticket') {
+            let reliefOutcome: OfficeReliefOutcome | undefined;
+            let claimedReliefDrop: OfficeReliefDrop | undefined;
+            if (action.startsWith('relief_')) {
+                this.reliefGate();
+                if (!Number.isSafeInteger(input.expectedVersion) || Number(input.expectedVersion) < 1)
+                    throw new BadRequestException({ code: 'OFFICE_COMMAND_INVALID' });
+                const relief = readOfficeRelief(p.relief, now);
+                if (relief.version !== input.expectedVersion) throw new ConflictException({ code: 'OFFICE_RELIEF_VERSION_CONFLICT' });
+                officeRateLimit(p, 'all', now, 1500, 100);
+                const { requestId: _requestId, action: _action, expectedVersion: _version, ...payload } = input;
+                const result = actOfficeRelief(relief, { kind: action.slice('relief_'.length), ...payload }, { now, requestId, rng: max => randomInt(max) });
+                if (result.claimedDrop) await grantOfficeReliefDrop(m, userId, result.claimedDrop, now);
+                claimedReliefDrop = result.claimedDrop;
+                for (const title of result.state.titles.filter(title => !relief.titles.includes(title))) {
+                    if (!OFFICE_RELIEF_TITLES.some(item => item.id === title)) throw new ConflictException({ code: 'OFFICE_RELIEF_STATE_INVALID' });
+                    await m.getRepository(CommunityAchievementUnlock).createQueryBuilder().insert().values({ userId, achievementKey: title, unlockedAt: new Date(now), sourceVersion: 1 }).orIgnore().execute();
+                }
+                p.relief = result.state;
+                reliefOutcome = result.outcome;
+                notice = result.outcome.message;
+            }
+            else if (action === 'daily_ticket') {
                 if (p.dailyTicketClaimed)
                     throw new ConflictException({ code: 'OFFICE_ALREADY_CLAIMED' });
                 p.dailyTicketClaimed = true;
@@ -290,8 +328,18 @@ export class OfficeHubService {
                 notice = '巡视结束，办公币 +20、职场经验 +5；不操作也有相同奖励';
             }
             await this.save(m, userId, p);
-            await m.query('INSERT INTO office_hub_receipts(user_id,request_id,request_hash,result) VALUES($1,$2,$3,$4::jsonb)', [userId, requestId, hash, JSON.stringify({ notice })]);
-            return this.view(m, userId, p, notice);
+            await m.query('INSERT INTO office_hub_receipts(user_id,request_id,request_hash,result) VALUES($1,$2,$3,$4::jsonb)', [userId, requestId, hash, JSON.stringify({ notice, ...(reliefOutcome ? { reliefOutcome } : {}) })]);
+            const view = await this.view(m, userId, p, notice);
+            if (reliefOutcome) {
+                this.reliefGate();
+                if (claimedReliefDrop && claimedReliefDrop.kind !== 'farm_crop') {
+                    if (process.env.FEATURE_COMMUNITY_DEMON_TOWER_ENABLED !== 'true' || process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED !== 'true')
+                        throw new ServiceUnavailableException({ code: 'OFFICE_RELIEF_TOWER_REQUIRED' });
+                    if (officeDay(Date.now()) !== officeDay(now)) throw new ConflictException({ code: 'OFFICE_RELIEF_DAY_CHANGED' });
+                }
+                view.reliefReceipt = { requestId, replayed: false, outcome: reliefOutcome };
+            }
+            return view;
         });
     }
     private async profile(m: EntityManager, userId: string): Promise<OfficeProfileState> {
@@ -576,6 +624,6 @@ export class OfficeHubService {
             }
         }
         const moderation=moderator?posts.filter(x=>x.kind!=='drawing'||(x.state as DrawingState).published).map(x=>({id:x.id,kind:x.kind,title:'title' in x.state?x.state.title:'异步画作',hidden:x.hidden,reports:x.reports.length,preview:x.kind==='story'?(x.state as StoryState).nodes.map(n=>n.text).join('\n\n').slice(0,5000):x.kind==='spy'?(x.state as OfficeSpyState).descriptions.map(d=>d.text).join('\n').slice(0,5000):'已发布的画作，不展示题目答案',strokes:x.kind==='drawing'?(x.state as DrawingState).strokes:undefined})):null;
-        return {page:{nextCursor,historical:Boolean(page?.before)},serverTime: new Date(now).toISOString(), collection: { day: p.day, promotionTier: p.promotionTier, hourlyExp: OFFICE_HOURLY_EXP[p.promotionTier], waveExp: OFFICE_WAVE_EXP[p.promotionTier], farmExp: Math.max(0, Math.floor(p.farmEarned) - p.farmSpent), farmEarned: Math.floor(p.farmEarned), farmDraws: p.farmSpent / 100, creditedWaves: p.creditedWaves, tickets: p.tickets, dailyTicketClaimed: p.dailyTicketClaimed, socialPoints: p.socialPoints, socialEarnedToday: p.socialEarnedToday, socialExchangesToday: p.socialExchangesToday, pityR: p.pityR, pitySSR: p.pitySSR, draws: p.draws, owned: p.owned, equipped: p.equipped, lastDraw: p.lastDraw, reputation: Object.keys(p.owned).length * 10, ...officeTheme(now) }, weekly: await this.weekly(m, userId, p, now), boss: { startedAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt).toISOString(), endsAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt + 30000).toISOString(), hits: p.boss.hits, damage: p.boss.damage, claimed: p.boss.claimed, rewardCoins: 20 }, stories, drawings, spies, notice, moderation };
+        return {...(process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED === 'true' ? { relief: readOfficeRelief(p.relief, now) } : {}),page:{nextCursor,historical:Boolean(page?.before)},serverTime: new Date(now).toISOString(), collection: { day: p.day, promotionTier: p.promotionTier, hourlyExp: OFFICE_HOURLY_EXP[p.promotionTier], waveExp: OFFICE_WAVE_EXP[p.promotionTier], farmExp: Math.max(0, Math.floor(p.farmEarned) - p.farmSpent), farmEarned: Math.floor(p.farmEarned), farmDraws: p.farmSpent / 100, creditedWaves: p.creditedWaves, tickets: p.tickets, dailyTicketClaimed: p.dailyTicketClaimed, socialPoints: p.socialPoints, socialEarnedToday: p.socialEarnedToday, socialExchangesToday: p.socialExchangesToday, pityR: p.pityR, pitySSR: p.pitySSR, draws: p.draws, owned: p.owned, equipped: p.equipped, lastDraw: p.lastDraw, reputation: Object.keys(p.owned).length * 10, ...officeTheme(now) }, weekly: await this.weekly(m, userId, p, now), boss: { startedAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt).toISOString(), endsAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt + 30000).toISOString(), hits: p.boss.hits, damage: p.boss.damage, claimed: p.boss.claimed, rewardCoins: 20 }, stories, drawings, spies, notice, moderation };
     }
 }
