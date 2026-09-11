@@ -5,6 +5,7 @@ import { DEVELOPMENT_LIMITS, type DevelopmentAccess } from '@stealth-reader/shar
 
 import { communityDevelopmentApi } from '../../api/community-development';
 import type { CommunityAuthUser } from '../../api/community-auth';
+import { setCommunitySessionTokens } from '../../api/community-http';
 import { resetCommunityAuthStoreForTests, useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { CommunitySiteLayout } from '../../components/layout/CommunitySiteLayout';
 import { DevelopmentAccessGate } from './development-access';
@@ -126,5 +127,29 @@ describe('development access boundary', () => {
     });
     expect(screen.queryByRole('heading', { name: '私有开发页' })).not.toBeInTheDocument();
   });
-});
 
+  it('rechecks and immediately hides allowed access across a new session for the same account', async () => {
+    const next = deferred<DevelopmentAccess>();
+    vi.spyOn(communityDevelopmentApi, 'getAccess').mockResolvedValueOnce(ownerAccess).mockReturnValueOnce(next.promise);
+    renderDevelopmentRoute();
+    expect(await screen.findByRole('heading', { name: '私有开发页' })).toBeInTheDocument();
+    act(() => { setCommunitySessionTokens(null); useCommunityAuthStore.setState({ loading: false }); });
+    expect(screen.queryByRole('heading', { name: '私有开发页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    expect(communityDevelopmentApi.getAccess).toHaveBeenCalledTimes(2);
+    await act(async () => { next.resolve({ ...ownerAccess, enabled: false, role: null }); await next.promise; });
+    expect(await screen.findByText('当前账号没有访问权限')).toBeInTheDocument();
+  });
+
+  it('ignores an old allow response even when a new session has the same publicId', async () => {
+    const old = deferred<DevelopmentAccess>(); const next = deferred<DevelopmentAccess>();
+    vi.spyOn(communityDevelopmentApi, 'getAccess').mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
+    renderDevelopmentRoute();
+    act(() => { setCommunitySessionTokens(null); useCommunityAuthStore.setState({ loading: false }); });
+    await act(async () => { old.resolve(ownerAccess); await old.promise; });
+    expect(screen.queryByRole('heading', { name: '私有开发页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    await act(async () => { next.resolve({ ...ownerAccess, enabled: false, role: null }); await next.promise; });
+    expect(await screen.findByText('当前账号没有访问权限')).toBeInTheDocument();
+  });
+});

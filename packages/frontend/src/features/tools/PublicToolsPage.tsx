@@ -112,7 +112,7 @@ const TOOL_CATEGORIES = [
 
 type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 
-export function PublicToolsPage(): JSX.Element {
+export function PublicToolsPage({ embedded = false }: { embedded?: boolean }): JSX.Element {
   const { toolId } = useParams<{ toolId?: string }>();
   const navigate = useNavigate();
   const activeTool = PUBLIC_TOOLS.find((tool) => tool.slug === toolId) ?? null;
@@ -139,7 +139,7 @@ export function PublicToolsPage(): JSX.Element {
 
   return (
     <main className={styles.page} aria-labelledby="public-tools-title">
-      <header className={styles.header}>
+      {!embedded ? <header className={styles.header}>
         <Link className={styles.brand} to="/" aria-label={`${SITE_NAME}首页`}>
           <span className={styles.brandMark} aria-hidden="true">摸</span>
           <span>
@@ -157,7 +157,7 @@ export function PublicToolsPage(): JSX.Element {
           <Link to="/privacy-policy">隐私政策</Link>
           <Link to="/terms-of-service">服务条款</Link>
         </nav>
-      </header>
+      </header> : null}
 
       <section className={styles.hero}>
         <span className={styles.eyebrow}>浏览器本地工具</span>

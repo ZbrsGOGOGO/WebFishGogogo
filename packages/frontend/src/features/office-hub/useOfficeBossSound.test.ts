@@ -43,9 +43,39 @@ beforeEach(() => {
   vi.spyOn(document, 'hasFocus').mockReturnValue(true);
   vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); resetCommunityAuthStoreForTests(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); resetCommunityAuthStoreForTests(); });
 
 describe('office boss gesture-only short sound', () => {
+  it('times out an indefinitely pending resume and ignores its late completion', async () => {
+    vi.useFakeTimers(); let complete!: () => void;
+    class PendingAudio extends FakeAudio { override resume = vi.fn(() => new Promise<void>(resolve => { complete = resolve; })); }
+    vi.stubGlobal('AudioContext', PendingAudio);
+    const initial = props(), hook = renderHook(input => useOfficeBossSound(input), { initialProps: initial });
+    act(() => hook.result.current.toggle()); expect(hook.result.current.starting).toBe(true);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(hook.result.current.starting).toBe(false); expect(hook.result.current.enabled).toBe(false);
+    expect(hook.result.current.available).toBe(false); expect(hook.result.current.message).toContain('启动超时');
+    expect(FakeAudio.instances[0].close).toHaveBeenCalledOnce(); expect(vi.getTimerCount()).toBe(0);
+    await act(async () => complete()); hook.rerender({ ...initial, receipt: receipt('after-timeout') });
+    expect(hook.result.current.enabled).toBe(false); expect(FakeAudio.instances[0].oscillators).toHaveLength(0);
+  });
+  it('clears the startup deadline after successful resume without muting later', async () => {
+    vi.useFakeTimers(); const hook = renderHook(() => useOfficeBossSound(props()));
+    await act(async () => hook.result.current.toggle()); expect(hook.result.current.enabled).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(hook.result.current.enabled).toBe(true); expect(hook.result.current.message).toBe('');
+  });
+  it('clears a pending startup deadline on privacy cover without a later timeout error', async () => {
+    vi.useFakeTimers();
+    class PendingAudio extends FakeAudio { override resume = vi.fn(() => new Promise<void>(() => {})); }
+    vi.stubGlobal('AudioContext', PendingAudio);
+    const initial = props(), hook = renderHook(input => useOfficeBossSound(input), { initialProps: initial });
+    act(() => hook.result.current.toggle()); hook.rerender({ ...initial, covered: true });
+    expect(vi.getTimerCount()).toBe(0); expect(FakeAudio.instances[0].close).toHaveBeenCalledOnce();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(hook.result.current.starting).toBe(false); expect(hook.result.current.message).toBe('');
+  });
   it('is silent without constructing a context on mount or new server receipts', () => {
     const initial = props(), hook = renderHook(input => useOfficeBossSound(input), { initialProps: initial });
     expect(hook.result.current.enabled).toBe(false); expect(FakeAudio.instances).toHaveLength(0);

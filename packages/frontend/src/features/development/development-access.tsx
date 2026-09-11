@@ -13,6 +13,7 @@ import { Outlet } from 'react-router-dom';
 import type { DevelopmentAccess } from '@stealth-reader/shared';
 
 import { communityDevelopmentApi } from '../../api/community-development';
+import { getCommunitySessionGeneration } from '../../api/community-http';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Card, EmptyState, PageHeader } from '../../components/ui';
 import styles from './Development.module.css';
@@ -25,6 +26,7 @@ export type DevelopmentAccessState =
 
 interface AccessSnapshot {
   subjectPublicId: string | null;
+  sessionGeneration: number;
   status: 'loading' | 'denied' | 'error' | 'allowed';
   access: DevelopmentAccess | null;
 }
@@ -32,13 +34,18 @@ interface AccessSnapshot {
 const DevelopmentAccessContext = createContext<DevelopmentAccessState | null>(null);
 
 export function useDevelopmentAccessState(): DevelopmentAccessState {
-  const phase = useCommunityAuthStore((state) => state.phase);
-  const userPublicId = useCommunityAuthStore((state) => state.user?.publicId ?? null);
+  // Explicit same-account logins can leave publicId/phase unchanged. Subscribe
+  // to the auth transition so an old permission response cannot cross it.
+  const auth = useCommunityAuthStore();
+  const phase = auth.phase;
+  const userPublicId = auth.user?.publicId ?? null;
+  const sessionGeneration = getCommunitySessionGeneration();
   const subjectPublicId = phase === 'active' ? userPublicId : null;
   const [reloadRevision, setReloadRevision] = useState(0);
   const requestGeneration = useRef(0);
   const [snapshot, setSnapshot] = useState<AccessSnapshot>({
     subjectPublicId: null,
+    sessionGeneration,
     status: 'denied',
     access: null,
   });
@@ -47,31 +54,32 @@ export function useDevelopmentAccessState(): DevelopmentAccessState {
   useEffect(() => {
     const generation = ++requestGeneration.current;
     if (!subjectPublicId) {
-      setSnapshot({ subjectPublicId: null, status: 'denied', access: null });
+      setSnapshot({ subjectPublicId: null, sessionGeneration, status: 'denied', access: null });
       return;
     }
 
-    setSnapshot({ subjectPublicId, status: 'loading', access: null });
+    setSnapshot({ subjectPublicId, sessionGeneration, status: 'loading', access: null });
     void communityDevelopmentApi.getAccess().then((access) => {
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current || getCommunitySessionGeneration() !== sessionGeneration) return;
       const current = useCommunityAuthStore.getState();
       if (current.phase !== 'active' || current.user?.publicId !== subjectPublicId) return;
       setSnapshot({
         subjectPublicId,
+        sessionGeneration,
         status: access.enabled && access.role ? 'allowed' : 'denied',
         access,
       });
     }).catch(() => {
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current || getCommunitySessionGeneration() !== sessionGeneration) return;
       const current = useCommunityAuthStore.getState();
       if (current.phase !== 'active' || current.user?.publicId !== subjectPublicId) return;
-      setSnapshot({ subjectPublicId, status: 'error', access: null });
+      setSnapshot({ subjectPublicId, sessionGeneration, status: 'error', access: null });
     });
 
     return () => {
       requestGeneration.current += 1;
     };
-  }, [reloadRevision, subjectPublicId]);
+  }, [reloadRevision, subjectPublicId, sessionGeneration]);
 
   return useMemo(() => {
     // Effects run after paint. Deriving from the current identity prevents a
@@ -79,7 +87,7 @@ export function useDevelopmentAccessState(): DevelopmentAccessState {
     if (!subjectPublicId) {
       return { status: 'denied', access: null, subjectPublicId: null, reload };
     }
-    if (snapshot.subjectPublicId !== subjectPublicId) {
+    if (snapshot.subjectPublicId !== subjectPublicId || snapshot.sessionGeneration !== sessionGeneration) {
       return { status: 'loading', access: null, subjectPublicId, reload };
     }
     if (
@@ -101,7 +109,7 @@ export function useDevelopmentAccessState(): DevelopmentAccessState {
       return { status: 'loading', access: null, subjectPublicId, reload };
     }
     return { status: 'denied', access: snapshot.access, subjectPublicId, reload };
-  }, [reload, snapshot, subjectPublicId]);
+  }, [reload, snapshot, subjectPublicId, sessionGeneration]);
 }
 
 export function DevelopmentAccessProvider({
@@ -164,4 +172,3 @@ export function DevelopmentAccessGate(): JSX.Element {
 
   return <Outlet />;
 }
-

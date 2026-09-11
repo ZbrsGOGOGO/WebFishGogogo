@@ -19,6 +19,7 @@ export function useOfficeBossSound({ owner, generation, covered, active, receipt
   const [enabled, setEnabled] = useState(false), [starting, setStarting] = useState(false), [error, setError] = useState('');
   const context = useRef<AudioContext | null>(null), voices = useRef(new Set<Voice>());
   const enabledRef = useRef(false), epoch = useRef(0), mounted = useRef(false);
+  const startupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seenReceipt = useRef(receipt?.requestId ?? null);
   const boundary = useRef({ owner, generation, covered, active });
   boundary.current = { owner, generation, covered, active };
@@ -30,6 +31,7 @@ export function useOfficeBossSound({ owner, generation, covered, active, receipt
   }, []);
   const release = useCallback((): void => {
     ++epoch.current;
+    if (startupTimer.current !== null) { clearTimeout(startupTimer.current); startupTimer.current = null; }
     enabledRef.current = false;
     for (const voice of voices.current) {
       voice.oscillator.onended = null;
@@ -66,6 +68,14 @@ export function useOfficeBossSound({ owner, generation, covered, active, receipt
       const Constructor = getAudio()!;
       const next = new Constructor();
       context.current = next;
+      // Some browsers leave resume() pending forever when no output device is
+      // available. A local deadline must release audio without blocking play.
+      startupTimer.current = setTimeout(() => {
+        startupTimer.current = null;
+        if (attempt !== epoch.current || context.current !== next) return;
+        release();
+        if (mounted.current) setError('音效启动超时，已保持静音；视觉反馈与挑战不受影响。');
+      }, 3000);
       void next.resume().then(() => {
         if (attempt !== epoch.current || context.current !== next || !allowed()) {
           if (context.current === next) release();
@@ -74,6 +84,7 @@ export function useOfficeBossSound({ owner, generation, covered, active, receipt
         if (next.state !== 'running') {
           release(); setError('当前浏览器无法开启音效，视觉反馈与挑战不受影响。'); return;
         }
+        if (startupTimer.current !== null) { clearTimeout(startupTimer.current); startupTimer.current = null; }
         enabledRef.current = true; setEnabled(true); setStarting(false);
       }).catch(() => {
         if (attempt !== epoch.current || context.current !== next) return;

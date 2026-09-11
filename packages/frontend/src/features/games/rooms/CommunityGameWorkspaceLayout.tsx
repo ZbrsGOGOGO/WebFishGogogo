@@ -8,6 +8,7 @@ import { refreshCommunityWallet, synchronizeCommunityWalletSession, useCommunity
 import { GamePrivacyProvider, useGamePrivacy } from '../GamePrivacyContext';
 import styles from './GameRooms.module.css';
 import { useBallpointWindow } from '../ballpoint-breach/BallpointWindow';
+import { CommunityDirectoryTrigger, CommunitySidebarLinks, CommunityWorkspaceNavigationBoundary, useCommunityWorkspaceNavigation } from '../../../components/layout/CommunityWorkspaceNavigation';
 
 /** Controls can stop accepting input while the mounted session is covered. */
 export function useGameWorkspaceHidden(): boolean {
@@ -15,6 +16,11 @@ export function useGameWorkspaceHidden(): boolean {
 }
 
 export function CommunityGameWorkspaceLayout(): JSX.Element {
+  return <CommunityWorkspaceNavigationBoundary><CommunityGameWorkspaceContent /></CommunityWorkspaceNavigationBoundary>;
+}
+
+function CommunityGameWorkspaceContent(): JSX.Element {
+  const navigation = useCommunityWorkspaceNavigation();
   const { coverWindow } = useBallpointWindow();
   const location = useLocation();
   const phase = useCommunityAuthStore((state) => state.phase);
@@ -22,13 +28,14 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
   const restoreSession = useCommunityAuthStore((state) => state.restoreSession);
   const wallet = useCommunityWalletStore();
   const [covered, setCovered] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const toggleCover = useCallback(() => setCovered((value) => !value), []);
   const [notes, setNotes] = useState('');
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const coverButtonRef = useRef<HTMLButtonElement>(null);
   const wasCovered = useRef(false);
 
-  useEffect(() => { setNotes(''); setCovered(false); }, [user?.publicId]);
+  useEffect(() => { setNotes(''); setCovered(false); setRailCollapsed(false); }, [user?.publicId]);
   useEffect(() => { if (covered) coverWindow(); }, [covered, coverWindow]);
 
   useEffect(() => { void restoreSession(); }, [restoreSession]);
@@ -63,11 +70,12 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
   const stale = wallet.status === 'stale' || wallet.status === 'error';
 
   return (
-    <GamePrivacyProvider value={{ covered, toggleCover }}>
-      <div className={styles.workspace} data-activity-covered={covered ? 'true' : undefined}>
+    <GamePrivacyProvider value={{ covered: covered || navigation.open, toggleCover }}>
+      <div className={styles.workspace} data-activity-covered={covered || navigation.open ? 'true' : undefined}>
         <header className={styles.workspaceHeader}>
           <Link to="/" className={styles.workspaceBrand}>{SITE_NAME}<span>协作工作台</span></Link>
-          <nav aria-label="工作台导航" className={styles.workspaceNav}>
+          <CommunityDirectoryTrigger neutral />
+          <nav aria-label="工作台导航" className={styles.workspaceNav} hidden={covered}>
             <Link to="/games">小游戏专区</Link>
             <Link to="/leaderboards">排行榜</Link>
             <Link to="/community/chat">聊天室</Link>
@@ -76,6 +84,11 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
           <button ref={coverButtonRef} type="button" className={styles.quietButton} onClick={() => setCovered((value) => !value)} aria-pressed={covered} aria-keyshortcuts="Escape">{covered ? '返回工作区' : '便签遮罩'}<kbd>Esc</kbd></button>
           <ThemeSwitch />
         </header>
+        <div className={styles.workspaceBody} data-rail={Boolean(user?.publicId && phase !== 'guest' && phase !== 'bootstrapping' && !covered)} data-collapsed={railCollapsed}>
+          {user?.publicId && phase !== 'guest' && phase !== 'bootstrapping' && !covered ? <aside className={styles.workspaceRail} aria-label="我的工作台">
+            <button type="button" className={styles.railToggle} aria-label={railCollapsed ? '展开侧目录' : '收起侧目录'} aria-expanded={!railCollapsed} onClick={() => setRailCollapsed(value => !value)}>{railCollapsed ? '→' : '←'}<span>{railCollapsed ? '目录' : '收起侧目录'}</span></button>
+            <div hidden={railCollapsed}><CommunitySidebarLinks /></div>
+          </aside> : null}
         <main className={styles.workspaceMain}>
           <section className={styles.notes} hidden={!covered} aria-label="临时便签">
             <div className={styles.sectionHeading}><div><span className={styles.eyebrow}>PERSONAL NOTES</span><h1>临时便签</h1></div><span className={styles.muted}>仅当前页面内存保存</span></div>
@@ -84,6 +97,7 @@ export function CommunityGameWorkspaceLayout(): JSX.Element {
           </section>
           <div hidden={covered} className={styles.mountedWorkspace}><Outlet /></div>
         </main>
+        </div>
         <footer className={styles.workspaceFooter}><span>默认静音 · 轻量界面</span><span>单机与玩家房间均有明确标识</span></footer>
       </div>
     </GamePrivacyProvider>

@@ -10,6 +10,7 @@ import {
   RequireRestrictedCommunityAccount,
 } from './community-route-guards';
 import { CommunitySiteLayout } from '../components/layout/CommunitySiteLayout';
+import { CommunityWorkspaceNavigationProvider } from '../components/layout/CommunityWorkspaceNavigation';
 import {
   CommunityAccountSecurityPage,
   CommunityAccountStatusPage,
@@ -150,6 +151,7 @@ export function CommunityModeRouter(): JSX.Element {
   return (
     <BallpointWindowProvider>
     <DeskPetSession>
+    <CommunityWorkspaceNavigationProvider>
     <CommunityActivityTracker />
     <WorkspaceVisitTracker />
     <Routes>
@@ -334,11 +336,11 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="/privacy-policy" element={<CommunityPrivacyPolicyPage />} />
         <Route path="/terms-of-service" element={<CommunityTermsOfServicePage />} />
         <Route path="/community-guidelines" element={<CommunityGuidelinesPage />} />
+        <Route path="/tools" element={<PublicToolsPage embedded />} />
+        <Route path="/tools/:toolId" element={<PublicToolsPage embedded />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
-      <Route path="/tools" element={<PublicToolsPage />} />
-      <Route path="/tools/:toolId" element={<PublicToolsPage />} />
       <Route path="/games" element={<CommunityGameWorkspaceLayout />}>
         <Route index element={loading(<CommunityGamesPage />)} />
         <Route path="ballpoint-breach" element={<BallpointBreachEntryPage />} />
@@ -370,6 +372,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="three-sum" element={<Navigate to="/games" replace />} />
       </Route>
     </Routes>
+    </CommunityWorkspaceNavigationProvider>
     </DeskPetSession>
     </BallpointWindowProvider>
   );

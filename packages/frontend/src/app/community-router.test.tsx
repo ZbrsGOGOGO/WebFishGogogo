@@ -83,6 +83,20 @@ describe('community mode routes', () => {
     expect(await screen.findByRole('heading', { name: '小游戏专区' })).toBeInTheDocument();
   });
 
+  it.each(['/tools', '/games', '/games/demon-tower', '/office', '/users/member-1', '/privacy-policy', '/terms-of-service', '/not-a-real-page'])(
+    'keeps one shared directory and desktop workbench on signed-in route %s',
+    async (path) => {
+      useCommunityAuthStore.setState({ phase: 'active', user: activeUser, sessionReady: true });
+      renderAt(path);
+      const sidebar = await screen.findByRole('complementary', { name: '我的工作台' });
+      expect(within(sidebar).getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
+      expect(within(sidebar).getByRole('button', { name: '目录设置' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: '浏览全部栏目' })).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+      expect(screen.getAllByRole('dialog', { name: '全部栏目' })).toHaveLength(1);
+    },
+  );
+
   it.each([
     ['全部系统', '小游戏', '/games', '小游戏专区'],
     ['全部系统', '工具', '/tools', '常用的小工具，打开就能用'],

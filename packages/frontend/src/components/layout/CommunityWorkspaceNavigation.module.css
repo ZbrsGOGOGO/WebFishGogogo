@@ -1,0 +1,34 @@
+.hint, .fixedHint { margin: 0 0 12px; font-size: 12px; line-height: 1.7; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.fixedHint { padding: 9px 11px; background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: 6px; }
+.fixedActions { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 4px 0; padding-top: 12px; border-top: 1px solid var(--color-border); }
+.fixedActions button, .smallButton, .editorActions button, .warning button { min-height: 34px; padding: 6px 10px; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer; }
+.fixedActions button:hover, .smallButton:hover, .editorActions button:hover, .warning button:hover { background: var(--color-surface-2); }
+.overlay { position: fixed; inset: 0; z-index: calc(var(--z-modal, 1000) + 10); background: rgb(0 0 0 / .4); display: flex; align-items: center; justify-content: center; padding: 20px; overscroll-behavior: contain; }
+.dialog { display: flex; flex-direction: column; width: min(760px, 100%); max-height: calc(100dvh - 40px); min-width: 0; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; box-shadow: var(--shadow-lg); }
+.dialogHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border-bottom: 1px solid var(--color-border); }
+.dialogHeader h2 { margin: 0; font-size: 17px; }
+.dialogHeader > button { min-width: 36px; min-height: 36px; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-secondary); font-size: 24px; cursor: pointer; }
+.dialogHeader > button:hover { background: var(--color-surface-2); }
+.dialogBody { padding: 16px; overflow-y: auto; overscroll-behavior: contain; min-width: 0; }
+.settingsList { list-style: none; padding: 0; margin: 0; display: grid; }
+.settingsList li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 5px 0; border-bottom: 1px solid var(--color-border); }
+.settingsList label { display: flex; align-items: center; gap: 9px; min-width: 0; min-height: 38px; font-size: 13px; cursor: pointer; }
+.settingsList label span { overflow-wrap: anywhere; }
+.settingsList input { width: 16px; height: 16px; accent-color: var(--color-brand); }
+.settingsList input, .settingsList svg { flex-shrink: 0; }
+.settingsList li > div { display: flex; flex-shrink: 0; gap: 4px; }
+.settingsList button { width: 34px; height: 34px; border: 1px solid var(--color-border); border-radius: 5px; background: var(--color-surface-2); color: var(--color-text); cursor: pointer; }
+.settingsList button:disabled, .editorActions button:disabled { opacity: .4; cursor: not-allowed; }
+.editorActions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 14px 0; }
+.editorActions > span { flex: 1; }
+.editorActions .primary { background: var(--color-brand); color: white; }
+.editorActions .primary:hover { background: var(--color-brand-hover); }
+.warning { margin-bottom: 12px; padding: 10px; border: 1px solid var(--color-border-strong); border-radius: 6px; color: var(--color-text); background: var(--color-surface-2); font-size: 12px; line-height: 1.7; }
+.warning button { display: block; margin-top: 8px; }
+@media (max-width: 840px) {
+  .overlay { padding: 0; align-items: stretch; justify-content: flex-start; }
+  .dialog { width: min(380px, calc(100% - 24px)); height: 100dvh; max-height: 100dvh; border-radius: 0 10px 10px 0; }
+  .dialogHeader { padding: calc(10px + env(safe-area-inset-top)) 12px 10px; }
+  .dialogBody { padding: 12px 12px calc(20px + env(safe-area-inset-bottom)); }
+  .settingsList label { gap: 7px; }
+}
