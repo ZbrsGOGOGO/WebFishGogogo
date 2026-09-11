@@ -64,6 +64,29 @@ describe('demon tower session-scoped actions', () => {
     expect(mutation.mock.calls[1][0]).toEqual(mutation.mock.calls[0][0]); expect(mutation.mock.calls[0][0]).toMatchObject({ kind: 'explore', expectedVersion: 1 });
     expect(mutation.mock.calls[0][0].requestId).toMatch(/^[0-9a-f-]{36}$/i); expect(result.current.pending).toBe(false); expect(result.current.overview?.profile?.version).toBe(2);
   });
+  it('checks a consented version against the latest ref before React has committed a refreshed render', async () => {
+    const initial = towerOverview({ profile: towerProfile({ availableActions: ['progressive_chest'] }) });
+    vi.mocked(communityDemonTowerApi.overview).mockResolvedValue(initial);
+    const mutation = vi.spyOn(communityDemonTowerApi, 'action'); const { result } = renderHook(() => useDemonTower());
+    await waitFor(() => expect(result.current.overview?.profile?.version).toBe(1));
+    const previousRender = result.current;
+    await act(async () => {
+      previousRender.observeOverview({ ...initial, profile: { ...initial.profile!, version: 2 } });
+      expect(previousRender.overview?.profile?.version).toBe(1);
+      expect(await previousRender.act({ kind: 'progressive_chest', payload: {} }, { expectedVersion: 1, serviceDate: initial.profile!.daily.serviceDate })).toBe(false);
+    });
+    expect(mutation).not.toHaveBeenCalled(); expect(result.current.error).toContain('确认后档案或自然日已变化');
+  });
+  it('refuses yesterday consent at the same character version and does not serialize UI expectation fields', async () => {
+    const initial = towerOverview({ profile: towerProfile({ availableActions: ['progressive_chest'] }) });
+    vi.mocked(communityDemonTowerApi.overview).mockResolvedValue(initial);
+    const mutation = vi.spyOn(communityDemonTowerApi, 'action').mockResolvedValue(towerReceipt());
+    const { result } = renderHook(() => useDemonTower()); await waitFor(() => expect(result.current.overview?.profile?.version).toBe(1));
+    await act(async () => { expect(await result.current.act({ kind: 'progressive_chest', payload: {} }, { expectedVersion: 1, serviceDate: '2026-09-08' })).toBe(false); });
+    expect(mutation).not.toHaveBeenCalled();
+    await act(async () => { expect(await result.current.act({ kind: 'progressive_chest', payload: {} }, { expectedVersion: 1, serviceDate: initial.profile!.daily.serviceDate })).toBe(true); });
+    expect(mutation).toHaveBeenCalledOnce(); expect(mutation.mock.calls[0][0]).toEqual({ kind: 'progressive_chest', payload: {}, requestId: expect.any(String), expectedVersion: 1 });
+  });
   it('does not publish any wallet value from a replayed action receipt', async () => {
     const publish = vi.spyOn(wallet, 'publishCommunityWalletOverview');
     vi.spyOn(communityDemonTowerApi, 'action').mockResolvedValue(towerReceipt({ replayed: true, officeCoinsGranted: 30, overview: towerOverview({ profile: towerProfile({ version: 2 }), wallet: { officeCoinBalance: 1 } }) }));

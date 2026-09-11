@@ -1,0 +1,15 @@
+.odds { padding: 0; list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
+.odds li { padding: 10px; border: 1px solid var(--tower-line); border-radius: 6px; background: var(--tower-soft); }
+.odds strong, .odds span { display: block; }
+.odds strong { font-size: 18px; font-variant-numeric: tabular-nums; }
+.odds span, .skillList small { font-size: 12px; color: var(--tower-muted); }
+.details { margin: 12px 0; }
+.details summary { cursor: pointer; min-height: 38px; }
+.pool { list-style: none; padding: 0; }
+.pool li { display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--tower-line); font-size: 12px; }
+.skillList { display: grid; gap: 10px; }
+.skillList > div { display: flex; gap: 12px; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--tower-line); padding-bottom: 10px; }
+.skillList > div > div { min-width: 0; }
+.skillList small { display: block; }
+.skillList button { flex-shrink: 0; }
+@media (max-width: 600px) { .odds { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

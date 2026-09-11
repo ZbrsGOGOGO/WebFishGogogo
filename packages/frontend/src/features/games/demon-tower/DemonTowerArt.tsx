@@ -1,4 +1,6 @@
 import { useId, type JSX } from 'react';
+import type { DemonTowerAppearance } from '@stealth-reader/shared';
+import profileStyles from './DemonTowerProfile.module.css';
 
 export type TowerIconName = 'explore' | 'profile' | 'loadout' | 'world' | 'journal' | 'help' | 'coin' | 'material' | 'energy' | 'refresh' | 'shield' | 'arrow' | 'close' | 'check' | 'heart' | 'clock';
 
@@ -42,14 +44,52 @@ export function TowerWeaponArt({ weaponId, label, className }: { weaponId?: stri
   return <svg className={className} viewBox="0 0 64 80" width="48" height="60" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label={label}>{weaponId ? <WeaponShape id={weaponId} /> : <><path d="M20 19h24v39H20zM25 14h14M25 63h14M32 26v24M26 38h12" strokeDasharray="3 4" /><circle cx="32" cy="38" r="20" strokeOpacity=".2" /></>}</svg>;
 }
 
-export function TowerPortrait({ name, weaponId, className, injured = false }: { name: string; weaponId?: string | null; className?: string; injured?: boolean }): JSX.Element {
+/** Closed cosmetic identifiers map to trusted local shapes, never user-supplied markup. */
+function AppearanceFigure({ value }: { value: DemonTowerAppearance }): JSX.Element {
+  const hair = '#35433e', skin = '#e8d1b8', edge = '#30483e';
+  const face = value.face === 'square' ? 'M115 77Q116 54 139 55Q162 54 163 77V102L153 117H125L115 102Z' : value.face === 'pointed' ? 'M117 77Q117 52 139 54Q161 52 161 77L158 100L139 119L120 100Z' : value.face === 'baby' ? 'M111 78Q110 54 139 54Q169 54 167 80V96Q161 120 139 117Q114 117 111 95Z' : 'M115 77Q115 54 139 54Q163 54 163 77V94Q162 116 139 118Q116 115 115 94Z';
+  return <g strokeLinecap="round" strokeLinejoin="round">
+    <g data-appearance-slot="hair" data-value={value.hair} fill={hair}>
+      {value.hair === 'long' ? <path d="M109 73Q108 44 139 44Q174 46 170 87L182 156L159 151L139 115L115 151L99 153Z" /> : value.hair === 'ponytail' ? <path d="M158 57Q190 37 182 72Q175 110 190 127L169 114L162 83Z" /> : null}
+    </g>
+    <g data-appearance-slot="bottom" data-value={value.bottom}>
+      {value.bottom === 'robe' ? <><path d="M103 214H175L183 280H96Z" fill="#61695c" stroke={edge} /><path d="m126 231-8 47m29-47 14 47" stroke="#a1a590" /></> : <><path d="M105 218H174L171 282H151L138 245L128 282H106Z" fill={value.bottom === 'leather' ? '#715e4d' : value.bottom === 'war' ? '#4c5f60' : '#737766'} stroke={edge} />{value.bottom === 'war' ? <path d="M107 247h24m18 0h24m-24 5h23m-66 0h22" stroke="#a0b5ac" strokeWidth="4" /> : value.bottom === 'leather' ? <path d="M108 230h20m22 0h20m-59 35h14m29 0h14" stroke="#af9476" /> : <path d="m119 239-5 32m42-32 8 32" stroke="#a1a590" />}</>}
+    </g>
+    <g data-appearance-slot="shoes" data-value={value.shoes}>
+      <path d={value.shoes === 'boots' ? 'M105 261H128V296H92V289L105 282ZM152 261H173V282L188 289V296H152Z' : 'M106 280H127V296H91V289ZM152 280H173L188 289V296H152Z'} fill={value.shoes === 'straw' ? '#ae996b' : value.shoes === 'cloud' ? '#d9d8c5' : '#3b4744'} stroke={edge} />
+      {value.shoes === 'straw' ? <path d="m101 286 13 9m-5-13 12 13m38-13 15 13m-6-13 13 12" stroke="#e4c995" /> : value.shoes === 'cloud' ? <path d="M98 290q5-11 11-3t13 0m35 0q6-8 12 0t12 3" fill="none" stroke="#81998c" /> : value.shoes === 'boots' ? <path d="M108 268h17m30 0h16m-65 9h19m30 0h17" stroke="#9fafa4" /> : <path d="M93 294h33m27 0h32" stroke="#9aaba0" />}
+    </g>
+    <g data-appearance-slot="top" data-value={value.top}>
+      <path d="m107 125-28 23-10 74 24 5 14-49-8 60h77l-5-62 17 48 22-13-27-71-25-16Z" fill={value.top === 'armor' ? '#758984' : value.top === 'robe' ? '#607985' : value.top === 'brocade' ? '#83745b' : '#4c665b'} stroke={edge} strokeWidth="1.3" />
+      <path d="M124 110v21l15 13 15-14v-21" fill="#d9bda3" />
+      {value.top === 'armor' ? <><path d="m109 132 29 15 26-14 5 66-30 16-35-16Z" fill="#a5b1a2" stroke={edge} /><path d="M107 161h60m-62 13h63m-64 13h66m-31-40v65m-39-2h76m-76 10h76" stroke="#4b675b" /><path d="m92 143 12 19-22 3m89-22-3 21 23-3" fill="#c2c9b5" stroke={edge} /></> : <><path d="m111 126 28 28 21-29 9 109h-64Z" fill={value.top === 'brocade' ? '#dfc892' : '#dedccd'} /><path d="m113 129 26 26 23-28m-23 28v79M103 207h69" fill="none" stroke={edge} strokeWidth="2" />{value.top === 'robe' ? <><path d="m115 133 39 64m8-64-36 64" stroke="#8d9f9a" strokeWidth="5" /><circle cx="140" cy="181" r="13" fill="#dedccd" stroke={edge} /><path d="M140 168q-14 5 0 13t0 13" fill="#4c665b" stroke={edge} /></> : value.top === 'brocade' ? <path d="m119 164 7 9-7 9-7-9Zm35 0 7 9-7 9-7-9Zm-35 39 7 9-7 9-7-9Zm35 0 7 9-7 9-7-9Z" fill="none" stroke="#a38748" /> : <><rect x="121" y="174" width="29" height="24" rx="2" fill="#f6f2e5" stroke="#60746a" /><path d="M127 182h16m-16 7h9M105 216h21v13h-21m47-13h17v13h-17" fill="none" stroke="#8c9c8f" /></>}</>}
+    </g>
+    <g data-appearance-slot="face" data-value={value.face}><path d={face} fill={skin} stroke="#b99a7e" strokeWidth=".7" /><path d="M124 90h6m16 0h6m-15 4-2 8h6m-10 9h14" stroke="#786555" strokeWidth="1.5" fill="none" />{value.face === 'baby' ? <><circle cx="121" cy="101" r="4" fill="#dcb8a5" /><circle cx="157" cy="101" r="4" fill="#dcb8a5" /></> : null}</g>
+    <g fill={hair} data-hair-front={value.hair}>
+      {value.hair === 'bald' ? <path d="M116 77q-1-14 7-20m33 0q8 6 7 20" stroke={hair} fill="none" strokeWidth="2" /> : value.hair === 'curly' ? <><path d="M112 77Q105 48 133 47Q165 40 169 76L160 84L154 68L140 79L123 72L116 88Z" /><path d="M113 64q-9-9 1-14t11-2q4-12 14-4q14-9 20 5q14-1 10 13" stroke={hair} strokeWidth="8" fill="none" /></> : <path d={value.hair === 'long' ? 'M112 81Q108 47 139 46Q172 49 166 84L158 75L145 62L132 76L120 83L114 105Z' : 'M113 82Q109 49 138 46Q166 45 168 74L164 88L156 81L153 65L137 77L122 75L118 90Z'} />}
+    </g>
+    <g data-appearance-slot="glasses" data-value={value.glasses} stroke="#384d45" strokeWidth="2" fill={value.glasses === 'sunglasses' ? '#354d47' : 'none'}>
+      {value.glasses === 'round' ? <><circle cx="126" cy="91" r="9" /><circle cx="150" cy="91" r="9" /><path d="M135 90h6m-28-3 4 2m42 0 6-3" /></> : value.glasses !== 'none' ? <><rect x="116" y="84" width="20" height="14" rx="3" /><rect x="141" y="84" width="20" height="14" rx="3" /><path d="M136 88h5m-30-4 5 4m45 0 5-4" /></> : null}
+    </g>
+    <g data-appearance-slot="hat" data-value={value.hat} stroke={edge} strokeWidth="1.4">
+      {value.hat === 'conical' ? <><path d="m94 66 45-34 46 34Z" fill="#b5a276" /><path d="m115 61 24-27 24 27M100 65h77" fill="none" stroke="#7d7d56" /></> : value.hat === 'official' ? <><path d="M119 53V30q20-9 39 0v23l7 11h-52Z" fill="#40524a" /><path d="m119 47-29-7-3 8 30 7m42-8 28-7 4 8-32 7" fill="#6b7e6a" /><path d="M123 55h32" stroke="#c4b879" strokeWidth="4" /></> : value.hat === 'straw' ? <><ellipse cx="139" cy="63" rx="50" ry="9" fill="#c7b488" /><path d="m116 61 4-25h36l7 25Z" fill="#c7b488" /><path d="M119 52h39" stroke="#776b4f" strokeWidth="6" /></> : value.hat === 'helmet' ? <><path d="M111 73V60q0-32 28-32t28 32v13l-9 10-1-25h-36l-2 25Z" fill="#90a59a" /><path d="M139 28v31m-24-7h48" stroke="#d1d5bc" strokeWidth="3" /><path d="m136 28 3-12 4 12" fill="#87755d" /></> : null}
+    </g>
+    <g data-appearance-slot="held" data-value={value.held} stroke="var(--portrait-ink, #506350)" strokeWidth="2" fill="none">
+      {value.held === 'sword' ? <path d="m205 139 6 17-13 82-5 8-4-10 9-81Zm-23 99 24 4m-12 3-3 24m-5 0 9 1" /> : value.held === 'blade' ? <path d="m213 142-4 70q-1 25-17 29l9-92ZM183 241l23 3m-12 1-3 24" /> : value.held === 'staff' ? <><path d="m205 158-11 127m12-152 10 14-11 13-10-15Z" /><circle cx="205" cy="146" r="4" fill="#8fa6a1" /></> : value.held === 'fan' ? <><path d="m199 225-27-36q31-25 57 1Z" fill="#ddd9bd" /><path d="m178 187 21 38-10-43m21 0-11 43 23-37m-23 37-3 19" /></> : value.held === 'gourd' ? <><path d="M203 187c-17-1-19 16-9 24-18 15-7 34 6 35s24-16 8-33c13-9 11-25-5-26Z" fill="#aa9772" /><path d="m199 186 3-8m-7 34 16 2" /></> : null}
+    </g>
+    <path d="m73 218-1 15 10 11 8-6-4-16M188 215l6 10 11 2 7-10-6-9" fill={skin} />
+  </g>;
+}
+
+export function TowerPortrait({ name, weaponId, appearance, className, injured = false }: { name: string; weaponId?: string | null; appearance?: DemonTowerAppearance; className?: string; injured?: boolean }): JSX.Element {
   const id = useId().replace(/:/g, '');
-  return <svg className={className} viewBox="0 0 280 320" role="img" aria-label={`${name}的寻道者形象`}>
+  return <svg className={`${profileStyles.portrait} ${className ?? ''}`} viewBox="0 0 280 320" role="img" aria-label={`${name}的寻道者形象`}>
     <defs><linearGradient id={`coat-${id}`} x1="0" y1="0" x2="1" y2="1"><stop stopColor="#596e69" /><stop offset="1" stopColor="#354d47" /></linearGradient></defs>
-    <path d="M28 249h224M44 260h191M51 68h175M50 48h52M201 77v117" stroke="#cbd5ce" strokeWidth="1" />
-    <circle cx="138" cy="135" r="92" fill="#e9eee7" /><circle cx="138" cy="135" r="75" fill="none" stroke="#d0dbd1" strokeDasharray="3 7" />
+    <path d="M28 249h224M44 260h191M51 68h175M50 48h52M201 77v117" stroke="var(--portrait-grid, #cbd5ce)" strokeWidth="1" />
+    <circle cx="138" cy="135" r="92" fill="var(--portrait-paper, #e9eee7)" /><circle cx="138" cy="135" r="75" fill="none" stroke="var(--portrait-grid, #d0dbd1)" strokeDasharray="3 7" />
     <path d="M59 234 88 166l27-16 66 13 31 80-47 14-73-2-33-21Z" fill="#a3aaa0" opacity=".5" />
     <ellipse cx="143" cy="294" rx="70" ry="9" fill="#c7d0c8" opacity=".6" />
+    {appearance ? <AppearanceFigure value={appearance} /> : <>
     <path d="m111 240-3 44-15 6v6h34l11-50M148 244l8 41-5 11h36v-7l-15-7-4-44" fill="#3b4744" />
     <path d="m106 123-27 25-10 74 25 5 12-48-6 78 73-1-3-77 17 44 22-11-26-72-24-16-53-1Z" fill={`url(#coat-${id})`} />
     <path d="m114 123 26 27 20-27 8 117h-62l8-117Z" fill="#dedccd" />
@@ -64,7 +104,8 @@ export function TowerPortrait({ name, weaponId, className, injured = false }: { 
     <path d="m73 218-1 15 10 11 8-6-4-16M188 215l6 10 11 2 7-10-6-9" fill="#e8d1b8" />
     <path d="m101 249 69 1" stroke="#718676" strokeWidth="2" />
     {weaponId ? <g transform="translate(192 142) rotate(14) scale(.95)" stroke="#506350" color="#506350" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"><WeaponShape id={weaponId} /></g> : <g fill="none" stroke="#667b68" strokeWidth="2"><path d="m205 156-10 132M205 156l4-18" /><path d="m199 257 9 3" /></g>}
-    <rect x="31" y="32" width="40" height="20" rx="3" fill="#f8faf6" stroke="#cbd5ce" /><text x="51" y="46" textAnchor="middle" fill="#829381" fontSize="9" fontFamily="monospace">FILE 01</text>
+    </>}
+    <rect x="31" y="32" width="40" height="20" rx="3" fill="var(--portrait-stamp, #f8faf6)" stroke="var(--portrait-grid, #cbd5ce)" /><text x="51" y="46" textAnchor="middle" fill="#829381" fontSize="9" fontFamily="monospace">FILE 01</text>
     {injured ? <><path d="m169 74 15 15m0-15-15 15" stroke="#a77b70" strokeWidth="3" /><circle cx="177" cy="82" r="15" fill="none" stroke="#a77b70" opacity=".5" /></> : <path d="m218 92 6 6 11-14" fill="none" stroke="#879b80" strokeWidth="2" />}
   </svg>;
 }

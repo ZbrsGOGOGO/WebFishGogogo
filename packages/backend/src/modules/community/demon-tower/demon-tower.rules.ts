@@ -25,6 +25,7 @@ export function demonTowerAction(raw: unknown): DemonTowerActionInput {
   if (typeof input.requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.requestId)) fail();
   if (!Number.isInteger(input.expectedVersion) || (input.expectedVersion as number) < 0 || (input.expectedVersion as number) >= 2_147_483_647) fail();
   const kinds = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'expedition', 'market', 'star_up', 'breakthrough', 'select_skin', 'claim_boss_loot', 'arena_enroll', 'arena_learn', 'arena_equip', 'arena_challenge', 'honor_exchange', 'squad_create', 'squad_join', 'squad_leave', 'squad_ready', 'squad_step', 'squad_claim', 'shop_purchase', 'use_rune'];
+  kinds.push('set_appearance', 'office_purchase', 'progressive_chest', 'fragment_select', 'explore_with_pass');
   if (typeof input.kind !== 'string' || !kinds.includes(input.kind)) fail();
   if (!input.payload || typeof input.payload !== 'object' || Array.isArray(input.payload)) fail();
   const pending: Array<{ item: unknown; depth: number }> = [{ item: input.payload, depth: 0 }];

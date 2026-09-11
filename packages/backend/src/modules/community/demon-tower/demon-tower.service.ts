@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, HttpException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { DEMON_TOWER_CATALOG, type DemonTowerActionInput, type DemonTowerActionReceipt, type DemonTowerCatalog, type DemonTowerOverview, type DemonTowerSocialView, type DemonTowerSquadView } from '@stealth-reader/shared';
-import { DataSource, EntityManager, In, MoreThan } from 'typeorm';
+import { DataSource, EntityManager, In, IsNull, MoreThan } from 'typeorm';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor, User, WalletBalance } from '../../../database/entities';
 import { DemonTowerAutoRun } from '../../../database/entities/demon-tower-auto-run.entity';
 import { DemonTowerSquad } from '../../../database/entities/demon-tower-squad.entity';
+import { Friendship } from '../../../database/entities/friendship.entity';
+import { UserBlock } from '../../../database/entities/user-block.entity';
 import { PlatformAssetsService } from '../../platform/platform-assets.service';
 import { PLATFORM_CLOCK, systemPlatformClock, type PlatformClock } from '../../platform/platform.constants';
 import { toBusinessLocalDate } from '../../platform/platform-time';
@@ -16,7 +18,7 @@ import { demonTowerArenaRank, type DemonTowerSocialBuild } from './demon-tower-s
 import { initialDemonTowerSquad, stepDemonTowerSquad, type DemonTowerSquadState } from './demon-tower-squad.engine';
 
 interface StoredReceipt {
-  events: string[]; officeCoinsGranted: number; effectiveBossDamage: number; passageContribution: number;
+  events: string[]; officeCoinsGranted: number; officeCoinsSpent?: number; effectiveBossDamage: number; passageContribution: number;
 }
 
 @Injectable()
@@ -94,24 +96,59 @@ export class DemonTowerService {
       if (profile?.actionWindowAt && now.getTime() - profile.actionWindowAt.getTime() < 1000 && profile.actionWindowCount >= 6) throw new HttpException({ code: 'DEMON_TOWER_ACTION_RATE_LIMIT' }, 429);
 
       let result: DemonTowerEngineResult;
+      let enginePayload = input.payload;
       const contributedFloors = input.kind === 'claim_boss_loot' ? (await manager.getRepository(DemonTowerContribution).findBy({ userId })).filter(row => row.bossDamage > 0).map(row => row.floor) : [];
       let arenaOpponent: { publicId: string; displayName: string; build: DemonTowerSocialBuild } | undefined;
       if (input.kind === 'arena_challenge') {
         if (!demonTowerExpansionEnabled()) throw new ConflictException({ code: 'DEMON_TOWER_EXPANSION_DISABLED' });
+        const payload = input.payload as Record<string, unknown>;
+        if (Object.keys(payload).some(key => !['opponentPublicId', 'friendOnly'].includes(key)) ||
+          (Object.prototype.hasOwnProperty.call(payload, 'friendOnly') && payload.friendOnly !== true)) {
+          throw new BadRequestException({ code: 'DEMON_TOWER_INVALID_ACTION' });
+        }
         const id = input.payload.opponentPublicId;
         if (typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id) || id === actor.publicId) throw new BadRequestException({ code: 'DEMON_TOWER_INVALID_ARENA_OPPONENT' });
         const opponent = await manager.getRepository(User).findOneBy({ publicId: id, accountStatus: 'active' });
+        const relationships = await this.socialRelationships(manager, userId);
+        // Friend removal and either direction of blocking take this same actor's
+        // user lock. Do not lock the opponent after the world: reverse challenges
+        // must not introduce a user/world lock-order cycle.
+        if (!opponent || relationships.blockedIds.has(opponent.id) ||
+          (payload.friendOnly === true && !relationships.friendIds.has(opponent.id))) {
+          throw new ConflictException({ code: 'DEMON_TOWER_ARENA_OPPONENT_UNAVAILABLE' });
+        }
         const target = opponent ? await this.profile(manager, opponent.id) : null;
         if (!target || !this.state(target).expansion?.arena?.enabled) throw new ConflictException({ code: 'DEMON_TOWER_ARENA_OPPONENT_UNAVAILABLE' });
         arenaOpponent = { publicId: id, displayName: (opponent!.displayName || opponent!.username || '同事').slice(0, 80), build: demonTowerSocialBuild(this.state(target)) };
+        // This is a server-checked relationship scope, not a new battle/reward
+        // mode. Both entrances share the existing per-opponent/day accounting.
+        enginePayload = { opponentPublicId: id };
       }
       try {
-        result = profile ? actDemonTower(this.state(profile), { kind: input.kind, payload: input.payload }, { now: now.getTime(), serviceDate, world, expansionEnabled: demonTowerExpansionEnabled(), contributedFloors, arenaOpponent })
+        result = profile ? actDemonTower(this.state(profile), { kind: input.kind, payload: enginePayload }, { now: now.getTime(), serviceDate, world, expansionEnabled: demonTowerExpansionEnabled(), contributedFloors, arenaOpponent })
           : { state: createDemonTowerState(now.getTime(), serviceDate, randomBytes(32).toString('hex')), events: ['九层妖塔角色已建立，初始装备与基础技能已入库；全程免费。'], worldEffect: null, officeCoinIntent: 0 };
       } catch (error) { this.rethrowEngine(error); }
       if (input.kind.startsWith('squad_')) await this.applySquad(manager, userId, input, result!.state, result!.events, world.unlockedFloor, now);
       if (!Number.isSafeInteger(result!.officeCoinIntent) || result!.officeCoinIntent < 0 || result!.officeCoinIntent > DEMON_TOWER_DAILY_COINS) throw new Error('Demon tower reward invariant failed');
       if ((result!.worldEffect?.kind === 'boss_damage') !== (input.kind === 'challenge_boss') || (result!.worldEffect?.kind === 'construction') !== (input.kind === 'donate')) throw new Error('Demon tower action effect invariant failed');
+      const officeCoinsSpent = result!.officeCoinCost ?? 0;
+      const officePurchase = input.kind === 'office_purchase' || input.kind === 'progressive_chest';
+      if (!Number.isSafeInteger(officeCoinsSpent) || officeCoinsSpent < 0 || officeCoinsSpent > 300 ||
+        (officeCoinsSpent > 0) !== officePurchase || (officePurchase && (result!.officeCoinIntent !== 0 || result!.worldEffect !== null))) {
+        throw new Error('Demon tower purchase cost invariant failed');
+      }
+      if (officeCoinsSpent > 0) {
+        // The engine computes fixed server prices. Never read a client price,
+        // currency, balance or account, and never purchase on a worker's behalf.
+        const debit = await this.assets.debitWallet(manager, userId, 'office_coin', officeCoinsSpent, {
+          sourceType: 'demon_tower_shop', sourceId: input.requestId, reason: `demon-tower-${input.kind}`,
+          idempotencyKey: `demon-tower-shop:${userId}:${input.requestId}`,
+        });
+        // A legitimate retry was already served from its immutable command.
+        // A lone pre-existing debit must never issue a second item/state grant.
+        if (!debit.applied) throw new Error('Demon tower purchase receipt invariant failed');
+        result!.events.push(`已从全站钱包扣除 ${officeCoinsSpent} 办公币。`);
+      }
       const applied = await this.applyWorld(manager, worlds, result!.worldEffect, now);
       // Credit tower-only currency from the locked world's effective damage, not
       // predicted overkill. Stored with the same command/limits/receipt transaction.
@@ -127,6 +164,7 @@ export class DemonTowerService {
       const stored: StoredReceipt = {
         events: [...result!.events, ...applied.events].slice(-12).map((event) => event.slice(0, 240)),
         officeCoinsGranted, effectiveBossDamage: applied.effectiveBossDamage, passageContribution: applied.passageContribution,
+        ...(officeCoinsSpent > 0 ? { officeCoinsSpent } : {}),
       };
       if (result!.officeCoinIntent > officeCoinsGranted) stored.events.push('已达到妖塔当日日常办公币上限；经验与绑定材料正常结算。');
       if (!profile) {
@@ -168,12 +206,26 @@ export class DemonTowerService {
     return this.db.transaction(async manager => {
       await this.activeUser(manager, userId);
       const now = this.clock.now();
-      if (!demonTowerExpansionEnabled()) return { enabled: false, serverNow: now.getTime(), opponents: [], squads: [] };
+      if (!demonTowerExpansionEnabled()) return { enabled: false, serverNow: now.getTime(), opponents: [], friends: [], squads: [] };
       const profile = await this.profile(manager, userId), ownSquad = profile ? this.state(profile).expansion?.squadId : null;
-      const rows = await manager.getRepository(DemonTowerProfile).createQueryBuilder('profile').addSelect('profile.state')
+      const relationships = await this.socialRelationships(manager, userId);
+      const ownState = profile ? advanceDemonTowerState(this.state(profile), now.getTime(), toBusinessLocalDate(now)) : null;
+      const query = manager.getRepository(DemonTowerProfile).createQueryBuilder('profile').addSelect('profile.state')
         .innerJoin('profile.user', 'user').addSelect(['user.id', 'user.publicId', 'user.displayName', 'user.username'])
         .where("user.account_status = 'active' AND profile.user_id <> :userId AND profile.state -> 'expansion' -> 'arena' ->> 'enabled' = 'true'", { userId })
-        .orderBy("COALESCE((profile.state -> 'expansion' -> 'arena' ->> 'rating')::integer, 0)", 'DESC').addOrderBy('profile.user_id', 'ASC').limit(30).getMany();
+        .orderBy("COALESCE((profile.state -> 'expansion' -> 'arena' ->> 'rating')::integer, 0)", 'DESC').addOrderBy('profile.user_id', 'ASC');
+      if (relationships.blockedIds.size) query.andWhere('profile.user_id NOT IN (:...blockedIds)', { blockedIds: [...relationships.blockedIds] });
+      const rows = await query.clone().limit(30).getMany();
+      // A friend's entry must not disappear just because 30 unrelated players
+      // rank above them. Existing relationship policy caps active friends at 200.
+      const friends = relationships.friendIds.size ? await query.clone()
+        .andWhere('profile.user_id IN (:...friendIds)', { friendIds: [...relationships.friendIds] }).limit(200).getMany() : [];
+      const projectOpponent = (row: DemonTowerProfile) => {
+        const state = this.state(row), rating = state.expansion?.arena?.rating ?? 0;
+        return { publicId: row.user.publicId, displayName: (row.user.displayName || row.user.username || '同事').slice(0, 80), level: state.level,
+          rating, rank: demonTowerArenaRank(rating), isFriend: relationships.friendIds.has(row.userId),
+          challengedToday: ownState?.arenaOpponentsToday?.includes(row.user.publicId) ?? false };
+      };
       const waiting = await manager.getRepository(DemonTowerSquad).createQueryBuilder('squad').addSelect('squad.state')
         .where('squad.status = :status AND squad.expires_at > :now', { status: 'waiting', now }).orderBy('squad.created_at', 'DESC').take(20).getMany();
       if (ownSquad && !waiting.some(row => row.id === ownSquad)) {
@@ -182,11 +234,18 @@ export class DemonTowerService {
       }
       const squads: DemonTowerSquadView[] = [];
       for (const row of waiting) squads.push(await this.squadView(manager, row, now));
-      return { enabled: true, serverNow: now.getTime(), opponents: rows.map(row => {
-        const state = this.state(row), rating = state.expansion?.arena?.rating ?? 0;
-        return { publicId: row.user.publicId, displayName: (row.user.displayName || row.user.username || '同事').slice(0, 80), level: state.level, rating, rank: demonTowerArenaRank(rating) };
-      }), squads };
+      return { enabled: true, serverNow: now.getTime(), opponents: rows.map(projectOpponent),
+        friends: friends.map(row => ({ ...projectOpponent(row), isFriend: true as const })), squads };
     });
+  }
+  private async socialRelationships(manager: EntityManager, userId: string): Promise<{ friendIds: Set<string>; blockedIds: Set<string> }> {
+    const friendships = await manager.getRepository(Friendship).find({ where: [
+      { userLowId: userId, endedAt: IsNull() }, { userHighId: userId, endedAt: IsNull() },
+    ] });
+    const blocks = await manager.getRepository(UserBlock).find({ where: [{ blockerId: userId }, { blockedId: userId }] });
+    const blockedIds = new Set(blocks.map(row => row.blockerId === userId ? row.blockedId : row.blockerId));
+    const friendIds = new Set(friendships.map(row => row.userLowId === userId ? row.userHighId : row.userLowId).filter(id => !blockedIds.has(id)));
+    return { friendIds, blockedIds };
   }
   private async squadView(manager: EntityManager, row: DemonTowerSquad, now: Date): Promise<DemonTowerSquadView> {
     const state = row.state as unknown as DemonTowerSquadState;
@@ -306,7 +365,10 @@ export class DemonTowerService {
   private receipt(raw: Record<string, unknown>): StoredReceipt {
     if (!Array.isArray(raw.events) || raw.events.length > 13 || raw.events.some((event) => typeof event !== 'string' || event.length > 240)) throw new Error('Demon tower receipt invariant failed');
     for (const key of ['officeCoinsGranted', 'effectiveBossDamage', 'passageContribution']) if (!Number.isSafeInteger(raw[key]) || (raw[key] as number) < 0) throw new Error('Demon tower receipt invariant failed');
-    return { events: [...raw.events], officeCoinsGranted: raw.officeCoinsGranted as number, effectiveBossDamage: raw.effectiveBossDamage as number, passageContribution: raw.passageContribution as number };
+    if (Object.prototype.hasOwnProperty.call(raw, 'officeCoinsSpent') &&
+      (!Number.isSafeInteger(raw.officeCoinsSpent) || (raw.officeCoinsSpent as number) < 1 || (raw.officeCoinsSpent as number) > 300)) throw new Error('Demon tower receipt invariant failed');
+    return { events: [...raw.events], officeCoinsGranted: raw.officeCoinsGranted as number, effectiveBossDamage: raw.effectiveBossDamage as number, passageContribution: raw.passageContribution as number,
+      ...(raw.officeCoinsSpent === undefined ? {} : { officeCoinsSpent: raw.officeCoinsSpent as number }) };
   }
   private async applyWorld(manager: EntityManager, worlds: DemonTowerWorldFloor[], effect: DemonTowerWorldEffect | null, now: Date): Promise<{ effectiveBossDamage: number; passageContribution: number; events: string[] }> {
     const result = { effectiveBossDamage: 0, passageContribution: 0, events: [] as string[] };

@@ -8,6 +8,8 @@ import { beginCommunityWalletObservation, finishCommunityWalletObservation, mark
 
 interface Scoped<T> { key: string; value: T }
 interface PendingAction { key: string; input: DemonTowerActionInput; status: 'sending' | 'uncertain' }
+export interface DemonTowerActionExpectation { expectedVersion: number; serviceDate: string }
+export type DemonTowerActionHandler = (action: DemonTowerAction, expectation?: DemonTowerActionExpectation) => Promise<boolean>;
 
 export interface DemonTowerState {
   catalog: DemonTowerCatalog | null;
@@ -22,7 +24,7 @@ export interface DemonTowerState {
   ownerId: string | null;
   displayName: string;
   now: number;
-  act: (action: DemonTowerAction) => Promise<boolean>;
+  act: DemonTowerActionHandler;
   retry: () => Promise<boolean>;
   refresh: () => Promise<void>;
   dismissReceipt: () => void;
@@ -177,10 +179,19 @@ export function useDemonTower(): DemonTowerState {
     }
   }, [isCurrent, apply, refresh]);
 
-  const act = useCallback((action: DemonTowerAction): Promise<boolean> => {
+  const act = useCallback((action: DemonTowerAction, expectation?: DemonTowerActionExpectation): Promise<boolean> => {
     const current = snapshotRef.current;
     if (!ownerId || !isCurrent(key) || pendingRef.current || current?.key !== key || !current.value.writesEnabled || catalog?.enabled !== true) return Promise.resolve(false);
     if (current.value.autoExplore?.status === 'running' || (action.kind === 'enroll' ? current.value.profile !== null : !current.value.profile?.availableActions.includes(action.kind))) return Promise.resolve(false);
+    if (expectation) {
+      const now = Date.now() + (serverClock.current.key === key ? serverClock.current.offset : 0);
+      const today = new Date(now + 8 * 3600_000).toISOString().slice(0, 10);
+      if (expectation.expectedVersion !== current.value.profile?.version || expectation.serviceDate !== today ||
+        expectation.serviceDate !== (current.value.profile?.provisions?.serviceDate ?? current.value.profile?.daily.serviceDate)) {
+        setError({ key, source: 'action', value: '确认后档案或自然日已变化，请关闭确认窗口并同步后重试。' });
+        return Promise.resolve(false);
+      }
+    }
     return send({ key, status: 'uncertain', input: { ...action, requestId: crypto.randomUUID(), expectedVersion: current.value.profile?.version ?? 0 } });
   }, [ownerId, isCurrent, key, catalog?.enabled, send]);
   const retry = useCallback((): Promise<boolean> => {

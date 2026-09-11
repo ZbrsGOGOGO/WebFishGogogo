@@ -3,6 +3,7 @@ import { DEMON_TOWER_AFFIXES, DEMON_TOWER_EXPANSION_RULES, DEMON_TOWER_SKILLS, D
   demonTowerItemRarity, demonTowerQualityLimit, demonTowerStrengthRating,
   type DemonTowerAction, type DemonTowerProfileView, type DemonTowerWorldView } from '@stealth-reader/shared';
 import { TowerModal, TowerPanel } from './TowerElements';
+import { DemonTowerGuide } from './DemonTowerGuide';
 import styles from './DemonTower.module.css';
 
 const RULES = DEMON_TOWER_EXPANSION_RULES;
@@ -53,6 +54,7 @@ export function DemonTowerExpansion({ profile, disabled, onAction, onContinueBat
         {score ? <details style={{ marginTop: 12 }}><summary>强度设计评级 T{score.tier} · {score.score}/100</summary><p>数值贡献 {score.numeric}×35% + 常驻增益 {score.permanent}×25% + 功能 {score.utility}×25% + 泛用 {score.breadth}×15%。这是公开可复算的设计量表，不是实战DPS实测；不按稀有度直接冒充综合强度，也不改变已公示单品掉落权重。</p></details> : null}
       </> : null}
     </TowerPanel>
+    <DemonTowerGuide profile={profile} />
     {confirmation ? <TowerModal title={confirmation.title} onClose={() => setConfirmation(null)} footer={<div className={styles.actionsRight}><button type="button" className={styles.button} disabled={disabled} onClick={() => setConfirmation(null)}>取消</button><button type="button" className={styles.primary} disabled={!can(confirmation.action.kind)} onClick={() => void onAction(confirmation.action).then(ok => { if (ok) setConfirmation(null); })}>确认兑换</button></div>}><p>{confirmation.text}</p><p className={styles.muted}>操作由服务器幂等保存；网络不确定时先确认原操作，不会自动再次扣除。</p></TowerModal> : null}
   </div>;
 }

@@ -1,0 +1,15 @@
+.opponentNav { display: flex; flex-wrap: wrap; gap: 5px; padding: 5px; margin-top: 18px; border: 1px solid var(--tower-line, #dce3db); border-radius: 7px; background: var(--color-surface-2, #f6f8fa); }
+.opponentNav button { flex: 1 1 130px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 10px; min-height: 44px; background: transparent; color: var(--tower-muted, #596a5e); border: 1px solid transparent; border-radius: 5px; cursor: pointer; }
+.opponentNav button[aria-pressed='true'] { color: var(--color-text, #293c34); background: var(--color-surface, #fff); border-color: var(--tower-line, #dce3db); font-weight: 600; }
+.opponentNav small { font: 12px/1.5 var(--font-mono, monospace); padding: 0 5px; border-radius: 8px; background: var(--color-surface-2, #f0f4ed); }
+.opponentList { margin-top: 12px; }
+.opponent { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--tower-line, #dce3db); }
+.opponent > div { min-width: 0; flex: 1 1 150px; }
+.opponent h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 0 4px; font-size: 14px; overflow-wrap: anywhere; }
+.opponent h3 span { max-width: 100%; }
+.opponent p, .opponent small, .empty { margin: 0; color: var(--tower-muted, #596a5e); font-size: 12px; }
+.empty { padding: 16px 0; }
+.empty a { display: inline-block; margin-top: 8px; }
+.opponentNote { margin: 10px 0 0; color: var(--tower-muted, #596a5e); font-size: 12px; }
+.friendBadge { padding: 0 6px; border: 1px solid var(--tower-line, #dce3db); border-radius: 10px; font-size: 11px; color: var(--tower-muted, #596a5e); font-weight: 400; }
+@media (max-width: 390px) { .opponent > button { width: 100%; } }

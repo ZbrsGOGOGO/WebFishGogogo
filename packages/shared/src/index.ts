@@ -8,6 +8,8 @@ export * from './rail-game';
 export * from './rail-rooms';
 export * from './demon-tower';
 export * from './demon-tower-economy';
+export * from './demon-tower-profile';
+export * from './demon-tower-provisions';
 export * from './community-progression';
 export * from './tower-defense-engine';
 export * from './tower-defense-campaign';

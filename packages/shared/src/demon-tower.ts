@@ -1,4 +1,6 @@
 import type { DemonTowerEconomyView, DemonTowerShopOfferId } from './demon-tower-economy';
+import type { DemonTowerAppearance, DemonTowerCombatPower } from './demon-tower-profile';
+import type { DemonTowerProvisionsView } from './demon-tower-provisions';
 /** Public 九层妖塔 contracts. Seeds, RNG counters and internal combat state are never API data. */
 export const DEMON_TOWER_ATTRIBUTE_KEYS = ['STR', 'SPD', 'AGI', 'DEF', 'LUCK'] as const;
 export type DemonTowerAttribute = typeof DEMON_TOWER_ATTRIBUTE_KEYS[number];
@@ -77,7 +79,8 @@ export interface DemonTowerArenaReport { opponentPublicId: string; opponentName:
 export interface DemonTowerArenaView { enabled: boolean; rating: number; rank: '青铜' | '白银' | '黄金' | '妖王'; honor: number; skillPoints: number; learned: DemonTowerArenaSkillId[]; loadout: DemonTowerArenaSkillId[]; attemptsToday: number; winsToday: number; lastReport: DemonTowerArenaReport | null; skinUnlocked: boolean }
 export interface DemonTowerSocialView {
   enabled: boolean; serverNow: number;
-  opponents: { publicId: string; displayName: string; level: number; rating: number; rank: DemonTowerArenaView['rank'] }[];
+  opponents: { publicId: string; displayName: string; level: number; rating: number; rank: DemonTowerArenaView['rank']; isFriend?: boolean; challengedToday?: boolean }[];
+  friends?: { publicId: string; displayName: string; level: number; rating: number; rank: DemonTowerArenaView['rank']; isFriend: true; challengedToday: boolean }[];
   squads: DemonTowerSquadView[];
 }
 export interface DemonTowerSquadView { id: string; ownerPublicId: string | null; floor: number; status: 'waiting' | 'active' | 'victory' | 'defeat' | 'closed'; round: number; boss: { hp: number; maxHp: number; minions: number }; members: { publicId: string; displayName: string; ready: boolean; hp: number; maxHp: number; damage: number; claimed: boolean }[]; log: string[]; expiresAt: number }
@@ -179,6 +182,9 @@ export interface DemonTowerDailyView {
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
+  appearance?: DemonTowerAppearance;
+  combatPower?: DemonTowerCombatPower;
+  provisions?: DemonTowerProvisionsView;
   economy?: DemonTowerEconomyView;
   expansion?: DemonTowerExpansionView;
   growth?: DemonTowerGrowthView;
@@ -215,6 +221,11 @@ export interface DemonTowerAutoRunView {
 }
 export interface DemonTowerAutoResponse { enabled: boolean; replayed: boolean; run: DemonTowerAutoRunView | null; overview: DemonTowerOverview }
 export type DemonTowerAction =
+  | { kind: 'set_appearance'; payload: { appearance: DemonTowerAppearance } }
+  | { kind: 'office_purchase'; payload: { offer: 'stamina' | 'star' | 'pass' } | { offer: 'permanent'; attribute: DemonTowerAttribute } }
+  | { kind: 'progressive_chest'; payload: Record<string, never> }
+  | { kind: 'explore_with_pass'; payload: Record<string, never> }
+  | { kind: 'fragment_select'; payload: { skillId: DemonTowerSkillId } }
   | { kind: 'shop_purchase'; payload: { offerId: DemonTowerShopOfferId; quantity: number } }
   | { kind: 'use_rune'; payload: { rune: DemonTowerAffix; itemId: DemonTowerWeaponId; replace?: DemonTowerAffix } }
   | { kind: 'enroll'; payload: Record<string, never> }
@@ -238,7 +249,7 @@ export type DemonTowerAction =
   | { kind: 'arena_enroll'; payload: { enabled: boolean } }
   | { kind: 'arena_learn'; payload: { skillId: DemonTowerArenaSkillId } }
   | { kind: 'arena_equip'; payload: { skills: DemonTowerArenaSkillId[] } }
-  | { kind: 'arena_challenge'; payload: { opponentPublicId: string } }
+  | { kind: 'arena_challenge'; payload: { opponentPublicId: string; friendOnly?: true } }
   | { kind: 'honor_exchange'; payload: { offer: 'skin' | 'essence' | 'materials' } }
   | { kind: 'squad_create'; payload: { floor: number } }
   | { kind: 'squad_join'; payload: { squadId: string } }
@@ -253,6 +264,8 @@ export type DemonTowerAction =
 export type DemonTowerActionKind = DemonTowerAction['kind'];
 export type DemonTowerActionInput = DemonTowerAction & { requestId: string; expectedVersion: number };
 export interface DemonTowerActionReceipt {
+  /** Actual unified-wallet debit, omitted by older servers. */
+  officeCoinsSpent?: number;
   requestId: string; replayed: boolean; overview: DemonTowerOverview;
   events: string[]; officeCoinsGranted: number; effectiveBossDamage: number; passageContribution: number;
 }

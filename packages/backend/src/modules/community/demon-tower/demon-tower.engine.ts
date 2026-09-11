@@ -4,6 +4,9 @@ import {
   DEMON_TOWER_WEAPONS, DEMON_TOWER_INNATES, DEMON_TOWER_RARITY_ORDER, demonTowerLootPool, demonTowerUpgradeCost,
   DEMON_TOWER_EXPANSION_RULES, DEMON_TOWER_AFFIXES, DEMON_TOWER_ULTIMATES, demonTowerItemRarity, demonTowerQualityLimit,
   DEMON_TOWER_ARENA_SKILLS, DEMON_TOWER_ECONOMY_RULES,
+  DEMON_TOWER_APPEARANCE_OPTIONS, DEMON_TOWER_APPEARANCE_SLOTS, DEMON_TOWER_DEFAULT_APPEARANCE,
+  DEMON_TOWER_COMBAT_POWER_WEIGHTS, demonTowerExperienceRequirement,
+  DEMON_TOWER_PROVISIONS_RULES,
 } from '@stealth-reader/shared';
 import type {
   DemonTowerAction, DemonTowerActionKind, DemonTowerAttribute, DemonTowerAttributes, DemonTowerBattleReport,
@@ -12,6 +15,8 @@ import type {
   DemonTowerProfileView, DemonTowerSkillId, DemonTowerWeaponId, DemonTowerWorldView, DemonTowerInnateId, DemonTowerRarity,
   DemonTowerExpansionView, DemonTowerLootSource, DemonTowerAffix, DemonTowerSkin,
   DemonTowerArenaSkillId, DemonTowerEconomyView, DemonTowerShopOffer, DemonTowerShopOfferId, DemonTowerEconomyLedgerEntry,
+  DemonTowerAppearance, DemonTowerCombatPower,
+  DemonTowerProvisionsView, DemonTowerOfficeOffer, DemonTowerOfficeOfferView,
 } from '@stealth-reader/shared';
 import { demonTowerArenaRank, simulateDemonTowerDuel, type DemonTowerSocialBuild } from './demon-tower-social.engine';
 
@@ -39,6 +44,8 @@ interface Battle {
 }
 /** Private JSON only. Never spread state or battle into API responses. */
 export interface DemonTowerEngineState {
+  appearance?: DemonTowerAppearance;
+  provisions?: DemonTowerProvisionsState;
   economy?: DemonTowerEconomyState;
   expansion?: DemonTowerExpansionView;
   arenaOpponentsToday?: string[]; arenaBestRank?: number;
@@ -59,10 +66,18 @@ export interface DemonTowerEconomyState {
   permanent: DemonTowerAttributes; buffs: DemonTowerAttributes; runes: Partial<Record<DemonTowerAffix, number>>;
   ledgerSequence: number; ledger: DemonTowerEconomyLedgerEntry[];
 }
+export interface DemonTowerProvisionsState {
+  version: 1; createdAt: number; serviceDate: string; week: string;
+  passes: number; fragments: number; ordinaryStarted: number; passStarted: number;
+  staminaBought: number; passesBought: number; starsBought: number; chestsOpened: number;
+  historySequence: number; history: DemonTowerProvisionsView['history'];
+}
 export interface DemonTowerEngineContext { now: number; serviceDate: string; world: DemonTowerWorldView; expansionEnabled?: boolean; contributedFloors?: number[];
   arenaOpponent?: { publicId: string; displayName: string; build: DemonTowerSocialBuild } }
 export interface DemonTowerWorldEffect { kind: 'boss_damage' | 'construction'; floor: number; amount: number }
 export interface DemonTowerEngineResult {
+  /** Intent only. The service MUST debit the real unified wallet in the SAME transaction. */
+  officeCoinCost?: number;
   state: DemonTowerEngineState; events: string[]; worldEffect: DemonTowerWorldEffect | null;
   /** Proposed ordinary payout only. Service applies the 200/day cap and ledger in the same transaction. */
   officeCoinIntent: number;
@@ -167,7 +182,7 @@ export function demonTowerMaxHp(state: DemonTowerEngineState, includeTemporary =
 }
 export function demonTowerExperienceToNext(level: number): number {
   if (!integer(level, 1, RULES.maxLevel)) fail('INVALID_LEVEL');
-  return level === RULES.maxLevel ? 0 : 30 + level * 10 + Math.floor(level * level / 25);
+  return demonTowerExperienceRequirement(level);
 }
 export function demonTowerPersonalUnlockedFloor(level: number): number {
   return DEMON_TOWER_FLOORS.filter((floor) => floor.requiredLevel <= level).at(-1)?.floor ?? 1;
@@ -239,8 +254,11 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
   if (input.battle?.economyVersion !== undefined && input.battle.economyVersion !== 1) fail('INVALID_ECONOMY_STATE');
   if (input.expansion) validateExpansionState(input);
   if (input.economy) validateEconomyState(input.economy, input.daily.serviceDate);
+  if (input.appearance !== undefined) validateAppearance(input.appearance);
+  if (input.provisions) validateProvisions(input.provisions, input.daily.serviceDate);
   const state = clone(input);
   if (state.economy) advanceEconomy(state.economy, serviceDate);
+  if (state.provisions) advanceProvisions(state.provisions, serviceDate);
   const elapsed = Math.max(0, now - state.staminaAt);
   const restored = Math.floor(elapsed / RULES.staminaRestoreMs);
   if (state.stamina >= RULES.staminaCap) state.staminaAt = now;
@@ -427,6 +445,189 @@ function economyView(state: DemonTowerEngineState, now: number): DemonTowerEcono
     buffs: copyAttributes(value.buffs), permanent: copyAttributes(value.permanent), runes: { ...value.runes },
     offers: SHOP_OFFERS.map(offer => { const purchased = shopPurchased(value, offer), reason = shopReason(projected, offer, 1); return { ...offer, purchased, remaining: offer.limit - purchased, available: reason === null, reason }; }),
     ledger: value.ledger.map(entry => ({ id: entry.id, at: entry.at, kind: entry.kind, description: entry.description, amount: entry.amount, balance: entry.balance, currency: entry.currency })).reverse() };
+}
+function validateAppearance(raw: unknown): DemonTowerAppearance {
+  const value = exact(raw, DEMON_TOWER_APPEARANCE_SLOTS);
+  for (const key of DEMON_TOWER_APPEARANCE_SLOTS) {
+    if (typeof value[key] !== 'string' || !DEMON_TOWER_APPEARANCE_OPTIONS[key].some(option => option.id === value[key])) fail('INVALID_APPEARANCE');
+  }
+  return clone(value) as DemonTowerAppearance;
+}
+/** Display-only current loadout rubric. Never used to change combat, gates or rewards. */
+export function demonTowerCombatPower(state: DemonTowerEngineState, now: number, expansionEnabled = false): DemonTowerCombatPower {
+  clock(now);
+  const weights = DEMON_TOWER_COMBAT_POWER_WEIGHTS, attributes = demonTowerEffectiveAttributes(state, false);
+  const serviceDate = new Date(now + 8 * 3_600_000).toISOString().slice(0, 10);
+  // This is a next-battle loadout reference, not a measurement of an in-flight
+  // snapshot (which may legitimately retain expired drugs or legacy mechanics).
+  const temporary = DEMON_TOWER_ATTRIBUTE_KEYS.reduce((sum, key) => sum +
+    (expansionEnabled && state.economy?.serviceDate === serviceDate ? state.economy.buffs[key] : 0), 0) * weights.attribute;
+  const equippedWeapons = [...new Set([state.loadout.mainHand, state.loadout.artifact].filter((id): id is DemonTowerWeaponId => id !== null))];
+  const equippedSkills = [...new Set([...state.loadout.activeSkills, ...state.loadout.passiveSkills])];
+  const parts = {
+    level: state.level * weights.level,
+    attributes: DEMON_TOWER_ATTRIBUTE_KEYS.reduce((sum, key) => sum + attributes[key], 0) * weights.attribute,
+    weapons: equippedWeapons.reduce((sum, id) => { const owned = weaponOwned(state, id); return sum + owned.quality * weights.weaponQuality + (owned.star ?? 1) * weights.weaponStar; }, 0),
+    skills: equippedSkills.reduce((sum, id) => { const definition = skillDefinition(id), owned = skillOwned(state, id); return sum + owned.quality * weights.skillQuality + (definition.rarity === '神' ? weights.divineSkill : definition.rarity === '仙' ? weights.immortalSkill : 0); }, 0),
+    innates: new Set(state.growth?.innates ?? []).size * weights.innate,
+  };
+  const base = Object.values(parts).reduce((sum, amount) => sum + amount, 0);
+  return { total: base + temporary, base, temporary, parts };
+}
+
+const PROVISIONS = DEMON_TOWER_PROVISIONS_RULES;
+function initialProvisions(now: number, serviceDate: string): DemonTowerProvisionsState {
+  return { version: 1, createdAt: now, serviceDate, week: expansionWeek(serviceDate), passes: 0, fragments: 0,
+    ordinaryStarted: 0, passStarted: 0, staminaBought: 0, passesBought: 0, starsBought: 0, chestsOpened: 0, historySequence: 0, history: [] };
+}
+function validateProvisions(value: DemonTowerProvisionsState, serviceDate: string): void {
+  const invalid = () => fail('INVALID_PROVISIONS_STATE');
+  if (!value || value.version !== 1 || typeof value.serviceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.serviceDate) ||
+    !Number.isFinite(Date.parse(`${value.serviceDate}T00:00:00Z`)) || new Date(`${value.serviceDate}T00:00:00Z`).toISOString().slice(0, 10) !== value.serviceDate ||
+    value.serviceDate > serviceDate || value.week !== expansionWeek(value.serviceDate) || !integer(value.createdAt, 0, 8_640_000_000_000_000) ||
+    !integer(value.passes, 0, PROVISIONS.passCap) || !integer(value.fragments, 0, PROVISIONS.fragmentCap) ||
+    !integer(value.ordinaryStarted, 0, MAX_RESOURCE) || !integer(value.passStarted, 0, PROVISIONS.passUseDaily) ||
+    !integer(value.staminaBought, 0, PROVISIONS.staminaDaily) || !integer(value.passesBought, 0, PROVISIONS.passBuyDaily) ||
+    !integer(value.starsBought, 0, PROVISIONS.starWeekly) || !integer(value.chestsOpened, 0, PROVISIONS.chestDaily) ||
+    !integer(value.historySequence, 0, Number.MAX_SAFE_INTEGER - 1) || !Array.isArray(value.history) || value.history.length > PROVISIONS.historyLimit) invalid();
+  const seen = new Set<string>();
+  for (const entry of value.history) {
+    if (!entry || !/^\d+$/.test(entry.id) || !integer(Number(entry.id), 1, value.historySequence) || seen.has(entry.id) ||
+      !integer(entry.at, value.createdAt, 8_640_000_000_000_000) || !['purchase', 'chest', 'pass', 'fragment'].includes(entry.kind) ||
+      typeof entry.description !== 'string' || entry.description.length > 300 || !integer(entry.cost, 0, 300)) invalid();
+    seen.add(entry.id);
+  }
+}
+function advanceProvisions(value: DemonTowerProvisionsState, serviceDate: string): void {
+  if (value.serviceDate !== serviceDate) {
+    value.serviceDate = serviceDate; value.ordinaryStarted = 0; value.passStarted = 0;
+    value.staminaBought = 0; value.passesBought = 0; value.chestsOpened = 0;
+  }
+  if (value.week !== expansionWeek(serviceDate)) { value.week = expansionWeek(serviceDate); value.starsBought = 0; }
+}
+function provisionsHistory(state: DemonTowerEngineState, now: number, kind: DemonTowerProvisionsView['history'][number]['kind'], description: string, cost = 0): void {
+  const value = state.provisions!;
+  if (!integer(value.historySequence, 0, Number.MAX_SAFE_INTEGER - 2)) fail('INVALID_PROVISIONS_STATE');
+  value.history.push({ id: String(++value.historySequence), at: now, kind, description, cost });
+  value.history = value.history.slice(-PROVISIONS.historyLimit);
+}
+/** Bound rewards have their own deterministic stream; no old pity or combat roll is consumed. */
+function provisionsRoll(state: DemonTowerEngineState, source: string): number {
+  return createHmac('sha256', state.rngSeed).update(`provisions:${state.daily.serviceDate}:${state.provisions!.historySequence}:${source}`).digest().readUInt32BE(0) / 0x1_0000_0000;
+}
+function officeOffers(state: DemonTowerEngineState, value: DemonTowerProvisionsState): DemonTowerOfficeOfferView[] {
+  const main = weaponOwned(state, state.loadout.mainHand);
+  const definitions: Array<Omit<DemonTowerOfficeOfferView, 'remaining' | 'available' | 'reason'>> = [
+    { offer: 'stamina', name: '体力补给（+20）', currency: 'office_coin', price: PROVISIONS.staminaPrice, limit: PROVISIONS.staminaDaily, limitPeriod: 'day', purchased: value.staminaBought },
+    { offer: 'star', name: '主手升星券', currency: 'office_coin', price: PROVISIONS.starPrice, limit: PROVISIONS.starWeekly, limitPeriod: 'week', purchased: value.starsBought },
+    { offer: 'pass', name: '探索符', currency: 'office_coin', price: PROVISIONS.passPrice, limit: PROVISIONS.passBuyDaily, limitPeriod: 'day', purchased: value.passesBought },
+    ...DEMON_TOWER_ATTRIBUTE_KEYS.map(attribute => ({ offer: 'permanent' as const, attribute, name: `${DEMON_TOWER_CATALOG.attributes[attribute]}永久丹`, currency: 'office_coin' as const,
+      price: PROVISIONS.permanentPrice, limit: 5, limitPeriod: 'lifetime' as const, purchased: state.economy?.permanent[attribute] ?? 0 })),
+  ];
+  return definitions.map(offer => {
+    const remaining = Math.max(0, offer.limit - offer.purchased);
+    const reason = state.battle ? 'BATTLE_IN_PROGRESS' : !remaining ? 'PROVISIONS_LIMIT_REACHED'
+      : offer.offer === 'stamina' && state.stamina + PROVISIONS.staminaAmount > RULES.staminaCap ? 'STAMINA_WOULD_OVERFLOW'
+      : offer.offer === 'star' && (main.star ?? 1) >= 5 ? 'STAR_MAXED'
+      : offer.offer === 'pass' && value.passes >= PROVISIONS.passCap ? 'PASS_STORAGE_FULL' : null;
+    return { ...offer, remaining, available: reason === null, reason };
+  });
+}
+function provisionsWeaponPool(state: DemonTowerEngineState) {
+  return demonTowerLootPool('weapon', state.level, '凡').map(group => ({ ...group, items: group.items.filter(item => item.requiredLevel <= state.level) })).filter(group => group.items.length);
+}
+/** Preflight every possible output before drawing. A rejected box must not be a free reward probe. */
+function chestReason(state: DemonTowerEngineState, value: DemonTowerProvisionsState): string | null {
+  if (state.battle) return 'BATTLE_IN_PROGRESS';
+  if (value.chestsOpened >= PROVISIONS.chestDaily) return 'PROVISIONS_LIMIT_REACHED';
+  if (state.materials.ore > MAX_RESOURCE - PROVISIONS.chestMaterials || state.materials.clue > MAX_RESOURCE - PROVISIONS.chestMaterials ||
+    value.fragments > PROVISIONS.fragmentCap - PROVISIONS.chestFragments) return 'RESOURCE_STORAGE_FULL';
+  for (const group of provisionsWeaponPool(state)) for (const item of group.items) {
+    const owned = state.weapons.find(weapon => weapon.id === item.id);
+    if (owned && (owned.qualityExperience ?? 0) >= MAX_RESOURCE) return 'RESOURCE_STORAGE_FULL';
+  }
+  return null;
+}
+function provisionsView(state: DemonTowerEngineState, now: number): DemonTowerProvisionsView {
+  const serviceDate = new Date(now + 8 * 3_600_000).toISOString().slice(0, 10);
+  if (state.provisions) validateProvisions(state.provisions, state.daily.serviceDate);
+  const value = state.provisions ? clone(state.provisions) : initialProvisions(now, serviceDate);
+  advanceProvisions(value, serviceDate);
+  const reason = chestReason(state, value);
+  return { version: 1, serviceDate, week: value.week, trackingStartedAt: state.provisions?.createdAt ?? null,
+    passes: value.passes, fragments: value.fragments, ordinaryStarted: value.ordinaryStarted, passStarted: value.passStarted, passDailyLimit: PROVISIONS.passUseDaily,
+    offers: officeOffers(state, value), chest: { opened: value.chestsOpened, limit: PROVISIONS.chestDaily,
+      nextCost: value.chestsOpened >= PROVISIONS.chestDaily ? null : PROVISIONS.chestBaseCost + PROVISIONS.chestStepCost * value.chestsOpened, available: reason === null, reason },
+    skills: DEMON_TOWER_SKILLS.map(skill => {
+      const cost = PROVISIONS.fragmentCosts[skill.rarity] ?? null, requiredLevel = Math.max(skill.requiredLevel, skill.dropLevel), owned = state.skills.some(item => item.id === skill.id);
+      const reason = state.battle ? 'BATTLE_IN_PROGRESS' : owned ? 'SKILL_ALREADY_OWNED' : cost === null ? 'SKILL_SELECTION_UNAVAILABLE'
+        : state.level < requiredLevel ? 'SKILL_LEVEL_REQUIRED' : value.fragments < cost ? 'NOT_ENOUGH_SKILL_FRAGMENTS' : null;
+      return { skillId: skill.id, name: skill.name, rarity: skill.rarity, requiredLevel, cost, owned, available: reason === null, reason };
+    }),
+    history: value.history.slice().reverse().map(entry => ({ id: entry.id, at: entry.at, kind: entry.kind, description: entry.description, cost: entry.cost })) };
+}
+function grantChestMaterials(state: DemonTowerEngineState, events: string[]): string {
+  const material = provisionsRoll(state, 'material') < 0.5 ? 'ore' : 'clue';
+  if (state.materials[material] > MAX_RESOURCE - PROVISIONS.chestMaterials) fail('RESOURCE_STORAGE_FULL');
+  state.materials[material] += PROVISIONS.chestMaterials;
+  const description = `${DEMON_TOWER_CATALOG.materials[material]}×${PROVISIONS.chestMaterials}`;
+  events.push(`获得绑定${description}。`); return description;
+}
+function provisionsAction(state: DemonTowerEngineState, kind: string, raw: unknown, context: DemonTowerEngineContext, result: DemonTowerEngineResult): void {
+  if (!context.expansionEnabled || !state.expansion || !state.economy) fail('EXPANSION_DISABLED');
+  const value = state.provisions!, events = result.events;
+  if (kind === 'office_purchase') {
+    const payload = record(raw, ['offer', 'attribute']);
+    if (!['stamina', 'star', 'pass', 'permanent'].includes(payload.offer as string)) fail('INVALID_OFFICE_OFFER');
+    exact(raw, payload.offer === 'permanent' ? ['offer', 'attribute'] : ['offer']);
+    if (payload.offer === 'permanent' && !DEMON_TOWER_ATTRIBUTE_KEYS.includes(payload.attribute as DemonTowerAttribute)) fail('INVALID_OFFICE_OFFER');
+    const offer = officeOffers(state, value).find(item => item.offer === payload.offer && item.attribute === payload.attribute)!;
+    if (!offer.available) fail(offer.reason!);
+    if (offer.offer === 'stamina') { state.stamina += PROVISIONS.staminaAmount; if (state.stamina === RULES.staminaCap) state.staminaAt = context.now; value.staminaBought++; }
+    else if (offer.offer === 'star') { const main = weaponOwned(state, state.loadout.mainHand); main.star = (main.star ?? 1) + 1; main.favor = 0; value.starsBought++; }
+    else if (offer.offer === 'pass') { value.passes++; value.passesBought++; }
+    else state.economy.permanent[offer.attribute!] += PROVISIONS.permanentAmount;
+    result.officeCoinCost = offer.price;
+    provisionsHistory(state, context.now, 'purchase', offer.name, offer.price);
+    events.push(`申领${offer.name}，需由统一钱包扣除${offer.price}办公币；全部奖励绑定当前角色。`); return;
+  }
+  if (kind === 'fragment_select') {
+    const payload = exact(raw, ['skillId']);
+    if (typeof payload.skillId !== 'string') fail('INVALID_SKILL');
+    const skill = skillDefinition(payload.skillId), cost = PROVISIONS.fragmentCosts[skill.rarity];
+    if (state.skills.some(item => item.id === skill.id)) fail('SKILL_ALREADY_OWNED');
+    if (cost === undefined) fail('SKILL_SELECTION_UNAVAILABLE');
+    if (state.level < Math.max(skill.requiredLevel, skill.dropLevel)) fail('SKILL_LEVEL_REQUIRED');
+    if (value.fragments < cost) fail('NOT_ENOUGH_SKILL_FRAGMENTS');
+    value.fragments -= cost; grantLootItem(state, 'skill', skill.id, events);
+    provisionsHistory(state, context.now, 'fragment', `技能碎片×${cost}自选${skill.rarity}·${skill.name}`); return;
+  }
+  exact(raw, []);
+  const reason = chestReason(state, value); if (reason) fail(reason);
+  const cost = PROVISIONS.chestBaseCost + PROVISIONS.chestStepCost * value.chestsOpened;
+  const roll = provisionsRoll(state, 'chest') * 100, weights = PROVISIONS.chestWeights;
+  let description: string;
+  if (roll < weights.materials) description = grantChestMaterials(state, events);
+  else if (roll < weights.materials + weights.fragments) {
+    if (value.fragments > PROVISIONS.fragmentCap - PROVISIONS.chestFragments) fail('RESOURCE_STORAGE_FULL');
+    value.fragments += PROVISIONS.chestFragments; description = `技能碎片×${PROVISIONS.chestFragments}`; events.push(`获得绑定${description}。`);
+  } else if (roll < weights.materials + weights.fragments + weights.weapon) {
+    const pool = provisionsWeaponPool(state);
+    if (!pool.length) description = `当前等级无可用武器，转为${grantChestMaterials(state, events)}`;
+    else {
+      const group = weighted(pool, provisionsRoll(state, 'rarity')), item = weighted(group.items, provisionsRoll(state, 'weapon'));
+      const owned = state.weapons.find(weapon => weapon.id === item.id);
+      if (owned && (owned.qualityExperience ?? 0) >= MAX_RESOURCE) fail('RESOURCE_STORAGE_FULL');
+      grantLootItem(state, 'weapon', item.id, events); description = `${item.rarity}·${item.name}${owned ? '品质经验×1' : ''}`;
+    }
+  } else {
+    const attributes = DEMON_TOWER_ATTRIBUTE_KEYS.filter(attribute => state.economy!.permanent[attribute] < 5);
+    if (!attributes.length) description = `永久属性已满，转为${grantChestMaterials(state, events)}`;
+    else { const attribute = attributes[Math.floor(provisionsRoll(state, 'permanent') * attributes.length)]; state.economy.permanent[attribute]++; description = `${DEMON_TOWER_CATALOG.attributes[attribute]}永久+1`; events.push(`获得${description}（共用每维+5上限）。`); }
+  }
+  value.chestsOpened++; result.officeCoinCost = cost;
+  provisionsHistory(state, context.now, 'chest', `阶梯宝箱：${description}`, cost);
+  events.push(`今日第${value.chestsOpened}箱，需由统一钱包扣除${cost}办公币；不影响旧武器箱保底。`);
 }
 function validateExpansionState(state: DemonTowerEngineState): void {
   const value = state.expansion!;
@@ -1177,7 +1378,7 @@ export function demonTowerAutomaticAction(state: DemonTowerEngineState): DemonTo
 export function actDemonTower(input: DemonTowerEngineState, raw: unknown, context: DemonTowerEngineContext): DemonTowerEngineResult {
   const root = exact(raw, ['kind', 'payload']);
   if (typeof root.kind !== 'string') fail('INVALID_ACTION');
-  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'shop_purchase', 'use_rune', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
+  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'shop_purchase', 'use_rune', 'set_appearance', 'office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
   if (!allowed.includes(root.kind as DemonTowerActionKind)) fail('INVALID_ACTION');
   validateWorld(context.world);
   const state = advanceDemonTowerState(input, context.now, context.serviceDate), events: string[] = [];
@@ -1185,16 +1386,29 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
   const hadExpansion = Boolean(state.expansion);
   if (context.expansionEnabled) enableExpansion(state, events);
   if (context.expansionEnabled) state.economy ??= initialEconomy(context.serviceDate);
+  // Zero-based tracking starts only on a successful write in this release. Old
+  // commands/reports are not a reliable exploration count and are not backfilled.
+  state.provisions ??= initialProvisions(context.now, context.serviceDate);
   const result: DemonTowerEngineResult = { state, events, worldEffect: null, officeCoinIntent: 0 };
   if (root.kind === 'enroll') fail('ALREADY_ENROLLED');
   if (state.battle && !['attack', 'skill', 'flee'].includes(root.kind)) fail('BATTLE_IN_PROGRESS');
   if (!state.battle && ['attack', 'skill', 'flee'].includes(root.kind)) fail('NO_BATTLE');
-  if (['explore', 'train', 'rest', 'flee', 'claim_reward', 'reset_attributes'].includes(root.kind)) exact(root.payload, []);
+  if (['explore', 'explore_with_pass', 'train', 'rest', 'flee', 'claim_reward', 'reset_attributes'].includes(root.kind)) exact(root.payload, []);
   switch (root.kind as DemonTowerAction['kind']) {
-    case 'explore': {
+    case 'explore': case 'explore_with_pass': {
       if (state.hp <= 0) fail('REST_REQUIRED');
       if (state.selectedFloor > context.world.unlockedFloor || state.selectedFloor > demonTowerPersonalUnlockedFloor(state.level)) fail('FLOOR_LOCKED');
-      spendStamina(state, RULES.exploreCost, context.now);
+      if (root.kind === 'explore_with_pass') {
+        if (!context.expansionEnabled || !state.expansion) fail('EXPANSION_DISABLED');
+        if (state.provisions.passStarted >= PROVISIONS.passUseDaily) fail('PASS_DAILY_LIMIT');
+        if (state.provisions.passes <= 0) fail('NOT_ENOUGH_EXPLORATION_PASSES');
+        state.provisions.passes--; state.provisions.passStarted++;
+        provisionsHistory(state, context.now, 'pass', '手动使用探索符×1；未消耗体力');
+        events.push('已手动使用探索符，本轮不消耗体力；自动探索不会购买或使用探索符。');
+      } else {
+        spendStamina(state, RULES.exploreCost, context.now);
+        state.provisions.ordinaryStarted = Math.min(MAX_RESOURCE, state.provisions.ordinaryStarted + 1);
+      }
       const roll = random(state), floor = state.selectedFloor;
       if (roll < 0.7) {
         gainXp(state, 6 + floor * 2, events);
@@ -1353,8 +1567,16 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       state.daily.rewardClaimed = true; result.officeCoinIntent = RULES.dailyActivityCoins;
       events.push('每日修行奖励已申请，由统一钱包按妖塔日常上限结算。'); break;
     }
+    case 'set_appearance': {
+      const value = exact(root.payload, ['appearance']);
+      const appearance = validateAppearance(value.appearance);
+      if (DEMON_TOWER_APPEARANCE_SLOTS.every(key => appearance[key] === (state.appearance ?? DEMON_TOWER_DEFAULT_APPEARANCE)[key])) fail('APPEARANCE_UNCHANGED');
+      state.appearance = appearance; events.push('个人形象已保存；仅改变展示，不改变装备、战斗或奖励。'); break;
+    }
     case 'shop_purchase': case 'use_rune':
       economyAction(state, root.kind as 'shop_purchase' | 'use_rune', root.payload, context, events); break;
+    case 'office_purchase': case 'progressive_chest': case 'fragment_select':
+      provisionsAction(state, root.kind, root.payload, context, result); break;
     case 'expedition': case 'market': case 'star_up': case 'breakthrough': case 'select_skin': case 'claim_boss_loot':
     case 'arena_enroll': case 'arena_learn': case 'arena_equip': case 'arena_challenge': case 'honor_exchange':
       expansionAction(state, root.kind, root.payload, context, events); break;
@@ -1407,8 +1629,13 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
   if (!state.battle && !state.growth?.chosenAttribute) availableActions.push('choose_innate');
   if (expansionEnabled && !state.battle) availableActions.push(...EXPANSION_ACTIONS, ...SQUAD_ACTIONS);
   if (expansionEnabled && !state.battle) availableActions.push('shop_purchase', 'use_rune');
+  if (expansionEnabled && !state.battle) availableActions.push('office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select');
+  if (!state.battle) availableActions.push('set_appearance');
   return {
+    appearance: state.appearance ? validateAppearance(state.appearance) : { ...DEMON_TOWER_DEFAULT_APPEARANCE },
+    combatPower: demonTowerCombatPower(state, now, expansionEnabled),
     ...(expansionEnabled ? { economy: economyView(state, now) } : {}),
+    ...(expansionEnabled ? { provisions: provisionsView(state, now) } : {}),
     ...(expansionEnabled ? { expansion: expansionView(state) } : {}),
     growth: { rulesVersion: 2, pendingLegacyBattle: Boolean(state.battle && state.battle.rulesVersion !== 2),
       chosenAttribute: state.growth?.chosenAttribute ?? null, innates: [...(state.growth?.innates ?? [])],

@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
 import { WebSocket } from 'ws';
 import type { DataSource } from 'typeorm';
-import { PAPER_ARENA_PROTOCOL_VERSION, PAPER_ARENA_MAP_VERSION } from '@stealth-reader/shared';
+import { PAPER_ARENA_PROTOCOL_VERSION, PAPER_ARENA_MAP_VERSION, getPaperArenaNavigation } from '@stealth-reader/shared';
 import { AuthSession, User } from '../../../database/entities';
 import { createLocalDevDataSource } from '../../../database/local-dev-datasource';
 import { ChatWebSocketGateway } from '../../chat/chat-websocket.gateway';
@@ -20,8 +20,13 @@ describe('paper arena real websocket security and shared HTTP server', () => {
   const original = { ...process.env };
   beforeAll(async () => {
     process.env.LOCAL_DEV = 'true'; process.env.FEATURE_PAPER_ARENA_ENABLED = 'true'; process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true'; process.env.PUBLIC_SITE_ORIGIN = 'http://localhost:5173';
+    // The real, deterministic navigation graph is built lazily on first room
+    // creation. Initialize it with the database fixture, not inside the first
+    // authenticated protocol test's 5s budget. No map or socket behavior is mocked;
+    // protocol tests retain their normal timeout and 2.5s message deadline.
+    getPaperArenaNavigation();
     db = await createLocalDevDataSource();
-  });
+  }, 30_000);
   beforeEach(async () => {
     arena = new PaperArenaService(db); gateway = new PaperArenaGateway(arena);
     chatGateway = new ChatWebSocketGateway({} as ChatService, { subscribe: () => () => undefined } as unknown as ChatRealtimeService, {} as DirectMessageService, db);

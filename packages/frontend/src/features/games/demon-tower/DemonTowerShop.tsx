@@ -7,18 +7,20 @@ import {
 } from '@stealth-reader/shared';
 import { demonTowerActionReasonMessage } from '../../../api/community-demon-tower';
 import { DemonTowerLegacyMarket } from './DemonTowerLegacyMarket';
+import { DemonTowerOfficeSupplies } from './DemonTowerOfficeSupplies';
 import { TowerModal, TowerPanel, towerTime } from './TowerElements';
+import type { DemonTowerActionHandler } from './useDemonTower';
 import styles from './DemonTower.module.css';
 
 const SECTIONS = [
-  { id: 'supplies', label: '物资库' }, { id: 'market', label: '残魂秘市' },
+  { id: 'supplies', label: '物资库' }, { id: 'market', label: '残魂秘市' }, { id: 'office', label: '办公币补给' },
   { id: 'effects', label: '增益与符文' }, { id: 'ledger', label: '收支记录' },
 ] as const;
 type ShopSection = typeof SECTIONS[number]['id'];
 type Props = {
   profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; now: number;
   balance: number | null; balanceStale: boolean;
-  onAction: (action: DemonTowerAction) => Promise<boolean>; onExplore: () => void; onWorkshop: () => void;
+  onAction: DemonTowerActionHandler; onExplore: () => void; onWorkshop: () => void;
 };
 const currencyName = (currency: DemonTowerShopOffer['currency']) => currency === 'soul' ? '残魂' : '灵石';
 const periodName = { day: '每日', week: '每周', lifetime: '累计' };
@@ -80,13 +82,14 @@ export function DemonTowerShop({ profile, catalog, disabled, now, balance, balan
         <div><small>残魂 · 秘市与培养</small><strong>{profile.materials.soul.toLocaleString('zh-CN')}</strong></div>
         <div><small>办公币 · 全站钱包</small><strong>{balance === null ? '待同步' : balance.toLocaleString('zh-CN')}</strong>{balanceStale ? <small>余额待同步</small> : null}</div>
       </div>
-      <p className={styles.muted}>三种资源独立，不互兑、不转赠。物资申领不扣办公币；药品与补给确认后立即使用，不存入背包。</p>
+      <p className={styles.muted}>三种资源独立，不互兑、不转赠。灵石物资与残魂秘市不扣办公币；「办公币补给」明确标价，确认后才扣全站钱包。药品立即使用，探索符单独保留库存。</p>
       {economy ? <p className={styles.muted}>今日灵石 {economy.dailyEarned}/{economy.dailyCap}，其中首领 {economy.bossEarned}/{economy.bossCap}（包含在总额内）。自然日 {economy.serviceDate}，日限北京时间 00:00、周限周一 00:00 重置。</p> : <p className={styles.notice}>新物资库正在维护或同步，原有残魂兑换仍可在「残魂秘市」查看。</p>}
       <div className={styles.supplyContext}><span>体力 {profile.stamina}/{profile.staminaMax} · 生命 {profile.hp}/{profile.maxHp}</span><button type="button" className={styles.button} onClick={onExplore}>{profile.battle ? '返回进行中探索' : '返回探索任务'}</button></div>
       {disabled ? <p className={styles.muted}>当前处于提交、待确认、托管或只读状态；可浏览清单，暂不能申领。</p> : profile.battle ? <p className={styles.notice}>当前战斗不接受补给或配装变更，请先返回探索完成或撤离，再来申领。</p> : null}
       {economy && now >= economy.buffsExpiresAt ? <p className={styles.notice}>已进入新的自然日，正在等待服务器刷新限额与增益；同步后再申领。</p> : null}
       <nav className={styles.supplyNav} aria-label="物资申领分类">{SECTIONS.map(item => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => changeSection(item.id)}>{item.label}</button>)}</nav>
     </TowerPanel>
+    {section === 'office' ? <DemonTowerOfficeSupplies profile={profile} disabled={disabled || submitting} balance={balance} balanceStale={balanceStale} now={now} onAction={onAction} onExplore={onExplore} onWorkshop={onWorkshop} /> : null}
     {section === 'supplies' || section === 'market' ? <>
       {economy ? <TowerPanel title={section === 'supplies' ? '物资库 · 灵石申领' : '残魂秘市 · 定额申领'}>
         <p className={styles.muted}>{section === 'supplies' ? '补充体力、恢复生命或准备下一场探索。临时药丸每项每日最多 3 份，单项加成最高 +15；北京时间当日结束失效。' : '永久属性丹单维累计最多 +5，单独计入成长，不受自由点洗点影响。精级箱与传统武器箱的物品池、限额及保底分别计算。'}</p>

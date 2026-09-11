@@ -21,6 +21,22 @@ export function demonTowerErrorCode(error: unknown): string {
 }
 
 const MESSAGES: Readonly<Record<string, string>> = {
+  DEMON_TOWER_INVALID_APPEARANCE: '形象选项无效，请重新选择本站提供的部件。',
+  DEMON_TOWER_APPEARANCE_UNCHANGED: '形象与已保存档案相同，无需重复保存。',
+  DEMON_TOWER_INVALID_OFFICE_OFFER: '补给内容无效，请重新打开本站补给清单。',
+  DEMON_TOWER_PROVISIONS_LIMIT_REACHED: '已达到该项补给的日限、周限或累计上限，未扣款。',
+  DEMON_TOWER_STAMINA_WOULD_OVERFLOW: '体力没有足够空间完整恢复 20 点，未扣款。',
+  DEMON_TOWER_STAR_MAXED: '当前主手已达 5 星，无需再使用升星凭证。',
+  DEMON_TOWER_PASS_STORAGE_FULL: '探索符库存已满，请先使用已有探索符。',
+  DEMON_TOWER_PASS_DAILY_LIMIT: '今日探索符次数已用完，普通体力探索不受此限额影响。',
+  DEMON_TOWER_NOT_ENOUGH_EXPLORATION_PASSES: '探索符不足，请同步库存；不会自动购买。',
+  DEMON_TOWER_SKILL_ALREADY_OWNED: '已经学会该技能，不重复消耗碎片。',
+  DEMON_TOWER_SKILL_SELECTION_UNAVAILABLE: '当前技能尚未开放碎片自选，请查看获取等级。',
+  DEMON_TOWER_NOT_ENOUGH_SKILL_FRAGMENTS: '技能碎片不足；凡、精、灵、仙分别需要 3、6、12、30 枚，旧残页不会被扣除。',
+  DEMON_TOWER_RESOURCE_STORAGE_FULL: '可能获得的奖励超过资源容量，未扣款或消耗宝箱次数。',
+  DEMON_TOWER_ARENA_FRIEND_REQUIRED: '好友关系已变化，请同步好友列表后再切磋。',
+  DEMON_TOWER_NOT_ENOUGH_OFFICE_COINS: '办公币不足，本次未扣款，也未消耗限购或宝箱次数。',
+  INSUFFICIENT_WALLET_BALANCE: '办公币不足，本次未扣款，也未消耗限购或宝箱次数。',
   DEMON_TOWER_SHOP_LIMIT_REACHED: '已达到这项物资的限购数量，请查看日限、周限或累计上限。',
   DEMON_TOWER_STAMINA_SPACE_REQUIRED: '当前体力空余不足以完整使用所选补给，请减少数量或探索后再申领。',
   DEMON_TOWER_HEALTH_FULL: '生命已满，无需申领疗伤符。',
