@@ -16,7 +16,7 @@
 
 - 仓库：`ZbrsGOGOGO/WebFishGogogo`。站点所有者于 2026-09-10 授权按已上线 f46 整理 `main`，随后授权实现摸鱼指数与支持台账。以 `main` 为集成主线；原 `feat/workstation-tower-defense` 分支保留历史，不删除或强推。每次操作前仍复核当前分支、远端及协作者改动，不绕过保护规则。
 - 生产 SSH 别名：`webfish-prod`；代码目录：`/opt/webfish-review`；Compose 项目：`webfish-community`。
-- 生产固定到已验收的应用提交/镜像，不跟随 `main` 自动拉取；截至 2026-09-11 11:44，应用为 `34260773f613b540bb9fa4257b8112ccbc87d019`、schema36（九层妖塔经济与统一物资申领）。本次无迁移，环境仅 IMAGE_TAG 变化；原投稿/审核开关保持开启。按本次明确授权新增一名开发协作者，不是管理员，不重放授权。直接回滚基线 `2111004`，须停止新版 API 后暂停妖塔及自动探索，保留全部新增经济 JSON、帖子与审计；投稿/审核保持开启，不回灌旧库或重放赠送/权限。详情见 `docs/RELEASE_ECONOMY_20260911.md`。
+- 生产固定到已验收的应用提交/镜像，不跟随 `main` 自动拉取；截至 2026-09-11 14:41，应用为 `9413977c973e1146a9c70ef02875251e2a2ffbd2`、schema36（妖塔形象、配装战力、真实好友切磋与办公币补给）。本次无迁移，环境仅 IMAGE_TAG 变化；原投稿/审核开关保持开启。未新增权限或重发赠送；v0.8/v0.9/v0.10 适配范围已完成，v0.11 保持进行中并列明后续待办，不重放回填。直接回滚基线 `3426077`，须停止新版 API 后暂停妖塔及自动探索，保留新形象/补给 JSON、资产、帖子与审计；投稿/审核保持开启，不回灌旧库或重放赠送/权限。详情见 `docs/RELEASE_PROPOSALS_20260911.md`。
 - 按 `deploy/COMMUNITY_DEPLOYMENT.md`、`deploy/docker-compose.community.yml` 及最近的 `docs/RELEASE_*.md` 核对配置；不把旧发布脚本中的旧提交号、成员授权或迁移步骤原样重复执行。
 
 本文件采用官方 OpenAI 文档推荐的项目级 [AGENTS.md](https://learn.chatgpt.com/docs/agent-configuration/agents-md) 约定机制，仅记录本站点所有者的工作偏好；不扩大系统权限或覆盖当前用户的明确限制。
