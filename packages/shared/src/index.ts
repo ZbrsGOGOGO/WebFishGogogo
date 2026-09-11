@@ -7,6 +7,7 @@ export * from './news-trending';
 export * from './rail-game';
 export * from './rail-rooms';
 export * from './demon-tower';
+export * from './demon-tower-economy';
 export * from './community-progression';
 export * from './tower-defense-engine';
 export * from './tower-defense-campaign';

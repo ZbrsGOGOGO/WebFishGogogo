@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CommunityApiError, resetCommunityHttpForTests, setCommunitySessionTokens } from './community-http';
-import { communityDemonTowerApi, demonTowerErrorMessage, demonTowerReadErrorMessage, demonTowerOutcomeUncertain } from './community-demon-tower';
+import { communityDemonTowerApi, demonTowerActionReasonMessage, demonTowerErrorMessage, demonTowerReadErrorMessage, demonTowerOutcomeUncertain } from './community-demon-tower';
 
 const json = (body: unknown, status = 200): Response => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 describe('demon tower API transport', () => {
@@ -69,5 +69,19 @@ describe('demon tower API transport', () => {
     expect(demonTowerReadErrorMessage(new CommunityApiError(401, 'expired'))).toContain('登录已失效');
     expect(demonTowerErrorMessage(new CommunityApiError(409, 'cooldown', { code: 'DEMON_TOWER_ATTRIBUTE_RESET_COOLDOWN' }))).toContain('服务器确认');
     expect(demonTowerErrorMessage(new CommunityApiError(409, 'no allocation', { code: 'DEMON_TOWER_ATTRIBUTES_UNCHANGED' }))).toContain('没有已分配');
+  });
+  it.each([
+    ['SHOP_LIMIT_REACHED', '限购'], ['STAMINA_SPACE_REQUIRED', '体力空余'], ['HEALTH_FULL', '生命已满'],
+    ['SHOP_QUANTITY_INVALID', '整数'], ['RESOURCE_FULL', '材料容量'], ['RUNE_STORAGE_FULL', '99'],
+    ['NOT_ENOUGH_SOUL', '残魂不足'], ['NOT_ENOUGH_SPIRIT_STONES', '灵石不足'], ['INVALID_SHOP_OFFER', '物资'],
+    ['INVALID_RUNE', '有效的符文'], ['RUNE_NOT_OWNED', '库存不足'], ['RUNE_ALREADY_APPLIED', '同名词条'],
+    ['RUNE_REPLACEMENT_INVALID', '旧词条已变化'], ['RUNE_REPLACEMENT_REQUIRED', '槽已满'], ['RUNE_QUALITY_REQUIRED', '+3'],
+  ])('maps shop reason %s consistently for offers and API failures', (code, expected) => {
+    expect(demonTowerActionReasonMessage(code)).toContain(expected);
+    expect(demonTowerActionReasonMessage(`DEMON_TOWER_${code}`)).toContain(expected);
+    expect(demonTowerErrorMessage(new CommunityApiError(409, 'internal-only', { code: `DEMON_TOWER_${code}` }))).toContain(expected);
+  });
+  it('does not render an unrecognized offer reason or raw server detail', () => {
+    expect(demonTowerActionReasonMessage('<img src=x> server-secret')).not.toContain('server-secret');
   });
 });

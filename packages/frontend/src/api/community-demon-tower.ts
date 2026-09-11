@@ -21,6 +21,21 @@ export function demonTowerErrorCode(error: unknown): string {
 }
 
 const MESSAGES: Readonly<Record<string, string>> = {
+  DEMON_TOWER_SHOP_LIMIT_REACHED: '已达到这项物资的限购数量，请查看日限、周限或累计上限。',
+  DEMON_TOWER_STAMINA_SPACE_REQUIRED: '当前体力空余不足以完整使用所选补给，请减少数量或探索后再申领。',
+  DEMON_TOWER_HEALTH_FULL: '生命已满，无需申领疗伤符。',
+  DEMON_TOWER_SHOP_QUANTITY_INVALID: '申领数量须为 1–5 的整数，并且不超过当前限额。',
+  DEMON_TOWER_RESOURCE_FULL: '材料容量不足，未扣除资源。请先使用已有材料。',
+  DEMON_TOWER_RUNE_STORAGE_FULL: '符文箱可能超过单类 99 枚库存上限，请先使用已有符文。',
+  DEMON_TOWER_NOT_ENOUGH_SOUL: '残魂不足，无法完成此次兑换；不会扣除办公币或灵石。',
+  DEMON_TOWER_NOT_ENOUGH_SPIRIT_STONES: '灵石不足，可通过探索、秘境与有效首领协作积累。',
+  DEMON_TOWER_INVALID_SHOP_OFFER: '这项物资当前不可申领，请同步最新申领单。',
+  DEMON_TOWER_INVALID_RUNE: '请选择有效的符文。',
+  DEMON_TOWER_RUNE_NOT_OWNED: '所选符文库存不足，请同步库存。',
+  DEMON_TOWER_RUNE_ALREADY_APPLIED: '这件武器已有同名词条，不能重复装配。',
+  DEMON_TOWER_RUNE_REPLACEMENT_INVALID: '所选旧词条已变化，请重新选择需要替换的词条。',
+  DEMON_TOWER_RUNE_REPLACEMENT_REQUIRED: '当前开放的词条槽已满，请明确选择要替换的旧词条。',
+  DEMON_TOWER_RUNE_QUALITY_REQUIRED: '武器至少 +3 才开放词条槽；+3 / +6 / +9 分别开放 1 / 2 / 3 槽。',
   DEMON_TOWER_EXPANSION_DISABLED: '妖塔扩展正在维护，原有档案与资产保留。',
   DEMON_TOWER_EXPEDITION_DAILY_LIMIT: '今日该秘境任务次数已用完，明日北京时间重置。',
   DEMON_TOWER_EXPEDITION_WEEKLY_LIMIT: '本周周常挑战次数已用完，下周一北京时间重置。',
@@ -129,6 +144,11 @@ const MESSAGES: Readonly<Record<string, string>> = {
   DEMON_TOWER_ACTION_LIMIT: '操作稍快，请等一会儿再试。',
   DEMON_TOWER_RATE_LIMIT: '操作稍快，请等一会儿再试。',
 };
+
+/** Offers return machine-readable reasons; never expose internal codes as UI copy. */
+export function demonTowerActionReasonMessage(code: string): string {
+  return MESSAGES[code] ?? MESSAGES[`DEMON_TOWER_${code}`] ?? '当前暂不可申领，请同步最新状态后再试。';
+}
 
 export function demonTowerErrorMessage(error: unknown): string {
   const code = demonTowerErrorCode(error);

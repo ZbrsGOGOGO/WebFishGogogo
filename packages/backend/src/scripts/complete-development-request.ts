@@ -12,6 +12,8 @@ export interface DevelopmentCompletionInput {
   deployedCommit: string;
   confirmation: string;
   reason: string;
+  /** Explicit owner decision to stop tracking, NOT a claim that code shipped. */
+  mode?: 'owner_closed';
 }
 
 export interface DevelopmentCompletionResult {
@@ -33,8 +35,10 @@ function validate(input: DevelopmentCompletionInput): DevelopmentCompletionInput
   if (!/^[0-9a-f]{40}$/.test(input.deployedCommit)) {
     throw new CompletionError('DEVELOPMENT_COMPLETE_DEPLOYED_COMMIT must be the verified full lowercase Git SHA');
   }
-  if (input.confirmation !== `COMPLETE:${input.requestId}:${input.expectedVersion}:${input.deployedCommit}`) {
-    throw new CompletionError('DEVELOPMENT_COMPLETE_CONFIRMATION must exactly match COMPLETE:<requestId>:<expectedVersion>:<deployedCommit>');
+  if (input.mode !== undefined && input.mode !== 'owner_closed') throw new CompletionError('DEVELOPMENT_COMPLETE_MODE_INVALID');
+  const operation = input.mode === 'owner_closed' ? 'CLOSE' : 'COMPLETE';
+  if (input.confirmation !== `${operation}:${input.requestId}:${input.expectedVersion}:${input.deployedCommit}`) {
+    throw new CompletionError(`DEVELOPMENT_COMPLETE_CONFIRMATION must exactly match ${operation}:<requestId>:<expectedVersion>:<deployedCommit>`);
   }
   const reason = input.reason.trim().normalize('NFC');
   if ([...reason].length < 5 || [...reason].length > 500 || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(reason)) {
@@ -87,6 +91,7 @@ export async function completeDevelopmentRequest(
       if (
         request.status !== 'done' ||
         previousOperation.reason !== input.reason ||
+        previousOperation.nextState.completionMode !== (input.mode ?? 'offline_operator') ||
         previousOperation.nextState.deployedCommit !== input.deployedCommit
       ) throw new CompletionError('DEVELOPMENT_COMPLETION_REPLAY_CONFLICT');
       return { requestId: request.id, status: 'done', version: request.version, changed: false };
@@ -118,7 +123,7 @@ export async function completeDevelopmentRequest(
       nextState: {
         status: 'done',
         version: request.version,
-        completionMode: 'offline_operator',
+        completionMode: input.mode ?? 'offline_operator',
         authorization: 'site_owner_instruction',
         deployedCommit: input.deployedCommit,
       },
@@ -129,8 +134,10 @@ export async function completeDevelopmentRequest(
       actorUserId: null,
       category: 'system',
       eventType: DEVELOPMENT_OFFLINE_COMPLETION_ACTION,
-      title: '开发反馈已完成',
-      summary: `${request.title}：已验证上线，由站点运维（站长授权）归档为已完成。`,
+      title: input.mode === 'owner_closed' ? '开发反馈已按站长决定归档' : '开发反馈已完成',
+      summary: input.mode === 'owner_closed'
+        ? `${request.title}：${input.reason}`
+        : `${request.title}：已验证上线，由站点运维（站长授权）归档为已完成。`,
       resourceType: 'development_request',
       resourceId: request.id,
       resourcePath: `/development/requests/${request.id}`,
@@ -148,6 +155,7 @@ export function completionInputFromEnvironment(env: NodeJS.ProcessEnv): Developm
     deployedCommit: env.DEVELOPMENT_COMPLETE_DEPLOYED_COMMIT ?? '',
     confirmation: env.DEVELOPMENT_COMPLETE_CONFIRMATION ?? '',
     reason: env.DEVELOPMENT_COMPLETE_REASON ?? '',
+    ...(env.DEVELOPMENT_COMPLETE_MODE !== undefined ? { mode: env.DEVELOPMENT_COMPLETE_MODE as 'owner_closed' } : {}),
   };
 }
 

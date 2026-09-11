@@ -2,6 +2,8 @@ import { fireEvent, render, screen, within, waitFor } from '@testing-library/rea
 import { describe, expect, it, vi } from 'vitest';
 import type { DemonTowerExpansionView, DemonTowerBattleReport } from '@stealth-reader/shared';
 import { DemonTowerExpansion } from './DemonTowerExpansion';
+import { DemonTowerLegacyMarket } from './DemonTowerLegacyMarket';
+import { DemonTowerFirstClear, DemonTowerSkinPicker } from './DemonTowerRecognition';
 import { DemonTowerReport } from './DemonTowerBattle';
 import { towerProfile, towerWorld, towerBattle, towerCatalog } from './test-fixtures';
 
@@ -15,7 +17,7 @@ describe('Demon tower expansion workbench', () => {
     const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole('button', { name: '进入小秘境' }));
     expect(onAction).toHaveBeenCalledExactlyOnceWith({ kind: 'expedition', payload: { mode: 'rift' } });
-    expect(screen.getByText(/武器箱累计 9 个/)).toBeVisible();
+    expect(screen.queryByText(/武器箱累计/)).toBeNull(); expect(screen.queryByRole('button', { name: /武器箱 ·/ })).toBeNull();
   });
   it('opens the saved combat workspace only after a confirmed expedition and offers an explicit return', async () => {
     const onAction = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true), onContinueBattle = vi.fn();
@@ -36,7 +38,7 @@ describe('Demon tower expansion workbench', () => {
     expect(screen.queryByText(/普通探索/)).toBeNull();
   });
   it('requires an explicit second confirmation before spending souls and explains exact ten-box pity', () => {
-    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled={false} onAction={onAction} />);
+    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerLegacyMarket profile={profile()} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole('button', { name: '武器箱 · 12残魂' }));
     expect(onAction).not.toHaveBeenCalled(); const modal = screen.getByRole('dialog', { name: '兑换武器箱' });
     expect(within(modal).getByText(/第10箱至少灵/)).toBeVisible();
@@ -45,16 +47,16 @@ describe('Demon tower expansion workbench', () => {
   });
   it('does not charge on cancellation and disables level/material/in-flight invalid actions', () => {
     const onAction = vi.fn(); const current = profile(); current.level = 1; current.materials.soul = 0;
-    const { rerender } = render(<DemonTowerExpansion profile={current} world={towerWorld()} disabled={false} onAction={onAction} />);
+    const { rerender } = render(<DemonTowerLegacyMarket profile={current} disabled={false} onAction={onAction} />);
     expect(screen.getByRole('button', { name: '武器箱 · 12残魂' })).toBeDisabled();
-    rerender(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled={false} onAction={onAction} />);
+    rerender(<DemonTowerLegacyMarket profile={profile()} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole('button', { name: '技能箱 · 10残魂' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '取消' })); expect(onAction).not.toHaveBeenCalled();
-    rerender(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled onAction={onAction} />);
-    expect(screen.getByRole('button', { name: '进入小秘境' })).toBeDisabled(); expect(screen.getByRole('button', { name: '升星符 · 40残魂' })).toBeDisabled();
+    rerender(<DemonTowerLegacyMarket profile={profile()} disabled onAction={onAction} />);
+    expect(screen.getByRole('button', { name: '技能箱 · 10残魂' })).toBeDisabled();
   });
   it('selects a named celestial skill with exactly 30 pages, instead of a random or hidden purchase', () => {
-    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled={false} onAction={onAction} />);
+    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerLegacyMarket profile={profile()} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByText('30残页自选仙级技能 · Lv46'));
     fireEvent.click(screen.getByRole('button', { name: '续命丹心' }));
     const dialog = screen.getByRole('dialog', { name: '自选续命丹心' }); expect(within(dialog).getByText(/已有同名时转为品质经验/)).toBeVisible();
@@ -71,15 +73,22 @@ describe('Demon tower expansion workbench', () => {
   });
   it('shows equipped divine ultimate and persists an explicit low-profile skin selection', () => {
     const current = profile(); current.weapons.push({ id: 'w20', quality: 9, spareCopies: 0, star: 5, favor: 0 }); const onAction = vi.fn().mockResolvedValue(true);
-    render(<DemonTowerExpansion profile={current} world={towerWorld()} disabled={false} onAction={onAction} />);
+    render(<><DemonTowerExpansion profile={current} world={towerWorld()} disabled={false} onAction={onAction} /><DemonTowerSkinPicker profile={current} disabled={false} onAction={onAction} /></>);
     fireEvent.change(screen.getByRole('combobox', { name: '成长工坊物品' }), { target: { value: 'w20' } });
     expect(screen.getByText(/真·混元改命.*当前已激活/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '数据台账' })); expect(onAction).toHaveBeenCalledExactlyOnceWith({ kind: 'select_skin', payload: { skin: 'ledger' } });
   });
   it('keeps a failed/uncertain exchange confirmation and never automatically repeats it', async () => {
-    const onAction = vi.fn().mockResolvedValue(false); render(<DemonTowerExpansion profile={profile()} world={towerWorld()} disabled={false} onAction={onAction} />);
+    const onAction = vi.fn().mockResolvedValue(false); render(<DemonTowerLegacyMarket profile={profile()} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole('button', { name: '武器箱 · 12残魂' }));
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认兑换' }));
     await Promise.resolve(); expect(screen.getByRole('dialog')).toBeVisible(); expect(onAction).toHaveBeenCalledTimes(1);
+  });
+  it('keeps first-clear contribution rewards beside the shared world and disables previously claimed floors', () => {
+    const current = profile(); current.expansion!.claimedBossFloors = [1]; const onAction = vi.fn().mockResolvedValue(true);
+    render(<DemonTowerFirstClear profile={current} world={towerWorld({ currentFloor: 3 })} disabled={false} onAction={onAction} />);
+    expect(screen.getByRole('button', { name: '第1层已领取' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '第2层核验首杀贡献' }));
+    expect(onAction).toHaveBeenCalledExactlyOnceWith({ kind: 'claim_boss_loot', payload: { floor: 2 } });
   });
 });

@@ -12,7 +12,7 @@ export const DEVELOPMENT_REVIEW_ACTIONS = [DEVELOPMENT_PROGRESS_ACTION, DEVELOPM
 function trusted(row: AdminAuditLog): boolean {
   if (row.targetType !== 'development_request') return false;
   if (row.action === 'development.request.offline_completed' &&
-    (row.nextState.status !== 'done' || row.nextState.completionMode !== 'offline_operator')) return false;
+    (row.nextState.status !== 'done' || !['offline_operator', 'owner_closed'].includes(String(row.nextState.completionMode)))) return false;
   return ((row.action === DEVELOPMENT_PROGRESS_ACTION || row.action === 'development.request.decided') && row.actorRole === 'admin' && row.actorId !== null) ||
     ((row.action === DEVELOPMENT_OFFLINE_PROGRESS_ACTION || row.action === 'development.request.offline_completed') && row.actorRole === 'system' && row.actorId === null &&
       typeof row.nextState.deployedCommit === 'string' && /^[0-9a-f]{40}$/.test(row.nextState.deployedCommit));

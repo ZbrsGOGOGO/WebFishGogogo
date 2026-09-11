@@ -13,7 +13,7 @@ export function offlineCompletionEvent(record: AdminAuditLog): DevelopmentEvent 
     record.actorRole !== 'system' ||
     record.actorId !== null ||
     record.nextState.status !== 'done' ||
-    record.nextState.completionMode !== 'offline_operator' ||
+    !['offline_operator', 'owner_closed'].includes(String(record.nextState.completionMode)) ||
     typeof record.nextState.deployedCommit !== 'string' ||
     !/^[0-9a-f]{40}$/.test(record.nextState.deployedCommit)
   ) return null;
@@ -27,7 +27,9 @@ export function offlineCompletionEvent(record: AdminAuditLog): DevelopmentEvent 
       displayName: '站点运维（站长授权）',
     },
     actorSource: 'site_operations',
-    body: `${record.reason ?? '已核验上线，归档为已完成'}\n发布版本：${record.nextState.deployedCommit}`,
+    body: record.nextState.completionMode === 'owner_closed'
+      ? `按站长决定结束跟进，归档不代表功能已经实现。\n${record.reason ?? '站长要求归档'}\n归档时应用版本：${record.nextState.deployedCommit}`
+      : `${record.reason ?? '已核验上线，归档为已完成'}\n发布版本：${record.nextState.deployedCommit}`,
     status: 'done',
     createdAt: record.createdAt.toISOString(),
   };

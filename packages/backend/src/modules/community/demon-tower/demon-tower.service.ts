@@ -9,7 +9,7 @@ import { PlatformAssetsService } from '../../platform/platform-assets.service';
 import { PLATFORM_CLOCK, systemPlatformClock, type PlatformClock } from '../../platform/platform.constants';
 import { toBusinessLocalDate } from '../../platform/platform-time';
 import { hash } from '../play/play.rules';
-import { actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerProfileView, demonTowerSocialBuild, grantDemonTowerBossClear, DemonTowerEngineError, type DemonTowerEngineResult, type DemonTowerEngineState, type DemonTowerWorldEffect } from './demon-tower.engine';
+import { actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerProfileView, demonTowerSocialBuild, grantDemonTowerBossClear, grantDemonTowerBossSpirit, DemonTowerEngineError, type DemonTowerEngineResult, type DemonTowerEngineState, type DemonTowerWorldEffect } from './demon-tower.engine';
 import { assertDemonTowerWrites, DEMON_TOWER_DAILY_ACTION_LIMIT, DEMON_TOWER_DAILY_COINS, demonTowerAction, demonTowerEnabled, demonTowerExpansionEnabled, demonTowerWorldView, demonTowerWritesEnabled, initialDemonTowerWorld } from './demon-tower.rules';
 import { demonTowerAutoView } from './demon-tower-auto.rules';
 import { demonTowerArenaRank, type DemonTowerSocialBuild } from './demon-tower-social.engine';
@@ -113,6 +113,11 @@ export class DemonTowerService {
       if (!Number.isSafeInteger(result!.officeCoinIntent) || result!.officeCoinIntent < 0 || result!.officeCoinIntent > DEMON_TOWER_DAILY_COINS) throw new Error('Demon tower reward invariant failed');
       if ((result!.worldEffect?.kind === 'boss_damage') !== (input.kind === 'challenge_boss') || (result!.worldEffect?.kind === 'construction') !== (input.kind === 'donate')) throw new Error('Demon tower action effect invariant failed');
       const applied = await this.applyWorld(manager, worlds, result!.worldEffect, now);
+      // Credit tower-only currency from the locked world's effective damage, not
+      // predicted overkill. Stored with the same command/limits/receipt transaction.
+      if (demonTowerExpansionEnabled() && result!.worldEffect?.kind === 'boss_damage') {
+        grantDemonTowerBossSpirit(result!.state, applied.effectiveBossDamage, now.getTime(), serviceDate, result!.events);
+      }
       if (demonTowerExpansionEnabled() && result!.worldEffect?.kind === 'boss_damage' && applied.effectiveBossDamage > 0 && worlds[result!.worldEffect.floor - 1].bossHp === 0) {
         grantDemonTowerBossClear(result!.state, result!.worldEffect.floor, result!.events);
       }

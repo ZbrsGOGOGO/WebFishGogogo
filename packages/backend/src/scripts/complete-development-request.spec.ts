@@ -43,6 +43,8 @@ describe('offline development completion validation', () => {
     { reason: 'ok' },
     { reason: 'x'.repeat(501) },
     { reason: 'bad\u0000reason' },
+    { mode: 'unsupported' as 'owner_closed' },
+    { mode: 'owner_closed' as const },
   ])('rejects unsafe input before touching the database: %j', async (override) => {
     const transaction = jest.fn();
     await expect(completeDevelopmentRequest(
@@ -130,6 +132,27 @@ describe('offline development completion integration', () => {
     const { author: other } = await proposal();
     await expect(service.detail(other.id, request.id))
       .rejects.toMatchObject({ response: { code: 'DEVELOPMENT_REQUEST_NOT_FOUND' } });
+  });
+
+  it('records an explicit owner closure without claiming the unfinished feature shipped', async () => {
+    const { author, request } = await proposal();
+    const command: DevelopmentCompletionInput = { ...input(request.id), mode: 'owner_closed',
+      confirmation: `CLOSE:${request.id}:1:${RELEASE}`,
+      reason: '站长决定结束跟进；微博、知乎站内快照没有接入，保留外链，不宣称已实现。' };
+    expect(await completeDevelopmentRequest(dataSource, command)).toMatchObject({ status: 'done', version: 2, changed: true });
+    const audit = await dataSource.getRepository(AdminAuditLog).findOneByOrFail({ targetId: request.id });
+    expect(audit.nextState.completionMode).toBe('owner_closed');
+    const detail = await service.detail(author.id, request.id);
+    expect(detail.events.at(-1)?.body).toContain('归档不代表功能已经实现');
+    expect(detail.review).toMatchObject({ reviewedVersion: 2, hasUnreviewedChanges: false });
+    const notification = await dataSource.getRepository(CommunityNotification).findOneByOrFail({ resourceId: request.id });
+    expect(JSON.stringify(notification.payload)).toContain('没有接入');
+    expect(JSON.stringify(notification.payload)).not.toContain('已验证上线');
+    expect(await completeDevelopmentRequest(dataSource, command)).toMatchObject({ changed: false });
+    await expect(completeDevelopmentRequest(dataSource, { ...command, mode: undefined, confirmation: `COMPLETE:${request.id}:1:${RELEASE}` }))
+      .rejects.toThrow('DEVELOPMENT_COMPLETION_REPLAY_CONFLICT');
+    expect(await dataSource.getRepository(CommunityNotification).count()).toBe(1);
+    expect(await dataSource.getRepository(User).countBy({ communityRole: 'admin' })).toBe(0);
   });
 
   it('replays without duplicate audit/notification and does not rewrite a completed proposal', async () => {

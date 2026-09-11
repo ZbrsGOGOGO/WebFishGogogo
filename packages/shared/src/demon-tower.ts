@@ -1,3 +1,4 @@
+import type { DemonTowerEconomyView, DemonTowerShopOfferId } from './demon-tower-economy';
 /** Public 九层妖塔 contracts. Seeds, RNG counters and internal combat state are never API data. */
 export const DEMON_TOWER_ATTRIBUTE_KEYS = ['STR', 'SPD', 'AGI', 'DEF', 'LUCK'] as const;
 export type DemonTowerAttribute = typeof DEMON_TOWER_ATTRIBUTE_KEYS[number];
@@ -178,6 +179,7 @@ export interface DemonTowerDailyView {
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
+  economy?: DemonTowerEconomyView;
   expansion?: DemonTowerExpansionView;
   growth?: DemonTowerGrowthView;
   version: number; level: number; experience: number; experienceToNext: number; totalExperience: number;
@@ -213,6 +215,8 @@ export interface DemonTowerAutoRunView {
 }
 export interface DemonTowerAutoResponse { enabled: boolean; replayed: boolean; run: DemonTowerAutoRunView | null; overview: DemonTowerOverview }
 export type DemonTowerAction =
+  | { kind: 'shop_purchase'; payload: { offerId: DemonTowerShopOfferId; quantity: number } }
+  | { kind: 'use_rune'; payload: { rune: DemonTowerAffix; itemId: DemonTowerWeaponId; replace?: DemonTowerAffix } }
   | { kind: 'enroll'; payload: Record<string, never> }
   | { kind: 'explore'; payload: Record<string, never> }
   | { kind: 'attack'; payload: { targetId: string } }
@@ -378,7 +382,7 @@ export const DEMON_TOWER_CATALOG: DemonTowerCatalog = {
     restHealingPercent: 50, healingRestoreMs: 30_000, donationValues: { ore: 1, clue: 5 }, lootGuaranteeEvery: 4,
     attributeResetCooldownMs: 86_400_000, resetTimezone: 'Asia/Shanghai',
     rulesText: [
-      '完全免费；没有充值、付费战力或第二种通用货币。妖塔等级、体力和材料独立于平台账号成长。',
+      '完全免费，没有充值或付费战力。灵石仅为妖塔内绑定物资，不可转赠或兑换办公币；妖塔等级、体力和材料独立于平台账号成长。',
       '开局赠送五类基础武器和四个基础技能，可立即选择流派；主手一件、副法器一件、主动技能三个、被动技能两个。',
       '法器也可作为主手，普通攻击按主手对应属性计算；同一件武器不能同时占据主手和副法器槽。',
       '战斗外可免费重置已分配自由点，首次随时可用、以后每24小时一次；固有属性保留，不提供治疗或额外资源。',
@@ -390,7 +394,9 @@ export const DEMON_TOWER_CATALOG: DemonTowerCatalog = {
       '达到Lv16后累计无灵以上探索结算，连续20次未得则下一次保底；Lv31后仙以上同理50次。未达资格不计数，保底可调整武器/技能种类以保证有合法物品，不会抽空。',
       '武器星级独立于+N。每次普攻行动主手与已装法器各+1熟练度，多段不重复；每星需当前星级×15熟练度，升星清零，最高5星，每星普攻伤害+10%。无降星、无付费升星。',
       '免费选择一次心性主维获得首个命格；随后在Lv16/31/46/61/76/91/106依次补齐8命格，不占技能槽。旧角色同样可选；旧战斗结束后启用新规则。',
-      '新手赠送五武器和旧存档已拥有物品保留使用资格。新掉落武器按获取/装备双等级限制，不删除旧装备，不增加充值、灵石商店或自动购买。',
+      '新手赠送五武器和旧存档已拥有物品保留使用资格。新掉落武器按获取/装备双等级限制，不删除旧装备，不增加充值或自动购买。',
+      '内部物资申领单集中管理灵石物资、残魂秘市和绑定符文；灵石每日总获取上限200，其中世界首领有效伤害按0.5折算、每日最多100，不回填历史收益。',
+      '临时药丸每维每日最多+15，北京时间零点到期，进行中战斗保留快照；论道和小队不使用临时药效。永久丹每维累计最多+5，洗点不影响。',
       '战斗外生命与体力按服务器时间恢复，战斗内不自动回血；负伤可以休整。',
   ] },
 };

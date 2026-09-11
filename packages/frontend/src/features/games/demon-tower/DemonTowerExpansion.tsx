@@ -7,10 +7,10 @@ import styles from './DemonTower.module.css';
 
 const RULES = DEMON_TOWER_EXPANSION_RULES;
 export const demonTowerExpansionUIEnabled = import.meta.env.VITE_DEMON_TOWER_EXPANSION_ENABLED === 'true';
-type Props = { profile: DemonTowerProfileView; world: DemonTowerWorldView; disabled: boolean; onAction: (action: DemonTowerAction) => Promise<boolean>; onContinueBattle?: () => void };
+type Props = { profile: DemonTowerProfileView; world: DemonTowerWorldView; disabled: boolean; onAction: (action: DemonTowerAction) => Promise<boolean>; onContinueBattle?: () => void; onSupplies?: () => void };
 
 /** Uses the same versioned, uncertain-result-aware action queue as ordinary exploration. */
-export function DemonTowerExpansion({ profile, world, disabled, onAction, onContinueBattle }: Props): JSX.Element | null {
+export function DemonTowerExpansion({ profile, disabled, onAction, onContinueBattle, onSupplies }: Props): JSX.Element | null {
   const [confirmation, setConfirmation] = useState<{ title: string; text: string; action: DemonTowerAction } | null>(null);
   const [selected, setSelected] = useState('w1');
   const value = profile.expansion;
@@ -28,7 +28,8 @@ export function DemonTowerExpansion({ profile, world, disabled, onAction, onCont
   const star = owned?.star ?? 1;
   return <div className={styles.stack}>
     <TowerPanel title="秘境与灵气任务" detail={<span className={styles.badge}>账号存档 · 全程免费</span>}>
-      <p className={styles.muted}>三个独立获取来源，不改普通探索的保底计数。秘境和周常可逐回合操作、刷新续战；失败不发装备，不回退次数。</p>
+      <p className={styles.muted}>这里集中副本与成长打造；补给、残魂兑换和符文使用统一在「物资申领」。三个独立获取来源不改普通探索保底，秘境和周常可逐回合操作、刷新续战；失败不发装备，不回退次数。</p>
+      {onSupplies ? <button type="button" className={styles.button} onClick={onSupplies}>前往物资申领</button> : null}
       {profile.battle && onContinueBattle ? <p className={styles.notice}>你有一场已保存的战斗。<button className={styles.textButton} type="button" onClick={onContinueBattle}>返回战斗现场</button></p> : null}
       <div className={styles.resourceList}><div className={styles.resource}><strong>{value.skillPages}</strong><small>技能残页</small></div><div className={styles.resource}><strong>{value.essences}</strong><small>妖塔精魄</small></div><div className={styles.resource}><strong>{value.passageTokens}</strong><small>通行凭证</small></div></div>
       <div className={styles.itemGrid} style={{ marginTop: 16 }}>
@@ -36,15 +37,6 @@ export function DemonTowerExpansion({ profile, world, disabled, onAction, onCont
         <article className={styles.item}><h3>灵气修炼点</h3><p>必得一件符合等级的技能和1—3残页，不掉武器。技能池凡/精/灵/仙权重30/30/25/15。</p><p>今日 {value.meditationsToday}/{RULES.meditationsPerDay} · {RULES.meditationCost}体力</p><button className={styles.button} type="button" disabled={!can('expedition') || profile.stamina < RULES.meditationCost || value.meditationsToday >= RULES.meditationsPerDay} onClick={() => void onAction({ kind: 'expedition', payload: { mode: 'meditate' } })}>前往灵气点</button></article>
         <article className={styles.item}><h3>周常守关者</h3><p>独立个人副本，世界通关后仍可挑战；胜利双物品、3残页、3精魄。神武器权重由10提高至15，全部权重重新归一，不影响全服血池/日榜。</p><p>本周 {value.weeklyBossAttempts}/{RULES.weeklyBossPerWeek} · {RULES.weeklyBossCost}体力 · 周一北京时间重置</p><button className={styles.button} type="button" disabled={!can('expedition') || profile.hp <= 0 || profile.stamina < RULES.weeklyBossCost || value.weeklyBossAttempts >= RULES.weeklyBossPerWeek} onClick={() => launch('weekly_boss')}>挑战周常守关者</button></article>
       </div>
-    </TowerPanel>
-    <TowerPanel title="免费秘市" detail={<span className={styles.badge}>只消耗塔内绑定残魂</span>}>
-      <p>不支持充值，不扣办公币。武器箱累计 {value.weaponBoxes} 个，本轮 {value.weaponBoxPity}/10；每第10箱必得灵以上，Lv16开始开放。技能箱附送残页×1。</p>
-      <div className={styles.buttonRow}>
-        <button type="button" className={styles.button} disabled={!can('market') || profile.level < 16 || profile.materials.soul < RULES.weaponBoxSoul} onClick={() => ask('兑换武器箱', `消耗${RULES.weaponBoxSoul}残魂。精/灵/仙/神权重10/35/40/15，排除未达获取等级后归一；第10箱至少灵。`, { kind: 'market', payload: { offer: 'weapon_box' } })}>武器箱 · {RULES.weaponBoxSoul}残魂</button>
-        <button type="button" className={styles.button} disabled={!can('market') || profile.materials.soul < RULES.skillBoxSoul} onClick={() => ask('兑换技能残页箱', `消耗${RULES.skillBoxSoul}残魂。获得技能×1及残页×1；技能凡/精/灵/仙权重10/35/40/15，等级筛选后归一。`, { kind: 'market', payload: { offer: 'skill_box' } })}>技能箱 · {RULES.skillBoxSoul}残魂</button>
-        <button type="button" className={styles.button} disabled={!can('market') || profile.materials.soul < RULES.enlightenmentSoul || DEMON_TOWER_SKILLS.every(item => item.requiredLevel > profile.level || profile.skills.some(owned => owned.id === item.id))} onClick={() => ask('兑换悟性丹', `消耗${RULES.enlightenmentSoul}残魂，等概率习得一个当前等级可学习、尚未拥有的技能；已学全时不扣材料。`, { kind: 'market', payload: { offer: 'enlightenment' } })}>悟性丹 · {RULES.enlightenmentSoul}残魂</button>
-      </div>
-      <details style={{ marginTop: 16 }}><summary>30残页自选仙级技能 · Lv46</summary><div className={styles.buttonRow} style={{ marginTop: 12 }}>{DEMON_TOWER_SKILLS.filter(item => item.rarity === '仙').map(item => <button key={item.id} type="button" className={styles.button} disabled={!can('market') || profile.level < item.requiredLevel || value.skillPages < RULES.selectionPages} onClick={() => ask(`自选${item.name}`, '消耗30残页，明确获得这一个技能；已有同名时转为品质经验，不随机替换。', { kind: 'market', payload: { offer: 'skill_selection', itemId: item.id } })}>{item.name}</button>)}</div></details>
     </TowerPanel>
     <TowerPanel title="星级、词条与突破工坊">
       <label>选择已收录物品 <select aria-label="成长工坊物品" value={selected} onChange={event => setSelected(event.target.value)}>{[...profile.weapons, ...profile.skills].map(item => <option key={item.id} value={item.id}>{(item.id.startsWith('w') ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS).find(entry => entry.id === item.id)?.name}</option>)}</select></label>
@@ -60,12 +52,6 @@ export function DemonTowerExpansion({ profile, world, disabled, onAction, onCont
         </div>
         {score ? <details style={{ marginTop: 12 }}><summary>强度设计评级 T{score.tier} · {score.score}/100</summary><p>数值贡献 {score.numeric}×35% + 常驻增益 {score.permanent}×25% + 功能 {score.utility}×25% + 泛用 {score.breadth}×15%。这是公开可复算的设计量表，不是实战DPS实测；不按稀有度直接冒充综合强度，也不改变已公示单品掉落权重。</p></details> : null}
       </> : null}
-    </TowerPanel>
-    <TowerPanel title="首杀凭证与工作台皮肤">
-      <p className={styles.muted}>对共享守关者造成有效伤害的玩家，在该层击败后可各领取一次首杀奖励；已结束的历史贡献也可核验，不要求抢到最后一击。</p>
-      <div className={styles.buttonRow}>{Array.from({ length: world.currentFloor }, (_, index) => index + 1).filter(floor => floor < world.currentFloor || world.phase !== 'boss').map(floor => <button className={styles.button} type="button" key={floor} disabled={!can('claim_boss_loot') || value.claimedBossFloors.includes(floor)} onClick={() => void onAction({ kind: 'claim_boss_loot', payload: { floor } })}>第{floor}层{value.claimedBossFloors.includes(floor) ? '已领取' : '核验首杀贡献'}</button>)}</div>
-      <p>首杀称号：{value.titles.join('、') || '完成共同讨伐后领取'}</p>
-      <fieldset disabled={!can('select_skin')}><legend>低调工作台皮肤</legend><div className={styles.buttonRow}>{value.unlockedSkins.map(skin => <button type="button" className={styles.button} key={skin} aria-pressed={value.skin === skin} disabled={!can('select_skin') || value.skin === skin} onClick={() => void onAction({ kind: 'select_skin', payload: { skin } })}>{({ field: '野外笔记', ledger: '数据台账', memo: '便签白板' })[skin]}</button>)}</div></fieldset>
     </TowerPanel>
     {confirmation ? <TowerModal title={confirmation.title} onClose={() => setConfirmation(null)} footer={<div className={styles.actionsRight}><button type="button" className={styles.button} disabled={disabled} onClick={() => setConfirmation(null)}>取消</button><button type="button" className={styles.primary} disabled={!can(confirmation.action.kind)} onClick={() => void onAction(confirmation.action).then(ok => { if (ok) setConfirmation(null); })}>确认兑换</button></div>}><p>{confirmation.text}</p><p className={styles.muted}>操作由服务器幂等保存；网络不确定时先确认原操作，不会自动再次扣除。</p></TowerModal> : null}
   </div>;
