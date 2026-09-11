@@ -2,7 +2,7 @@
 export const OFFICE_RELIEF_RULES = {
   secondsPerChance: 1800, chanceCap: 10, activeSecondsPerDay: 14_400,
   tokenCap: 1_000_000_000, maxCoinReward: 10_000, pendingCap: 99, historyLimit: 30,
-  titleDuplicateTokens: 500, farmCoinsPerGift: 30,
+  titleDuplicateTokens: 500, farmExperiencePerGift: 30,
   weights: { coin: 5000, loss: 4900, title: 50, tower_material: 20, farm_crop: 20, tower_book: 10 },
   weightTotal: 10_000, lossMin: 50, lossMax: 300,
   coinTiers: [
@@ -30,7 +30,7 @@ export type OfficeReliefSkinId = typeof OFFICE_RELIEF_SKINS[number]['id'];
 export const OFFICE_RELIEF_MATERIALS = [
   { id: 'ore', name: '玄铁砂', quantity: 3 }, { id: 'herb', name: '灵草', quantity: 3 }, { id: 'clue', name: '通道线索', quantity: 3 },
 ] as const;
-/** Existing FARM_CROPS keys. Gifts redeem farm coins, not a growing crop or a new seed unlock. */
+/** Existing FARM_CROPS keys. Gifts grant plant experience through the real farm level curve, never coins or a harvested crop. */
 export const OFFICE_RELIEF_CROPS = [
   { id: 'desk_mint', name: '工位薄荷礼包', quantity: 1 },
   { id: 'meeting_tomato', name: '会议番茄礼包', quantity: 1 },

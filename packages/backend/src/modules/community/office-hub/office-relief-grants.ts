@@ -4,7 +4,7 @@ import { EntityManager } from 'typeorm';
 import { DeskPlant } from '../../../database/entities/desk-plant.entity';
 import { DemonTowerProfile } from '../../../database/entities/demon-tower.entity';
 import { DemonTowerAutoRun } from '../../../database/entities/demon-tower-auto-run.entity';
-import { FARM_CROPS } from '../farm-growth-rules';
+import { FARM_CROPS, farmLevelSnapshot } from '../farm-growth-rules';
 import { DemonTowerEngineError, grantDemonTowerOfficeRelief, type DemonTowerEngineState } from '../demon-tower/demon-tower.engine';
 import { officeDay } from './office-hub.rules';
 
@@ -15,10 +15,13 @@ export async function grantOfficeReliefDrop(m: EntityManager, userId: string, dr
     const repository = m.getRepository(DeskPlant);
     const plant = await repository.findOne({ where: { userId }, lock: { mode: 'pessimistic_write' } });
     if (!plant) throw new ConflictException({ code: 'OFFICE_RELIEF_FARM_REQUIRED' });
-    if (!Number.isSafeInteger(plant.farmCoins) || plant.farmCoins < 0 || plant.farmCoins > 2_147_483_647 - OFFICE_RELIEF_RULES.farmCoinsPerGift ||
+    if (!Number.isSafeInteger(plant.plantExperience) || plant.plantExperience < 0 || plant.plantExperience > 2_147_483_647 - OFFICE_RELIEF_RULES.farmExperiencePerGift ||
         !Number.isSafeInteger(plant.farmVersion) || plant.farmVersion < 1 || plant.farmVersion >= 2_147_483_647)
       throw new ConflictException({ code: 'OFFICE_RELIEF_REWARD_FULL' });
-    plant.farmCoins += OFFICE_RELIEF_RULES.farmCoinsPerGift;
+    // farmCoins is a retired balance and the current farm projection always
+    // returns zero for it. Grant the visible, usable growth experience instead.
+    plant.plantExperience += OFFICE_RELIEF_RULES.farmExperiencePerGift;
+    plant.level = farmLevelSnapshot(plant.plantExperience).level;
     plant.farmVersion += 1;
     plant.updatedAt = new Date(now);
     await repository.save(plant);

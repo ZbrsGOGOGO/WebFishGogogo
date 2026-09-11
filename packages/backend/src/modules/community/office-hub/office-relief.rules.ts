@@ -178,7 +178,13 @@ export function actOfficeRelief(input: OfficeReliefState, raw: OfficeReliefActio
       const drop = { id, receivedAt: at, ...draw } as OfficeReliefDrop;
       state.pending.push(drop); outcome.itemId = draw.itemId; outcome.dropId = id;
       const item = dropDefinition(draw.kind, draw.itemId)!;
-      outcome.message = `获得${item.name}×${draw.quantity}，已存入待领礼包；需显式领取，不自动改变农场或妖塔。`;
+      outcome.message = draw.kind === 'farm_crop'
+        ? `获得${item.name}×${draw.quantity}，已存入待领礼包；每份领取后增加${RULES.farmExperiencePerGift}种植经验，不发办公币、不自动收获或更换作物。`
+        : draw.kind === 'tower_book'
+          ? draw.itemId === 'weapon_manual'
+            ? `获得${item.name}，已存入待领礼包；领取后为当时主手武器暂存${draw.quantity}品质经验，不直接升星或升品质。`
+            : `获得${item.name}，已存入待领礼包；领取后增加${draw.quantity}技能碎片。`
+          : `获得${item.name}×${draw.quantity}，已存入待领礼包；需显式领取，不自动改变农场或妖塔。`;
     }
     state.tokenBalance += outcome.tokenDelta; state.chances--; state.totalPlays++;
   } else if (value.kind === 'buy') {
@@ -200,7 +206,15 @@ export function actOfficeRelief(input: OfficeReliefState, raw: OfficeReliefActio
     const index = state.pending.findIndex(item => item.id === dropId);
     if (index < 0) conflict('DROP_NOT_FOUND');
     [claimedDrop] = state.pending.splice(index, 1);
-    outcome = { id, at, kind: 'claim', tokenDelta: 0, itemId: claimedDrop.itemId, dropId: claimedDrop.id, message: `已领取${dropDefinition(claimedDrop.kind, claimedDrop.itemId)!.name}×${claimedDrop.quantity}，以对应模块的同事务授予结果为准。` };
+    const item = dropDefinition(claimedDrop.kind, claimedDrop.itemId)!;
+    const message = claimedDrop.kind === 'farm_crop'
+      ? `已领取${item.name}×${claimedDrop.quantity}，增加${RULES.farmExperiencePerGift}种植经验并按既有曲线更新等级；不发办公币、不自动收获或更换作物。`
+      : claimedDrop.kind === 'tower_book'
+        ? claimedDrop.itemId === 'weapon_manual'
+          ? `已领取${item.name}，为当前主手武器暂存${claimedDrop.quantity}品质经验，不直接升星或升品质。`
+          : `已领取${item.name}，增加${claimedDrop.quantity}技能碎片。`
+        : `已领取${item.name}×${claimedDrop.quantity}，以对应模块的同事务授予结果为准。`;
+    outcome = { id, at, kind: 'claim', tokenDelta: 0, itemId: claimedDrop.itemId, dropId: claimedDrop.id, message };
   } else invalid();
   state.version++; state.history.push(outcome); state.history = state.history.slice(-RULES.historyLimit); state.lastResult = copy(outcome);
   return { state, outcome: copy(outcome), ...(claimedDrop ? { claimedDrop: copy(claimedDrop) } : {}) };

@@ -22,7 +22,7 @@ const date = (value: string): string => new Date(value).toLocaleString('zh-CN', 
 const kindLabel = (kind: OfficeReliefOutcome['kind']): string => ({ coin: '解压币入账', loss: '解压币扣减', title: '称号收藏', tower_material: '妖塔材料待领', farm_crop: '农场礼包待领', tower_book: '研习册待领', purchase: '外观购买', equip: '外观设置', claim: '物品已领取' })[kind];
 const itemName = (drop: OfficeReliefDrop): string => [...OFFICE_RELIEF_MATERIALS, ...OFFICE_RELIEF_CROPS, ...OFFICE_RELIEF_BOOKS].find(item => item.id === drop.itemId)?.name ?? '待领物品';
 function dropDescription(drop: OfficeReliefDrop): string {
-  if (drop.kind === 'farm_crop') return '兑换 30 农场币；不是办公币，不更改正在种植的作物。';
+  if (drop.kind === 'farm_crop') return '领取 30 种植经验，不发办公币；不会自动收获或更换作物。';
   if (drop.itemId === 'weapon_manual') return '给领取时的妖塔主手武器增加 15 暂存品质经验；按现有品质规则后续结算，不增加熟练度，也不直接升星或升品质。';
   if (drop.itemId === 'skill_fragments') return '领取 3 个妖塔技能碎片，由自己选择后续用途。';
   return `领取 ${drop.quantity} 份${itemName(drop)}到妖塔材料库。`;
@@ -142,7 +142,7 @@ function Rules() {
       <tr><td>扣减解压币</td><td>49%</td><td>50–300，最多扣到 0</td></tr>
       <tr><td>稀有称号</td><td>0.5%</td><td>3 款等概率；重复折为 500 解压币</td></tr>
       <tr><td>妖塔材料</td><td>0.2%</td><td>玄铁砂 / 灵草 / 通道线索，各 3 份，待领</td></tr>
-      <tr><td>农场礼包</td><td>0.2%</td><td>3 款等概率，中奖礼包均兑换 30 农场币</td></tr>
+      <tr><td>农场礼包</td><td>0.2%</td><td>3 款等概率，中奖礼包均领取 30 种植经验</td></tr>
       <tr><td>妖塔研习册</td><td>0.1%</td><td>3 技能碎片 / 主手 15 暂存品质经验，待领</td></tr>
     </tbody></table>
     <details><summary>赢币金额细分（仅在 50% 赢币结果内）</summary><table className={styles.ruleTable}><thead><tr><th>金额区间</th><th>赢币结果内占比</th></tr></thead><tbody>{OFFICE_RELIEF_RULES.coinTiers.map(tier => <tr key={tier.min}><td>{number(tier.min)}–{number(tier.max)} 解压币</td><td>{tier.weight}%</td></tr>)}</tbody></table><p>各区间内整数等概率；超过 5,000 的结果占赢币事件的 8%，折合所有挑战的 4%。工具与外观不改变任何概率。</p></details>

@@ -5,6 +5,11 @@ import { type OfficeReliefState } from '@stealth-reader/shared';
 import { User, WalletBalance, WalletLedger, DeskPlant, DemonTowerProfile, DemonTowerAutoRun, CommunityAchievementUnlock, CommunityUserPresentation } from '../../../database/entities';
 import { createLocalDevDataSource } from '../../../database/local-dev-datasource';
 import { PlatformAssetsService } from '../../platform';
+import { DeskPlantService } from '../desk-plant.service';
+import { RelationshipPolicyService } from '../relationship-policy.service';
+import { NotificationService } from '../notification.service';
+import { FeedService } from '../feed.service';
+import { FARM_MAX_LEVEL, farmLevelSnapshot } from '../farm-growth-rules';
 import { actDemonTower, createDemonTowerState } from '../demon-tower/demon-tower.engine';
 import { demonTowerWorldView, initialDemonTowerWorld } from '../demon-tower/demon-tower.rules';
 import { OfficeHubService } from './office-hub.service';
@@ -61,6 +66,10 @@ describe('Office relief real service persistence and cross-module ownership (pg-
     const state = actDemonTower(createDemonTowerState(now, officeDay(now), 'relief-service-synthetic-seed'), { kind: 'select_skin', payload: { skin: 'ledger' } },
       { now, serviceDate: officeDay(now), expansionEnabled: true, world: demonTowerWorldView(initialDemonTowerWorld(new Date(now))) }).state;
     return db.getRepository(DemonTowerProfile).save({ userId: user.id, version: 1, state: state as unknown as Record<string, unknown>, createdAt: new Date(now), updatedAt: new Date(now) });
+  }
+  async function farmOverview(user = owner) {
+    const clock = { now: () => new Date(now) }, policy = new RelationshipPolicyService(), notifications = new NotificationService(db);
+    return new DeskPlantService(db, policy, assets, notifications, new FeedService(db, policy, notifications, clock), clock).overview(user.id);
   }
 
   it('keeps GET relief projection unpersisted and new lottery balances separate from the daily boss and main wallet', async () => {
@@ -119,15 +128,40 @@ describe('Office relief real service persistence and cross-module ownership (pg-
     expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: owner.id })).toBe(1); expect((await db.getRepository(User).findOneByOrFail({ id: owner.id })).communityRole).toBe('user');
   });
 
-  it('preserves missing-module pending rewards and grants exactly 30 real farm coins once after farm setup', async () => {
+  it('preserves missing-module pending rewards and grants visible farm experience and a real level-up exactly once', async () => {
     const state = pending([[9970, 0]]); await seed(state); const dropId = state.pending[0].id, command = input('relief_claim', state.version, { dropId });
     const before = await snapshot(); await expect(call(command)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_FARM_REQUIRED' } }); expect(await snapshot()).toEqual(before);
-    const farm = await db.getRepository(DeskPlant).save({ userId: owner.id, farmCoins: 50 });
+    await db.getRepository(DeskPlant).save({ userId: owner.id, farmCoins: 50, plantExperience: 25, level: 1, totalHarvests: 7 });
+    const farm = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id });
+    const visibleBefore = await farmOverview(); expect(visibleBefore.plant).toMatchObject({ experience: 25, level: 1 });
     const claimed = await call(command); expect(claimed.relief?.pending).toEqual([]);
-    const plant = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id }); expect(plant.farmCoins).toBe(80); expect(plant.farmVersion).toBe(farm.farmVersion + 1);
+    const plant = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id });
+    expect(plant.plantExperience).toBe(55); expect(plant.level).toBe(farmLevelSnapshot(55).level); expect(plant.farmVersion).toBe(farm.farmVersion + 1);
+    expect({ ...plant, plantExperience: farm.plantExperience, level: farm.level, farmVersion: farm.farmVersion, updatedAt: farm.updatedAt }).toEqual(farm);
+    const visibleAfter = await farmOverview();
+    expect(visibleAfter.plant).toMatchObject({ experience: 55, level: 2, experienceInLevel: 15, experienceToNextLevel: 50 });
+    expect(visibleAfter.skills.find(skill => skill.id === 'quick_care')?.unlocked).toBe(true);
+    expect(visibleAfter.growth).toMatchObject({ farmCoins: 0, officeCoins: visibleBefore.growth.officeCoins, totalHarvests: 7, farmVersion: farm.farmVersion + 1 });
     const after = await snapshot(); expect((await call(command)).reliefReceipt?.replayed).toBe(true); expect(await snapshot()).toEqual(after);
     await expect(call(input('relief_claim', claimed.relief!.version, { dropId }))).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_DROP_NOT_FOUND' } });
     expect(after.wallet).toEqual(before.wallet); expect(after.ledger).toEqual(before.ledger);
+  });
+
+  it.each([{ plantExperience: 2_147_483_618, farmVersion: 1 }, { plantExperience: 25, farmVersion: 2_147_483_647 }])('retains the gift when farm experience or version cannot safely increase: %j', async fields => {
+    const state = pending([[9970, 0]]); await seed(state);
+    await db.getRepository(DeskPlant).save({ userId: owner.id, ...fields, farmCoins: 50, level: farmLevelSnapshot(fields.plantExperience).level });
+    const before = await snapshot();
+    await expect(call(input('relief_claim', state.version, { dropId: state.pending[0].id }))).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_REWARD_FULL' } });
+    expect(await snapshot()).toEqual(before);
+  });
+
+  it('accepts the exact experience integer boundary while the actual farm level remains capped by existing rules', async () => {
+    const state = pending([[9970, 0]]); await seed(state);
+    await db.getRepository(DeskPlant).save({ userId: owner.id, plantExperience: 2_147_483_617, level: FARM_MAX_LEVEL, farmCoins: 77 });
+    await call(input('relief_claim', state.version, { dropId: state.pending[0].id }));
+    const plant = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id });
+    expect(plant).toMatchObject({ plantExperience: 2_147_483_647, level: FARM_MAX_LEVEL, farmCoins: 77 });
+    expect((await farmOverview()).plant).toMatchObject({ experience: 2_147_483_647, level: FARM_MAX_LEVEL, experienceToNextLevel: null });
   });
 
   it('retains tower gifts until explicitly claimed and credits real materials, fragments and current-main weapon experience once', async () => {

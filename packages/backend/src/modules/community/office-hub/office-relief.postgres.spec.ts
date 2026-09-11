@@ -6,6 +6,10 @@ import { entities, User, DeskPlant, DemonTowerProfile, CommunityFishProgress, Co
 import { migrations } from '../../../database/migrations';
 import { PlatformAssetsService } from '../../platform';
 import { FishGrowthService } from '../progression/fish-growth.service';
+import { DeskPlantService } from '../desk-plant.service';
+import { RelationshipPolicyService } from '../relationship-policy.service';
+import { NotificationService } from '../notification.service';
+import { FeedService } from '../feed.service';
 import { actDemonTower, createDemonTowerState } from '../demon-tower/demon-tower.engine';
 import { demonTowerWorldView, initialDemonTowerWorld } from '../demon-tower/demon-tower.rules';
 import { OfficeHubService } from './office-hub.service';
@@ -104,20 +108,28 @@ if (testUrl) {
     await fish.heartbeat(user.id, { tabId: crypto.randomUUID(), sequence: 1, mode: 'game' }); expect(await snapshot(user)).toEqual(before);
   }, 30000);
 
-  it('rolls back farm credit, pending removal and office state when the final immutable receipt insert fails', async () => {
-    const state = gift([9970, 0]), user = await actor(state); await db.getRepository(DeskPlant).save({ userId: user.id, farmCoins: 70 });
+  it('rolls back real farm experience/level and pending removal when the final receipt fails; retry is visible in the actual farm view', async () => {
+    const state = gift([9970, 0]), user = await actor(state); await db.getRepository(DeskPlant).save({ userId: user.id, farmCoins: 70, plantExperience: 25, level: 1, totalHarvests: 7 });
     const before = await snapshot(user), input = command('relief_claim', state.version, { dropId: state.pending[0].id });
     const original = EntityManager.prototype.query; let observedRealCredit = false;
     const fault = jest.spyOn(EntityManager.prototype, 'query').mockImplementation(async function (this: EntityManager, sql: string, parameters?: unknown[]) {
       if (sql.startsWith('INSERT INTO office_hub_receipts') && parameters?.[0] === user.id) {
-        const rows = await original.call(this, 'SELECT farm_coins FROM desk_plants WHERE user_id=$1', [user.id]) as Array<{ farm_coins: number }>; observedRealCredit = Number(rows[0].farm_coins) === 100;
+        const rows = await original.call(this, 'SELECT plant_experience,level,farm_coins FROM desk_plants WHERE user_id=$1', [user.id]) as Array<{ plant_experience: number; level: number; farm_coins: number }>;
+        observedRealCredit = rows[0].plant_experience === 55 && rows[0].level === 2 && rows[0].farm_coins === 70;
         throw new Error('synthetic-office-receipt-failure');
       }
       return original.call(this, sql, parameters);
     });
     await expect(act(user, input)).rejects.toThrow('synthetic-office-receipt-failure'); fault.mockRestore(); expect(observedRealCredit).toBe(true); expect(await snapshot(user)).toEqual(before);
-    const result = await act(user, input); expect(result.relief?.pending).toEqual([]); expect((await db.getRepository(DeskPlant).findOneByOrFail({ userId: user.id })).farmCoins).toBe(100);
+    const result = await act(user, input); expect(result.relief?.pending).toEqual([]);
+    expect(await db.getRepository(DeskPlant).findOneByOrFail({ userId: user.id })).toMatchObject({ plantExperience: 55, level: 2, farmCoins: 70, totalHarvests: 7, selectedCropKey: before.farm!.selectedCropKey, farmVersion: before.farm!.farmVersion + 1 });
+    const clock = { now: () => new Date(now) }, policy = new RelationshipPolicyService(), notifications = new NotificationService(db);
+    const visible = await new DeskPlantService(db, policy, assets, notifications, new FeedService(db, policy, notifications, clock), clock).overview(user.id);
+    expect(visible.plant).toMatchObject({ experience: 55, level: 2, experienceInLevel: 15, experienceToNextLevel: 50 });
+    expect(visible.skills.find(skill => skill.id === 'quick_care')?.unlocked).toBe(true);
+    expect(visible.growth).toMatchObject({ farmCoins: 0, totalHarvests: 7 });
     const saved = await snapshot(user); expect((await act(user, input)).reliefReceipt?.replayed).toBe(true); expect(await snapshot(user)).toEqual(saved);
+    expect(saved.wallets).toEqual(before.wallets); expect(saved.ledger).toEqual(before.ledger);
   });
 
   it('rolls back a granted title and persisted play when the post-write view fails, then safely retries the same UUID', async () => {

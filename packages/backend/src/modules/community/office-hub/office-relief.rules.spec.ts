@@ -108,6 +108,8 @@ describe('Office relief exact integer distribution and transitions', () => {
     expect(state.titles).toHaveLength(3); expect(state.tokenBalance).toBe(1500); expect(validateOfficeRelief(state)).toEqual(state);
   });
   it('creates exactly one bounded pending reward with the request ID and only real existing crop keys', () => {
+    expect(RULES.farmExperiencePerGift).toBe(30);
+    expect(RULES).not.toHaveProperty('farmCoinsPerGift');
     expect(OFFICE_RELIEF_CROPS.every(item => FARM_CROPS.some(crop => crop.key === item.id))).toBe(true);
     for (const [outer, pool, kind] of [[9950, OFFICE_RELIEF_MATERIALS, 'tower_material'], [9970, OFFICE_RELIEF_CROPS, 'farm_crop'], [9990, OFFICE_RELIEF_BOOKS, 'tower_book']] as const) {
       for (let index = 0; index < pool.length; index++) {
@@ -115,7 +117,19 @@ describe('Office relief exact integer distribution and transitions', () => {
         expect(result.state.pending).toEqual([{ id: requestId, receivedAt: new Date(NOW).toISOString(), kind, itemId: item.id, quantity: item.quantity }]);
         expect(result.outcome).toMatchObject({ id: requestId, kind, dropId: requestId, itemId: item.id, tokenDelta: 0 });
         expect(validateOfficeRelief(result.state)).toEqual(result.state);
-        expect(result.state).not.toHaveProperty('farmCoins'); expect(result.state).not.toHaveProperty('towerMaterials');
+        expect(result.state).not.toHaveProperty('farmCoins'); expect(result.state).not.toHaveProperty('plantExperience'); expect(result.state).not.toHaveProperty('towerMaterials');
+        if (kind === 'farm_crop') {
+          expect(result.outcome.message).toContain('每份领取后增加30种植经验');
+          expect(result.outcome.message).toContain('不发办公币');
+          const claimed = action(result.state, { kind: 'claim', dropId: requestId });
+          expect(claimed.claimedDrop).toMatchObject({ kind: 'farm_crop', itemId: item.id, quantity: 1 });
+          expect(claimed.outcome.message).toContain('增加30种植经验并按既有曲线更新等级');
+          expect(claimed.outcome.message).not.toContain('农场币'); expect(claimed.outcome.tokenDelta).toBe(0);
+        } else if (kind === 'tower_book' && item.id === 'weapon_manual') {
+          expect(result.outcome.message).toContain('暂存15品质经验'); expect(result.outcome.message).not.toContain('手册×15');
+          const claimed = action(result.state, { kind: 'claim', dropId: requestId });
+          expect(claimed.outcome.message).toContain('暂存15品质经验'); expect(claimed.outcome.message).not.toContain('手册×15');
+        }
       }
     }
   });

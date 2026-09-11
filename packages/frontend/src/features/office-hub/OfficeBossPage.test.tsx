@@ -281,7 +281,8 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
     expect(book).toHaveTextContent('不增加熟练度');
     expect(screen.getByRole('link', { name: '去妖塔' })).toHaveAttribute('href', '/games/demon-tower?tab=profile');
     expect(screen.getByRole('link', { name: '去农场' })).toHaveAttribute('href', '/farm');
-    expect(screen.getByText(/兑换 30 农场币/)).toHaveTextContent('不是办公币');
+    expect(screen.getByText(/领取 30 种植经验/)).toHaveTextContent('不发办公币；不会自动收获或更换作物');
+    expect(screen.queryByText(/农场币/)).not.toBeInTheDocument();
     fireEvent.click(within(book).getByRole('button', { name: '领取物品' })); fireEvent.click(screen.getByRole('button', { name: '确认领取' }));
     expect(write).toHaveBeenCalledWith('relief_claim', { dropId: 'book-a', expectedVersion: 1 }, expect.any(String));
     expect(await screen.findByRole('alert')).toHaveTextContent('物品仍然保留');
@@ -293,9 +294,9 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
     page(overview(relief({ pending: [{ id: 'crop-a', kind: 'farm_crop', itemId: 'desk_mint', quantity: 1, receivedAt: NOW }] })));
     fireEvent.click(await screen.findByRole('button', { name: '领取物品' })); fireEvent.click(screen.getByRole('button', { name: '确认领取' }));
     expect(screen.getByText('工位薄荷礼包')).toBeVisible();
-    await act(async () => request.resolve(receipt(write.mock.calls[0][2]!, outcome({ kind: 'claim', tokenDelta: 0, message: '农场已收到 30 农场币' }), { pending: [], tokenBalance: 2000 })));
+    await act(async () => request.resolve(receipt(write.mock.calls[0][2]!, outcome({ kind: 'claim', tokenDelta: 0, message: '农场已增加 30 种植经验' }), { pending: [], tokenBalance: 2000 })));
     expect(screen.queryByText('工位薄荷礼包')).not.toBeInTheDocument();
-    expect(screen.getByText('农场已收到 30 农场币')).toBeVisible();
+    expect(screen.getByText('农场已增加 30 种植经验')).toBeVisible();
     expect(art()).toHaveAttribute('data-effect', 'none');
   });
   it('keeps original daily manual tools cosmetic and stops their local tap effect on blur', async () => {
@@ -354,5 +355,7 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
     expect(screen.getByText(/游戏时间不重复加成/)).toBeVisible();
     expect(screen.getByText(/折合所有挑战的 4%/)).toBeInTheDocument();
     expect(screen.getByText('1,001–2,000 解压币')).toBeInTheDocument();
+    expect(screen.getByText('3 款等概率，中奖礼包均领取 30 种植经验')).toBeVisible();
+    expect(screen.queryByText(/农场币/)).not.toBeInTheDocument();
   });
 });
