@@ -27,6 +27,8 @@
     background: var(--color-surface);
     color: var(--color-text-secondary)
 }
+.talentActions { display: flex; flex-wrap: wrap; gap: 10px; }
+.talents p { overflow-wrap: anywhere; }
 :global(html[data-site-mode='community'][data-color-mode='dark']) .career, :global(html[data-site-mode='community'][data-color-mode='dark']) .resume, :global(html[data-site-mode='community'][data-color-mode='dark']) .options, :global(html[data-site-mode='community'][data-color-mode='dark']) .talents, :global(html[data-site-mode='community'][data-color-mode='dark']) .records, :global(html[data-site-mode='community'][data-color-mode='dark']) .rules {
     border: 1px solid var(--color-border);
     background: var(--color-surface)

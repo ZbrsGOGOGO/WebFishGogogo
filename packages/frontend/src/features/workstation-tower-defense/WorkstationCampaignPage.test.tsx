@@ -5,10 +5,12 @@ import { createWorkstationCampaign,type WorkstationOverview } from '@stealth-rea
 import { workstationApi } from './workstation-api';
 import { WorkstationCampaignPage,WorkstationLeaderboardPage } from './WorkstationCampaignPage';
 import { WorkstationTowerDefensePage } from './WorkstationTowerDefensePage';
+import { useCommunityAuthStore } from '../../app/store/community-auth-store';
+import { setCommunitySessionTokens } from '../../api/community-http';
 vi.mock('./workstation-api',()=>({workstationApi:{overview:vi.fn(),start:vi.fn(),sync:vi.fn(),command:vi.fn(),talents:vi.fn(),formation:vi.fn(),leaderboard:vi.fn()}}));
 function snapshot():WorkstationOverview{return {profile:{experience:0,promotionTier:0,unlockedChapter:1,talents:{output:0,control:0,economy:0},talentPoints:1,formation:[],stats:{runs:0,wins:0,waves:0,bestScore:0,bestStreak:0,totalScore:0,achievements:[]}},run:null,reports:[],writesEnabled:true,rules:'服务器保存，失败 30%'};}
 describe('account campaign interface',()=>{
-  beforeEach(()=>{vi.resetAllMocks();window.localStorage.clear();vi.mocked(workstationApi.overview).mockResolvedValue(snapshot());});
+  beforeEach(()=>{vi.resetAllMocks();window.localStorage.clear();useCommunityAuthStore.getState().reset();vi.mocked(workstationApi.overview).mockResolvedValue(snapshot());});
   afterEach(()=>{cleanup();vi.useRealTimers();});
   it('shows six chapters, four jobs, three modes, independent local practice and official ranking',async()=>{
     render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);
@@ -30,6 +32,51 @@ describe('account campaign interface',()=>{
     vi.mocked(workstationApi.overview).mockRejectedValue(new Error('offline'));
     render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);
     expect(await screen.findByText(/未假定操作成功/)).toBeInTheDocument();expect(screen.getByRole('link',{name:'先去本地练习'})).toBeInTheDocument();
+  });
+  it('saves the next-run plan during an active run and sends the exact previously read CAS baseline',async()=>{
+    const state=createWorkstationCampaign(1972,{job:'it',mode:'story',chapter:1,promotionTier:0,talents:{output:0,control:0,economy:0},weekday:1});
+    const initial={...snapshot(),run:{id:'current-run',revision:1,state,catchupPending:false}};
+    vi.mocked(workstationApi.overview).mockResolvedValue(initial);
+    vi.mocked(workstationApi.talents).mockResolvedValue({...initial,profile:{...initial.profile,talents:{output:1,control:0,economy:0}}});
+    render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);await screen.findByLabelText('当前局天赋');
+    fireEvent.change(screen.getByRole('spinbutton',{name:'出力'}),{target:{value:'1'}});
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'保存天赋'}));});
+    expect(workstationApi.talents).toHaveBeenCalledWith({output:1,control:0,economy:0,expectedTalents:{output:0,control:0,economy:0}});
+    expect(screen.getByLabelText('服务端天赋方案')).toHaveTextContent('出力 1');expect(screen.getByLabelText('当前局天赋')).toHaveTextContent('出力 0');
+    expect(workstationApi.command).not.toHaveBeenCalled();expect(workstationApi.start).not.toHaveBeenCalled();
+  });
+  it('rereads on failed saving without deleting the draft or pretending the persisted value changed',async()=>{
+    vi.mocked(workstationApi.talents).mockRejectedValue(new Error('offline'));
+    render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);await screen.findByLabelText('服务端天赋方案');
+    fireEvent.change(screen.getByRole('spinbutton',{name:'出力'}),{target:{value:'1'}});
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'保存天赋'}));});
+    expect(workstationApi.overview).toHaveBeenCalledTimes(2);expect(screen.getByRole('alert')).toHaveTextContent('未假定操作成功');
+    expect(screen.getByLabelText('服务端天赋方案')).toHaveTextContent('出力 0');expect(screen.getByRole('spinbutton',{name:'出力'})).toHaveValue(1);
+  });
+  it('drops the previous session draft and ignores its late save response even for the same owner',async()=>{
+    let finish!:(value:WorkstationOverview)=>void;
+    vi.mocked(workstationApi.talents).mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+    render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);await screen.findByLabelText('服务端天赋方案');
+    fireEvent.change(screen.getByRole('spinbutton',{name:'出力'}),{target:{value:'1'}});fireEvent.click(screen.getByRole('button',{name:'保存天赋'}));
+    const fresh=snapshot();fresh.profile.talents={output:0,control:0,economy:1};vi.mocked(workstationApi.overview).mockResolvedValue(fresh);
+    await act(async()=>{setCommunitySessionTokens('synthetic-new-session');useCommunityAuthStore.setState({loading:false});});
+    expect(screen.getByRole('spinbutton',{name:'出力'})).toHaveValue(0);expect(screen.getByRole('spinbutton',{name:'经济'})).toHaveValue(1);
+    const old=snapshot();old.profile.talents={output:1,control:0,economy:0};await act(async()=>{finish(old);});
+    expect(screen.getByLabelText('服务端天赋方案')).toHaveTextContent('出力 0 / 控制 0 / 经济 1');expect(screen.queryByText(/下一局方案已保存/)).not.toBeInTheDocument();
+  });
+  it('normal store rerenders keep an unsaved plan rather than remounting the task',async()=>{
+    render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);await screen.findByLabelText('服务端天赋方案');
+    fireEvent.change(screen.getByRole('spinbutton',{name:'出力'}),{target:{value:'1'}});act(()=>{useCommunityAuthStore.setState({loading:false});});
+    expect(screen.getByRole('spinbutton',{name:'出力'})).toHaveValue(1);expect(workstationApi.overview).toHaveBeenCalledTimes(1);
+  });
+  it('keeps next-run saves and the deployed-tower move control disabled in read-only maintenance',async()=>{
+    const state=createWorkstationCampaign(1972,{job:'it',mode:'story',chapter:1,promotionTier:0,talents:{output:0,control:0,economy:0},weekday:1});
+    state.towers=[{id:'owned',type:'single',level:2,slotIndex:4,cooldown:9,invested:54}];
+    vi.mocked(workstationApi.overview).mockResolvedValue({...snapshot(),writesEnabled:false,run:{id:'read-only-run',revision:1,state,catchupPending:false}});
+    render(<MemoryRouter><WorkstationCampaignPage/></MemoryRouter>);await screen.findByLabelText('服务端天赋方案');
+    expect(screen.getByRole('button',{name:'保存天赋'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'继续这份存档'}));
+    fireEvent.click(screen.getByRole('button',{name:'塔位 5，订书机 2 阶'}));expect(screen.getByRole('button',{name:'移动防御塔'})).toBeDisabled();
+    fireEvent.click(screen.getByRole('button',{name:'移动防御塔'}));expect(workstationApi.command).not.toHaveBeenCalled();
   });
   it('discards queued commands once the server says that run has ended',async()=>{
     vi.useFakeTimers();const state=createWorkstationCampaign(1,{job:'it',mode:'story',chapter:1,promotionTier:0,talents:{output:0,control:0,economy:0},weekday:1});const initial={...snapshot(),run:{id:'run-old',revision:1,state,catchupPending:false}};

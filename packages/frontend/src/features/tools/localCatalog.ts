@@ -150,7 +150,7 @@ export const LOCAL_TOOL_CATALOG: readonly Tool[] = [
     slug: 'color-converter',
     name: '颜色转换',
     category: '设计',
-    description: '实时转换 HEX、RGB 与 HSL 颜色格式。',
+    description: '实时转换 HEX、RGB、HSL 与 CMYK 颜色格式。',
     icon: 'palette',
     enabled: true,
     professions: [Profession.Design, Profession.Dev, Profession.Other],

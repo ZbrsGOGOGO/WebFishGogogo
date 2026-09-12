@@ -1,5 +1,5 @@
 // packages/frontend/src/features/tools/runtime/tools/ColorConverter.tsx
-// 颜色转换工具：HEX <-> RGB <-> HSL，带实时色块预览。纯前端。
+// 颜色转换工具：HEX <-> RGB <-> HSL <-> CMYK，带实时色块预览。纯前端。
 
 import { useState, type JSX } from 'react';
 
@@ -16,6 +16,13 @@ export interface Hsl {
   h: number;
   s: number;
   l: number;
+}
+
+export interface Cmyk {
+  c: number;
+  m: number;
+  y: number;
+  k: number;
 }
 
 /** 解析 HEX（#RGB / #RRGGBB，可省略 #）为 RGB；非法返回 null。 */
@@ -112,8 +119,49 @@ export function hslToRgb({ h, s, l }: Hsl): Rgb {
   };
 }
 
+/** RGB -> CMYK（百分比，保留 1 位小数）。未应用印刷设备的 ICC 配置。 */
+export function rgbToCmyk({ r, g, b }: Rgb): Cmyk {
+  const rn = clamp(r, 0, 255) / 255;
+  const gn = clamp(g, 0, 255) / 255;
+  const bn = clamp(b, 0, 255) / 255;
+  const k = 1 - Math.max(rn, gn, bn);
+  if (k >= 1) {
+    return { c: 0, m: 0, y: 0, k: 100 };
+  }
+  const percentage = (value: number): number =>
+    Math.round(value * 1000) / 10;
+  return {
+    c: percentage((1 - rn - k) / (1 - k)),
+    m: percentage((1 - gn - k) / (1 - k)),
+    y: percentage((1 - bn - k) / (1 - k)),
+    k: percentage(k),
+  };
+}
+
+/** CMYK（百分比）-> RGB。输入会被限制到 0-100。 */
+export function cmykToRgb({ c, m, y, k }: Cmyk): Rgb {
+  const cn = clamp(c, 0, 100) / 100;
+  const mn = clamp(m, 0, 100) / 100;
+  const yn = clamp(y, 0, 100) / 100;
+  const kn = clamp(k, 0, 100) / 100;
+  return {
+    r: Math.round(255 * (1 - cn) * (1 - kn)),
+    g: Math.round(255 * (1 - mn) * (1 - kn)),
+    b: Math.round(255 * (1 - yn) * (1 - kn)),
+  };
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, n));
+}
+
+function formatCmyk(cmyk: Cmyk): Record<keyof Cmyk, string> {
+  return {
+    c: String(cmyk.c),
+    m: String(cmyk.m),
+    y: String(cmyk.y),
+    k: String(cmyk.k),
+  };
 }
 
 /** 颜色转换工具组件。以 RGB 为内部权威表示，任一输入更新即同步其余。 */
@@ -121,9 +169,21 @@ export default function ColorConverter(): JSX.Element {
   const [rgb, setRgb] = useState<Rgb>({ r: 252, g: 85, b: 49 });
   const [hexInput, setHexInput] = useState('#FC5531');
   const [hexError, setHexError] = useState<string | null>(null);
+  const [cmykInput, setCmykInput] = useState<Record<keyof Cmyk, string>>(
+    () => formatCmyk(rgbToCmyk({ r: 252, g: 85, b: 49 })),
+  );
+  const [cmykError, setCmykError] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState('');
 
   const hsl = rgbToHsl(rgb);
+
+  function applyRgb(next: Rgb): void {
+    setRgb(next);
+    setHexInput(rgbToHex(next));
+    setHexError(null);
+    setCmykInput(formatCmyk(rgbToCmyk(next)));
+    setCmykError(null);
+  }
 
   function applyHex(next: string): void {
     setHexInput(next);
@@ -133,6 +193,8 @@ export default function ColorConverter(): JSX.Element {
     } else {
       setHexError(null);
       setRgb(parsed);
+      setCmykInput(formatCmyk(rgbToCmyk(parsed)));
+      setCmykError(null);
     }
   }
 
@@ -142,9 +204,7 @@ export default function ColorConverter(): JSX.Element {
       return;
     }
     const next = { ...rgb, [channel]: clamp(Math.round(n), 0, 255) };
-    setRgb(next);
-    setHexInput(rgbToHex(next));
-    setHexError(null);
+    applyRgb(next);
   }
 
   function setHslChannel(channel: keyof Hsl, raw: string): void {
@@ -154,6 +214,24 @@ export default function ColorConverter(): JSX.Element {
     }
     const nextHsl: Hsl = { ...hsl, [channel]: n };
     const nextRgb = hslToRgb(nextHsl);
+    applyRgb(nextRgb);
+  }
+
+  function setCmykChannel(channel: keyof Cmyk, raw: string): void {
+    const nextInput = { ...cmykInput, [channel]: raw };
+    setCmykInput(nextInput);
+    const entries = Object.entries(nextInput) as Array<[keyof Cmyk, string]>;
+    const parsed = Object.fromEntries(
+      entries.map(([key, value]) => [key, Number(value)]),
+    ) as unknown as Cmyk;
+    const isValid = entries.every(([, value]) => value.trim() !== '')
+      && Object.values(parsed).every((value) => Number.isFinite(value) && value >= 0 && value <= 100);
+    if (!isValid) {
+      setCmykError('CMYK 分量需要在 0–100 之间');
+      return;
+    }
+    setCmykError(null);
+    const nextRgb = cmykToRgb(parsed);
     setRgb(nextRgb);
     setHexInput(rgbToHex(nextRgb));
     setHexError(null);
@@ -162,6 +240,7 @@ export default function ColorConverter(): JSX.Element {
   const currentHex = rgbToHex(rgb);
   const rgbText = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
   const hslText = `hsl(${hsl.h} ${hsl.s}% ${hsl.l}%)`;
+  const cmykText = `cmyk(${cmykInput.c}% ${cmykInput.m}% ${cmykInput.y}% ${cmykInput.k}%)`;
 
   async function copyColor(value: string, label: string): Promise<void> {
     try {
@@ -263,6 +342,28 @@ export default function ColorConverter(): JSX.Element {
               />
             </div>
           </fieldset>
+
+          <fieldset className={styles.fieldset}>
+            <legend>CMYK</legend>
+            <div className={styles.quadGrid}>
+              {(['c', 'm', 'y', 'k'] as const).map((channel) => (
+                <Input
+                  key={channel}
+                  label={`${channel.toUpperCase()}%`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.1"
+                  value={cmykInput[channel]}
+                  onChange={(event) => setCmykChannel(channel, event.target.value)}
+                />
+              ))}
+            </div>
+            {cmykError && <p className={styles.error} role="alert">{cmykError}</p>}
+            <p className={styles.hint}>
+              CMYK 为未应用 ICC 色彩配置的近似值，印刷成品请以打样为准。
+            </p>
+          </fieldset>
         </div>
       </div>
 
@@ -286,6 +387,14 @@ export default function ColorConverter(): JSX.Element {
           onClick={() => void copyColor(hslText, 'HSL')}
         >
           复制 HSL
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          disabled={cmykError !== null}
+          onClick={() => void copyColor(cmykText, 'CMYK')}
+        >
+          复制 CMYK
         </Button>
       </div>
       <p className={styles.copyStatus} role="status" aria-live="polite">

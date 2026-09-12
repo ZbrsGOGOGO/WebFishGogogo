@@ -8,7 +8,15 @@ import { formatJson, minifyJson, validateJson } from './JsonFormatter';
 import { timestampToDate, dateToTimestamp, formatLocal } from './TimestampConverter';
 import { runRegex } from './RegexTester';
 import { convert, convertTemperature, roundResult } from './UnitConverter';
-import { hexToRgb, rgbToHex, rgbToHsl, hslToRgb, type Rgb } from './ColorConverter';
+import {
+  cmykToRgb,
+  hexToRgb,
+  hslToRgb,
+  rgbToCmyk,
+  rgbToHex,
+  rgbToHsl,
+  type Rgb,
+} from './ColorConverter';
 
 describe('JsonFormatter', () => {
   it('格式化使用 2 空格缩进', () => {
@@ -158,6 +166,17 @@ describe('ColorConverter', () => {
     expect(rgbToHsl({ r: 255, g: 0, b: 0 })).toEqual({ h: 0, s: 100, l: 50 });
   });
 
+  it('已知 CMYK 值并正确处理纯黑', () => {
+    expect(rgbToCmyk({ r: 255, g: 0, b: 0 })).toEqual({ c: 0, m: 100, y: 100, k: 0 });
+    expect(rgbToCmyk({ r: 0, g: 0, b: 0 })).toEqual({ c: 0, m: 0, y: 0, k: 100 });
+    expect(cmykToRgb({ c: 0, m: 0, y: 0, k: 0 })).toEqual({ r: 255, g: 255, b: 255 });
+    expect(cmykToRgb({ c: 0, m: 100, y: 100, k: 0 })).toEqual({ r: 255, g: 0, b: 0 });
+  });
+
+  it('CMYK 转换会限制越界输入', () => {
+    expect(cmykToRgb({ c: -20, m: 120, y: 0, k: 0 })).toEqual({ r: 255, g: 0, b: 255 });
+  });
+
   it('属性：HEX -> RGB -> HEX 往返一致', () => {
     fc.assert(
       fc.property(
@@ -186,6 +205,22 @@ describe('ColorConverter', () => {
           expect(Math.abs(back.r - r)).toBeLessThanOrEqual(5);
           expect(Math.abs(back.g - g)).toBeLessThanOrEqual(5);
           expect(Math.abs(back.b - b)).toBeLessThanOrEqual(5);
+        },
+      ),
+    );
+  });
+
+  it('属性：RGB -> CMYK -> RGB 近似还原', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 255 }),
+        fc.integer({ min: 0, max: 255 }),
+        fc.integer({ min: 0, max: 255 }),
+        (r, g, b) => {
+          const back = cmykToRgb(rgbToCmyk({ r, g, b }));
+          expect(Math.abs(back.r - r)).toBeLessThanOrEqual(1);
+          expect(Math.abs(back.g - g)).toBeLessThanOrEqual(1);
+          expect(Math.abs(back.b - b)).toBeLessThanOrEqual(1);
         },
       ),
     );

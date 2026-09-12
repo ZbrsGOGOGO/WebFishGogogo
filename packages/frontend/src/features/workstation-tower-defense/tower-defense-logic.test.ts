@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { withLegacySingleOpening } from './tower-defense-test-fixtures';
 
 import {
   TOWER_DEFENSE_PATH,
@@ -131,11 +132,11 @@ describe('workstation tower-defense economy', () => {
     expect(state.hero).toMatchObject({ x: 7, y: 6, level: 1, attack: 3 });
     expect(state.shop).toHaveLength(5);
     expect(state.shop.slice(0, 3).every((offer) =>
-      offer.type === 'single' && offer.source === 'guaranteed')).toBe(true);
+      offer.type === state.shopFocus && offer.source === 'guaranteed')).toBe(true);
     expect(state.shop[TOWER_FOCUSED_ORDER_INDEX]).toMatchObject({
-      type: 'single',
+      type: state.shopFocus,
       source: 'focused',
-      cost: focusedTowerPartCost('single'),
+      cost: focusedTowerPartCost(state.shopFocus),
     });
     expect(state.inventory).toEqual([]);
     expect('accountCredits' in state).toBe(false);
@@ -169,6 +170,7 @@ describe('workstation tower-defense economy', () => {
 
   it('guarantees plant plus three parts, then auto-merges the first deployable tower', () => {
     let state = upgradeTowerDefensePlant(createTowerDefenseState(9)).state;
+    const type = state.shopFocus, invested = 3 * state.shop[0].cost;
     const guaranteedIds = state.shop.slice(0, 3).map((offer) => offer.id);
     for (const offerId of guaranteedIds) {
       const bought = buyTowerShopOffer(state, offerId);
@@ -177,14 +179,14 @@ describe('workstation tower-defense economy', () => {
       expect(state.shop).toHaveLength(TOWER_SHOP_SIZE);
     }
 
-    expect(state.credits).toBe(26);
+    expect(state.credits).toBe(80 - invested);
     expect(state.inventory).toEqual([
-      expect.objectContaining({ type: 'single', tier: 2, invested: 54 }),
+      expect.objectContaining({ type, tier: 2, invested }),
     ]);
     const deployed = deployInventoryTower(state, state.inventory[0].id, 4);
     expect(deployed.ok).toBe(true);
-    expect(deployed.state.credits).toBe(26);
-    expect(deployed.state.towers[0]).toMatchObject({ type: 'single', level: 2, invested: 54 });
+    expect(deployed.state.credits).toBe(80 - invested);
+    expect(deployed.state.towers[0]).toMatchObject({ type, level: 2, invested });
   });
 
   it('refuses tier-one deployment with a useful reason and never deducts deployment credits', () => {
@@ -218,15 +220,15 @@ describe('workstation tower-defense economy', () => {
     const mergeable = {
       ...state,
       inventory: [
-        item('same-a', 'single', 1),
-        item('same-b', 'single', 1),
+        item('same-a', base.shop[0].type, 1, base.shop[0].cost),
+        item('same-b', base.shop[0].type, 1, base.shop[0].cost),
         ...inventory.slice(0, 10),
       ],
     };
     const merged = buyTowerShopOffer(mergeable, mergeable.shop[0].id);
     expect(merged.ok).toBe(true);
     expect(merged.state.inventory).toHaveLength(11);
-    expect(merged.state.inventory.some((entry) => entry.type === 'single' && entry.tier === 2)).toBe(true);
+    expect(merged.state.inventory.some((entry) => entry.type === base.shop[0].type && entry.tier === 2)).toBe(true);
   });
 
   it('refreshes all five offers deterministically and never refreshes for free', () => {
@@ -250,7 +252,7 @@ describe('workstation tower-defense economy', () => {
 
   it('keeps a purchased focused offer sold out and only restocks after paid refresh', () => {
     const initial = createTowerDefenseState(2027);
-    const unchangedFocus = setTowerShopFocus(initial, 'single');
+    const unchangedFocus = setTowerShopFocus(initial, initial.shopFocus);
     expect(unchangedFocus.state.shop[TOWER_FOCUSED_ORDER_INDEX].id)
       .toBe(initial.shop[TOWER_FOCUSED_ORDER_INDEX].id);
     expect(unchangedFocus.state.nextOfferId).toBe(initial.nextOfferId);
@@ -573,7 +575,7 @@ describe('workstation tower-defense combat', () => {
 
 describe('workstation tower-defense deterministic balance', () => {
   it('does not let the guaranteed tier-two tower idle through both rounds', () => {
-    let state = upgradeTowerDefensePlant(createTowerDefenseState(31)).state;
+    let state = upgradeTowerDefensePlant(withLegacySingleOpening(createTowerDefenseState(31))).state;
     const guaranteedIds = state.shop.slice(0, 3).map((offer) => offer.id);
     for (const offerId of guaranteedIds) state = buyTowerShopOffer(state, offerId).state;
     state = deployInventoryTower(state, state.inventory[0].id, 4).state;
@@ -595,7 +597,7 @@ describe('workstation tower-defense deterministic balance', () => {
   });
 
   it('does not let a lone tier-three stapler perfect-clear without using skills', () => {
-    let state = upgradeTowerDefensePlant(createTowerDefenseState(31)).state;
+    let state = upgradeTowerDefensePlant(withLegacySingleOpening(createTowerDefenseState(31))).state;
     const guaranteedIds = state.shop.slice(0, 3).map((offer) => offer.id);
     for (const offerId of guaranteedIds) state = buyTowerShopOffer(state, offerId).state;
     state = deployInventoryTower(state, state.inventory[0].id, 4).state;
@@ -632,7 +634,7 @@ describe('workstation tower-defense deterministic balance', () => {
   it.each([0, 31, 77, 314_159, 0xffff_ffff])(
     'charges every restock and no longer lets the old three-tier-two idle template perfect-clear (seed %s)',
     (seed) => {
-      let state = upgradeTowerDefensePlant(createTowerDefenseState(seed)).state;
+      let state = upgradeTowerDefensePlant(withLegacySingleOpening(createTowerDefenseState(seed))).state;
       const heroStart = { x: state.hero.x, y: state.hero.y };
       const guaranteedIds = state.shop.slice(0, 3).map((offer) => offer.id);
       for (const offerId of guaranteedIds) state = buyTowerShopOffer(state, offerId).state;

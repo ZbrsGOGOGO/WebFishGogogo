@@ -97,6 +97,20 @@ export interface OfficeDrawing {
     solved: boolean;
     attempts: number;
     createdAt: string;
+    /** Explicit lifecycle on newer servers; drafts may contain saved strokes. */
+    status?: 'draft' | 'published' | 'expired_empty';
+    deadlineAt?: string;
+    revision?: number;
+    savedAt?: string | null;
+    submittedAt?: string | null;
+    submission?: 'manual' | 'automatic' | null;
+}
+export interface OfficeDrawingWorkspace {
+    dailyLimit: number;
+    dailyUsed: number;
+    dailyRemaining: number;
+    /** Latest own drawing, independent of public feed pagination. */
+    current: OfficeDrawing | null;
 }
 export interface OfficeSpyView {
     id: string;
@@ -160,6 +174,7 @@ export interface OfficeBossView {
     rewardCoins: number;
 }
 export interface OfficeHubOverview {
+    drawingWorkspace?: OfficeDrawingWorkspace;
     /** Absent on older servers or when activity progression is disabled. */
     relief?: import('./office-relief').OfficeReliefView;
     reliefReceipt?: import('./office-relief').OfficeReliefReceipt;

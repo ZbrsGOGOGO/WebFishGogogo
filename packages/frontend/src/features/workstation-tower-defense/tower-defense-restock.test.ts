@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as e from './tower-defense-logic';
+import { withLegacySingleOpening } from './tower-defense-test-fixtures';
 
 function economicState(state: e.TowerDefenseState) {
   const { lastAction: _feedback, ...unchanged } = state;
@@ -91,9 +92,9 @@ function buyThree(state: e.TowerDefenseState, type: e.TowerType, slot: number): 
   expect(deployed.ok).toBe(true); return deployed.state;
 }
 
-describe('real-resource restock challenge balance', () => {
+describe('legacy fixed-opening save real-resource restock challenge balance', () => {
   it.each([0, 1, 31, 77, 2027, 314159, 0xffffffff])('keeps a real opening and active control strategy viable without injected funds, seed %s', (seed) => {
-    let state = e.upgradeTowerDefensePlant(e.createTowerDefenseState(seed)).state;
+    let state = e.upgradeTowerDefensePlant(withLegacySingleOpening(e.createTowerDefenseState(seed))).state;
     for (const offer of state.shop.slice(0, 3)) {
       const bought = e.buyTowerShopOffer(state, offer.id);
       expect(bought.ok).toBe(true); state = bought.state;
@@ -135,7 +136,7 @@ describe('real-resource restock challenge balance', () => {
   });
 
   it.each([0, 31, 77, 2027, 314159, 0xffffffff])('rewards an actively used third-tier armor-break build with a complete clear, seed %s', (seed) => {
-    let state = e.upgradeTowerDefensePlant(e.createTowerDefenseState(seed)).state;
+    let state = e.upgradeTowerDefensePlant(withLegacySingleOpening(e.createTowerDefenseState(seed))).state;
     for (const offer of state.shop.slice(0, 3)) state = e.buyTowerShopOffer(state, offer.id).state;
     state = e.deployInventoryTower(state, state.inventory[0].id, 4).state;
     state = e.startTowerDefense(state);

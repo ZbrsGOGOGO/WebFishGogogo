@@ -1,6 +1,6 @@
 import {
   advanceTowerPlantIncome, buyTowerShopOffer, campaignSpawns, createTowerDefenseState, deployInventoryTower,
-  mergeDeployedTower, moveTowerDefenseHero, pauseTowerDefense, refreshTowerDefenseShop,
+  mergeDeployedTower, moveDeployedTower, moveTowerDefenseHero, pauseTowerDefense, refreshTowerDefenseShop,
   resumeTowerDefense, sellDeployedTower, sellInventoryTower, setTowerShopFocus,
   startNextTowerDefenseWave, startTowerDefense, stepTowerDefense, triggerFocusPulse,
   upgradeTowerDefenseHero, upgradeTowerDefensePlant,
@@ -37,12 +37,15 @@ export const WORKSTATION_SYNERGIES: Record<TowerType, { two: string; three: stri
 export type WorkstationJob = keyof typeof WORKSTATION_JOBS;
 export type WorkstationMode = 'story' | 'endless' | 'extreme';
 export interface WorkstationTalents { output: number; control: number; economy: number }
+/** Optional CAS keeps old clients compatible; current clients protect drafts across tabs. */
+export interface WorkstationTalentPlanInput extends WorkstationTalents { expectedTalents?: WorkstationTalents }
 export type WorkstationCommand =
   | { type: 'start' | 'go' | 'next' | 'pause' | 'resume' | 'pulse' | 'hero' | 'plant' | 'refresh' | 'abandon' | 'skill2' | 'skill3' | 'rush' | 'repair-plant' }
   | { type: 'move'; direction: TowerDefenseDirection }
   | { type: 'buy'; offerId: string }
   | { type: 'focus'; towerType: TowerType }
   | { type: 'deploy'; itemId: string; slotIndex: number }
+  | { type: 'move-tower'; towerId: string; fromSlotIndex: number; toSlotIndex: number }
   | { type: 'merge' | 'sell-tower'; slotIndex: number }
   | { type: 'sell-item'; itemId: string };
 export interface WorkstationProfile {
@@ -135,6 +138,7 @@ export function applyWorkstationCommand(state: TowerDefenseState, command: Works
     case 'buy': return buyTowerShopOffer(state, command.offerId).state;
     case 'focus': return setTowerShopFocus(state, command.towerType).state;
     case 'deploy': return deployInventoryTower(state, command.itemId, command.slotIndex).state;
+    case 'move-tower': return moveDeployedTower(state, command.fromSlotIndex, command.toSlotIndex, command.towerId).state;
     case 'merge': return mergeDeployedTower(state, command.slotIndex).state;
     case 'sell-tower': return sellDeployedTower(state, command.slotIndex).state;
     case 'sell-item': return sellInventoryTower(state, command.itemId).state;

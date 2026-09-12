@@ -10,7 +10,7 @@ export function DemonTowerFirstClear({ profile, world, disabled, onAction }: Pro
   const value = profile.expansion;
   if (!value) return null;
   const can = !disabled && profile.availableActions.includes('claim_boss_loot');
-  return <TowerPanel title="首杀贡献凭证">
+  return <TowerPanel id="tower-world-recognition" title="首杀贡献凭证">
     <p className={styles.muted}>对共享守关者造成有效伤害的玩家，在该层击败后可各领取一次首杀奖励；历史贡献也可核验，不要求抢到最后一击。</p>
     <div className={styles.buttonRow}>{Array.from({ length: world.currentFloor }, (_, index) => index + 1).filter(floor => floor < world.currentFloor || world.phase !== 'boss').map(floor => <button className={styles.button} type="button" key={floor} disabled={!can || value.claimedBossFloors.includes(floor)} onClick={() => void onAction({ kind: 'claim_boss_loot', payload: { floor } })}>第{floor}层{value.claimedBossFloors.includes(floor) ? '已领取' : '核验首杀贡献'}</button>)}</div>
     {world.currentFloor === 1 && world.phase === 'boss' ? <p className={styles.muted}>首层守关者尚未击败，完成协作后在此核验贡献。</p> : null}

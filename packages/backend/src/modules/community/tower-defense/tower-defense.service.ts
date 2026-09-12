@@ -92,12 +92,22 @@ export class TowerDefenseService implements OnModuleInit, OnModuleDestroy {
     });
   }
   async talents(userId: string, raw: unknown): Promise<WorkstationOverview> {
-    assertWorkstationWrites(); const body = object(raw); exact(body, ['output','control','economy']);
+    assertWorkstationWrites(); const body = object(raw); exact(body, ['output','control','economy','expectedTalents']);
     const talents = { output: integer(body.output,0,5), control: integer(body.control,0,5), economy: integer(body.economy,0,5) };
+    let expected: WorkstationProfile['talents'] | undefined;
+    if (body.expectedTalents !== undefined) {
+      const value = object(body.expectedTalents); exact(value, ['output','control','economy']);
+      expected = { output: integer(value.output,0,5), control: integer(value.control,0,5), economy: integer(value.economy,0,5) };
+    }
     return this.transaction(userId, async (manager, profile) => {
-      const run = await this.latest(manager,userId,true);
-      if (run && !run.settled_at) throw new ConflictException({ code: 'WORKSTATION_TALENTS_NEXT_RUN' });
       if (talents.output + talents.control + talents.economy > Math.min(15,1 + Math.floor(profile.experience / 120))) throw new BadRequestException({ code: 'WORKSTATION_TALENT_POINTS' });
+      const same = (value: WorkstationProfile['talents']) => (['output','control','economy'] as const).every(key => value[key] === profile.talents[key]);
+      // Replaying the same desired allocation is harmless even if its CAS
+      // baseline predates the first response. A different stale draft is not.
+      if (same(talents)) return;
+      if (expected && !same(expected)) throw new ConflictException({ code: 'WORKSTATION_TALENTS_CONFLICT' });
+      // Running/paused/preparation states retain campaign.talents captured by
+      // createWorkstationCampaign. Only the NEXT run reads this profile plan.
       await manager.query('UPDATE tower_defense_profiles SET talents=$2 WHERE user_id=$1', [userId,JSON.stringify(talents)]);
     });
   }

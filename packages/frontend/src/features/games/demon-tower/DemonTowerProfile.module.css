@@ -1,10 +1,10 @@
 .power { margin: 0 0 18px; padding: 12px 0; border-block: 1px solid var(--tower-line, #dce3db); font-size: 12px; }
-.powerHeading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.powerHeading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; }
 .powerHeading strong { font: 600 25px/1.3 var(--font-mono, monospace); font-variant-numeric: tabular-nums; }
 .power p { margin: 6px 0; color: var(--tower-muted, #596a5e); }
 .power summary { cursor: pointer; min-height: 32px; padding-top: 5px; }
 .breakdown { margin: 10px 0; display: grid; gap: 5px; }
-.breakdown > div { display: flex; justify-content: space-between; gap: 12px; }
+.breakdown > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
 .breakdown dd { margin: 0; font-variant-numeric: tabular-nums; }
 .appearanceSummary { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
 .appearanceSummary > div { flex: 1 1 160px; min-width: 0; }

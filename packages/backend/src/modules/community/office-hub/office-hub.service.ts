@@ -1,16 +1,17 @@
 import { createHash, randomInt, randomUUID } from 'node:crypto';
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { OFFICE_COLLECTION, OFFICE_HOURLY_EXP, OFFICE_STORY_STARTERS, OFFICE_WAVE_EXP, type OfficeAuthor, type OfficeDrawing, type OfficeHubOverview, type OfficeSpyView, type OfficeStory, type OfficeStroke, type OfficeWeeklyView } from '@stealth-reader/shared';
 import { PlatformAssetsService } from '../../platform';
 import { AdminAuditLog } from '../../../database/entities/admin-audit-log.entity';
-import { assertCommunityWritesEnabled } from '../community-write-gate';
+import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { DRAW_WORDS, UNDERCOVER_WORDS } from '../play/engines/word-bank';
-import { accrueOffice, actOfficeSpy, creditOfficeWaves, drawOffice, newOfficeProfile, normalizedOfficeWord, officeDay, officeRateLimit, officeStrokes, officeText, officeTheme, officeWeek, startOfficeSpy, type OfficeProfileState, type OfficeSpyState } from './office-hub.rules';
+import { accrueOffice, actOfficeSpy, creditOfficeWaves, drawOffice, newOfficeProfile, normalizedOfficeWord, officeDay, officeRateLimit, officeText, officeTheme, officeWeek, startOfficeSpy, type OfficeProfileState, type OfficeSpyState } from './office-hub.rules';
 import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome, type OfficeReliefDrop } from '@stealth-reader/shared';
 import { CommunityAchievementUnlock } from '../../../database/entities/community-progression.entity';
 import { actOfficeRelief, readOfficeRelief } from './office-relief.rules';
 import { grantOfficeReliefDrop } from './office-relief-grants';
+import { drawingStatus, OFFICE_DRAWING_DAILY_LIMIT, OFFICE_DRAWING_DURATION, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
 interface Author extends OfficeAuthor {
     userId: string | null;
 }
@@ -28,7 +29,7 @@ interface StoryState {
     title: string;
     nodes: StoryNode[];
 }
-interface DrawingState {
+interface DrawingState extends DrawingLifecycle {
     author: Author;
     theme: string;
     wordIndex: number;
@@ -57,8 +58,56 @@ const uuid = (value: unknown): string => { if (typeof value !== 'string' || !/^[
 const enabled = (): boolean => process.env.FEATURE_OFFICE_HUB_ENABLED === 'true';
 const random = (): number => randomInt(0, 1000000) / 1000000;
 @Injectable()
-export class OfficeHubService {
+export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
+    private readonly logger = new Logger(OfficeHubService.name);
+    private drawingTimer?: ReturnType<typeof setInterval>;
+    private drawingSweepRunning = false;
     constructor(private readonly db: DataSource, private readonly assets: PlatformAssetsService) { }
+    onModuleInit(): void {
+        this.drawingTimer = setInterval(() => { void this.settleDueDrawings(); }, 2000);
+        this.drawingTimer.unref?.();
+    }
+    onModuleDestroy(): void { if (this.drawingTimer) clearInterval(this.drawingTimer); }
+    /** Bounded, restart-safe sweep. Account -> profile -> post locks match normal writes. */
+    async settleDueDrawings(): Promise<void> {
+        if (this.drawingSweepRunning || !enabled() || !communityWritesEnabled()) return;
+        this.drawingSweepRunning = true;
+        try {
+            const rows: Array<{ author_id: string }> = await this.db.query(`SELECT DISTINCT p.author_id FROM office_hub_posts p JOIN users u ON u.id=p.author_id
+                WHERE p.kind='drawing' AND p.hidden=false AND u.account_status='active'
+                AND p.state->>'published'='false' AND COALESCE(p.state->>'expiredEmpty','false')='false'
+                AND CASE WHEN jsonb_typeof(p.state->'startedAt')='number' THEN (p.state->>'startedAt')::numeric ELSE NULL END <= $1
+                ORDER BY p.author_id LIMIT 50`, [Date.now() - OFFICE_DRAWING_DURATION]);
+            for (const row of rows) {
+                if (!enabled() || !communityWritesEnabled()) break;
+                await this.db.transaction(async m => {
+                    const p = await this.profile(m, row.author_id);
+                    this.drawingGate();
+                    await this.settleOwnDrawings(m, row.author_id, p);
+                    this.drawingGate();
+                });
+            }
+        } catch { this.logger.warn('Drawing deadline settlement deferred; persisted drafts will be retried.'); }
+        finally { this.drawingSweepRunning = false; }
+    }
+    private drawingGate(): void { this.gate(); assertCommunityWritesEnabled(); }
+    private async settleOwnDrawings(m: EntityManager, userId: string, p: OfficeProfileState): Promise<void> {
+        this.drawingGate();
+        const posts: Post[] = await m.query(`SELECT * FROM office_hub_posts WHERE author_id=$1 AND kind='drawing' AND hidden=false
+            AND state->>'published'='false' AND COALESCE(state->>'expiredEmpty','false')='false' ORDER BY id LIMIT 20 FOR UPDATE`, [userId]);
+        this.drawingGate();
+        let changed = false;
+        for (const post of posts) {
+            const d = post.state as DrawingState;
+            if (!settleDrawing(d, Date.now())) continue;
+            if (d.published) p.stats.drawings += 1;
+            this.drawingGate();
+            await this.savePost(m, post);
+            changed = true;
+        }
+        this.drawingGate();
+        if (changed) { await this.save(m, userId, p); this.drawingGate(); }
+    }
     private reliefGate(): void {
         this.gate();
         assertCommunityWritesEnabled();
@@ -71,7 +120,16 @@ export class OfficeHubService {
         if(kind!==undefined&&!['story','drawing','spy'].includes(kind))throw new BadRequestException({code:'OFFICE_PAGE_INVALID'});
         let before:{at:string;id:string}|undefined;
         if(cursor!==undefined){try{if(!kind||cursor.length>300||!/^[A-Za-z0-9_-]+$/.test(cursor))throw new Error();const parsed=JSON.parse(Buffer.from(cursor,'base64url').toString('utf8'));if(Object.keys(parsed).length!==2||typeof parsed.at!=='string'||parsed.at.length>50||!Number.isFinite(Date.parse(parsed.at)))throw new Error();before={at:parsed.at,id:uuid(parsed.id)};}catch{throw new BadRequestException({code:'OFFICE_PAGE_INVALID'});}}
-        return this.db.transaction(async (m) => { const p = await this.profile(m, userId); return this.view(m, userId, p,null,{before,kind}); });
+        return this.db.transaction(async (m) => {
+            const p = await this.profile(m, userId);
+            this.gate();
+            const settlingEnabled = communityWritesEnabled();
+            if (settlingEnabled) await this.settleOwnDrawings(m, userId, p);
+            const view = await this.view(m, userId, p, null, { before, kind });
+            this.gate();
+            if (settlingEnabled) this.drawingGate();
+            return view;
+        });
     }
     /** Internal only: never expose client-provided run scores, position, or waves as an HTTP command. */
     async recordTowerSettlement(m: EntityManager, userId: string, result: {
@@ -120,8 +178,9 @@ export class OfficeHubService {
         const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
         return this.db.transaction(async (m) => {
             const p = await this.profile(m, userId);
-            const now = Date.now();
+            let now = Date.now();
             if (String(input.action).startsWith('relief_')) this.reliefGate();
+            if (String(input.action).startsWith('drawing_')) this.drawingGate();
             accrueOffice(p, now);
             const [receipt] = await m.query('SELECT request_hash,result FROM office_hub_receipts WHERE user_id=$1 AND request_id=$2', [userId, requestId]);
             if (receipt) {
@@ -132,12 +191,13 @@ export class OfficeHubService {
                     this.reliefGate();
                     view.reliefReceipt = { requestId, replayed: true, outcome: receipt.result.reliefOutcome ?? null };
                 }
+                if (String(input.action).startsWith('drawing_')) this.drawingGate();
                 return view;
             }
             const allowed: Record<string, string[]> = {
                 daily_ticket: [], collect_social: [], exchange_ticket: [], draw: ['source', 'pool'], equip: ['itemId'],
                 story_create: ['title', 'text', 'starter'], story_reply: ['postId', 'parentId', 'text'], story_rate: ['postId', 'nodeId', 'rating'],
-                drawing_start: [], drawing_publish: ['postId', 'strokes'], drawing_guess: ['postId', 'guess'], post_delete: ['postId'], post_report: ['postId'], post_moderate: ['postId', 'hidden', 'reason'],
+                drawing_start: [], drawing_save: ['postId', 'strokes', 'expectedRevision'], drawing_publish: ['postId', 'strokes', 'expectedRevision'], drawing_guess: ['postId', 'guess'], post_delete: ['postId'], post_report: ['postId'], post_moderate: ['postId', 'hidden', 'reason'],
                 spy_create: ['title', 'department'], spy_join: ['postId'], spy_leave: ['postId'], spy_start: ['postId'], spy_describe: ['postId', 'text'], spy_vote: ['postId', 'targetId'],
                 announcement: ['text'], weekly_claim: [], boss_start: [], boss_hit: ['tool'], boss_claim: [],
                 relief_play: ['expectedVersion', 'tool'], relief_buy: ['expectedVersion', 'skinId'],
@@ -167,6 +227,7 @@ export class OfficeHubService {
                         throw new ForbiddenException({ code: 'OFFICE_RELATIONSHIP_BLOCKED' });
                 }
             }
+            if (action.startsWith('drawing_')) { this.drawingGate(); now = Date.now(); accrueOffice(p, now); }
             if (!action.startsWith('relief_')) officeRateLimit(p, 'all', now, 1500, 100);
             let notice = '已保存';
             let reliefOutcome: OfficeReliefOutcome | undefined;
@@ -327,7 +388,9 @@ export class OfficeHubService {
                 await this.assets.addExperience(m, userId, 5);
                 notice = '巡视结束，办公币 +20、职场经验 +5；不操作也有相同奖励';
             }
+            if (action.startsWith('drawing_')) this.drawingGate();
             await this.save(m, userId, p);
+            if (action.startsWith('drawing_')) this.drawingGate();
             await m.query('INSERT INTO office_hub_receipts(user_id,request_id,request_hash,result) VALUES($1,$2,$3,$4::jsonb)', [userId, requestId, hash, JSON.stringify({ notice, ...(reliefOutcome ? { reliefOutcome } : {}) })]);
             const view = await this.view(m, userId, p, notice);
             if (reliefOutcome) {
@@ -339,6 +402,7 @@ export class OfficeHubService {
                 }
                 view.reliefReceipt = { requestId, replayed: false, outcome: reliefOutcome };
             }
+            if (action.startsWith('drawing_')) this.drawingGate();
             return view;
         });
     }
@@ -434,23 +498,40 @@ export class OfficeHubService {
             n.archiveReason = reason;
         } }
     private async drawingAction(m: EntityManager, userId: string, p: OfficeProfileState, input: Record<string, unknown>, now: number): Promise<string> {
-        officeRateLimit(p, String(input.action), now, input.action === 'drawing_start' ? 3 : 100, 700);
+        this.drawingGate();
         if (input.action === 'drawing_start') {
+            await this.settleOwnDrawings(m, userId, p);
+            const active = await m.query(`SELECT id FROM office_hub_posts WHERE author_id=$1 AND kind='drawing' AND hidden=false
+                AND state->>'published'='false' AND COALESCE(state->>'expiredEmpty','false')='false' LIMIT 1`, [userId]);
+            if (active.length) throw new ConflictException({ code: 'OFFICE_DRAWING_ACTIVE' });
+            const author = await this.author(m, userId);
+            this.drawingGate();
+            now = Date.now(); accrueOffice(p, now);
+            if ((p.counters.drawing_start ?? 0) >= OFFICE_DRAWING_DAILY_LIMIT) throw new ConflictException({ code: 'OFFICE_DRAWING_DAILY_LIMIT' });
+            officeRateLimit(p, String(input.action), now, OFFICE_DRAWING_DAILY_LIMIT, 700);
             const wordIndex = 8 + randomInt(0, 28);
-            await this.createPost(m, userId, 'drawing', { author: await this.author(m, userId), theme: officeTheme(now).theme, wordIndex, strokes: [], published: false, startedAt: now, guesses: {}, reports: [], hidden: false });
-            return '绘画任务已领取：2 分钟内提交，只画图形，不写文字';
+            await this.createPost(m, userId, 'drawing', { author, theme: officeTheme(now).theme, wordIndex, strokes: [], published: false, startedAt: now, revision: 0, savedAt: null, guesses: {}, reports: [], hidden: false });
+            this.drawingGate();
+            return '绘画任务已领取：2 分钟后自动提交已保存的画作；本次已计入今日 3 次机会';
         }
         const post = await this.post(m, uuid(input.postId), 'drawing'), d = post.state as DrawingState;
-        if (input.action === 'drawing_publish') {
+        this.drawingGate();
+        now = Date.now(); // A post lock can wait beyond the deadline; never accept the pre-lock clock.
+        accrueOffice(p, now);
+        if (input.action === 'drawing_publish' || input.action === 'drawing_save') {
             if (post.author_id !== userId)
                 throw new ForbiddenException({ code: 'OFFICE_OWNER_REQUIRED' });
-            if (d.published || now > d.startedAt + 120000)
-                throw new ConflictException({ code: 'OFFICE_DRAWING_EXPIRED' });
-            d.strokes = officeStrokes(input.strokes);
-            d.published = true;
-            p.stats.drawings += 1;
+            // Commit terminal state rather than rolling settlement back on a late client request.
+            if (settleDrawing(d, now)) { if (d.published) p.stats.drawings += 1; this.drawingGate(); await this.savePost(m, post); this.drawingGate(); }
+            if (drawingStatus(d) !== 'draft') return d.published
+                ? (d.submission === 'automatic' ? '时间到，服务器已自动提交最后保存的画作；未重复发布' : '画作已提交，未重复发布')
+                : '时间到，没有已保存的笔画，本次为空白结束；今日机会已使用';
+            officeRateLimit(p, String(input.action), now, input.action === 'drawing_save' ? 500 : 100, 700);
+            updateDrawing(d, { strokes: input.strokes, expectedRevision: input.expectedRevision }, now, input.action === 'drawing_publish');
+            if (d.published) p.stats.drawings += 1;
         }
         else {
+            officeRateLimit(p, String(input.action), now, 100, 700);
             if (!d.published || d.hidden)
                 throw new NotFoundException({ code: 'OFFICE_POST_NOT_FOUND' });
             if (post.author_id === userId)
@@ -467,12 +548,16 @@ export class OfficeHubService {
                     await this.award(m, userId, `guess:${post.id}`, 10);
                     await this.award(m, post.author_id, `draw:${post.id}:${userId}`, 5);
                 }
+                this.drawingGate();
                 await this.savePost(m, post);
+                this.drawingGate();
                 return guess.solved ? '猜中了！可在收藏页领取社交积分' : '再想想，还剩 ' + (5 - guess.attempts) + ' 次';
             }
         }
+        this.drawingGate();
         await this.savePost(m, post);
-        return '画作已挂到异步猜画墙';
+        this.drawingGate();
+        return input.action === 'drawing_save' ? '草稿已保存到服务器，到期自动提交已保存的笔画' : '画作已挂到异步猜画墙';
     }
     private async spyAction(m: EntityManager, userId: string, p: OfficeProfileState, input: Record<string, unknown>, now: number): Promise<string> {
         officeRateLimit(p, String(input.action), now, input.action === 'spy_create' ? 3 : 100, 500);
@@ -573,6 +658,15 @@ export class OfficeHubService {
         }) => sum + reputation(r.state), 0);
         return base;
     }
+    private drawingView(post: Post, userId: string): OfficeDrawing {
+        const d = post.state as DrawingState, mine = post.author_id === userId, g = d.guesses[userId];
+        return { id: post.id, author: { publicId: d.author.publicId, displayName: d.author.displayName }, mine, theme: d.theme, strokes: d.strokes,
+            word: mine || g?.solved ? DRAW_WORDS[d.wordIndex].word : null, wordLength: DRAW_WORDS[d.wordIndex].word.length,
+            guesses: Object.values(d.guesses).filter(x => x.solved).length, solved: g?.solved ?? false, attempts: g?.attempts ?? 0,
+            createdAt: new Date(post.created_at).toISOString(), status: drawingStatus(d), deadlineAt: new Date(d.startedAt + OFFICE_DRAWING_DURATION).toISOString(),
+            revision: d.revision ?? 0, savedAt: d.savedAt ? new Date(d.savedAt).toISOString() : null,
+            submittedAt: d.submittedAt ? new Date(d.submittedAt).toISOString() : null, submission: d.submission ?? (d.published ? 'manual' : null) };
+    }
     private async view(m: EntityManager, userId: string, p: OfficeProfileState, notice: string | null = null,page?:{before?:{at:string;id:string};kind?:string}): Promise<OfficeHubOverview> {
         const now = Date.now();
         accrueOffice(p, now);
@@ -608,10 +702,9 @@ export class OfficeHubService {
             }
             if (post.kind === 'drawing') {
                 const d = post.state as DrawingState, mine = post.author_id === userId;
-                if (d.hidden || !d.published && (!mine || now > d.startedAt + 120000))
+                if (d.hidden || !d.published && !mine)
                     continue;
-                const g = d.guesses[userId];
-                drawings.push({ id: post.id, author: { publicId: d.author.publicId, displayName: d.author.displayName }, mine, theme: d.theme, strokes: d.strokes, word: mine || g?.solved ? DRAW_WORDS[d.wordIndex].word : null, wordLength: DRAW_WORDS[d.wordIndex].word.length, guesses: Object.values(d.guesses).filter((x) => x.solved).length, solved: g?.solved ?? false, attempts: g?.attempts ?? 0, createdAt: new Date(post.created_at).toISOString() });
+                drawings.push(this.drawingView(post, userId));
             }
             if (post.kind === 'spy') {
                 const s = post.state as OfficeSpyState;
@@ -624,6 +717,9 @@ export class OfficeHubService {
             }
         }
         const moderation=moderator?posts.filter(x=>x.kind!=='drawing'||(x.state as DrawingState).published).map(x=>({id:x.id,kind:x.kind,title:'title' in x.state?x.state.title:'异步画作',hidden:x.hidden,reports:x.reports.length,preview:x.kind==='story'?(x.state as StoryState).nodes.map(n=>n.text).join('\n\n').slice(0,5000):x.kind==='spy'?(x.state as OfficeSpyState).descriptions.map(d=>d.text).join('\n').slice(0,5000):'已发布的画作，不展示题目答案',strokes:x.kind==='drawing'?(x.state as DrawingState).strokes:undefined})):null;
-        return {...(process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED === 'true' ? { relief: readOfficeRelief(p.relief, now) } : {}),page:{nextCursor,historical:Boolean(page?.before)},serverTime: new Date(now).toISOString(), collection: { day: p.day, promotionTier: p.promotionTier, hourlyExp: OFFICE_HOURLY_EXP[p.promotionTier], waveExp: OFFICE_WAVE_EXP[p.promotionTier], farmExp: Math.max(0, Math.floor(p.farmEarned) - p.farmSpent), farmEarned: Math.floor(p.farmEarned), farmDraws: p.farmSpent / 100, creditedWaves: p.creditedWaves, tickets: p.tickets, dailyTicketClaimed: p.dailyTicketClaimed, socialPoints: p.socialPoints, socialEarnedToday: p.socialEarnedToday, socialExchangesToday: p.socialExchangesToday, pityR: p.pityR, pitySSR: p.pitySSR, draws: p.draws, owned: p.owned, equipped: p.equipped, lastDraw: p.lastDraw, reputation: Object.keys(p.owned).length * 10, ...officeTheme(now) }, weekly: await this.weekly(m, userId, p, now), boss: { startedAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt).toISOString(), endsAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt + 30000).toISOString(), hits: p.boss.hits, damage: p.boss.damage, claimed: p.boss.claimed, rewardCoins: 20 }, stories, drawings, spies, notice, moderation };
+        const [ownDrawing]: Post[] = await m.query(`SELECT * FROM office_hub_posts WHERE author_id=$1 AND kind='drawing' AND hidden=false ORDER BY created_at DESC,id DESC LIMIT 1`, [userId]);
+        const dailyUsed = Math.min(OFFICE_DRAWING_DAILY_LIMIT, p.counters.drawing_start ?? 0);
+        const drawingWorkspace = { dailyLimit: OFFICE_DRAWING_DAILY_LIMIT, dailyUsed, dailyRemaining: OFFICE_DRAWING_DAILY_LIMIT - dailyUsed, current: ownDrawing ? this.drawingView(ownDrawing,userId) : null };
+        return {drawingWorkspace,...(process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED === 'true' ? { relief: readOfficeRelief(p.relief, now) } : {}),page:{nextCursor,historical:Boolean(page?.before)},serverTime: new Date(now).toISOString(), collection: { day: p.day, promotionTier: p.promotionTier, hourlyExp: OFFICE_HOURLY_EXP[p.promotionTier], waveExp: OFFICE_WAVE_EXP[p.promotionTier], farmExp: Math.max(0, Math.floor(p.farmEarned) - p.farmSpent), farmEarned: Math.floor(p.farmEarned), farmDraws: p.farmSpent / 100, creditedWaves: p.creditedWaves, tickets: p.tickets, dailyTicketClaimed: p.dailyTicketClaimed, socialPoints: p.socialPoints, socialEarnedToday: p.socialEarnedToday, socialExchangesToday: p.socialExchangesToday, pityR: p.pityR, pitySSR: p.pitySSR, draws: p.draws, owned: p.owned, equipped: p.equipped, lastDraw: p.lastDraw, reputation: Object.keys(p.owned).length * 10, ...officeTheme(now) }, weekly: await this.weekly(m, userId, p, now), boss: { startedAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt).toISOString(), endsAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt + 30000).toISOString(), hits: p.boss.hits, damage: p.boss.damage, claimed: p.boss.claimed, rewardCoins: 20 }, stories, drawings, spies, notice, moderation };
     }
 }

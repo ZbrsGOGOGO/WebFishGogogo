@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { OFFICE_COLLECTION, OFFICE_STORY_STARTERS, OFFICE_TITLES, type OfficeDrawing, type OfficeHubOverview, type OfficeSpyView, type OfficeStory, type OfficeStroke } from '@stealth-reader/shared';
+import { OFFICE_COLLECTION, OFFICE_STORY_STARTERS, OFFICE_TITLES, type OfficeHubOverview, type OfficeSpyView, type OfficeStory, type OfficeStroke } from '@stealth-reader/shared';
 import { officeHubApi, officeHubError } from '../../api/office-hub';
 import { getCommunitySessionGeneration } from '../../api/community-http';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { CommunityGuildPanel } from '../office-battle/CommunityGuildPanel';
 import { OfficeBossDailyPanel } from './OfficeBossDailyPanel';
+import { OfficeDrawingPanel } from './OfficeDrawingPanel';
 import styles from './OfficeHubPage.module.css';
 type Tab = 'company' | 'collection' | 'stories' | 'drawings' | 'spy' | 'boss';
 type Command = (action: string, data?: Record<string, unknown>) => Promise<boolean>;
@@ -72,8 +73,9 @@ export function OfficeHubPage({ initialTab = 'company' }: {
 }) {
     const [params, setParams] = useSearchParams();
     const requested = params.get('tab');
-    const ownerId = useCommunityAuthStore((state) => state.user?.publicId ?? 'guest');
-    return <OfficeHubContent key={ownerId} initialTab={initialTab} requested={requested} setTab={(next) => setParams({ tab: next })}/>;
+    const user = useCommunityAuthStore((state) => state.user);
+    const scope = `${user?.publicId ?? 'guest'}:${getCommunitySessionGeneration()}`;
+    return <OfficeHubContent key={scope} initialTab={initialTab} requested={requested} setTab={(next) => setParams({ tab: next })}/>;
 }
 function OfficeHubContent({ initialTab, requested, setTab }: {
     initialTab: Tab;
@@ -92,7 +94,7 @@ function OfficeHubContent({ initialTab, requested, setTab }: {
       {tab === 'company' && <CompanyPanel view={view} busy={busy} command={command}/>}
       {tab === 'collection' && <CollectionPanel view={view} busy={busy} command={command}/>}
       {tab === 'stories' && <StoryPanel stories={view.stories} busy={busy} command={command}/>}
-      {tab === 'drawings' && <DrawingPanel drawings={view.drawings} busy={busy} command={command} theme={view.collection.theme}/>}
+      {tab === 'drawings' && <OfficeDrawingPanel view={view} busy={busy} command={command} refresh={refresh}/>}
       {tab === 'spy' && <SpyPanel spies={view.spies} busy={busy} command={command} department={Boolean(view.weekly.guildId)}/>}
       {tab === 'boss' && <><p className={styles.notice}>机会挑战、独立解压币与待领物品已集中到 <Link to="/games/office-boss">压力整理工作区</Link>。下方每日巡视照常保留，不消耗挑战机会。</p><OfficeBossDailyPanel view={view} busy={busy} command={command}/></>}
       {['stories','drawings','spy'].includes(tab)&&<div className={styles.actions} aria-label="共创历史翻页">{view.page?.historical&&<button disabled={busy} onClick={()=>void refresh()}>返回最新内容</button>}{view.page?.nextCursor&&<button disabled={busy} onClick={()=>void refresh(view.page!.nextCursor!)}>查看更早的共创记录</button>}</div>}
@@ -160,30 +162,6 @@ function Drawing({ strokes, label = '同事的画作' }: {
     strokes: OfficeStroke[];
     label?: string;
 }) { return <svg className={styles.drawing} viewBox="0 0 1000 1000" role="img" aria-label={label}>{strokes.map((s, i) => <polyline key={i} points={s.points.map((p) => `${p.x},${p.y}`).join(' ')} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round" strokeLinejoin="round"/>)}</svg>; }
-function SketchPad({ onSubmit, busy }: {
-    onSubmit: (strokes: OfficeStroke[]) => void;
-    busy: boolean;
-}) {
-    const [strokes, setStrokes] = useState<OfficeStroke[]>([]), [color, setColor] = useState('#334155');
-    const active = useRef<number | null>(null);
-    function point(e: ReactPointerEvent<SVGSVGElement>) { const r = e.currentTarget.getBoundingClientRect(); return { x: Math.max(0, Math.min(1000, Math.round((e.clientX - r.left) / r.width * 1000))), y: Math.max(0, Math.min(1000, Math.round((e.clientY - r.top) / r.height * 1000))) }; }
-    return <div><div className={styles.actions}><label>笔色<select value={color} onChange={(e) => setColor(e.target.value)}><option value="#334155">墨色</option><option value="#2563eb">蓝</option><option value="#dc2626">红</option><option value="#16a34a">绿</option></select></label><button disabled={busy || strokes.length === 0} onClick={() => setStrokes((s) => s.slice(0, -1))}>撤销一笔</button><span>最多 100 笔，不写字母和文字</span></div>
-    <svg className={`${styles.drawing} ${styles.pad}`} viewBox="0 0 1000 1000" aria-label="绘画画布" role="img" onPointerDown={(e) => { if (busy || strokes.length >= 100)
-        return; active.current = e.pointerId; e.currentTarget.setPointerCapture(e.pointerId); const p = point(e); setStrokes((s) => [...s, { points: [p, p], color, width: 4 }]); }} onPointerMove={(e) => { if (active.current !== e.pointerId)
-        return; const p = point(e); setStrokes((s) => { const total = s.reduce((n, x) => n + x.points.length, 0); if (!s.length || s[s.length - 1].points.length >= 200 || total >= 3000)
-        return s; return s.map((x, i) => i === s.length - 1 ? { ...x, points: [...x.points, p] } : x); }); }} onPointerUp={() => { active.current = null; }} onPointerCancel={() => { active.current = null; }}>{strokes.map((s, i) => <polyline key={i} points={s.points.map((p) => `${p.x},${p.y}`).join(' ')} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round"/>)}</svg><button disabled={busy || !strokes.length} onClick={() => onSubmit(strokes)}>提交到猜画墙</button></div>;
-}
-function DrawingPanel({ drawings, busy, command, theme }: {
-    drawings: OfficeDrawing[];
-    busy: boolean;
-    command: Command;
-    theme: string;
-}) {
-    const [guesses, setGuesses] = useState<Record<string, string>>({});
-    const draft = drawings.find((d) => d.mine && !d.strokes.length);
-    return <div className={styles.stack}><section className={styles.panel}><div className={styles.sectionTitle}><h2>异步猜画墙 · {theme}</h2><button disabled={busy || Boolean(draft)} onClick={() => void command('drawing_start')}>领取绘画主题</button></div><p>无需在线匹配。画手 2 分钟内提交，猜手每张画最多猜 5 次；猜中后双方可领社交积分。每天最多领 3 道绘画题，投稿不得写文字。</p>{draft && <div><p className={styles.notice}>仅你可见的题目：<strong>{draft.word}</strong> · 请于 {new Date(Date.parse(draft.createdAt) + 120000).toLocaleTimeString()} 前提交</p><SketchPad key={draft.id} busy={busy} onSubmit={(strokes) => void command('drawing_publish', { postId: draft.id, strokes })}/></div>}</section>
-    <div className={styles.gallery}>{drawings.filter((d) => d.strokes.length > 0).map((d) => <article className={styles.panel} key={d.id}><div className={styles.sectionTitle}><h3>{d.author.displayName}的画</h3><span>{d.theme}</span></div><Drawing strokes={d.strokes}/><p>{d.word ? `答案：${d.word}` : `${d.wordLength} 个字`} · {d.guesses} 人猜中</p>{d.mine ? <button disabled={busy} onClick={() => void command('post_delete', { postId: d.id })}>撤下我的画</button> : <><form onSubmit={(e) => { e.preventDefault(); void command('drawing_guess', { postId: d.id, guess: guesses[d.id] ?? '' }); }}><label>你的答案<input required maxLength={30} disabled={d.solved || d.attempts >= 5} value={guesses[d.id] ?? ''} onChange={(e) => setGuesses({ ...guesses, [d.id]: e.target.value })}/></label><button disabled={busy || d.solved || d.attempts >= 5}>{d.solved ? '已猜中' : `提交（还剩 ${5 - d.attempts} 次）`}</button></form><button disabled={busy} onClick={() => void command('post_report', { postId: d.id })}>举报文字提示 / 不当内容</button></>}</article>)}</div></div>;
-}
 function SpyPanel({ spies, busy, command, department }: {
     spies: OfficeSpyView[];
     busy: boolean;

@@ -39,6 +39,12 @@ export function workstationCommand(raw: unknown): WorkstationCommand {
     return value as WorkstationCommand;
   }
   if (type === 'merge' || type === 'sell-tower') { exact(value, ['type','slotIndex']); integer(value.slotIndex, 0, 8); return value as WorkstationCommand; }
+  if (type === 'move-tower') {
+    exact(value, ['type','towerId','fromSlotIndex','toSlotIndex']);
+    if (typeof value.towerId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value.towerId)) throw new BadRequestException({ code: 'WORKSTATION_TOWER_ID_INVALID' });
+    integer(value.fromSlotIndex, 0, 8); integer(value.toSlotIndex, 0, 8);
+    return value as WorkstationCommand;
+  }
   if (type === 'buy') { exact(value, ['type','offerId']); if (typeof value.offerId !== 'string' || !/^offer-\d{1,8}$/.test(value.offerId)) throw new BadRequestException({ code: 'WORKSTATION_OFFER_INVALID' }); return value as WorkstationCommand; }
   if (type === 'deploy' || type === 'sell-item') {
     exact(value, type === 'deploy' ? ['type','itemId','slotIndex'] : ['type','itemId']);

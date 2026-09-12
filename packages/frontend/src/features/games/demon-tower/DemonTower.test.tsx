@@ -272,16 +272,16 @@ describe('demon tower native interface contracts', () => {
 
   it('uses duplicate copies before bound materials in an explicit upgrade confirmation', async () => {
     const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerInventory profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 } })} catalog={towerCatalog()} disabled={false} onAction={onAction} />);
-    fireEvent.click(within(weaponCard('w5')).getByRole('button', { name: '升阶' }));
+    fireEvent.click(within(weaponCard('w5')).getByRole('button', { name: '品质强化' }));
     const dialog = screen.getByRole('dialog'); expect(within(dialog).getByText(/消耗同名副本 ×1/)).toBeTruthy(); expect(onAction).not.toHaveBeenCalled();
-    fireEvent.click(within(dialog).getByRole('button', { name: '确认升至 +2' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认强化至 +2' }));
     await waitFor(() => expect(onAction).toHaveBeenCalledWith({ kind: 'upgrade', payload: { itemType: 'weapon', itemId: 'w5' } }));
   });
 
   it('blocks material-poor upgrades and does not offer a payment shortcut', () => {
     render(<DemonTowerInventory profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 } })} catalog={towerCatalog()} disabled={false} onAction={vi.fn()} />);
-    fireEvent.click(within(weaponCard('w1')).getByRole('button', { name: '升阶' })); const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByRole('button', { name: '确认升至 +2' })).toBeDisabled(); expect(dialog.textContent).toContain('当前绑定材料不足'); expect(dialog.textContent).not.toMatch(/充值|购买/);
+    fireEvent.click(within(weaponCard('w1')).getByRole('button', { name: '品质强化' })); const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: '确认强化至 +2' })).toBeDisabled(); expect(dialog.textContent).toContain('当前绑定材料不足'); expect(dialog.textContent).not.toMatch(/充值|购买/);
   });
 
   it('does not silently overwrite a dirty loadout when another tab saved a different one', () => {

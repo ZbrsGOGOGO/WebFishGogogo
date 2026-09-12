@@ -72,7 +72,7 @@ function DemonTowerSocialWorkspace({ profile, ownerId, disabled, onAction }: Pro
     void perform({ kind: 'arena_equip', payload: { skills } });
   };
   return <div className={styles.stack}>
-    <TowerPanel title="演武场 · 异步论道" detail={<button type="button" className={styles.button} onClick={() => setRefresh(value => value + 1)}>刷新同伴</button>}>
+    <TowerPanel id="tower-world-arena" title="演武场 · 异步论道" detail={<button type="button" className={styles.button} onClick={() => setRefresh(value => value + 1)}>刷新同伴</button>}>
       <p>自愿加入后公开昵称、等级与段位。切磋由服务器按双方当前配装快照结算，最多30回合；不会改变对手血量、办公币或共同世界。</p>
       {error ? <p className={styles.notice} role="status">同伴资料待同步：{error}</p> : null}
       <button type="button" className={styles.button} disabled={!can('arena_enroll')} onClick={() => setConfirm({ kind: 'arena_enroll', payload: { enabled: !arena?.enabled } })}>{arena?.enabled ? '退出公开论道池' : '自愿加入论道池'}</button>
@@ -94,7 +94,7 @@ function DemonTowerSocialWorkspace({ profile, ownerId, disabled, onAction }: Pro
         {arena.lastReport ? <details style={{ marginTop: 12 }}><summary>最近论道：{arena.lastReport.opponentName} · {({ victory: '获胜', defeat: '落败', draw: '平局' })[arena.lastReport.outcome]} · {arena.lastReport.rounds}回合</summary><ol>{arena.lastReport.log.map((line, index) => <li key={index}>{line}</li>)}</ol></details> : null}
       </> : null}
     </TowerPanel>
-    <TowerPanel title="2—4人同心小队" detail={<span className={styles.badge}>独立首领 · 不占共同血池</span>}>
+    <TowerPanel id="tower-world-squad" title="2—4人同心小队" detail={<span className={styles.badge}>独立首领 · 不占共同血池</span>}>
       <p>每位成员点击“准备”才会扣本人3体力、消耗今日一次小队次数并冻结配装。全员准备后开始，任何成员可推进一回合；服务器保存进度，不要求同时盯着页面。</p>
       <p className={styles.muted}>准备次数今日 {expansion.squadReadyToday ?? 0}/3；建房24小时内限5次，房间24小时过期。小队受伤只发生在本次快照，含召唤助灵、群攻、队友分摊、治疗和复活。胜利后每人领取一次绑定材料，未准备不领，不发办公币。</p>
       {!expansion.squadId ? <><button className={styles.button} type="button" disabled={!can('squad_create')} onClick={() => void perform({ kind: 'squad_create', payload: { floor: profile.selectedFloor } })}>创建第{profile.selectedFloor}层小队</button><div className={styles.itemGrid} style={{ marginTop: 12 }}>{social?.squads.filter(row => row.status === 'waiting').map(row => <article className={styles.item} key={row.id}><h3>第{row.floor}层 · {row.members[0]?.displayName ?? '同事'}的小队</h3><p>{row.members.length}/4人 · {row.members.map(member => member.displayName).join('、')}</p><button className={styles.button} type="button" disabled={!can('squad_join') || row.members.length >= 4} onClick={() => void perform({ kind: 'squad_join', payload: { squadId: row.id } })}>加入小队</button></article>)}</div></> : <>

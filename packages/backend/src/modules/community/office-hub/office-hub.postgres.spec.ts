@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
+import type { OfficeHubOverview } from '@stealth-reader/shared';
 import { entities, User, Guild, GuildMember, UserBlock, WalletBalance } from '../../../database/entities';
 import { migrations } from '../../../database/migrations';
 import { PlatformAssetsService } from '../../platform';
@@ -58,6 +59,14 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
     const action = async (i: number, action: string, data: Record<string, unknown> = {}, requestId = randomUUID()) => { now += 1100; const result=await service.action(users[i].id, { action, ...data, requestId });for(const post of [...result.stories,...result.drawings])if(post.mine)testPostIds.add(post.id);for(const spy of result.spies)if(spy.owner)testPostIds.add(spy.id);return result; };
     const state = async (i = 0) => (await db.query('SELECT state FROM office_hub_profiles WHERE user_id=$1', [users[i].id]))[0].state;
     const patch = async (i: number, patcher: (s: any) => void) => { await service.overview(users[i].id); const s = await state(i); patcher(s); await db.query('UPDATE office_hub_profiles SET state=$2::jsonb WHERE user_id=$1', [users[i].id, JSON.stringify(s)]); };
+    async function waitForBlockedBy(holder: number): Promise<void> {
+        for (let i = 0; i < 200; i++) {
+            const blocked = await db.query('SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid))', [holder]);
+            if (blocked.length) return;
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        throw new Error('Synthetic request never reached the expected PostgreSQL row lock');
+    }
     it('keeps disabled flag fail-closed and fresh users get no automatic tickets or office credits', async () => {
         process.env.FEATURE_OFFICE_HUB_ENABLED = 'false';
         await expect(service.overview(users[0].id)).rejects.toMatchObject({ response: { code: 'OFFICE_DISABLED' } });
@@ -66,6 +75,160 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
         expect(v.collection.tickets).toBe(0);
         expect(v.collection.draws).toBe(0);
         expect(await db.getRepository(WalletBalance).countBy({ userId: users[0].id })).toBe(0);
+    });
+    it('persists versioned drawings, restores current draft independently and keeps unfinished art private', async () => {
+        const started = await action(0, 'drawing_start'), d = started.drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 900, y: 900 }], color: '#334155', width: 4 }];
+        const saved = await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        expect(saved.drawingWorkspace).toMatchObject({ dailyLimit: 3, dailyUsed: 1, dailyRemaining: 2, current: { id: d.id, revision: 1, status: 'draft', strokes } });
+        expect((await service.overview(users[0].id, undefined, 'story')).drawingWorkspace?.current).toMatchObject({ id: d.id, strokes });
+        expect((await service.overview(users[1].id)).drawings.some(x => x.id === d.id)).toBe(false);
+        expect((await service.overview(users[1].id)).drawingWorkspace?.current).toBeNull();
+        await expect(action(1, 'drawing_save', { postId: d.id, expectedRevision: 1, strokes })).rejects.toMatchObject({ response: { code: 'OFFICE_OWNER_REQUIRED' } });
+        await expect(action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes: [] })).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_VERSION_CONFLICT' } });
+        expect((await service.overview(users[0].id)).drawingWorkspace?.current?.strokes).toEqual(strokes);
+        await expect(action(0, 'drawing_start')).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_ACTIVE' } });
+        expect((await state()).counters.drawing_start).toBe(1);
+    });
+    it('sweeps offline persisted art once after restart and never overwrites it with a late client payload', async () => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }];
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        now = Date.parse(d.deadlineAt!);
+        const restarted = new OfficeHubService(db, assets);
+        await Promise.all([restarted.settleDueDrawings(), service.settleDueDrawings()]);
+        expect((await state()).stats.drawings).toBe(1);
+        const other = (await service.overview(users[1].id)).drawings.find(x => x.id === d.id)!;
+        expect(other).toMatchObject({ status: 'published', submission: 'automatic', word: null, strokes });
+        expect(other.submittedAt).toBe(d.deadlineAt);
+        const late = await action(0, 'drawing_publish', { postId: d.id, expectedRevision: 1, strokes: [] });
+        expect(late.drawingWorkspace?.current).toMatchObject({ status: 'published', submission: 'automatic', strokes });
+        await service.settleDueDrawings(); expect((await state()).stats.drawings).toBe(1);
+        expect((await state()).counters.drawing_start).toBe(1);
+    });
+    it('records blank expiration without a public image or automatic chance refunds', async () => {
+        for (let i = 0; i < 3; i++) {
+            const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+            now = Date.parse(d.deadlineAt!);
+            const view = await service.overview(users[0].id);
+            expect(view.drawingWorkspace).toMatchObject({ dailyUsed: i + 1, dailyRemaining: 2 - i, current: { status: 'expired_empty', submission: 'automatic', strokes: [] } });
+        }
+        expect((await service.overview(users[1].id)).drawings).toEqual([]);
+        expect((await state()).stats.drawings).toBe(0);
+        await expect(action(0, 'drawing_start')).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_DAILY_LIMIT' } });
+        now += 86400000;
+        expect((await action(0, 'drawing_start')).drawingWorkspace?.dailyRemaining).toBe(2);
+    });
+    it('replays original draft and publish requests without duplicate revisions or drawing credit', async () => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 1, y: 2 }, { x: 4, y: 8 }], color: '#334155', width: 4 }];
+        const saveId = randomUUID(), data = { postId: d.id, expectedRevision: 0, strokes };
+        await action(0, 'drawing_save', data, saveId);
+        expect((await action(0, 'drawing_save', data, saveId)).drawingWorkspace?.current?.revision).toBe(1);
+        const publishId = randomUUID(), publish = { ...data, expectedRevision: 1 };
+        await action(0, 'drawing_publish', publish, publishId);
+        expect((await action(0, 'drawing_publish', publish, publishId)).drawingWorkspace?.current).toMatchObject({ revision: 2, submission: 'manual', status: 'published' });
+        now = Date.parse(d.deadlineAt!); await service.settleDueDrawings();
+        expect((await state()).stats.drawings).toBe(1);
+    });
+    it('allows legacy revision omission only on untouched drafts, never over a saved revision', async () => {
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }];
+        let d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        await action(0, 'drawing_publish', { postId: d.id, strokes });
+        d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        const before = await state();
+        await expect(action(0, 'drawing_publish', { postId: d.id, strokes: [{ ...strokes[0], color: '#dc2626' }] })).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_VERSION_CONFLICT' } });
+        expect((await service.overview(users[0].id)).drawingWorkspace?.current).toMatchObject({ status: 'draft', revision: 1, strokes });
+        expect((await state()).stats).toEqual(before.stats);
+    });
+    it.each(['drawing_save', 'drawing_publish'])('uses the post-lock clock when %s waits across its deadline', async kind => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }];
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        const holder = db.createQueryRunner(); await holder.connect(); await holder.startTransaction();
+        let queued: Promise<OfficeHubOverview> | undefined;
+        try {
+            const [{ pid }] = await holder.query('SELECT pg_backend_pid() pid');
+            await holder.query('SELECT id FROM office_hub_posts WHERE id=$1 FOR UPDATE', [d.id]);
+            now = Date.parse(d.deadlineAt!) - 1;
+            queued = service.action(users[0].id, { action: kind, requestId: randomUUID(), postId: d.id, expectedRevision: 1, strokes: [{ ...strokes[0], color: '#dc2626' }] });
+            void queued.catch(() => {});
+            await waitForBlockedBy(Number(pid)); now = Date.parse(d.deadlineAt!) + 1;
+            await holder.commitTransaction();
+            const result = await queued;
+            expect(result.drawingWorkspace?.current).toMatchObject({ status: 'published', submission: 'automatic', revision: 2, strokes });
+            expect((await state()).stats.drawings).toBe(1);
+        } finally { if (holder.isTransactionActive) await holder.rollbackTransaction(); await holder.release(); if (queued) await queued.catch(() => {}); }
+    });
+    it.each(['FEATURE_OFFICE_HUB_ENABLED', 'FEATURE_COMMUNITY_WRITES_ENABLED'])('rejects a draft save when %s closes during a real post-lock wait', async flag => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const before = await state(), requestId = randomUUID();
+        const holder = db.createQueryRunner(); await holder.connect(); await holder.startTransaction();
+        let queued: Promise<OfficeHubOverview> | undefined;
+        try {
+            const [{ pid }] = await holder.query('SELECT pg_backend_pid() pid');
+            await holder.query('SELECT id FROM office_hub_posts WHERE id=$1 FOR UPDATE', [d.id]);
+            now += 1100;
+            queued = service.action(users[0].id, { action: 'drawing_save', requestId, postId: d.id, expectedRevision: 0, strokes: [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }] });
+            void queued.catch(() => {});
+            await waitForBlockedBy(Number(pid)); process.env[flag] = 'false';
+            await holder.commitTransaction();
+            await expect(queued).rejects.toMatchObject({ status: 503 });
+            expect(await state()).toEqual(before);
+            expect(await db.query('SELECT request_id FROM office_hub_receipts WHERE user_id=$1 AND request_id=$2', [users[0].id, requestId])).toEqual([]);
+            const [{ state: stored }] = await db.query('SELECT state FROM office_hub_posts WHERE id=$1', [d.id]);
+            expect(stored).toMatchObject({ revision: 0, strokes: [], published: false });
+        } finally { if (holder.isTransactionActive) await holder.rollbackTransaction(); await holder.release(); if (queued) await queued.catch(() => {}); process.env[flag] = 'true'; }
+    });
+    it.each(['action', 'overview', 'sweep'])('rolls back %s settlement and receipts if maintenance closes at its final profile write', async flow => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }];
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        now = flow === 'action' ? now + 1100 : Date.parse(d.deadlineAt!);
+        const before = await state(), requestId = randomUUID();
+        const original = EntityManager.prototype.query;
+        const intercepted = jest.spyOn(EntityManager.prototype, 'query').mockImplementation(async function (this: EntityManager, sql: string, parameters?: unknown[]) {
+            const result = await original.call(this, sql, parameters);
+            if (sql.startsWith('UPDATE office_hub_profiles SET state=') && parameters?.[0] === users[0].id) process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'false';
+            return result;
+        });
+        try {
+            if (flow === 'sweep') await service.settleDueDrawings();
+            else await expect(flow === 'overview' ? service.overview(users[0].id) : service.action(users[0].id, { action: 'drawing_publish', postId: d.id, expectedRevision: 1, strokes, requestId })).rejects.toMatchObject({ status: 503 });
+            expect(await state()).toEqual(before);
+            expect(await db.query('SELECT request_id FROM office_hub_receipts WHERE user_id=$1 AND request_id=$2', [users[0].id, requestId])).toEqual([]);
+            const [{ state: stored }] = await db.query('SELECT state FROM office_hub_posts WHERE id=$1', [d.id]);
+            expect(stored).toMatchObject({ revision: 1, strokes, published: false });
+        } finally { intercepted.mockRestore(); process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true'; }
+    });
+    it.each(['action', 'overview'])('rolls back %s after response projection when the office feature is disabled before commit', async flow => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        const strokes = [{ points: [{ x: 0, y: 0 }, { x: 50, y: 60 }], color: '#2563eb', width: 4 }];
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
+        now = flow === 'action' ? now + 1100 : Date.parse(d.deadlineAt!);
+        const before = await state(), requestId = randomUUID(), original = EntityManager.prototype.query;
+        const intercepted = jest.spyOn(EntityManager.prototype, 'query').mockImplementation(async function (this: EntityManager, sql: string, parameters?: unknown[]) {
+            const result = await original.call(this, sql, parameters);
+            if (sql.includes("kind='drawing' AND hidden=false ORDER BY created_at DESC,id DESC LIMIT 1") && parameters?.[0] === users[0].id) process.env.FEATURE_OFFICE_HUB_ENABLED = 'false';
+            return result;
+        });
+        try {
+            await expect(flow === 'overview' ? service.overview(users[0].id) : service.action(users[0].id, { action: 'drawing_publish', postId: d.id, expectedRevision: 1, strokes, requestId })).rejects.toMatchObject({ status: 503 });
+            expect(await state()).toEqual(before);
+            expect(await db.query('SELECT request_id FROM office_hub_receipts WHERE user_id=$1 AND request_id=$2', [users[0].id, requestId])).toEqual([]);
+            const [{ state: stored }] = await db.query('SELECT state FROM office_hub_posts WHERE id=$1', [d.id]);
+            expect(stored).toMatchObject({ revision: 1, strokes, published: false });
+        } finally { intercepted.mockRestore(); process.env.FEATURE_OFFICE_HUB_ENABLED = 'true'; }
+    });
+    it('pauses automatic publication behind the write gate and processes saved art after reopening', async () => {
+        const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+        await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes: [{ points: [{ x: 1, y: 2 }, { x: 4, y: 8 }], color: '#334155', width: 4 }] });
+        now = Date.parse(d.deadlineAt!);
+        process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'false';
+        try { await service.settleDueDrawings(); expect((await service.overview(users[0].id)).drawingWorkspace?.current?.status).toBe('draft'); }
+        finally { process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true'; }
+        await service.settleDueDrawings(); expect((await state()).stats.drawings).toBe(1);
     });
     it('serializes concurrent same-key daily ticket requests, rejects key reuse with different actions', async () => {
         const id = randomUUID();

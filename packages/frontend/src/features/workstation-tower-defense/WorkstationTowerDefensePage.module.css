@@ -48,6 +48,10 @@
 .deskPlant { position: absolute; width: 95%; opacity: .88; }
 .towerSlot { position: absolute; z-index: 4; display: grid; place-items: center; width: 96%; min-width: 36px; height: 100%; min-height: 36px; padding: 0; border: 1px solid #76978270; border-radius: 9px; background: #f3f5decb; color: #659277; box-shadow: 0 3px 0 #78978355; transition: background .15s, box-shadow .15s; }
 .towerSlot[data-empty='true'] { border: 1px dashed #6c927985; background: #f1f6e8b0; }
+.page .towerSlot[data-locked='true'] { opacity: .75; background: #d2d9ce; border-style: solid; box-shadow: none; }
+.page .towerSlot[data-locked='true'] b { font-size: 11px; }
+.slotRules { margin: 16px 2px 0; color: var(--muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.slotRules span { display: block; }
 .towerSlot[data-empty='true'] b { font-size: 22px; line-height: 1; font-weight: 400; }
 .towerSlot > svg { width: 118%; height: 118%; max-height: 68px; transform: translateY(-5%); pointer-events: none; }
 .towerSlot > small { position: absolute; bottom: 1px; left: 0; right: 0; color: #9d7f37; font-size: 7px; line-height: 1; text-align: center; }

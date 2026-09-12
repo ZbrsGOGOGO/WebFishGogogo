@@ -68,7 +68,7 @@ describe('Demon tower expansion workbench', () => {
     render(<DemonTowerExpansion profile={current} world={towerWorld()} disabled={false} onAction={vi.fn()} />);
     fireEvent.change(screen.getByRole('combobox', { name: '成长工坊物品' }), { target: { value: 's1' } });
     expect(screen.getByText(/回春术 \+2 · 3\/5星 · 熟练度 20\/45/)).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '升星符 · 40残魂' }));
+    fireEvent.click(screen.getByRole('button', { name: '残魂升星 · 40残魂' }));
     expect(within(screen.getByRole('dialog')).getByText(/本次成功率30%.*不降星/)).toBeVisible();
   });
   it('shows equipped divine ultimate and persists an explicit low-profile skin selection', () => {
@@ -77,6 +77,20 @@ describe('Demon tower expansion workbench', () => {
     fireEvent.change(screen.getByRole('combobox', { name: '成长工坊物品' }), { target: { value: 'w20' } });
     expect(screen.getByText(/真·混元改命.*当前已激活/)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '数据台账' })); expect(onAction).toHaveBeenCalledExactlyOnceWith({ kind: 'select_skin', payload: { skin: 'ledger' } });
+  });
+  it.each([
+    ['残魂升星 · 40残魂', '确认消耗残魂升星', { kind: 'star_up', payload: { itemType: 'weapon', itemId: 'w1' } }],
+    ['稀有度突破', '确认稀有度突破', { kind: 'breakthrough', payload: { itemId: 'w1' } }],
+    ['1品质经验换3残魂', '确认回收品质经验', { kind: 'market', payload: { offer: 'recycle_quality', itemId: 'w1' } }],
+  ] as const)('names the %s confirmation explicitly while keeping the original action payload', async (button, confirmation, action) => {
+    const current = profile(); current.weapons[0].qualityExperience = 2;
+    const onAction = vi.fn().mockResolvedValue(true);
+    render(<DemonTowerExpansion profile={current} world={towerWorld()} disabled={false} onAction={onAction} />);
+    fireEvent.click(screen.getByRole('button', { name: button }));
+    expect(onAction).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: confirmation }));
+    expect(onAction).toHaveBeenCalledExactlyOnceWith(action);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
   it('keeps a failed/uncertain exchange confirmation and never automatically repeats it', async () => {
     const onAction = vi.fn().mockResolvedValue(false); render(<DemonTowerLegacyMarket profile={profile()} disabled={false} onAction={onAction} />);

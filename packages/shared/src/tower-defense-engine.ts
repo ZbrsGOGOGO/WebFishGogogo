@@ -451,6 +451,17 @@ export const TOWER_SLOTS: readonly TowerDefensePoint[] = [
   { x: 10, y: 6 },
 ] as const;
 
+/** Slot identities are persistent: never reorder TOWER_SLOTS for a new layout. */
+export function isTowerSlotUnlocked(state: TowerDefenseState, slotIndex: number): boolean {
+  return Number.isInteger(slotIndex) && slotIndex >= 0 && slotIndex < TOWER_SLOTS.length &&
+    (!state.campaign || (Number.isInteger(state.campaign.slots) && slotIndex < state.campaign.slots));
+}
+
+export function towerSlotRequiredPromotionTier(slotIndex: number): number | null {
+  if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= TOWER_SLOTS.length) return null;
+  return slotIndex < 6 ? 0 : (slotIndex - 5) * 2;
+}
+
 function waveSpawns(wave: number): TowerRoundEnemySpawn[] {
   const config = TOWER_ROUND_CONFIGS.find((entry) => entry.wave === wave);
   return config ? config.spawns.map((spawn) => ({ ...spawn })) : [];
@@ -507,17 +518,23 @@ function createInitialShop(seed: number): {
   shop: TowerShopOffer[];
   seed: number;
   nextOfferId: number;
+  focus: TowerType;
 } {
+  // Only new runs draw an opening type. A saved shop/RNG stream is never rebuilt.
+  // Three matching ordinary-price parts still guarantee a tier-two defense and
+  // fit the existing 110 G opening budget together with the 30 G plant.
+  const opening = nextRandom(seed);
+  const type = TOWER_TYPES[Math.floor(opening.value * TOWER_TYPES.length)] ?? 'single';
   const shop: TowerShopOffer[] = [1, 2, 3].map((id) => ({
     id: `offer-${id}`,
-    type: 'single',
+    type,
     tier: 1,
-    cost: TOWER_DEFINITIONS.single.partCost,
+    cost: TOWER_DEFINITIONS[type].partCost,
     source: 'guaranteed',
   }));
-  const random = randomOffer(seed, 4);
-  shop.push(random.offer, focusedOffer('single', 5));
-  return { shop, seed: random.seed, nextOfferId: TOWER_SHOP_SIZE + 1 };
+  const random = randomOffer(opening.seed, 4);
+  shop.push(random.offer, focusedOffer(type, 5));
+  return { shop, seed: random.seed, nextOfferId: TOWER_SHOP_SIZE + 1, focus: type };
 }
 
 function makeFeedback(
@@ -576,7 +593,7 @@ export function createTowerDefenseState(seed = DEFAULT_RNG_SEED): TowerDefenseSt
     plantLevel: 0,
     plantIncomeTick: 0,
     shop: initialShop.shop,
-    shopFocus: 'single',
+    shopFocus: initialShop.focus,
     inventory: [],
     rngSeed: initialShop.seed,
     nextItemId: 1,
@@ -844,7 +861,7 @@ export function deployInventoryTower(
     return makeFeedback(state, false, 'invalid_status', '当前状态不能部署工位塔。');
   }
   const slot = TOWER_SLOTS[slotIndex];
-  if (state.campaign && slotIndex >= state.campaign.slots) return makeFeedback(state, false, 'invalid_slot', '这个扩展工位随升职解锁。');
+  if (!isTowerSlotUnlocked(state, slotIndex)) return makeFeedback(state, false, 'invalid_slot', '这个工位尚未解锁或不存在；正式局扩展工位随升职在下局解锁。');
   if (!slot) return makeFeedback(state, false, 'invalid_slot', '这个工位不能部署。');
   if (state.towers.some((tower) => tower.slotIndex === slotIndex)) {
     return makeFeedback(state, false, 'slot_occupied', '这个工位已经放置了办公用品。');
@@ -877,6 +894,27 @@ export function deployInventoryTower(
     'ok',
     `${item.tier} 阶${TOWER_DEFINITIONS[item.type].name}已部署。`,
   );
+}
+
+/** Reposition the same owned tower, without selling, merging or resetting fire. */
+export function moveDeployedTower(
+  state: TowerDefenseState,
+  fromSlotIndex: number,
+  toSlotIndex: number,
+  towerId: string,
+): TowerDefenseActionResult {
+  if (!canManage(state)) return makeFeedback(state, false, 'invalid_status', '当前状态不能移动工位塔。');
+  if (!isTowerSlotUnlocked(state, fromSlotIndex) || !isTowerSlotUnlocked(state, toSlotIndex)) {
+    return makeFeedback(state, false, 'invalid_slot', '只能在本局已解锁的工位之间移动。');
+  }
+  const tower = state.towers.find(entry => entry.slotIndex === fromSlotIndex && entry.id === towerId);
+  if (!tower) return makeFeedback(state, false, 'tower_missing', '原工位的防御塔已变化，请重新选择。');
+  if (fromSlotIndex === toSlotIndex) return makeFeedback(state, true, 'ok', '防御塔已在这个工位，无需移动。');
+  if (state.towers.some(entry => entry.slotIndex === toSlotIndex)) return makeFeedback(state, false, 'slot_occupied', '目标工位已有办公用品，请选择空位。');
+  const target = TOWER_SLOTS[toSlotIndex]!;
+  if (pointKey(state.hero) === pointKey(target)) return makeFeedback(state, false, 'hero_blocking', '角色正站在目标工位，请先移动守卫。');
+  return makeFeedback({ ...state, towers: state.towers.map(entry => entry.id === tower.id ? { ...entry, slotIndex: toSlotIndex } : entry) },
+    true, 'ok', `${TOWER_DEFINITIONS[tower.type].name}已移至 ${toSlotIndex + 1} 号位；等级、投入与攻击冷却保持不变。`);
 }
 
 export function mergeDeployedTower(

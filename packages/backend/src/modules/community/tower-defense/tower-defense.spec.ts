@@ -15,7 +15,10 @@ import { assertWorkstationWrites, workstationCommand } from './tower-defense.rul
 const campaign = (seed=12):TowerDefenseState=>createWorkstationCampaign(seed,{job:'specialist',mode:'story',chapter:1,promotionTier:0,talents:{output:0,control:0,economy:0},weekday:2});
 describe('workstation server command boundary and deterministic clock',()=>{
   it('authenticates every personal operation and the official leaderboard',()=>expect(Reflect.getMetadata(GUARDS_METADATA,TowerDefenseController)).toContain(JwtAuthGuard));
-  it.each([{type:'score',score:1000},{type:'start',elapsed:100000},{type:'refresh',credits:9999},{type:'buy',offerId:'offer-1',seed:123},{type:'deploy',itemId:'item-1',slotIndex:-1},{type:'move',direction:'warp'},{type:'focus',towerType:'constructor'},[],null])('rejects forged command %j',(input)=>expect(()=>workstationCommand(input)).toThrow());
+  it.each([{type:'score',score:1000},{type:'start',elapsed:100000},{type:'refresh',credits:9999},{type:'buy',offerId:'offer-1',seed:123},{type:'deploy',itemId:'item-1',slotIndex:-1},{type:'move',direction:'warp'},{type:'focus',towerType:'constructor'},
+    {type:'move-tower',fromSlotIndex:0,toSlotIndex:1}, {type:'move-tower',towerId:'tower-item-1',fromSlotIndex:-1,toSlotIndex:1},
+    {type:'move-tower',towerId:'tower-item-1',fromSlotIndex:0,toSlotIndex:9}, {type:'move-tower',towerId:'tower-item-1',fromSlotIndex:0,toSlotIndex:1,credits:999},
+    {type:'move-tower',towerId:'../url',fromSlotIndex:0,toSlotIndex:1}, {type:'move-tower',towerId:'tower-item-1',fromSlotIndex:0,toSlotIndex:1.5},[],null])('rejects forged command %j',(input)=>expect(()=>workstationCommand(input)).toThrow());
   it('requires both independent production write gates',()=>{
     const old={...process.env};
     try{process.env.FEATURE_COMMUNITY_WRITES_ENABLED='true';delete process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED;expect(()=>assertWorkstationWrites()).toThrow();process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED='true';expect(()=>assertWorkstationWrites()).not.toThrow();process.env.FEATURE_COMMUNITY_WRITES_ENABLED='false';expect(()=>assertWorkstationWrites()).toThrow();}finally{process.env=old;}
@@ -81,10 +84,11 @@ describe('workstation persisted account service',()=>{
     const actor=await user(),first=await service.start(actor.id,input());
     const envelope={runId:first.run!.id,revision:first.run!.revision,command:{type:'buy',offerId:'offer-1'}};
     const purchased=await service.command(actor.id,envelope);
-    expect(purchased.run!.state.shop[0]!.soldOut).toBe(true);expect(purchased.run!.state.credits).toBe(92);
+    const paid = first.run!.state.shop[0]!.cost;
+    expect(purchased.run!.state.shop[0]!.soldOut).toBe(true);expect(purchased.run!.state.credits).toBe(110 - paid);
     await expect(service.command(actor.id,envelope)).rejects.toMatchObject({response:{code:'WORKSTATION_REVISION_CONFLICT'}});
     const reloaded=await service.overview(actor.id);expect(reloaded.run!.state).toEqual(purchased.run!.state);
-    const retry=await service.command(actor.id,{...envelope,revision:reloaded.run!.revision});expect(retry.run!.state.credits).toBe(92);
+    const retry=await service.command(actor.id,{...envelope,revision:reloaded.run!.revision});expect(retry.run!.state.credits).toBe(110 - paid);
   });
   it('ends empty runs once, allows a new run, and never emits an empty-run wallet grant',async()=>{
     const actor=await user(),first=await service.start(actor.id,input());
@@ -119,8 +123,45 @@ describe('workstation persisted account service',()=>{
     const actor=await user();await service.talents(actor.id,{output:1,control:0,economy:0});
     await expect(service.talents(actor.id,{output:5,control:5,economy:5})).rejects.toMatchObject({response:{code:'WORKSTATION_TALENT_POINTS'}});
     const first=await service.start(actor.id,input());expect(first.run!.state.campaign!.talents.output).toBe(1);
-    await expect(service.talents(actor.id,{output:0,control:1,economy:0})).rejects.toThrow();
+    const changed=await service.talents(actor.id,{output:0,control:1,economy:0});
+    expect(changed.profile.talents).toEqual({output:0,control:1,economy:0});expect(changed.run).toEqual(first.run);
     const saved=await service.formation(actor.id,{});expect(saved.profile.formation).toEqual([]);expect(saved.run!.state.towers).toEqual([]);
+  });
+  it.each(['idle','running','paused'] as const)('saves only the next-run talent plan during %s and preserves every current-run field',async(status)=>{
+    const actor=await user();await service.talents(actor.id,{output:1,control:0,economy:0});
+    const first=await service.start(actor.id,input()),state={...first.run!.state,status};
+    await db.query('UPDATE tower_defense_runs SET state=$2 WHERE id=$1',[first.run!.id,JSON.stringify(state)]);
+    const before=(await service.overview(actor.id)).run;
+    const result=await service.talents(actor.id,{output:0,control:1,economy:0,expectedTalents:{output:1,control:0,economy:0}});
+    expect(result.profile.talents).toEqual({output:0,control:1,economy:0});expect(result.run).toEqual(before);
+    expect((await service.overview(actor.id)).profile.talents).toEqual(result.profile.talents);
+    expect(await db.getRepository(WalletLedger).count({where:{userId:actor.id}})).toBe(0);
+    await service.command(actor.id,{runId:first.run!.id,revision:result.run!.revision,command:{type:'abandon'}});
+    const next=await service.start(actor.id,input());expect(next.run!.state.campaign!.talents).toEqual(result.profile.talents);
+  });
+  it('protects a different stale talent draft while replaying the same desired plan and retaining legacy input',async()=>{
+    const actor=await user(),expectedTalents={output:0,control:0,economy:0},body={output:1,control:0,economy:0,expectedTalents};
+    await service.talents(actor.id,body);const repeated=await service.talents(actor.id,body);expect(repeated.profile.talents.output).toBe(1);
+    await expect(service.talents(actor.id,{output:0,control:1,economy:0,expectedTalents})).rejects.toMatchObject({response:{code:'WORKSTATION_TALENTS_CONFLICT'}});
+    expect((await service.overview(actor.id)).profile.talents).toEqual({output:1,control:0,economy:0});
+    expect((await service.talents(actor.id,{output:0,control:0,economy:1})).profile.talents.economy).toBe(1);
+    for(const invalid of [{output:2,control:0,economy:0},{output:0.5,control:0,economy:0},{output:-1,control:0,economy:0},{output:1,control:0,economy:0,expectedTalents:{output:0,control:0,economy:0,extra:1}}]) await expect(service.talents(actor.id,invalid)).rejects.toThrow();
+    expect((await service.overview(actor.id)).profile.talents).toEqual({output:0,control:0,economy:1});
+  });
+  it('moves one owned tower under revision control and preserves identity, economics and reload state',async()=>{
+    const actor=await user(),first=await service.start(actor.id,input());
+    const tower={id:'tower-item-1',type:'single',level:3,slotIndex:4,cooldown:7,invested:177};
+    const state={...first.run!.state,towers:[tower]};await db.query('UPDATE tower_defense_runs SET state=$2 WHERE id=$1',[first.run!.id,JSON.stringify(state)]);
+    const command={type:'move-tower',towerId:tower.id,fromSlotIndex:4,toSlotIndex:1},body={runId:first.run!.id,revision:first.run!.revision,command};
+    const result=await service.command(actor.id,body),next=result.run!;
+    expect(next.state.towers).toEqual([{...tower,slotIndex:1}]);expect(next.state).toEqual({...state,towers:[{...tower,slotIndex:1}],lastAction:expect.objectContaining({ok:true})});
+    expect(next.revision).toBe(first.run!.revision+1);
+    await expect(service.command(actor.id,body)).rejects.toMatchObject({response:{code:'WORKSTATION_REVISION_CONFLICT'}});
+    const retry=await service.command(actor.id,{...body,revision:next.revision});expect(retry.run!.state.towers).toEqual(next.state.towers);expect(retry.run!.state.lastAction?.code).toBe('tower_missing');
+    const beforeLocked=retry.run!.state;
+    const rejected=await service.command(actor.id,{...body,revision:retry.run!.revision,command:{...command,fromSlotIndex:1,toSlotIndex:6}});
+    expect(rejected.run!.state).toEqual({...beforeLocked,lastAction:expect.objectContaining({ok:false,code:'invalid_slot'})});
+    expect((await service.overview(actor.id)).run).toEqual(rejected.run);expect(await db.getRepository(WalletLedger).count({where:{userId:actor.id}})).toBe(0);
   });
   it('caps real ledger credits at 80 a day while retaining later verified scores in mode-specific rankings',async()=>{
     const actor=await user();let last:WorkstationOverviewForTest|undefined;

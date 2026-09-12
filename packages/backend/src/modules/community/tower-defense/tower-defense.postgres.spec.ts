@@ -32,7 +32,21 @@ const enabled=Boolean(process.env.TEST_PG_URL);
   });
   it('parallel identical revisions apply a purchase only once',async()=>{
     const actor=await user(),first=await service.start(actor.id,input());const body={runId:first.run!.id,revision:first.run!.revision,command:{type:'buy',offerId:'offer-1'}};
-    const results=await Promise.allSettled([service.command(actor.id,body),service.command(actor.id,body)]);expect(results.filter(result=>result.status==='fulfilled')).toHaveLength(1);expect((await service.overview(actor.id)).run!.state.credits).toBe(92);
+    const results=await Promise.allSettled([service.command(actor.id,body),service.command(actor.id,body)]);expect(results.filter(result=>result.status==='fulfilled')).toHaveLength(1);expect((await service.overview(actor.id)).run!.state.credits).toBe(110-first.run!.state.shop[0]!.cost);
+  });
+  it('serializes parallel tower moves without duplication or resetting cooldown and investment',async()=>{
+    const actor=await user(),first=await service.start(actor.id,input());
+    const tower={id:'tower-item-1',type:'single',level:2,slotIndex:4,cooldown:11,invested:60};
+    await db.query('UPDATE tower_defense_runs SET state=$2 WHERE id=$1',[first.run!.id,JSON.stringify({...first.run!.state,towers:[tower]})]);
+    const body={runId:first.run!.id,revision:first.run!.revision,command:{type:'move-tower',towerId:tower.id,fromSlotIndex:4,toSlotIndex:1}};
+    const results=await Promise.allSettled([service.command(actor.id,body),service.command(actor.id,body)]);expect(results.filter(row=>row.status==='fulfilled')).toHaveLength(1);
+    const after=await service.overview(actor.id);expect(after.run!.state.towers).toEqual([{...tower,slotIndex:1}]);expect(after.run!.state.credits).toBe(110);
+    expect(await db.getRepository(WalletLedger).count({where:{userId:actor.id}})).toBe(0);
+  });
+  it('serializes two distinct next-run talent plans with an explicit compare-and-set baseline',async()=>{
+    const actor=await user(),expectedTalents={output:0,control:0,economy:0},first=await service.start(actor.id,input());
+    const results=await Promise.allSettled([service.talents(actor.id,{output:1,control:0,economy:0,expectedTalents}),service.talents(actor.id,{output:0,control:1,economy:0,expectedTalents})]);
+    expect(results.filter(row=>row.status==='fulfilled')).toHaveLength(1);expect((await service.overview(actor.id)).run).toEqual(first.run);
   });
   it('simultaneous offline settlements grant one wallet ledger and one company contribution',async()=>{
     const actor=await user();await terminal(actor);await Promise.all([service.sync(actor.id,{}),service.sync(actor.id,{})]);

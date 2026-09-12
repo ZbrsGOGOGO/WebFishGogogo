@@ -95,7 +95,7 @@ export const PUBLIC_TOOLS: readonly PublicToolDefinition[] = [
     slug: 'color-converter',
     name: '颜色转换',
     category: '设计',
-    description: '转换 HEX、RGB 与 HSL，并实时预览颜色。',
+    description: '转换 HEX、RGB、HSL 与 CMYK，并实时预览颜色。',
     mark: '#',
   },
 ] as const;

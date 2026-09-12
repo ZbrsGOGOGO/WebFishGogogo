@@ -20,12 +20,14 @@ function buyStarterTower(): void {
   }
 }
 function useInitialState(overrides: Partial<engine.TowerDefenseState>): void {
-  const initial = engine.createTowerDefenseState();
+  const initial = engine.createTowerDefenseState(1972);
   vi.spyOn(engine, 'createTowerDefenseState').mockReturnValue({ ...initial, ...overrides });
 }
 
 describe('WorkstationTowerDefensePage two-round merging edition', () => {
-  beforeEach(() => { vi.useFakeTimers(); vi.spyOn(Math, 'random').mockReturnValue(0.314159); window.localStorage.clear(); });
+  // Seed 1972 chooses single in the real opening lottery. Other types are
+  // exercised separately; deterministic UI fixtures keep their exact prices.
+  beforeEach(() => { vi.useFakeTimers(); vi.spyOn(Math, 'random').mockReturnValue(1972 / 0x1_0000_0000); window.localStorage.clear(); });
   afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
   it('renders one hero, 96 board cells, five shop slots and all office tower silhouettes without network access', () => {
@@ -50,6 +52,39 @@ describe('WorkstationTowerDefensePage two-round merging edition', () => {
     expect(screen.getByText('小张 · 工位守卫')).toBeInTheDocument();
     expect(document.querySelector('[data-avatar="green"]')).not.toBeNull();
     expect(document.querySelector(`.${styles.hero} text`)?.textContent).toBe('🌱');
+  });
+
+  it('shows a genuinely different random starting kit and deploys it with the unchanged initial budget',()=>{
+    vi.mocked(Math.random).mockReturnValue(0);renderPage();
+    fireEvent.click(screen.getByRole('button',{name:'购买办公桌绿植'}));
+    for(const slot of [1,2,3]) fireEvent.click(screen.getByRole('button',{name:new RegExp(`购买第 ${slot} 格咖啡机零件`)}));
+    fireEvent.click(screen.getByRole('button',{name:'选择部署咖啡机 2 阶'}));fireEvent.click(screen.getByRole('button',{name:'空塔位 5'}));
+    expect(screen.getByRole('button',{name:'塔位 5，咖啡机 2 阶'})).toBeInTheDocument();expect(coins()).toBe(20);
+  });
+
+  it('moves a local tower without sale or extra cost and lets the user cancel first',()=>{
+    useInitialState({towers:[{id:'same-owned-tower',type:'single',level:3,slotIndex:4,cooldown:7,invested:177}]});renderPage();const before=coins();
+    fireEvent.click(screen.getByRole('button',{name:'塔位 5，订书机 3 阶'}));fireEvent.click(screen.getByRole('button',{name:'移动防御塔'}));
+    expect(screen.getByRole('button',{name:'卖出防御塔'})).toBeDisabled();fireEvent.click(screen.getByRole('button',{name:'取消移动'}));
+    expect(screen.getByRole('button',{name:'塔位 5，订书机 3 阶'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'移动防御塔'}));fireEvent.click(screen.getByRole('button',{name:'空塔位 2'}));
+    expect(screen.getByRole('button',{name:'塔位 2，订书机 3 阶'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'空塔位 5'})).toBeInTheDocument();expect(coins()).toBe(before);
+    expect(screen.getByRole('status')).toHaveTextContent('冷却保持不变');
+  });
+
+  it('labels all locked official slots and sends a specific tower move without optimistic relocation',()=>{
+    const base=engine.createWorkstationCampaign(1972,{job:'specialist',mode:'story',chapter:1,promotionTier:0,talents:{output:0,control:0,economy:0},weekday:2});
+    const state={...base,towers:[{id:'old-owned-tower',type:'single' as const,level:2 as const,slotIndex:4,cooldown:17,invested:54}]},onCommand=vi.fn();
+    const view=render(<WorkstationTowerDefensePage session={{state,pending:false,onCommand,onRestart:vi.fn()}}/>);
+    expect(screen.getByRole('button',{name:/未解锁塔位 7，.*360/})).toBeDisabled();expect(screen.getByRole('button',{name:/未解锁塔位 8，.*1600/})).toBeDisabled();expect(screen.getByRole('button',{name:/未解锁塔位 9，.*5400/})).toBeDisabled();
+    expect(screen.getByLabelText('扩展工位解锁条件')).toHaveTextContent('本局开放 6/9');
+    fireEvent.click(screen.getByRole('button',{name:'塔位 5，订书机 2 阶'}));fireEvent.click(screen.getByRole('button',{name:'移动防御塔'}));
+    fireEvent.click(screen.getByRole('button',{name:/未解锁塔位 7/}));expect(onCommand).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:'空塔位 2'}));expect(onCommand).toHaveBeenCalledWith({type:'move-tower',towerId:'old-owned-tower',fromSlotIndex:4,toSlotIndex:1});
+    expect(screen.getByRole('button',{name:'塔位 5，订书机 2 阶'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'空塔位 2'})).toBeInTheDocument();expect(coins()).toBe(110);
+    const accepted=engine.moveDeployedTower(state,4,1,'old-owned-tower').state;
+    view.rerender(<WorkstationTowerDefensePage session={{state:accepted,pending:false,onCommand,onRestart:vi.fn()}}/>);
+    expect(screen.getByRole('button',{name:'塔位 2，订书机 2 阶'})).toBeInTheDocument();expect(coins()).toBe(110);
   });
 
   it('buys a plant with local coins and only earns income while running', () => {

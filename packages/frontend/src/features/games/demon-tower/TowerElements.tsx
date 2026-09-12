@@ -14,8 +14,8 @@ export function revealTowerControl(target: HTMLElement): void {
   if (rectangle.top < 12 || rectangle.bottom > bottom - 12) target.scrollIntoView?.({ block: 'center', behavior: 'instant' });
 }
 
-export function TowerPanel({ title, detail, children, className = '' }: { title: string; detail?: ReactNode; children: ReactNode; className?: string }): JSX.Element {
-  return <section className={`${styles.panel} ${className}`}><header className={styles.panelHeading}><h2>{title}</h2>{detail}</header><div className={styles.panelBody}>{children}</div></section>;
+export function TowerPanel({ title, detail, children, className = '', id }: { title: string; detail?: ReactNode; children: ReactNode; className?: string; id?: string }): JSX.Element {
+  return <section id={id} tabIndex={id ? -1 : undefined} aria-labelledby={id ? `${id}-heading` : undefined} className={`${styles.panel} ${id ? styles.sectionTarget : ''} ${className}`}><header className={styles.panelHeading}><h2 id={id ? `${id}-heading` : undefined}>{title}</h2>{detail}</header><div className={styles.panelBody}>{children}</div></section>;
 }
 
 export function TowerMeter({ label, value, max, tone = 'sage', detail }: { label: string; value: number; max: number; tone?: 'sage' | 'clay' | 'blue'; detail?: ReactNode }): JSX.Element {
