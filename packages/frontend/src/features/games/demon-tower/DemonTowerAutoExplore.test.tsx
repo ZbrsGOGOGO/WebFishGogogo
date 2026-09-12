@@ -112,10 +112,10 @@ describe('demon tower server-owned automatic exploration UI', () => {
     let reject!: (reason: unknown) => void; vi.mocked(communityDemonTowerApi.autoStart).mockReturnValueOnce(new Promise((_, no) => { reject = no; }));
     render(<MemoryRouter><DemonTowerPage /></MemoryRouter>); fireEvent.click(await ready()); fireEvent.click(screen.getByRole('button', { name: '确认启动服务器托管' }));
     const input = vi.mocked(communityDemonTowerApi.autoStart).mock.calls[0][0];
-    fireEvent.click(screen.getByRole('tab', { name: /人物档案/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /成长/ }));
     expect(screen.getByRole('button', { name: '力量分配 1 点' })).toBeDisabled();
     await act(async () => { reject(new CommunityApiError(502, 'lost')); await Promise.resolve(); });
-    fireEvent.click(screen.getByRole('tab', { name: /探索任务/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /探索/ }));
     expect(screen.getByRole('button', { name: /开始探索/ })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: '确认上次托管操作' }));
     await waitFor(() => expect(communityDemonTowerApi.autoStart).toHaveBeenCalledTimes(2));

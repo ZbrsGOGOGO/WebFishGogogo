@@ -20,7 +20,7 @@ type ShopSection = typeof SECTIONS[number]['id'];
 type Props = {
   profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; now: number;
   balance: number | null; balanceStale: boolean;
-  onAction: DemonTowerActionHandler; onExplore: () => void; onWorkshop: () => void;
+  onAction: DemonTowerActionHandler;
 };
 const currencyName = (currency: DemonTowerShopOffer['currency']) => currency === 'soul' ? '残魂' : '灵石';
 const periodName = { day: '每日', week: '每周', lifetime: '累计' };
@@ -38,7 +38,7 @@ export function towerShopQuantityReason(offer: DemonTowerShopOffer, quantity: nu
 }
 
 /** A single supply desk; URL-owned sections survive refresh/history without leaking account form state. */
-export function DemonTowerShop({ profile, catalog, disabled, now, balance, balanceStale, onAction, onExplore, onWorkshop }: Props): JSX.Element {
+export function DemonTowerShop({ profile, catalog, disabled, now, balance, balanceStale, onAction }: Props): JSX.Element {
   const [params, setParams] = useSearchParams();
   const rawSection = params.get('supply');
   const section: ShopSection = SECTIONS.some(item => item.id === rawSection) ? rawSection as ShopSection : 'supplies';
@@ -84,12 +84,12 @@ export function DemonTowerShop({ profile, catalog, disabled, now, balance, balan
       </div>
       <p className={styles.muted}>三种资源独立，不互兑、不转赠。灵石物资与残魂秘市不扣办公币；「办公币补给」明确标价，确认后才扣全站钱包。药品立即使用，探索符单独保留库存。</p>
       {economy ? <p className={styles.muted}>今日灵石 {economy.dailyEarned}/{economy.dailyCap}，其中首领 {economy.bossEarned}/{economy.bossCap}（包含在总额内）。自然日 {economy.serviceDate}，日限北京时间 00:00、周限周一 00:00 重置。</p> : <p className={styles.notice}>新物资库正在维护或同步，原有残魂兑换仍可在「残魂秘市」查看。</p>}
-      <div className={styles.supplyContext}><span>体力 {profile.stamina}/{profile.staminaMax} · 生命 {profile.hp}/{profile.maxHp}</span><button type="button" className={styles.button} onClick={onExplore}>{profile.battle ? '返回进行中探索' : '返回探索任务'}</button></div>
+      <div className={styles.supplyContext}><span>体力 {profile.stamina}/{profile.staminaMax} · 生命 {profile.hp}/{profile.maxHp}</span></div>
       {disabled ? <p className={styles.muted}>当前处于提交、待确认、托管或只读状态；可浏览清单，暂不能申领。</p> : profile.battle ? <p className={styles.notice}>当前战斗不接受补给或配装变更，请先返回探索完成或撤离，再来申领。</p> : null}
       {economy && now >= economy.buffsExpiresAt ? <p className={styles.notice}>已进入新的自然日，正在等待服务器刷新限额与增益；同步后再申领。</p> : null}
       <nav className={styles.supplyNav} aria-label="物资申领分类">{SECTIONS.map(item => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => changeSection(item.id)}>{item.label}</button>)}</nav>
     </TowerPanel>
-    {section === 'office' ? <DemonTowerOfficeSupplies profile={profile} disabled={disabled || submitting} balance={balance} balanceStale={balanceStale} now={now} onAction={onAction} onExplore={onExplore} onWorkshop={onWorkshop} /> : null}
+    {section === 'office' ? <DemonTowerOfficeSupplies profile={profile} disabled={disabled || submitting} balance={balance} balanceStale={balanceStale} now={now} onAction={onAction} /> : null}
     {section === 'supplies' || section === 'market' ? <>
       {economy ? <TowerPanel title={section === 'supplies' ? '物资库 · 灵石申领' : '残魂秘市 · 定额申领'}>
         <p className={styles.muted}>{section === 'supplies' ? '补充体力、恢复生命或准备下一场探索。临时药丸每项每日最多 3 份，单项加成最高 +15；北京时间当日结束失效。' : '永久属性丹单维累计最多 +5，单独计入成长，不受自由点洗点影响。精级箱与传统武器箱的物品池、限额及保底分别计算。'}</p>
@@ -105,7 +105,7 @@ export function DemonTowerShop({ profile, catalog, disabled, now, balance, balan
       {section === 'market' ? <DemonTowerLegacyMarket profile={profile} disabled={disabled || submitting} onAction={onAction} /> : null}
     </> : null}
     {section === 'effects' && economy ? <>
-      <TowerPanel title="增益登记" detail={<button type="button" className={styles.textButton} onClick={onWorkshop}>前往成长工坊</button>}>
+      <TowerPanel title="增益登记">
         <p className={styles.muted}>以下加成已计入人物有效属性。临时增益{now >= economy.buffsExpiresAt ? '已到期，等待服务器同步' : `截至 ${towerTime(economy.buffsExpiresAt)}（北京时间）`}；跨日正在进行的战斗保留开战快照，不中途改写。</p>
         <div className={styles.supplyAttributes}>{DEMON_TOWER_ATTRIBUTE_KEYS.map(key => <div key={key}><strong>{catalog.attributes[key]}</strong><span>今日 +{now >= economy.buffsExpiresAt ? 0 : economy.buffs[key]}</span><small>永久 +{economy.permanent[key]}/5</small></div>)}</div>
         <p className={styles.muted}>临时药效用于新开的个人探索与首领战，不进入论道或小队快照；永久丹在各玩法中保留。</p>

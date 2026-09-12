@@ -25,13 +25,28 @@ const wrap = (route = '/games/demon-tower') => render(<MemoryRouter initialEntri
 
 describe('Demon tower supply navigation and account boundaries', () => {
   beforeEach(() => { vi.clearAllMocks(); vi.mocked(useDemonTower).mockReturnValue(state()); });
+  it('retains the three-currency balance strip without a duplicate supplies button before the tabs', () => {
+    const { container } = wrap('/games/demon-tower?tab=profile');
+    for (const name of ['成长', '探索', '装备', '养成']) {
+      fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}(?: |$)`) }));
+      const balances = container.querySelector('[class*="supplyQuickBar"]')!;
+      expect(balances).toBeVisible();
+      expect(balances).toHaveTextContent('灵石 200 · 残魂 8 · 办公币');
+      expect(balances).toHaveTextContent('塔内资源与办公币独立，不互兑。');
+      expect(balances.querySelector('button,a')).toBeNull();
+      expect(screen.queryByRole('button', { name: '物资申领' })).toBeNull();
+    }
+    fireEvent.click(screen.getByRole('tab', { name: '探索' }));
+    expect(screen.getByRole('button', { name: '前往物资库补充体力' })).toBeVisible();
+    expect(useDemonTower().act).not.toHaveBeenCalled();
+  });
   it('opens deep-linked supply sections and keeps tab and section on browser back/forward', () => {
     wrap('/games/demon-tower?tab=shop&supply=market&keep=1');
-    expect(screen.getByRole('tab', { name: '物资申领' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '物资' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: '武器箱 · 12残魂' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '收支记录' }));
     expect(screen.getByLabelText('主页面位置')).toHaveTextContent('tab=shop&supply=ledger&keep=1');
-    fireEvent.click(screen.getByRole('tab', { name: '探索任务' })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
+    fireEvent.click(screen.getByRole('tab', { name: /^探索/ })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
     fireEvent.click(screen.getByRole('button', { name: '上一页' })); expect(screen.getByRole('heading', { name: '最近收支登记' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '上一页' })); expect(screen.getByRole('button', { name: '武器箱 · 12残魂' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '下一页' })); expect(screen.getByRole('heading', { name: '最近收支登记' })).toBeVisible();
@@ -40,26 +55,29 @@ describe('Demon tower supply navigation and account boundaries', () => {
     wrap(); fireEvent.click(screen.getByRole('button', { name: '前往物资库补充体力' }));
     expect(screen.getByRole('heading', { name: '内部物资申领单' })).toBeVisible();
     expect(screen.getByLabelText('主页面位置')).toHaveTextContent('tab=shop&supply=supplies');
-    fireEvent.click(screen.getByRole('button', { name: '返回探索任务' })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
-    fireEvent.click(screen.getByRole('tab', { name: '秘境工坊' })); expect(screen.queryByRole('button', { name: '武器箱 · 12残魂' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: '前往物资申领' })); expect(screen.getByRole('heading', { name: '内部物资申领单' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: '返回探索任务' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /^探索/ })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
+    fireEvent.click(screen.getByRole('tab', { name: '养成' })); expect(screen.queryByRole('button', { name: '武器箱 · 12残魂' })).toBeNull();
+    expect(screen.queryByRole('button', { name: '前往物资申领' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: '物资' })); expect(screen.getByRole('heading', { name: '内部物资申领单' })).toBeVisible();
   });
   it('returns from a saved expedition to its battle and only redirects after a confirmed launch', async () => {
     const value = state(); value.overview!.profile!.stamina = 100; vi.mocked(value.act).mockResolvedValueOnce(false).mockResolvedValueOnce(true); vi.mocked(useDemonTower).mockReturnValue(value);
-    const view = wrap('/games/demon-tower?tab=expansion');
-    fireEvent.click(screen.getByRole('button', { name: '进入小秘境' })); await act(async () => {}); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-expansion');
-    fireEvent.click(screen.getByRole('button', { name: '进入小秘境' })); await waitFor(() => expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore'));
+    const view = wrap('/games/demon-tower?tab=explore');
+    fireEvent.click(screen.getByRole('button', { name: '进入小秘境' })); await act(async () => {}); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
+    fireEvent.click(screen.getByRole('button', { name: '进入小秘境' })); await waitFor(() => expect(value.act).toHaveBeenCalledTimes(2));
     vi.mocked(useDemonTower).mockReturnValue({ ...value, overview: towerOverview({ profile: { ...value.overview!.profile!, battle: towerBattle(), availableActions: ['attack'] } }) });
     view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('tab', { name: '物资申领' })); expect(screen.getByRole('button', { name: '申领小体力包' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: '返回进行中探索' })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
+    fireEvent.click(screen.getByRole('tab', { name: '物资' })); expect(screen.getByRole('button', { name: '申领小体力包' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '返回进行中探索' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /^探索/ })); expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-explore');
   });
   it('drops account-owned purchase and rune form state when the account changes but retains harmless navigation', () => {
     const value = state(); const view = wrap('/games/demon-tower?tab=shop');
     fireEvent.click(screen.getByRole('button', { name: '申领小体力包' })); fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '3' } });
     vi.mocked(useDemonTower).mockReturnValue({ ...value, ownerId: 'tower-user-b', displayName: '合成成员乙' });
     view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
-    expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.getByRole('tab', { name: '物资申领' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.getByRole('tab', { name: '物资' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('button', { name: '申领小体力包' })); expect(screen.getByRole('spinbutton')).toHaveValue(1); expect(value.act).not.toHaveBeenCalled();
   });
   it('falls back from unrecognized tabs without taking any action', () => {
@@ -80,7 +98,7 @@ describe('Demon tower supply navigation and account boundaries', () => {
       expect(screen.queryByRole('tablist')).toBeNull(); expect(scrolled).toEqual([]);
       vi.mocked(useDemonTower).mockReturnValue(value);
       view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);
-      expect(screen.getByRole('tab', { name: '物资申领' })).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('tab', { name: '物资' })).toHaveAttribute('aria-selected', 'true');
       expect(scrolled).toEqual([{ id: 'tower-tab-shop', options: { block: 'nearest', inline: 'nearest' } }]);
       vi.mocked(useDemonTower).mockReturnValue({ ...value, overview: { ...value.overview!, profile: { ...value.overview!.profile!, version: 2 } } });
       view.rerender(<MemoryRouter><DemonTowerPage /><Probe /></MemoryRouter>);

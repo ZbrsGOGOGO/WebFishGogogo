@@ -13,6 +13,7 @@ import { DemonTowerAttributeReset } from './DemonTowerAttributeReset';
 import { TowerEnemyArt } from './DemonTowerEnemyArt';
 import { DemonTowerBattle, DemonTowerDaily, TowerCombatLog } from './DemonTowerBattle';
 import { DemonTowerInventory } from './DemonTowerInventory';
+import { DemonTowerExpansion } from './DemonTowerExpansion';
 import { DemonTowerWorld, TowerContributionList } from './DemonTowerWorld';
 import { DemonTowerLeaderboardPage, towerDateValid } from './DemonTowerLeaderboardPage';
 import { TowerModal, revealTowerControl } from './TowerElements';
@@ -76,12 +77,12 @@ describe('demon tower native interface contracts', () => {
   });
 
   it('supports roving keyboard tabs and leaves only the selected workspace accessible', async () => {
-    wrap(<DemonTowerPage />); const explore = await screen.findByRole('tab', { name: '探索任务' });
+    wrap(<DemonTowerPage />); const explore = await screen.findByRole('tab', { name: '探索' });
     expect(explore).toHaveAttribute('tabindex', '0'); explore.focus(); fireEvent.keyDown(explore, { key: 'ArrowRight' });
-    const loadout = screen.getByRole('tab', { name: '装备技能' }); expect(loadout).toHaveFocus(); expect(loadout).toHaveAttribute('aria-selected', 'true');
+    const loadout = screen.getByRole('tab', { name: '装备' }); expect(loadout).toHaveFocus(); expect(loadout).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tower-panel-loadout');
-    fireEvent.keyDown(loadout, { key: 'End' }); expect(screen.getByRole('tab', { name: '行动战报' })).toHaveFocus();
-    fireEvent.keyDown(document.activeElement!, { key: 'Home' }); expect(screen.getByRole('tab', { name: /人物档案/ })).toHaveFocus();
+    fireEvent.keyDown(loadout, { key: 'End' }); expect(screen.getByRole('tab', { name: '协作' })).toHaveFocus();
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' }); expect(screen.getByRole('tab', { name: /成长/ })).toHaveFocus();
     expect(screen.getAllByRole('tab').filter((tab) => tab.tabIndex === 0)).toHaveLength(1);
   });
 
@@ -191,19 +192,19 @@ describe('demon tower native interface contracts', () => {
     expect(screen.getByText('下次行动重击（可震慑打断） · 1 回合')).toHaveAttribute('data-warning', 'true');
   });
   it('describes agility as damage and evasion while luck controls critical probability', async () => {
-    wrap(<DemonTowerPage />); fireEvent.click(await screen.findByRole('tab', { name: /人物档案/ }));
+    wrap(<DemonTowerPage />); fireEvent.click(await screen.findByRole('tab', { name: /成长/ }));
     expect(screen.getByText('敏捷影响轻兵伤害与闪避。')).not.toHaveTextContent('暴击');
     expect(screen.getByText('幸运影响法器、回复、暴击概率和部分探索收益。')).toBeTruthy();
   });
   it('unmounts an unsubmitted private bulk allocation draft when the account changes', async () => {
     vi.mocked(communityDemonTowerApi.overview).mockResolvedValue(towerOverview({ profile: towerProfile({ unspentPoints: 10 }) }));
-    wrap(<DemonTowerPage />); fireEvent.click(await screen.findByRole('tab', { name: /人物档案/ }));
+    wrap(<DemonTowerPage />); fireEvent.click(await screen.findByRole('tab', { name: /成长/ }));
     fireEvent.click(screen.getByRole('button', { name: '批量分配自由点' }));
     fireEvent.change(screen.getByRole('textbox', { name: '分配数量' }), { target: { value: '8' } });
     act(() => { setCommunitySessionTokens('synthetic-ui-b'); useCommunityAuthStore.setState({ phase: 'active', user: { ...TOWER_TEST_USER, id: 'tower-user-b', publicId: 'tower-public-b', displayName: '隔离寻道者乙' } }); });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(communityDemonTowerApi.action).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole('tab', { name: /人物档案/ })); fireEvent.click(screen.getByRole('button', { name: '批量分配自由点' }));
+    fireEvent.click(await screen.findByRole('tab', { name: /成长/ })); fireEvent.click(screen.getByRole('button', { name: '批量分配自由点' }));
     expect(screen.getByRole('textbox', { name: '分配数量' })).toHaveValue('1');
   });
   it('labels catalog skill cooldowns as base values without changing actual battle availability', () => {
@@ -265,22 +266,25 @@ describe('demon tower native interface contracts', () => {
 
   it('keeps full 20-weapon and 16-skill catalogs inspectable without granting unowned items', () => {
     render(<DemonTowerInventory profile={towerProfile()} catalog={towerCatalog()} disabled={false} onAction={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: '查看完整图鉴' })); expect(screen.getAllByRole('article')).toHaveLength(20);
+    fireEvent.click(screen.getByRole('button', { name: '查看完整图鉴' })); expect(screen.getAllByRole('article')).toHaveLength(6);
     expect(within(weaponCard('w2')).getByRole('button', { name: /选作主手|需要 Lv/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: '技能' })); expect(screen.getAllByRole('article')).toHaveLength(16);
+    const weaponIds = new Set<string>();
+    do { screen.getAllByRole('article').forEach(card => weaponIds.add(card.textContent!)); if ((screen.getByRole('button', { name: '下一页' }) as HTMLButtonElement).disabled) break; fireEvent.click(screen.getByRole('button', { name: '下一页' })); } while (true);
+    expect(weaponIds.size).toBe(20);
+    fireEvent.click(screen.getByRole('button', { name: '技能' })); expect(screen.getAllByRole('article')).toHaveLength(6);
   });
 
   it('uses duplicate copies before bound materials in an explicit upgrade confirmation', async () => {
-    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerInventory profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 } })} catalog={towerCatalog()} disabled={false} onAction={onAction} />);
-    fireEvent.click(within(weaponCard('w5')).getByRole('button', { name: '品质强化' }));
+    const onAction = vi.fn().mockResolvedValue(true); render(<DemonTowerExpansion profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 }, expansion: { version: 1, skillPages: 0, essences: 0, weaponBoxes: 0, weaponBoxPity: 0, riftsToday: 0, meditationsToday: 0, weeklyBossAttempts: 0, week: '2026-09-07', claimedBossFloors: [], passageTokens: 0, titles: [], skin: 'field', unlockedSkins: ['field'] } })} selectedItem="w5" disabled={false} onAction={onAction} />);
+    fireEvent.click(screen.getByRole('button', { name: '品质强化 +N' }));
     const dialog = screen.getByRole('dialog'); expect(within(dialog).getByText(/消耗同名副本 ×1/)).toBeTruthy(); expect(onAction).not.toHaveBeenCalled();
     fireEvent.click(within(dialog).getByRole('button', { name: '确认强化至 +2' }));
     await waitFor(() => expect(onAction).toHaveBeenCalledWith({ kind: 'upgrade', payload: { itemType: 'weapon', itemId: 'w5' } }));
   });
 
   it('blocks material-poor upgrades and does not offer a payment shortcut', () => {
-    render(<DemonTowerInventory profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 } })} catalog={towerCatalog()} disabled={false} onAction={vi.fn()} />);
-    fireEvent.click(within(weaponCard('w1')).getByRole('button', { name: '品质强化' })); const dialog = screen.getByRole('dialog');
+    render(<DemonTowerExpansion profile={towerProfile({ materials: { ore: 0, herb: 0, soul: 0, clue: 0 }, expansion: { version: 1, skillPages: 0, essences: 0, weaponBoxes: 0, weaponBoxPity: 0, riftsToday: 0, meditationsToday: 0, weeklyBossAttempts: 0, week: '2026-09-07', claimedBossFloors: [], passageTokens: 0, titles: [], skin: 'field', unlockedSkins: ['field'] } })} disabled={false} onAction={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '品质强化 +N' })); const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: '确认强化至 +2' })).toBeDisabled(); expect(dialog.textContent).toContain('当前绑定材料不足'); expect(dialog.textContent).not.toMatch(/充值|购买/);
   });
 

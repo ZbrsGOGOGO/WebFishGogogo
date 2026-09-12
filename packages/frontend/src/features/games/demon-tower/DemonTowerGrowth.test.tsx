@@ -44,10 +44,13 @@ describe('Demon tower free innate UI', () => {
     current.weapons = [{ id: 'w1', quality: 3, spareCopies: 2, star: 2, favor: 12, levelExempt: true }, { id: 'w17', quality: 1, spareCopies: 0, star: 1, favor: 0, levelExempt: true }, { id: 'w2', quality: 0, spareCopies: 0, star: 1, favor: 0 }];
     render(<DemonTowerInventory profile={current} catalog={towerCatalog()} disabled={false} onAction={vi.fn()} />);
     const hammer = screen.getByRole('heading', { name: '玄铁锤 +0' }).closest('article')!;
-    expect(within(hammer).getByText(/获取 Lv16 \/ 装备 Lv31/)).toBeVisible();
+    expect(within(hammer).getByText(/装备 Lv31/)).toBeVisible();
     expect(within(hammer).getByRole('button', { name: '需要 Lv31' })).toBeDisabled();
-    expect(screen.getByText('2 / 5 星 · 品质 +3 独立保留')).toBeVisible();
+    expect(screen.getByLabelText('斩马刀星级')).toHaveTextContent('★ 2/5');
+    expect(screen.getByRole('heading', { name: '斩马刀 +3' })).toBeVisible();
     expect(screen.getByRole('progressbar', { name: '斩马刀升星熟练度' })).toHaveAttribute('value', '12');
     expect(screen.getAllByText(/训练赠送可用/)).toHaveLength(2);
+    fireEvent.click(within(hammer).getByRole('button', { name: '详情' }));
+    expect(within(screen.getByRole('dialog')).getByText(/获取 Lv16 · 装备 Lv31/)).toBeVisible();
   });
 });

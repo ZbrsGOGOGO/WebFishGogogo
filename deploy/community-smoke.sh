@@ -218,11 +218,13 @@ for path in \
   request GET "$path" 200 "$SMOKE_TMP/spa${safe_name}.html" "$SMOKE_TMP/spa${safe_name}.headers"
 done
 
-# A deep-link 200 only proves that Nginx returned the SPA shell. Follow the
-# production entry manifest to the lazy React chunk and verify the actual page copy.
+# A deep-link 200 only proves that Nginx returned the SPA shell. Follow only
+# executable entry scripts (not modulepreload dependency links) to the lazy React
+# chunk and verify the actual page copy.
 : > "$SMOKE_TMP/community-entry-bundles.js"
-grep -a -E -o '/assets/[A-Za-z0-9._/-]+\.js' \
+grep -a -E -o '<script[^>]+src="/assets/[A-Za-z0-9._/-]+\.js"[^>]*>' \
   "$SMOKE_TMP/spa-games-zhesi.html" |
+  sed -E 's#.*src="([^"]+)".*#\1#' |
   sort -u > "$SMOKE_TMP/community-entry-assets.txt"
 [ -s "$SMOKE_TMP/community-entry-assets.txt" ] ||
   fail "community SPA does not reference a built JavaScript entry"

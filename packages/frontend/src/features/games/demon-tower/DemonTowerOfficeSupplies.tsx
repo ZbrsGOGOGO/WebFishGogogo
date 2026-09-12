@@ -20,9 +20,9 @@ const offerDescription = (offer: DemonTowerOfficeOfferView, profile: DemonTowerP
 };
 
 /** Server prices are consented to explicitly and invalidated by any changed profile version. */
-export function DemonTowerOfficeSupplies({ profile, disabled, balance, balanceStale, now, onAction, onExplore, onWorkshop }: {
+export function DemonTowerOfficeSupplies({ profile, disabled, balance, balanceStale, now, onAction }: {
   profile: DemonTowerProfileView; disabled: boolean; balance: number | null; balanceStale: boolean; now: number;
-  onAction: DemonTowerActionHandler; onExplore: () => void; onWorkshop: () => void;
+  onAction: DemonTowerActionHandler;
 }): JSX.Element {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -81,10 +81,9 @@ export function DemonTowerOfficeSupplies({ profile, disabled, balance, balanceSt
         <p className={styles.muted}>新增碎片与原有残页独立，不折损旧资产。碎片可自选当前已达获取与装备等级、尚未学会的技能；凡 / 精 / 灵 / 仙分别需 3 / 6 / 12 / 30 枚，不直接解锁越级技能。原有 30 残页自选仙级技能仍在「残魂秘市」。</p>
         <div className={office.skillList}>{value.skills.map(item => <div key={item.skillId}><div><strong>{item.rarity} · {item.name}</strong><small>Lv.{item.requiredLevel} · {item.owned ? '已习得' : `${item.cost ?? '—'} 碎片`}</small>{item.reason && !item.owned ? <small>{demonTowerActionReasonMessage(item.reason)}</small> : null}</div><button type="button" className={styles.button} aria-label={`自选${item.name}`} disabled={!item.available || !can('fragment_select')} onClick={() => ask({ kind: 'fragment_select', payload: { skillId: item.skillId } }, `自选${item.name}`, `消耗 ${item.cost} 枚技能碎片，确定习得「${item.name}」。不扣办公币、不消耗旧残页。`)}>自选</button></div>)}</div>
       </TowerPanel>
-      <TowerPanel title="补给操作记录" detail={<button className={styles.textButton} type="button" onClick={onWorkshop}>查看养成手册与工坊</button>}>
+      <TowerPanel title="补给操作记录">
         <p className={styles.muted}>显示最近 {RULES.historyLimit} 条新增补给操作；办公币真实流水同时写入全站钱包。不是全部钱包历史，不展示他人余额。</p>
         {value.history.length ? <ol className={styles.supplyLedger}>{value.history.map(item => <li key={item.id}><div><strong>{item.description}</strong><small>{towerTime(item.at)} · 北京时间</small></div><strong>{item.cost > 0 ? `−${item.cost} 办公币` : '绑定资源操作'}</strong></li>)}</ol> : <p className={styles.empty}>还没有补给记录。</p>}
-        <button type="button" className={styles.button} onClick={onExplore}>返回探索任务</button>
       </TowerPanel>
     </> : null}
     {quote ? <TowerModal title="确认补给操作" onClose={() => { if (!submitting) setQuote(null); }} footer={<div className={styles.actionsRight}><button className={styles.button} type="button" disabled={submitting} onClick={() => setQuote(null)}>取消</button><button className={styles.primary} type="button" disabled={changed || !can(quote.action.kind, quote.cost)} onClick={() => void submit()}>{submitting ? '提交中…' : quote.cost ? `确认扣除 ${quote.cost} 办公币` : '确认兑换'}</button></div>}>

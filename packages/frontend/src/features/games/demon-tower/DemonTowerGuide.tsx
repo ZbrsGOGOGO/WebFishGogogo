@@ -18,7 +18,7 @@ export function DemonTowerGuide({ profile }: { profile: DemonTowerProfileView })
   const rules = DEMON_TOWER_CATALOG.rules;
   const levels = [...new Set([profile.level, 16, 31, 46, 61, 120])].sort((a, b) => a - b);
   return <TowerPanel title="养成手册" detail={<span className={styles.badge}>本站运行规则</span>}>
-    <p className={styles.muted}>先探索积累等级，再选主维和配装，最后强化、升星与突破。补给与兑换统一在「物资申领」，角色属性与形象统一在「人物档案」；旧装备、经验和已解锁进度保留。</p>
+    <p className={styles.muted}>先探索积累等级，再选主维和配装，最后强化、升星与突破。补给与兑换统一在「物资」，角色属性与形象在「成长」，配装在「装备」，品质、星级和稀有度在「养成」；旧装备、经验和已解锁进度保留。</p>
     <ol className={guide.route} aria-label="养成路线">
       <li><strong>探索与恢复</strong><span>普通探索 {rules.exploreCost} 体力；每 {rules.staminaRestoreMs / 60000} 分钟恢复 1 点，最多 {rules.staminaCap} 点。普通探索没有每日 10 次硬上限，托管使用同一规则。</span></li>
       <li><strong>等级与心性</strong><span>每级获得 2 点自由属性与 2 点轮转基础属性。先天命格跟随境界解锁，永久丹独立于洗点；满级 {rules.maxLevel}。</span></li>

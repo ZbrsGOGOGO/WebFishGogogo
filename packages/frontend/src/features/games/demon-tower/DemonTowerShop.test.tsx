@@ -90,13 +90,13 @@ describe('Demon tower unified supply desk', () => {
     fireEvent.click(confirm); fireEvent.click(confirm); expect(value.onAction).toHaveBeenCalledOnce();
     await act(async () => resolve(false)); expect(screen.getByRole('dialog')).toBeVisible(); expect(value.onAction).toHaveBeenCalledOnce();
   });
-  it('uses history-preserving supply URLs and an explicit back-to-exploration action', () => {
+  it('uses history-preserving supply URLs without a redundant cross-tab return control', () => {
     const value = props(); wrap(value, '/games/demon-tower?tab=shop&supply=market&keep=1');
     expect(screen.getByRole('button', { name: '残魂秘市' })).toHaveAttribute('aria-current', 'page');
     fireEvent.click(screen.getByRole('button', { name: '收支记录' })); expect(screen.getByLabelText('物资位置')).toHaveTextContent('tab=shop&supply=ledger&keep=1');
     fireEvent.click(screen.getByRole('button', { name: '后退' })); expect(screen.getByRole('button', { name: '残魂秘市' })).toHaveAttribute('aria-current', 'page');
     fireEvent.click(screen.getByRole('button', { name: '前进' })); expect(screen.getByRole('button', { name: '收支记录' })).toHaveAttribute('aria-current', 'page');
-    fireEvent.click(screen.getByRole('button', { name: '返回探索任务' })); expect(value.onExplore).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: '返回探索任务' })).toBeNull(); expect(value.onExplore).not.toHaveBeenCalled();
   });
   it('requires a named replacement for a full quality-unlocked rune slot and preserves unrelated affixes', async () => {
     const value = props(); wrap(value, '/games/demon-tower?tab=shop&supply=effects');

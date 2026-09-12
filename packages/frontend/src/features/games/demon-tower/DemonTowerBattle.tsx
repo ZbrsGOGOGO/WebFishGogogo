@@ -53,10 +53,15 @@ export function DemonTowerReport({ report, catalog, compact = false }: { report:
   return <TowerPanel title={TOWER_OUTCOME_LABELS[report.outcome]} detail={<span className={styles.muted}>{towerTime(report.completedAt)}</span>}><p className={styles.muted}>{source} · 第 {report.floor} 层 · {report.turns} 回合</p><dl className={styles.reportStats}><div><dt>造成伤害</dt><dd>{report.damage.toLocaleString('zh-CN')}</dd></div><div><dt>妖塔经验</dt><dd>+{report.experience}</dd></div><div><dt>结算</dt><dd style={{ fontSize: 13 }}>{TOWER_OUTCOME_LABELS[report.outcome]}</dd></div></dl>{Object.entries(report.materials).some(([, amount]) => amount > 0) ? <div className={styles.effects}>{Object.entries(report.materials).filter(([, amount]) => amount > 0).map(([material, amount]) => <span className={styles.badge} key={material}>{catalog.materials[material as keyof typeof catalog.materials]} +{amount}</span>)}</div> : null}<p className={styles.muted} style={{ marginTop: 13 }}>此处记录战斗经验和材料。实际办公币到账、首领有效血池扣除以操作回执为准。</p><TowerCombatLog entries={report.log} limit={compact ? 5 : undefined} /></TowerPanel>;
 }
 
-export function DemonTowerDaily({ profile, catalog, disabled, onAction }: { profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; onAction: (action: DemonTowerAction) => Promise<boolean> }): JSX.Element {
+export function DemonTowerDaily({ profile, catalog, disabled, onAction, compact = false }: { profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; onAction: (action: DemonTowerAction) => Promise<boolean>; compact?: boolean }): JSX.Element {
   const daily = profile.daily;
   const rewardRemaining = Math.max(0, Math.min(catalog.rules.dailyActivityCoins, daily.officeCoinCap - daily.officeCoinsEarned));
   const rewardTitle = daily.rewardClaimed ? '今日活跃奖励已结算' : rewardRemaining > 0 ? `完成日常，最多获得 ${rewardRemaining} 办公币` : '今日日常办公币额度已用完';
   const canClaim = !disabled && profile.availableActions.includes('claim_reward') && !daily.rewardClaimed && daily.activity >= daily.activityTarget;
+  if (compact) return <section className={styles.dailySummary} aria-label="今日工作小结">
+    <div><h2>今日工作小结</h2><small>{daily.serviceDate} · 北京时间每日重置</small></div>
+    <div><strong>{rewardTitle}</strong><span>活跃 {daily.activity}/{daily.activityTarget} · 已到账 {daily.officeCoinsEarned}/{daily.officeCoinCap} 办公币</span></div>
+    <button type="button" className={styles.button} disabled={!canClaim} onClick={() => { void onAction({ kind: 'claim_reward', payload: {} }); }}>{daily.rewardClaimed ? '今日已领取' : daily.activity >= daily.activityTarget ? '领取活跃奖励' : '继续积累活跃'}</button>
+  </section>;
   return <TowerPanel title="今日工作小结" detail={<span className={styles.muted}>{daily.serviceDate}</span>}><div className={styles.daily}><div><h3>{rewardTitle}</h3><p>妖塔经验和绑定材料独立成长；办公币使用统一钱包，本次到账受今日剩余额度限制。</p><TowerMeter label="今日活跃" value={daily.activity} max={daily.activityTarget} /></div><button type="button" className={styles.button} disabled={!canClaim} onClick={() => { void onAction({ kind: 'claim_reward', payload: {} }); }}>{daily.rewardClaimed ? '今日已领取' : daily.activity >= daily.activityTarget ? '领取活跃奖励' : '继续积累活跃'}</button></div><p className={styles.muted} style={{ marginTop: 14 }}>今日妖塔日常已到账 {daily.officeCoinsEarned} / {daily.officeCoinCap} 办公币。北京时间自然日重置，不要求连续在线。</p></TowerPanel>;
 }

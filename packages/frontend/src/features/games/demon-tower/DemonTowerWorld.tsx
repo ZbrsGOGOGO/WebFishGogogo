@@ -15,6 +15,7 @@ export function DemonTowerWorldNavigation({ phase, expanded }: { phase: DemonTow
     ...(phase === 'passage' ? [['tower-world-passage', '通道建设']] : []),
     ['tower-world-floors', '楼层档案'], ['tower-world-contributions', '贡献档案'],
     ...(expanded ? [['tower-world-recognition', '首杀凭证'], ['tower-world-arena', '论道与好友'], ['tower-world-squad', '同心小队']] : []),
+    ['tower-world-journal', '行动战报'],
   ];
   return <nav className={styles.sectionNav} aria-label="协作世界分段导航">{sections.map(([id, label]) => <button key={id} type="button" className={styles.button} aria-controls={id} onClick={() => {
     const target = document.getElementById(id);

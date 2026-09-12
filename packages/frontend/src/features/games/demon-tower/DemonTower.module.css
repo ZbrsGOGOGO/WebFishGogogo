@@ -65,6 +65,11 @@
 .mobileSummary { display: none; }
 .buttonRow { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
 .actionsRight { display: flex; flex-wrap: wrap; gap: 9px; justify-content: flex-end; }
+.dailySummary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 18px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid var(--tower-line); border-radius: 9px; background: var(--tower-soft); }
+.dailySummary > div { min-width: 0; overflow-wrap: anywhere; }
+.dailySummary h2 { font-size: 15px; margin: 0; }
+.dailySummary strong { font-size: 13px; }
+.dailySummary small, .dailySummary span { display: block; color: var(--tower-muted); font-size: 12px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--tower-line); padding: 0 0 13px; margin-bottom: 24px; }
 .tab { display: inline-flex; gap: 8px; align-items: center; border: 0; background: transparent; color: #596952; padding: 10px 18px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 13px; min-height: 42px; }
 .tab[aria-selected="true"] { background: #e6eddf; color: #405c3d; font-weight: 600; }
