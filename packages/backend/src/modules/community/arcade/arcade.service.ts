@@ -15,7 +15,9 @@ import {
 import type { ArcadeGameKey } from '../../../database/entities/arcade-score.entity';
 import {
   replayWordFront,
+  replayWordFrontV2,
   type WordFrontAction,
+  type WordFrontV2Action,
 } from '@stealth-reader/shared';
 import { assertCommunityWritesEnabled } from '../community-write-gate';
 
@@ -25,7 +27,11 @@ const RUN_TTL_MS: Record<ArcadeGameKey, number> = {
   zhesi: 2 * 60 * 60 * 1_000,
   word_story: 2 * 60 * 60 * 1_000,
   word_endless: 2 * 60 * 60 * 1_000,
+  word_story_v2: 2 * 60 * 60 * 1_000,
+  word_endless_v2: 2 * 60 * 60 * 1_000,
 };
+const isWordFrontGame = (key: ArcadeGameKey) => key === 'word_story' || key === 'word_endless' || key === 'word_story_v2' || key === 'word_endless_v2';
+const isWordFrontV2Game = (key: ArcadeGameKey) => key === 'word_story_v2' || key === 'word_endless_v2';
 
 const ZHESI_MAX_AGE = 120_000;
 const ZHESI_BOOLEAN_METRICS = [
@@ -53,6 +59,8 @@ export function validateArcadeResult(
   input: FinishRunInput,
   elapsedSeconds: number,
   runSeed?: number,
+  runRulesVersion: 1 | 2 = 1,
+  runChapter?: number,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(input.score) || input.score < 0) {
     throw new BadRequestException({ code: 'ARCADE_SCORE_INVALID' });
@@ -98,26 +106,30 @@ export function validateArcadeResult(
     return { outcome, enemiesDefeated, elapsedSeconds };
   }
 
-  if (gameKey === 'word_story' || gameKey === 'word_endless') {
-    return validateWordFrontResult(gameKey, input, metrics, elapsedSeconds, runSeed);
+  if (isWordFrontGame(gameKey)) {
+    return validateWordFrontResult(gameKey, input, metrics, elapsedSeconds, runSeed, runRulesVersion, runChapter);
   }
 
-  return validateZhesiResult(input, metrics, elapsedSeconds);
+  if (gameKey === 'zhesi') return validateZhesiResult(input, metrics, elapsedSeconds);
+  throw new BadRequestException({ code: 'ARCADE_GAME_INVALID' });
 }
 
 function validateWordFrontResult(
-  gameKey: 'word_story' | 'word_endless',
+  gameKey: 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2',
   input: FinishRunInput,
   metrics: Record<string, unknown>,
   elapsedSeconds: number,
   runSeed: number | undefined,
+  runRulesVersion: 1 | 2,
+  runChapter: number | undefined,
 ): Record<string, unknown> {
-  const expectedMode = gameKey === 'word_story' ? 'story' : 'endless';
+  const expectedMode = gameKey === 'word_story' || gameKey === 'word_story_v2' ? 'story' : 'endless';
   const { mode, chapter, wave, kills, coreHp, drawCount, outcome, finishTick, actions } = metrics;
   if (
-    mode !== expectedMode ||
+    mode !== expectedMode || (isWordFrontV2Game(gameKey) !== (runRulesVersion === 2)) ||
+    (runRulesVersion === 2 && chapter !== runChapter) ||
     !Number.isSafeInteger(runSeed) || Number(runSeed) < 0 || Number(runSeed) > 0xffffffff ||
-    !Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > 3 ||
+    !Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (runRulesVersion === 2 ? 6 : 3) ||
     !Number.isSafeInteger(finishTick) || Number(finishTick) < 1 || Number(finishTick) > 3_000 ||
     !Array.isArray(actions) || actions.length < 2 || actions.length > 400 ||
     actions.some((action) => !action || typeof action !== 'object' || Array.isArray(action)) ||
@@ -126,7 +138,9 @@ function validateWordFrontResult(
     throw new BadRequestException({ code: 'ARCADE_RESULT_IMPLAUSIBLE' });
   }
 
-  const state = replayWordFront(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontAction[], Number(finishTick));
+  const state = runRulesVersion === 2
+    ? replayWordFrontV2(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontV2Action[], Number(finishTick))
+    : replayWordFront(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontAction[], Number(finishTick));
   if (
     !state ||
     state.status !== outcome ||
@@ -140,7 +154,7 @@ function validateWordFrontResult(
   }
   return {
     mode, chapter, wave, kills, coreHp, drawCount, outcome,
-    finishTick, elapsedSeconds, rulesVersion: 1,
+    finishTick, elapsedSeconds, rulesVersion: runRulesVersion,
   };
 }
 
@@ -288,7 +302,13 @@ function zhesiCombatPower(metrics: {
 export class ArcadeService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async startRun(userId: string, gameKey: ArcadeGameKey) {
+  async startRun(userId: string, gameKey: ArcadeGameKey, rulesVersion: 1 | 2 = 1, chapter?: number) {
+    if (isWordFrontV2Game(gameKey) !== (rulesVersion === 2) && isWordFrontGame(gameKey)) {
+      throw new BadRequestException({ code: 'ARCADE_RULES_VERSION_INVALID' });
+    }
+    if (isWordFrontV2Game(gameKey) && (!Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (gameKey === 'word_endless_v2' ? 1 : 6))) {
+      throw new BadRequestException({ code: 'ARCADE_CHAPTER_INVALID' });
+    }
     this.assertWritesEnabled();
     return this.dataSource.transaction(async (manager) => {
       // The account row is the common lock for every run belonging to this
@@ -296,6 +316,20 @@ export class ArcadeService {
       // then insert two active runs because there is no partial unique index.
       await this.lockActiveUser(manager, userId);
       this.assertWritesEnabled();
+      const now = new Date();
+      const repo = manager.getRepository(ArcadeGameRun);
+      if (isWordFrontV2Game(gameKey)) {
+        const active = await repo.findOne({ where: { userId, gameKey, status: 'active' }, order: { startedAt: 'DESC' } });
+        // V2 restarts reuse a seed only while there is ample time remaining.
+        // V1 keeps its original start semantics for already deployed clients.
+        const reusableUntil = 90 * 60 * 1_000;
+        if (active && active.expiresAt.getTime() - now.getTime() >= reusableUntil &&
+          (active.metrics.rulesVersion === 2 ? 2 : 1) === rulesVersion) {
+          return { runId: active.id, gameKey: active.gameKey, startedAt: active.startedAt.toISOString(),
+            expiresAt: active.expiresAt.toISOString(), seed: active.metrics.seed, rulesVersion,
+            ...(isWordFrontV2Game(gameKey) ? { chapter: active.metrics.chapter } : {}) };
+        }
+      }
       await manager
         .createQueryBuilder()
         .update(ArcadeGameRun)
@@ -306,8 +340,6 @@ export class ArcadeService {
           status: 'active',
         })
         .execute();
-      const now = new Date();
-      const repo = manager.getRepository(ArcadeGameRun);
       const run = repo.create({
           id: randomUUID(),
           userId,
@@ -322,8 +354,9 @@ export class ArcadeService {
       // The random server-generated run ID fixes the card order for this run.
       // Persist the seed so a finished result can be replayed independently of
       // any client-side draft or edited local storage.
-      if (gameKey === 'word_story' || gameKey === 'word_endless') {
-        run.metrics = { seed: Number.parseInt(run.id.replace(/-/g, '').slice(0, 8), 16) };
+      if (isWordFrontGame(gameKey)) {
+        run.metrics = { seed: Number.parseInt(run.id.replace(/-/g, '').slice(0, 8), 16), rulesVersion,
+          ...(isWordFrontV2Game(gameKey) ? { chapter } : {}) };
       }
       const saved = await repo.save(run);
       return {
@@ -331,7 +364,8 @@ export class ArcadeService {
         gameKey: saved.gameKey,
         startedAt: saved.startedAt.toISOString(),
         expiresAt: saved.expiresAt.toISOString(),
-        ...(gameKey === 'word_story' || gameKey === 'word_endless' ? { seed: saved.metrics.seed } : {}),
+        ...(isWordFrontGame(gameKey) ? { seed: saved.metrics.seed, rulesVersion: saved.metrics.rulesVersion,
+          ...(isWordFrontV2Game(gameKey) ? { chapter: saved.metrics.chapter } : {}) } : {}),
       };
     });
   }
@@ -356,8 +390,9 @@ export class ArcadeService {
         throw new BadRequestException({ code: 'ARCADE_RUN_EXPIRED' });
       }
       const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - run.startedAt.getTime()) / 1_000));
-      const metrics = validateArcadeResult(run.gameKey, input, elapsedSeconds, Number(run.metrics.seed));
-      const wordFront = run.gameKey === 'word_story' || run.gameKey === 'word_endless';
+      const rulesVersion = run.metrics.rulesVersion === 2 ? 2 : 1;
+      const metrics = validateArcadeResult(run.gameKey, input, elapsedSeconds, Number(run.metrics.seed), rulesVersion, Number(run.metrics.chapter));
+      const wordFront = isWordFrontGame(run.gameKey);
       const actions = wordFront ? (input.metrics as Record<string, unknown>).actions : undefined;
       const traceHash = wordFront
         ? createHash('sha256').update(JSON.stringify(actions)).digest('hex')
@@ -412,7 +447,7 @@ export class ArcadeService {
       .getMany();
     return {
       gameKey,
-      formulaVersion: 'arcade-score-v1',
+      formulaVersion: isWordFrontV2Game(gameKey) ? 'word-front-v2' : 'arcade-score-v1',
       items: rows.map((row, index) => ({
         rank: index + 1,
         publicId: row.user.publicId,

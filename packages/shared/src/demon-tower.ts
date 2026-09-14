@@ -7,7 +7,7 @@ export type DemonTowerAttribute = typeof DEMON_TOWER_ATTRIBUTE_KEYS[number];
 export type DemonTowerAttributes = Record<DemonTowerAttribute, number>;
 export type DemonTowerRarity = '凡' | '精' | '灵' | '仙' | '神';
 export type DemonTowerWeaponId = 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'w6' | 'w7' | 'w8' | 'w9' | 'w10' | 'w11' | 'w12' | 'w13' | 'w14' | 'w15' | 'w16' | 'w17' | 'w18' | 'w19' | 'w20';
-export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16';
+export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16' | 's17' | 's18';
 export type DemonTowerMaterial = 'ore' | 'herb' | 'soul' | 'clue';
 export type DemonTowerMaterials = Record<DemonTowerMaterial, number>;
 export type DemonTowerTerrain = 'plain' | 'lake' | 'mountain' | 'sea';
@@ -176,11 +176,15 @@ export interface DemonTowerBattleReport {
   source?: 'rift' | 'weekly_boss';
   id: string; kind: 'explore' | 'boss'; floor: number; outcome: 'victory' | 'defeat' | 'fled' | 'timeout' | 'contributed';
   turns: number; damage: number; experience: number; materials: DemonTowerMaterials;
+  /** Server-settled presentation only; older reports and shared-boss contributions have no grade. */
+  grade?: 'instant' | 'flawless' | 'steady' | 'narrow' | 'draw';
   /** Actual credited coins are returned by the service receipt, not this combat simulation. */
   log: DemonTowerCombatLog[]; completedAt: number;
 }
 export interface DemonTowerDailyView {
   serviceDate: string; activity: number; activityTarget: number; rewardClaimed: boolean;
+  /** Wins recorded after the task tracker was introduced; old daily progress is not backfilled. */
+  exploreVictories?: number;
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
@@ -338,6 +342,8 @@ export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
   skill('s14', '全维淬炼', '维度', 'active', '仙', 36, 5, '五属性各增加5，持续2回合。'),
   skill('s15', '气运一击', '伤害', 'active', '仙', 36, 4, '非首领目标有8%概率被压至1生命（无视护盾）；否则造成1至4倍幸运伤害。共享首领免疫压血，只结算普通伤害。'),
   skill('s16', '崩山击', '伤害', 'active', '仙', 36, 4, '造成3倍力量伤害，并使目标防御降低30%，持续2回合。'),
+  skill('s17', '皮糙肉厚', '维度', 'passive', '精', 6, 0, '受到直接攻击时伤害减少12%（随品质和免费熟练度提高，最多30%）；不抵消持续毒伤。'),
+  skill('s18', '无影手', '伤害', 'passive', '灵', 18, 0, '普通攻击命中且目标仍存活时，20%概率追加一击0.5倍敏捷伤害；每次行动最多触发一次。'),
 ];
 /** Conditional on receiving this item kind. Level filtering and guarantees are applied before normalization. */
 export const DEMON_TOWER_SOURCE_WEIGHTS: Record<DemonTowerLootSource, { weapon: Record<DemonTowerRarity, number>; skill: Record<DemonTowerRarity, number> }> = {

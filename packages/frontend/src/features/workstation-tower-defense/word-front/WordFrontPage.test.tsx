@@ -99,6 +99,15 @@ describe('WordFrontPage', () => {
     expect(screen.getByText(/本机草稿，不会提交在线榜/)).toBeInTheDocument();
   });
 
+  it('never submits a legacy trace against a mistakenly returned v2 rules seed', async () => {
+    vi.mocked(startArcadeRun).mockResolvedValue({ runId: 'wrong-rules', gameKey: 'word_story', rulesVersion: 2, seed: 17,
+      startedAt: '2026-09-14T00:00:00.000Z', expiresAt: '2026-09-14T02:00:00.000Z' });
+    openPage();
+    fireEvent.click(screen.getByRole('button', { name: '招募五张 · 10 点' }));
+    await waitFor(() => expect(screen.getByText(/本机草稿，不会提交在线榜/)).toBeInTheDocument());
+    expect(finishArcadeRun).not.toHaveBeenCalled();
+  });
+
   it('drops a late seed response after switching from account A to account B', async () => {
     let resolveRun!: (run: Awaited<ReturnType<typeof startArcadeRun>>) => void;
     vi.mocked(startArcadeRun).mockReturnValue(new Promise(resolve => { resolveRun = resolve; }));

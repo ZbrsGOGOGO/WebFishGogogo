@@ -23,7 +23,7 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
     return () => { currentRun.current = null; };
   }, [adapter, gameKey]);
 
-  const begin = useCallback(() => {
+  const beginForChapter = useCallback((chapter?: number) => {
     const run = { promise: Promise.resolve<ArcadeRun | null>(null), finished: false };
     currentRun.current = run;
     setNotice(null);
@@ -31,7 +31,7 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
       const request = async (): Promise<ArcadeRun | null> => {
         if (currentRun.current !== run) return null;
         try {
-          return await adapter.startRun(gameKey);
+          return await (chapter === undefined ? adapter.startRun(gameKey) : adapter.startRun(gameKey, chapter));
         } catch {
           if (currentRun.current === run) {
             setNotice('本局可以继续游玩，成绩暂未接入排行榜。');
@@ -49,6 +49,7 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
     }
     return run.promise;
   }, [adapter, gameKey, signedIn]);
+  const begin = useCallback(() => beginForChapter(), [beginForChapter]);
 
   const finish = useCallback(async (score: number, metrics: Record<string, unknown>) => {
     const pending = currentRun.current;
@@ -71,5 +72,5 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
     }
   }, [adapter]);
 
-  return { begin, finish, notice, revision, signedIn };
+  return { begin, beginForChapter, finish, notice, revision, signedIn };
 }

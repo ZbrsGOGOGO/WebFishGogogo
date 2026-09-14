@@ -121,12 +121,12 @@ describe('Server automatic exploration policy', () => {
 });
 
 describe('DemonTower engine contracts and authority', () => {
-  test('all nine floors, twenty weapons, sixteen skills are reachable before the level cap', () => {
+  test('all nine floors, twenty weapons, eighteen skills are reachable before the level cap', () => {
     expect(DEMON_TOWER_FLOORS).toHaveLength(9);
     expect(DEMON_TOWER_WEAPONS).toHaveLength(20);
-    expect(DEMON_TOWER_SKILLS).toHaveLength(16);
+    expect(DEMON_TOWER_SKILLS).toHaveLength(18);
     expect(new Set(DEMON_TOWER_WEAPONS.map((item) => item.id)).size).toBe(20);
-    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(16);
+    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(18);
     expect(DEMON_TOWER_FLOORS.map((floor) => floor.requiredLevel)).toEqual([1, 5, 12, 22, 36, 52, 72, 94, 110]);
     expect(demonTowerPersonalUnlockedFloor(120)).toBe(9);
     expect(DEMON_TOWER_CATALOG.rules.dailyOfficeCoinCap).toBe(200);
@@ -293,13 +293,19 @@ describe('DemonTower progression, time and inventory', () => {
     expect(advanceDemonTowerState(trained, NOW + 86_400_000 + 1, '2026-09-09').stamina).toBe(94);
   });
   test('clock cannot move backwards; day rollover clears only daily counters', () => {
-    const state = fresh(); state.daily.activity = 10; state.daily.bossAttempts = 3; state.daily.rewardClaimed = true;
+    const state = fresh(); state.daily.activity = 10; state.daily.bossAttempts = 3; state.daily.rewardClaimed = true; state.daily.exploreVictories = 2;
     expectCode(() => advanceDemonTowerState(state, NOW - 1, DATE), 'INVALID_TIME');
     const next = advanceDemonTowerState(state, NOW + 86_400_000, '2026-09-09');
     expect(next.daily).toEqual({ serviceDate: '2026-09-09', activity: 0, bossAttempts: 0, rewardClaimed: false });
     expect(next.weapons).toEqual(state.weapons);
     expectCode(() => advanceDemonTowerState(next, NOW + 86_400_000 - 1, '2026-09-09'), 'INVALID_TIME');
     expectCode(() => advanceDemonTowerState(state, NOW, '2026-09-09'), 'INVALID_SERVICE_DATE');
+  });
+  test('rejects malformed optional daily task counters while retaining legacy saves', () => {
+    const old = fresh();
+    expect(advanceDemonTowerState(old, NOW, DATE).daily.exploreVictories).toBeUndefined();
+    const corrupted = structuredClone(old); corrupted.daily.exploreVictories = -1;
+    expectCode(() => advanceDemonTowerState(corrupted, NOW, DATE), 'INVALID_DAILY_STATE');
   });
   test('Shanghai midnight, not browser date or UTC midnight, resets boss attempts', () => {
     const before = Date.UTC(2026, 8, 8, 15, 59, 59);
@@ -383,14 +389,14 @@ describe('DemonTower progression, time and inventory', () => {
     expect(state.skills.length).toBeGreaterThan(originalSkills);
     expect(state.lootPity.stepsSinceGuarantee).toBeLessThan(4);
   });
-  test('weighted pools retain a free seeded path to all thirty-six items without paid boxes', () => {
+  test('weighted pools retain a free seeded path to all thirty-eight items without paid boxes', () => {
     let state = fresh('finite-free-collection-synthetic'); state.level = 60;
     state.attributes = { STR: 1000, SPD: 1000, AGI: 1000, DEF: 1000, LUCK: 10 };
     state.hp = demonTowerMaxHp(state);
     let eligibleResults = 0;
     // v2 guarantees an item every four settlements, not a globally unowned rarity every fourth draw.
     // Missing-item preference is now within the weighted rarity. The resource-conserving campaign is below.
-    while (state.weapons.length + state.skills.length < 36 && eligibleResults < 1000) {
+    while (state.weapons.length + state.skills.length < 38 && eligibleResults < 1000) {
       state.stamina = 100;
       state = action(state, { kind: 'explore', payload: {} }).state;
       while (state.battle) state = attack(state);
@@ -614,8 +620,58 @@ describe('DemonTower combat effects', () => {
     let state = combat('w13'); state.battle!.player.shield = 100000;
     for (let i = 0; i < 12; i += 1) state = attack(state);
     expect(state.battle).toBeNull(); expect(state.lastReport!.outcome).toBe('timeout');
+    expect(state.lastReport!.grade).toBe('draw');
     expect(state.lastReport!.turns).toBe(12); expect(state.lastReport!.log.length).toBeLessThanOrEqual(100);
     expectCode(() => attack(state), 'NO_BATTLE');
+  });
+  test('settles battle grades from the saved combat snapshot, not client-reported scores or rewards', () => {
+    const instant = combat(); instant.battle!.enemies[0].hp = 1;
+    const instantResult = action(instant, { kind: 'attack', payload: { targetId: 'enemy-1' } });
+    expect(instantResult.state.lastReport).toMatchObject({ outcome: 'victory', grade: 'instant', turns: 1 });
+    expect(instantResult.state.daily.exploreVictories).toBe(1);
+    expect(demonTowerProfileView(instantResult.state, NOW, 1).lastReport?.grade).toBe('instant');
+    expect(demonTowerProfileView(instantResult.state, NOW, 1).daily.exploreVictories).toBe(1);
+
+    const flawless = combat(); flawless.battle!.turn = 1; flawless.battle!.enemies[0].hp = 1;
+    expect(attack(flawless).lastReport?.grade).toBe('flawless');
+
+    const narrow = combat(); narrow.battle!.turn = 1; narrow.battle!.player.hp = Math.floor(narrow.battle!.player.maxHp / 5);
+    narrow.battle!.playerDamageTaken = 10; narrow.battle!.enemies[0].hp = 1;
+    expect(attack(narrow).lastReport?.grade).toBe('narrow');
+
+    const steady = combat(); steady.battle!.turn = 1; steady.battle!.playerDamageTaken = 10;
+    steady.battle!.enemies[0].hp = 1;
+    expect(attack(steady).lastReport?.grade).toBe('steady');
+
+    const escaped = combat();
+    expect(action(escaped, { kind: 'flee', payload: {} }).state.lastReport?.grade).toBeUndefined();
+    expect(action(escaped, { kind: 'flee', payload: {} }).state.daily.exploreVictories).toBeUndefined();
+  });
+  test('new free passives reduce direct incoming damage and add at most one normal-action follow-up', () => {
+    const eligible = equipped();
+    expect(action(eligible, { kind: 'equip', payload: { ...eligible.loadout, passiveSkills: ['s17', 's18'] } }).state.loadout.passiveSkills).toEqual(['s17', 's18']);
+    let plainDamage = 0, toughDamage = 0;
+    for (let i = 0; i < 20; i += 1) {
+      const plain = combat('w1', null, `new-passive-defense-seed-${i}`);
+      const tough = structuredClone(plain); tough.loadout.passiveSkills = ['s17'];
+      const plainAfter = attack(plain), toughAfter = attack(tough);
+      plainDamage += plainAfter.battle!.playerDamageTaken;
+      toughDamage += toughAfter.battle!.playerDamageTaken;
+      expect(toughAfter.battle!.enemies[0].hp).toBe(plainAfter.battle!.enemies[0].hp);
+    }
+    expect(plainDamage).toBeGreaterThan(0);
+    expect(toughDamage).toBeLessThan(plainDamage);
+    let triggered = 0;
+    for (let i = 0; i < 80; i += 1) {
+      const state = combat('w1', null, `new-passive-follow-up-seed-${i}`);
+      state.loadout.passiveSkills = ['s18'];
+      const result = attack(state);
+      const followUps = result.battle!.log.filter((entry) => entry.text.includes('无影手追击'));
+      expect(followUps.length).toBeLessThanOrEqual(1);
+      triggered += followUps.length;
+    }
+    expect(triggered).toBeGreaterThan(0);
+    expect(triggered).toBeLessThan(80);
   });
   test('cannot change gear, allocate stats or train inside combat; flee is reward-free', () => {
     const state = combat();

@@ -42,6 +42,21 @@ describe('ColorConverter CMYK interactions', () => {
     expect(screen.getByRole('spinbutton', { name: 'M%' })).toHaveValue(0);
     expect(screen.getByRole('spinbutton', { name: 'Y%' })).toHaveValue(100);
     expect(screen.getByRole('spinbutton', { name: 'K%' })).toHaveValue(0);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'HEX' }), {
+      target: { value: '#FC5531' },
+    });
+    for (const label of ['C%', 'M%', 'Y%', 'K%']) {
+      expect((screen.getByRole('spinbutton', { name: label }) as HTMLInputElement).value).toMatch(/^\d+$/);
+    }
+  });
+
+  it('keeps a manually entered decimal instead of silently changing its value', () => {
+    render(<ColorConverter />);
+    const cyan = screen.getByRole('spinbutton', { name: 'C%' });
+    fireEvent.change(cyan, { target: { value: '12.5' } });
+    expect(cyan).toHaveValue(12.5);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('keeps invalid input visible and prevents copying it', () => {

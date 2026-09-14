@@ -173,6 +173,12 @@ describe('ColorConverter', () => {
     expect(cmykToRgb({ c: 0, m: 100, y: 100, k: 0 })).toEqual({ r: 255, g: 0, b: 0 });
   });
 
+  it('自动换算 CMYK 只显示整数百分比', () => {
+    const converted = rgbToCmyk({ r: 252, g: 85, b: 49 });
+    expect(converted).toEqual({ c: 0, m: 66, y: 81, k: 1 });
+    expect(Object.values(converted).every(Number.isInteger)).toBe(true);
+  });
+
   it('CMYK 转换会限制越界输入', () => {
     expect(cmykToRgb({ c: -20, m: 120, y: 0, k: 0 })).toEqual({ r: 255, g: 0, b: 255 });
   });
@@ -218,9 +224,11 @@ describe('ColorConverter', () => {
         fc.integer({ min: 0, max: 255 }),
         (r, g, b) => {
           const back = cmykToRgb(rgbToCmyk({ r, g, b }));
-          expect(Math.abs(back.r - r)).toBeLessThanOrEqual(1);
-          expect(Math.abs(back.g - g)).toBeLessThanOrEqual(1);
-          expect(Math.abs(back.b - b)).toBeLessThanOrEqual(1);
+          // Integer CMYK percentages intentionally trade a little precision
+          // for legibility; each of two rounded factors can shift RGB by ~1.3.
+          expect(Math.abs(back.r - r)).toBeLessThanOrEqual(3);
+          expect(Math.abs(back.g - g)).toBeLessThanOrEqual(3);
+          expect(Math.abs(back.b - b)).toBeLessThanOrEqual(3);
         },
       ),
     );

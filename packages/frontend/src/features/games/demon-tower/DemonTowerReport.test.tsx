@@ -1,8 +1,8 @@
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DemonTowerBattleReport, DemonTowerCombatLog } from '@stealth-reader/shared';
 
-import { DemonTowerReport, TowerCombatLog } from './DemonTowerBattle';
+import { DemonTowerDailyTasks, DemonTowerReport, TowerCombatLog } from './DemonTowerBattle';
 import { towerCatalog } from './test-fixtures';
 
 const log: DemonTowerCombatLog[] = [
@@ -57,6 +57,20 @@ describe('saved demon-tower battle report', () => {
   });
 
   it.each([
+    ['instant', '秒杀（一回合）'], ['flawless', '完胜'], ['steady', '稳胜'], ['narrow', '险胜'], ['draw', '平局'],
+  ] as const)('displays a server-issued %s grade without changing the settlement', (grade, label) => {
+    render(<DemonTowerReport report={report({ grade, outcome: grade === 'draw' ? 'timeout' : 'victory' })} catalog={towerCatalog()} />);
+    expect(screen.getByText(`战绩评级 · ${label}`)).toBeVisible();
+    expect(screen.getByText(/不改变经验、材料或排行榜/)).toBeVisible();
+    expect(screen.getByText('+18')).toBeVisible();
+  });
+
+  it('does not fabricate a grade for a persisted older report', () => {
+    render(<DemonTowerReport report={report()} catalog={towerCatalog()} />);
+    expect(screen.queryByText(/战绩评级/)).toBeNull();
+  });
+
+  it.each([
     ['defeat', '暂时受挫', '当前没有胜利结算'],
     ['fled', '主动撤离', '已消耗的探索体力不会退还'],
     ['timeout', '回合上限', '未按胜利结算'],
@@ -75,5 +89,16 @@ describe('saved demon-tower battle report', () => {
     expect(entries[0]).toHaveTextContent('我方');
     expect(entries[1]).toHaveTextContent('系统');
     expect(screen.queryByText('寻道者损失4生命。')).toBeNull();
+  });
+});
+
+describe('daily task progress', () => {
+  it('shows real, optional server counters and no second payout', () => {
+    render(<DemonTowerDailyTasks daily={{ serviceDate: '2026-09-14', activity: 3, activityTarget: 3, rewardClaimed: false,
+      exploreVictories: 1, bossAttempts: 0, bossAttemptsMax: 3, officeCoinsEarned: 0, officeCoinCap: 200 }} />);
+    fireEvent.click(screen.getByText('每日任务 · 已完成 2/3'));
+    const list = screen.getByRole('list', { name: '今日妖塔任务' });
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByText(/不额外发币/)).toBeVisible();
   });
 });

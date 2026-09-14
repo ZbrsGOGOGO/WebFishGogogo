@@ -53,7 +53,7 @@ export function WordFrontPage(): JSX.Element {
   const signedIn = phase === 'active';
   const publicId = useCommunityAuthStore(state => state.phase === 'active' ? state.user?.publicId : null);
   const restoreSession = useCommunityAuthStore(state => state.restoreSession);
-  const adapter = useMemo<ArcadeAdapter>(() => ({ signedIn, restoreSession, startRun: startArcadeRun,
+  const adapter = useMemo<ArcadeAdapter>(() => ({ signedIn, restoreSession, startRun: gameKey => startArcadeRun(gameKey),
     finishRun: finishArcadeRun, getLeaderboard: getArcadeLeaderboard }), [signedIn, restoreSession]);
   if (!signedIn || !publicId) return <main className={styles.page}>
     <h1>文字战线</h1>
@@ -147,7 +147,7 @@ function WordFrontRun({ mode, publicId, onModeChange }: { mode: WordFrontMode; p
       const run = await arcade.begin();
       if (!alive.current || request !== startRequest.current || useCommunityAuthStore.getState().user?.publicId !== publicId) return;
       const key = mode === 'story' ? 'word_story' : 'word_endless';
-      const validSeed = run?.gameKey === key && Number.isSafeInteger(run.seed) && run.seed! >= 0 && run.seed! <= 0xffff_ffff;
+      const validSeed = run?.gameKey === key && (run.rulesVersion === undefined || run.rulesVersion === 1) && Number.isSafeInteger(run.seed) && run.seed! >= 0 && run.seed! <= 0xffff_ffff;
       const base = createWordFrontState(mode, chapter, validSeed ? run.seed! : stateRef.current.seed);
       const action: WordFrontAction = { tick: 0, type: 'recruit' };
       const next = applyWordFrontAction(base, action);
@@ -206,7 +206,7 @@ function WordFrontRun({ mode, publicId, onModeChange }: { mode: WordFrontMode; p
   return <main className={styles.page}>
     <header className={styles.header}>
       <div><span className={styles.kicker}>WORKSHEET / WORD FRONT</span><h1>文字战线 · 赵云救阿斗</h1><p>一条隐约可见的文件路线，两字组队、两人合一；原工位塔防仍独立保留。</p></div>
-      <nav aria-label="文字战线导航"><Link to="/tower-defense">原工位塔防</Link><Link to="/games">小游戏专区</Link></nav>
+      <nav aria-label="文字战线导航"><Link to="/tower-defense">原工位塔防</Link><Link to="/tower-defense/word-front">新版六章</Link><Link to="/games">小游戏专区</Link></nav>
     </header>
     <div className={styles.layout}>
       <section className={styles.mainPanel} aria-label="文字战线对局">

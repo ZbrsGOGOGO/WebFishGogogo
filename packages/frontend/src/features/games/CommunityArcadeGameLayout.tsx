@@ -20,7 +20,7 @@ export function CommunityArcadeGameLayout(): JSX.Element {
   const adapter = useMemo<ArcadeAdapter>(() => ({
     signedIn,
     restoreSession,
-    startRun: startArcadeRun,
+    startRun: gameKey => startArcadeRun(gameKey),
     finishRun: finishArcadeRun,
     getLeaderboard: getArcadeLeaderboard,
   }), [publicId, restoreSession, signedIn]);

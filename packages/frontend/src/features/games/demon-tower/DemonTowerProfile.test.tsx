@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { DEMON_TOWER_APPEARANCE_OPTIONS, DEMON_TOWER_APPEARANCE_SLOTS, DEMON_TOWER_DEFAULT_APPEARANCE, type DemonTowerAppearance } from '@stealth-reader/shared';
 import { GamePrivacyProvider } from '../GamePrivacyContext';
 import { DemonTowerAppearancePanel, DemonTowerPower } from './DemonTowerProfile';
@@ -91,6 +93,21 @@ describe('Demon tower appearance and loadout reference', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '取消' })); expect(trigger).toHaveFocus();
     open(); rerender(<GamePrivacyProvider value={{ covered: true, toggleCover: null }}><DemonTowerAppearancePanel {...value} /></GamePrivacyProvider>);
     expect(document.body.style.overflow).not.toBe('hidden'); expect(value.onAction).not.toHaveBeenCalled();
+  });
+  it('keeps skin actions below the legend instead of squeezing them beside a full-width float', () => {
+    const value = props();
+    value.profile.expansion = {
+      version: 1, skillPages: 0, essences: 0, weaponBoxes: 0, weaponBoxPity: 0,
+      riftsToday: 0, meditationsToday: 0, weeklyBossAttempts: 0, week: '2026-09-07',
+      claimedBossFloors: [], passageTokens: 0, titles: [], skin: 'field', unlockedSkins: ['field', 'ledger', 'memo'],
+    };
+    render(<DemonTowerAppearancePanel {...value} showSkins />);
+    const skins = screen.getByRole('group', { name: /低调工作台皮肤/ });
+    expect(within(skins).getAllByRole('button')).toHaveLength(3);
+    const css = readFileSync(resolve(process.cwd(), 'src/features/games/demon-tower/DemonTowerProfile.module.css'), 'utf8');
+    const legend = css.match(/\.skins legend\s*\{([^}]+)\}/)?.[1];
+    expect(legend).toContain('float: none');
+    expect(legend).not.toMatch(/(?:^|;)\s*(?:float:\s*left|width:\s*100%)/);
   });
   it('renders every option using distinct trusted SVG shapes, without remote images or user markup', () => {
     const { container, rerender } = render(<TowerPortrait name="<script>" appearance={{ ...DEMON_TOWER_DEFAULT_APPEARANCE }} />);

@@ -198,6 +198,15 @@
 .reportSummary { border-left: 3px solid var(--tower-accent); border-radius: 0 6px 6px 0; background: var(--tower-soft); padding: 10px 12px; font-size: 13px; }
 .reportSummary[data-outcome="defeat"], .reportSummary[data-outcome="timeout"] { border-left-color: #a77959; }
 .reportSummary[data-outcome="fled"] { border-left-color: #8c8f72; }
+.reportGrade { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin: -2px 0 15px; color: var(--tower-ink); font-size: 12px; }
+.reportGrade strong { color: var(--tower-accent); font-size: 13px; }
+.reportGrade[data-grade="draw"] strong, .reportGrade[data-grade="narrow"] strong { color: #9c624d; }
+.dailyTasks { flex: 1 0 100%; border-top: 1px dashed var(--tower-line); padding-top: 6px; color: var(--tower-ink); }
+.dailyTasks summary { cursor: pointer; font-weight: 600; font-size: 12px; }
+.dailyTasks ul { list-style: none; margin: 8px 0 4px; padding: 0; display: grid; gap: 4px; }
+.dailyTasks li { display: flex; justify-content: space-between; gap: 10px; color: var(--tower-muted); font-size: 12px; }
+.dailyTasks li[data-complete="true"] { color: var(--tower-accent); }
+.dailyTasks p { margin: 7px 0 0; color: var(--tower-muted); font-size: 11px; }
 .reportHighlights { margin-top: 16px; padding: 13px 15px; border: 1px solid var(--tower-line); border-radius: 8px; }
 .reportHighlights h3, .reportLogHeading { margin: 0; font-size: 13px; font-weight: 600; }
 .reportHighlights p { margin: 2px 0 0; color: var(--tower-muted); font-size: 12px; }

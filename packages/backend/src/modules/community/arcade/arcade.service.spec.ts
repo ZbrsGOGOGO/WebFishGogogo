@@ -2,12 +2,17 @@ import { BadRequestException } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
 import {
   createWordFrontState,
+  createWordFrontV2State,
   deployWordFrontUnit,
+  applyWordFrontV2Action,
   recruitWordFrontCards,
+  replayWordFrontV2,
   startWordFront,
   stepWordFront,
+  stepWordFrontV2,
   wordFrontHeroForLetters,
   type WordFrontAction,
+  type WordFrontV2Action,
 } from '@stealth-reader/shared';
 
 import {
@@ -57,6 +62,28 @@ describe('arcade score validation', () => {
     expect(() => validateArcadeResult('word_story', {
       ...story, metrics: { ...story.metrics, outcome: state.status === 'won' ? 'lost' : 'won' },
     }, elapsedSeconds, seed)).toThrow(BadRequestException);
+  });
+
+  it('replays v2 only on its separate score key and preserves v1 validation', () => {
+    const seed = 7301;
+    let state = createWordFrontV2State('story', 1, seed);
+    const actions: WordFrontV2Action[] = [{ type: 'recruit', tick: 0 }];
+    state = applyWordFrontV2Action(state, actions[0]!)!;
+    actions.push({ type: 'deploy_hero', tick: 0, first: 0, second: 1, slot: 0 }, { type: 'start', tick: 0 });
+    state = applyWordFrontV2Action(state, actions[1]!)!;
+    state = applyWordFrontV2Action(state, actions[2]!)!;
+    while (state.status === 'running' && state.tick < 3000) state = stepWordFrontV2(state);
+    expect(['won', 'lost']).toContain(state.status);
+    const elapsedSeconds = Math.ceil(state.tick * 0.85) + 5;
+    const input = { score: state.score, metrics: { mode: 'story', chapter: 1, wave: state.completedWaves, kills: state.kills,
+      coreHp: state.coreHp, drawCount: state.drawCount, outcome: state.status, finishTick: state.tick, actions } };
+    expect(validateArcadeResult('word_story_v2', input, elapsedSeconds, seed, 2, 1)).toMatchObject({ rulesVersion: 2, chapter: 1 });
+    expect(() => validateArcadeResult('word_story', input, elapsedSeconds, seed, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story_v2', input, elapsedSeconds, seed, 1, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story_v2', { ...input, metrics: { ...input.metrics, chapter: 2 } }, elapsedSeconds, seed, 2, 1)).toThrow(BadRequestException);
+    expect(replayWordFrontV2('story', 1, seed, actions, state.tick)?.score).toBe(state.score);
+    expect(() => validateArcadeResult('word_story_v2', { ...input, score: state.score + 1000 }, elapsedSeconds, seed, 2, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('future_key' as never, input, elapsedSeconds, seed, 2)).toThrow(BadRequestException);
   });
 
   it('accepts a plausible tetris result and normalizes its metrics', () => {
@@ -203,7 +230,7 @@ describe('arcade run lifetime', () => {
       where: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined),
     };
     const runRepository = {
-      create: jest.fn((value) => value), save: jest.fn(async (value) => value),
+      create: jest.fn((value) => value), save: jest.fn(async (value) => value), findOne: jest.fn().mockResolvedValue(null),
     };
     const manager = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
@@ -216,7 +243,56 @@ describe('arcade run lifetime', () => {
     expect(run.runId).toMatch(/^[0-9a-f-]{36}$/);
     expect(run.seed).toEqual(expect.any(Number));
     expect(runRepository.save).toHaveBeenCalledTimes(1);
-    expect(runRepository.save.mock.calls[0]![0].metrics).toEqual({ seed: run.seed });
+    expect(runRepository.save.mock.calls[0]![0].metrics).toEqual({ seed: run.seed, rulesVersion: 1 });
+  });
+
+  it('preserves the already-deployed v1 start semantics', async () => {
+    const existing = { id: 'existing-v1', gameKey: 'word_endless', userId: 'user-1', status: 'active',
+      startedAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 60_000), metrics: { seed: 17 } };
+    const execute = jest.fn();
+    const repo = { findOne: jest.fn().mockResolvedValue(existing), create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    const manager = { getRepository: jest.fn((entity) => entity === User
+      ? { findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }) } : repo),
+    createQueryBuilder: jest.fn(() => ({ update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), execute })) };
+    const dataSource = { transaction: jest.fn(async (work) => work(manager)) } as unknown as DataSource;
+    const run = await new ArcadeService(dataSource).startRun('user-1', 'word_endless');
+    expect(run.runId).not.toBe('existing-v1');
+    expect(run.rulesVersion).toBe(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(repo.findOne).not.toHaveBeenCalled();
+    expect(repo.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses an unexpired v2 run and rejects a v2 key with v1 rules', async () => {
+    const existing = { id: 'existing-v2', gameKey: 'word_story_v2', userId: 'user-1', status: 'active',
+      startedAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 100 * 60_000), metrics: { seed: 42, rulesVersion: 2, chapter: 1 } };
+    const repo = { findOne: jest.fn().mockResolvedValue(existing), create: jest.fn(), save: jest.fn() };
+    const manager = { getRepository: jest.fn((entity) => entity === User
+      ? { findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }) } : repo) };
+    const dataSource = { transaction: jest.fn(async (work) => work(manager)) } as unknown as DataSource;
+    const service = new ArcadeService(dataSource);
+    expect(await service.startRun('user-1', 'word_story_v2', 2, 2)).toMatchObject({ runId: 'existing-v2', seed: 42, rulesVersion: 2, chapter: 1 });
+    await expect(service.startRun('user-1', 'word_story_v2')).rejects.toThrow(BadRequestException);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+
+  it('rotates a v2 seed only when the old online window is too short for a fresh battle', async () => {
+    const active = { id: 'near-expiry', gameKey: 'word_story_v2', userId: 'user-1', status: 'active',
+      startedAt: new Date(Date.now() - 115 * 60_000), expiresAt: new Date(Date.now() + 5 * 60_000),
+      metrics: { seed: 7, rulesVersion: 2, chapter: 1 } };
+    const execute = jest.fn().mockResolvedValue(undefined);
+    const queryBuilder = { update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), execute };
+    const repo = { findOne: jest.fn().mockResolvedValue(active), create: jest.fn((value) => value), save: jest.fn(async (value) => value) };
+    const manager = { getRepository: jest.fn((entity) => entity === User
+      ? { findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }) } : repo),
+    createQueryBuilder: jest.fn().mockReturnValue(queryBuilder) };
+    const dataSource = { transaction: jest.fn(async (work) => work(manager)) } as unknown as DataSource;
+    const fresh = await new ArcadeService(dataSource).startRun('user-1', 'word_story_v2', 2, 2);
+    expect(fresh.runId).not.toBe('near-expiry');
+    expect(fresh.rulesVersion).toBe(2);
+    expect(fresh.chapter).toBe(2);
+    expect(new Date(fresh.expiresAt).getTime() - Date.now()).toBeGreaterThan(119 * 60_000);
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   it('gives zhesi runs a two-hour expiry', async () => {

@@ -60,7 +60,7 @@ export interface DemonTowerEngineState {
   materials: DemonTowerMaterials; weapons: DemonTowerOwnedWeapon[]; skills: DemonTowerOwnedSkill[];
   loadout: DemonTowerLoadout; selectedFloor: number; battle: Battle | null; lastReport: DemonTowerBattleReport | null;
   lootPity: { stepsSinceGuarantee: number; nextKind: 'weapon' | 'skill' };
-  daily: { serviceDate: string; activity: number; bossAttempts: number; rewardClaimed: boolean };
+  daily: { serviceDate: string; activity: number; bossAttempts: number; rewardClaimed: boolean; exploreVictories?: number };
 }
 export interface DemonTowerEconomyState {
   version: 1; balance: number; serviceDate: string; week: string; dailyEarned: number; bossEarned: number;
@@ -248,6 +248,7 @@ export function createDemonTowerState(now: number, serviceDate: string, seed: st
 export function advanceDemonTowerState(input: DemonTowerEngineState, now: number, serviceDate: string): DemonTowerEngineState {
   clock(now, serviceDate);
   if (input.schemaVersion !== 1 || now < Math.max(input.lastActionAt, input.staminaAt, input.healingAt) || serviceDate < input.daily.serviceDate) fail('INVALID_TIME');
+  if (input.daily.exploreVictories !== undefined && !integer(input.daily.exploreVictories, 0, 10_000)) fail('INVALID_DAILY_STATE');
   if (input.growth && (input.growth.rulesVersion !== 2 || !integer(input.growth.misses?.ling, 0, 20) || !integer(input.growth.misses?.xian, 0, 50) ||
     (input.growth.levelDropPending !== undefined && typeof input.growth.levelDropPending !== 'boolean') ||
     (input.growth.chosenAttribute !== null && !DEMON_TOWER_ATTRIBUTE_KEYS.includes(input.growth.chosenAttribute)) || !Array.isArray(input.growth.innates) ||
@@ -760,6 +761,7 @@ function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter
   value *= (0.95 + random(state) * 0.1) * (critical ? 1.6 : 1);
   if (!playerSource && hasWeapon(state, 'w13')) value *= 1 - Math.min(0.6, 0.2 * weaponScale(state, 'w13'));
   if (!playerSource && battleInnate(battle, 'defense')) value *= 0.9;
+  if (!playerSource && hasPassive(state, 's17')) value *= 1 - Math.min(0.3, 0.12 * skillScale(state, 's17'));
   if (playerSource && target.boss) value *= 1 + affixBonus(state, battle, 'boss_damage');
   const actual = damage(battle, target, value, playerSource ? 'player' : 'enemy', `${label}${critical ? '·暴击' : ''}`);
   if (playerSource) battle.landedPlayerHits += 1;
@@ -795,6 +797,9 @@ function mainAttack(state: DemonTowerEngineState, battle: Battle, target: Fighte
     } else directHit(state, battle, player, enemy, base, main.name, forced);
   }
   if (hasWeapon(state, 'w6') && battle.landedPlayerHits > priorHits && target.hp > 0 && chance(state, 0.3 * weaponScale(state, 'w6'))) directHit(state, battle, player, target, attributes.AGI * 0.5 * weaponScale(state, 'w6') * mastery, '秋水连击');
+  if (hasPassive(state, 's18') && battle.landedPlayerHits > priorHits && target.hp > 0 && chance(state, Math.min(0.45, 0.2 * skillScale(state, 's18')))) {
+    directHit(state, battle, player, target, attributes.AGI * 0.5 * skillScale(state, 's18') * mastery, '无影手追击');
+  }
   if (hasWeapon(state, 'w12')) {
     directHit(state, battle, player, target, base * 0.5, '龙吟追击');
     for (const enemy of battle.enemies.filter((candidate) => candidate.id !== target.id && candidate.hp > 0)) directHit(state, battle, player, enemy, base * 0.4 * weaponScale(state, 'w12'), '龙吟溅射');
@@ -1236,6 +1241,7 @@ function finishBattle(state: DemonTowerEngineState, battle: Battle, outcome: Dem
       events.push(battle.source === 'rift' ? '小秘境通关：独立偏高稀有池各得武器/技能×1、残页×2、精魄×1。' : '周常讨伐通关：独立首领池武器/技能各×1、残页×3、精魄×3；不影响共享血池。');
     } else loot(state, events, economyEnabled);
     activity(state);
+    state.daily.exploreVictories = Math.min(10_000, (state.daily.exploreVictories ?? 0) + 1);
   } else if (battle.kind === 'boss' && battle.bossDamage > 0) {
     experience = gainXp(state, 20 + battle.floor * 8, events);
     materials = gainMaterials(state, { soul: 2 + battle.floor, ore: 2, clue: 1 });
@@ -1243,12 +1249,23 @@ function finishBattle(state: DemonTowerEngineState, battle: Battle, outcome: Dem
   }
   state.lastReport = { id: battle.id, kind: battle.kind, floor: battle.floor, outcome, turns: battle.turn,
     ...(battle.source ? { source: battle.source } : {}),
+    ...(battleGrade(battle, outcome) ? { grade: battleGrade(battle, outcome) } : {}),
     damage: battle.kind === 'boss' ? battle.bossDamage : battle.totalDamage, experience, materials,
     log: clone(battle.log), completedAt: now };
   state.battle = null;
   settleQualityExperience(state, events);
   events.push(outcome === 'victory' ? '本次探索获胜。' : outcome === 'contributed' ? '本次讨伐已完成，伤害将计入共享进度。' : outcome === 'fled' ? '已安全撤离，未获得战斗奖励。' : '本次战斗结束，可以休整后再出发。');
   return coins;
+}
+/** A result label based on the persisted battle snapshot, never a source of rewards. */
+function battleGrade(battle: Battle, outcome: DemonTowerBattleReport['outcome']): DemonTowerBattleReport['grade'] | undefined {
+  if (battle.kind === 'boss') return undefined;
+  if (outcome === 'timeout' && battle.player.hp > 0 && battle.enemies.some((enemy) => enemy.hp > 0)) return 'draw';
+  if (outcome !== 'victory') return undefined;
+  if (battle.turn <= 1) return 'instant';
+  if (battle.playerDamageTaken === 0) return 'flawless';
+  if (battle.player.hp * 4 <= battle.player.maxHp) return 'narrow';
+  return 'steady';
 }
 const EXPANSION_ACTIONS = ['expedition', 'market', 'star_up', 'breakthrough', 'select_skin', 'claim_boss_loot', 'arena_enroll', 'arena_learn', 'arena_equip', 'arena_challenge', 'honor_exchange'] as const;
 const SQUAD_ACTIONS = ['squad_create', 'squad_join', 'squad_leave', 'squad_ready', 'squad_step', 'squad_claim'] as const;
@@ -1686,6 +1703,7 @@ function logView(entries: DemonTowerCombatLog[]): DemonTowerCombatLog[] {
 function reportView(report: DemonTowerBattleReport): DemonTowerBattleReport {
   return { id: report.id, kind: report.kind, floor: report.floor, outcome: report.outcome, turns: report.turns,
     ...(report.source ? { source: report.source } : {}),
+    ...(report.grade ? { grade: report.grade } : {}),
     damage: report.damage, experience: report.experience, materials: copyMaterials(report.materials),
     log: logView(report.log), completedAt: report.completedAt };
 }
@@ -1740,7 +1758,8 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
     loadout: { mainHand: state.loadout.mainHand, artifact: state.loadout.artifact, activeSkills: [...state.loadout.activeSkills], passiveSkills: [...state.loadout.passiveSkills] },
     selectedFloor: state.selectedFloor, personalUnlockedFloor: demonTowerPersonalUnlockedFloor(state.level),
     daily: { serviceDate: state.daily.serviceDate, activity: state.daily.activity, activityTarget: RULES.dailyActivityTarget,
-      rewardClaimed: state.daily.rewardClaimed, bossAttempts: state.daily.bossAttempts, bossAttemptsMax: RULES.bossAttemptsPerDay,
+      rewardClaimed: state.daily.rewardClaimed, exploreVictories: state.daily.exploreVictories ?? 0,
+      bossAttempts: state.daily.bossAttempts, bossAttemptsMax: RULES.bossAttemptsPerDay,
       officeCoinsEarned, officeCoinCap: RULES.dailyOfficeCoinCap },
     battle: battleView(state), lastReport: state.lastReport ? reportView(state.lastReport) : null, availableActions, createdAt: state.createdAt,
   };

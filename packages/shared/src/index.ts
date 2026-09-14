@@ -14,6 +14,7 @@ export * from './community-progression';
 export * from './tower-defense-engine';
 export * from './tower-defense-campaign';
 export * from './word-front-engine';
+export * from './word-front-engine-v2';
 export * from './office-hub';
 export * from './office-relief';
 export * from './paper-arena';

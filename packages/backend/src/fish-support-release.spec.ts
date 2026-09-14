@@ -13,14 +13,16 @@ describe('fish supporter release boundaries', () => {
     expect(queries.join('\n')).toContain('CREATE UNIQUE INDEX idx_support_order_hash');
     await expect(migration.down()).rejects.toThrow('Retain growth/support records');
   });
-  it('reviews the actual current migration and keeps isolated api/web deployment checks', () => {
+  it('reviews the actual current migration and documents sequential api/web deployment', () => {
     const source = (file: string) => readFileSync(resolve(__dirname, '../../../', file), 'utf8');
     const preflight = source('deploy/community-preflight.sh');
+    const deployment = source('deploy/COMMUNITY_DEPLOYMENT.md');
     expect(preflight).toContain('LATEST_REGISTERED_MIGRATION');
-    expect(preflight).toContain('up -d --no-deps api web');
+    expect(deployment).toContain('up -d --no-deps --no-build --pull never --force-recreate --wait api');
+    expect(deployment).toContain('up -d --no-deps --no-build --pull never --force-recreate --wait web');
     expect(preflight).not.toContain('community rollback must explicitly restore the independent webfish-public project');
     expect(preflight).not.toContain('migration 0026 as the release target');
-    expect(source('deploy/COMMUNITY_DEPLOYMENT.md')).toContain('1700000000036');
+    expect(deployment).toContain('1700000000036');
     expect(source('docs/COMMUNITY_FISH_SUPPORT.md')).toContain('FEATURE_ACCOUNT_DELETION_ENABLED');
   });
 });

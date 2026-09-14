@@ -119,7 +119,7 @@ export function hslToRgb({ h, s, l }: Hsl): Rgb {
   };
 }
 
-/** RGB -> CMYK（百分比，保留 1 位小数）。未应用印刷设备的 ICC 配置。 */
+/** RGB -> CMYK（百分比，自动换算以整数呈现）。未应用印刷设备的 ICC 配置。 */
 export function rgbToCmyk({ r, g, b }: Rgb): Cmyk {
   const rn = clamp(r, 0, 255) / 255;
   const gn = clamp(g, 0, 255) / 255;
@@ -128,8 +128,7 @@ export function rgbToCmyk({ r, g, b }: Rgb): Cmyk {
   if (k >= 1) {
     return { c: 0, m: 0, y: 0, k: 100 };
   }
-  const percentage = (value: number): number =>
-    Math.round(value * 1000) / 10;
+  const percentage = (value: number): number => Math.round(value * 100);
   return {
     c: percentage((1 - rn - k) / (1 - k)),
     m: percentage((1 - gn - k) / (1 - k)),
@@ -361,7 +360,7 @@ export default function ColorConverter(): JSX.Element {
             </div>
             {cmykError && <p className={styles.error} role="alert">{cmykError}</p>}
             <p className={styles.hint}>
-              CMYK 为未应用 ICC 色彩配置的近似值，印刷成品请以打样为准。
+              自动换算的 CMYK 显示整数；手动输入保留原值。未应用 ICC 色彩配置，印刷成品请以打样为准。
             </p>
           </fieldset>
         </div>
