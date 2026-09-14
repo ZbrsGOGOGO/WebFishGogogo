@@ -16,6 +16,7 @@ import { DevelopmentModule } from './modules/development/development.module';
 import { TowerDefenseModule } from './modules/community/tower-defense/tower-defense.module';
 import { OfficeHubModule } from './modules/community/office-hub/office-hub.module';
 import { PaperArenaModule } from './modules/community/paper-arena/paper-arena.module';
+import { WordFrontRoomModule } from './modules/community/word-front-room/word-front-room.module';
 
 /**
  * 正式社区的 API 白名单根模块。
@@ -41,6 +42,7 @@ import { PaperArenaModule } from './modules/community/paper-arena/paper-arena.mo
     TowerDefenseModule,
     OfficeHubModule,
     PaperArenaModule,
+    WordFrontRoomModule,
   ],
   controllers: [CommunityHealthController],
 })

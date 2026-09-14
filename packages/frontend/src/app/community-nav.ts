@@ -57,6 +57,7 @@ export const COMMUNITY_FEATURE_FLAGS = Object.freeze({
   officeHub: envFlag(import.meta.env.VITE_OFFICE_HUB_ENABLED, false),
   demonTowerExpansion: envFlag(import.meta.env.VITE_DEMON_TOWER_EXPANSION_ENABLED, false),
   paperArena: envFlag(import.meta.env.VITE_PAPER_ARENA_ENABLED, false),
+  wordFrontRooms: envFlag(import.meta.env.VITE_WORD_FRONT_ROOMS_ENABLED, false),
   battleServer: envFlag(import.meta.env.VITE_COMMUNITY_BATTLE_SERVER_ENABLED, false),
   feed: envFlag(import.meta.env.VITE_COMMUNITY_FEED_ENABLED, false),
   invite: envFlag(import.meta.env.VITE_COMMUNITY_INVITE_ENABLED, false),

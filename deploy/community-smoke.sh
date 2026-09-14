@@ -364,6 +364,10 @@ request GET /api/v1/games/rail/me 401 "$SMOKE_TMP/rail-me-guest.json" "$SMOKE_TM
 request GET /api/v1/games/rail-admin 404 "$SMOKE_TMP/rail-adjacent.json" "$SMOKE_TMP/rail-adjacent.headers"
 pass "rail catalog, separate daily prize and authenticated membership boundaries"
 
+request GET /api/v1/games/word-front/rooms 401 "$SMOKE_TMP/word-front-rooms-guest.json" "$SMOKE_TMP/word-front-rooms-guest.headers"
+request GET /api/v1/games/word-front/rooms/unlisted 404 "$SMOKE_TMP/word-front-rooms-adjacent.json" "$SMOKE_TMP/word-front-rooms-adjacent.headers"
+pass "Word Front 1V1 rooms require account, and unrelated routes stay closed"
+
 # Cookie-creating endpoints must reject the request before parsing credentials. Empty bodies
 # ensure this contract check cannot log in, consume a Beta code or send verification mail.
 for auth_path_and_label in \

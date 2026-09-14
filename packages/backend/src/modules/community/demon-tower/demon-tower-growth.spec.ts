@@ -38,14 +38,16 @@ function settlement(level: number, misses = { ling: 0, xian: 0 }): ReturnType<ty
 }
 
 describe('Demon tower free growth, legacy saves and contracts', () => {
-  it('keeps the existing 20/16 stable IDs and adds two distinct free skills', () => {
-    expect(DEMON_TOWER_WEAPONS).toHaveLength(20); expect(DEMON_TOWER_SKILLS).toHaveLength(18);
+  it('keeps existing stable IDs while extending the free catalog to twenty skills', () => {
+    expect(DEMON_TOWER_WEAPONS).toHaveLength(20); expect(DEMON_TOWER_SKILLS).toHaveLength(20);
     expect(DEMON_TOWER_WEAPONS.filter(item => item.type === '重兵').map(item => [item.dropLevel, item.requiredLevel])).toEqual([[1, 16], [16, 31], [31, 46], [46, 61]]);
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's2')!.name).toBe('裂地斩');
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's9')!.name).toBe('疗伤真气');
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's13')!.name).toBe('续命丹心');
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's17')!.name).toBe('皮糙肉厚');
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's18')!.name).toBe('无影手');
+    expect(DEMON_TOWER_SKILLS.find(item => item.id === 's19')!.name).toBe('嗜血');
+    expect(DEMON_TOWER_SKILLS.find(item => item.id === 's20')!.name).toBe('镇魂喝');
   });
   it('GET projection is pure and does not persist migration, choice, RNG or entitlement', () => {
     const state = oldSave(), original = structuredClone(state);

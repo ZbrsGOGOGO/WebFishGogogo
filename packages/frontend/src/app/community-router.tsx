@@ -80,8 +80,10 @@ const WorkstationTowerDefensePage = lazy(() =>
 const CommunityGamesPage = lazy(() => import('../features/games/rooms/CommunityGamesPage').then((module) => ({ default: module.CommunityGamesPage })));
 const WorkstationCampaignPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationCampaignPage })));
 const WorkstationLeaderboardPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationLeaderboardPage })));
-const WordFrontPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV2Page').then(module => ({ default: module.WordFrontV2Page })));
+const WordFrontPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV3Page').then(module => ({ default: module.WordFrontV3Page })));
+const WordFrontV2Page = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV2Page').then(module => ({ default: module.WordFrontV2Page })));
 const WordFrontLegacyPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontPage').then(module => ({ default: module.WordFrontPage })));
+const WordFrontRoomsPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontRoomsPage').then(module => ({ default: module.WordFrontRoomsPage })));
 const OfficeHubPage = lazy(() => import('../features/office-hub/OfficeHubPage').then(module => ({ default: module.OfficeHubPage })));
 const OfficeBossPage = lazy(() => import('../features/office-hub/OfficeBossPage').then(module => ({ default: module.OfficeBossPage })));
 const PaperArenaPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaPage })));
@@ -197,7 +199,9 @@ export function CommunityModeRouter(): JSX.Element {
           />
           <Route path="/tower-defense/practice" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<CommunityWorkstationTowerDefensePage />) : <CommunityUnavailablePage system="towerDefense" />} />
           <Route path="/tower-defense/word-front" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontPage />) : <CommunityUnavailablePage system="towerDefense" />} />
+          <Route path="/tower-defense/word-front/v2" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontV2Page />) : <CommunityUnavailablePage system="towerDefense" />} />
           <Route path="/tower-defense/word-front/legacy" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontLegacyPage />) : <CommunityUnavailablePage system="towerDefense" />} />
+          <Route path="/tower-defense/word-front/rooms" element={COMMUNITY_FEATURE_FLAGS.towerDefense && COMMUNITY_FEATURE_FLAGS.wordFrontRooms ? loading(<WordFrontRoomsPage />) : <CommunityUnavailablePage system="towerDefense" title="文字战线房间暂未开放" />} />
           <Route path="/tower-defense/leaderboard" element={COMMUNITY_FEATURE_FLAGS.towerDefense && COMMUNITY_FEATURE_FLAGS.workstationCampaign ? loading(<WorkstationLeaderboardPage />) : <CommunityUnavailablePage system="towerDefense" title="正式塔防榜暂未开放" />} />
           <Route path="/office" element={COMMUNITY_FEATURE_FLAGS.officeHub ? loading(<OfficeHubPage />) : <CommunityUnavailablePage system="officeHub" title="公司协作暂未开放" />} />
           <Route path="/ledou" element={<Navigate to={COMMUNITY_FEATURE_FLAGS.demonTower ? '/games/demon-tower' : '/tower-defense'} replace />} />

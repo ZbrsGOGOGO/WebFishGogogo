@@ -79,6 +79,8 @@ function skillEffect(definition: DemonTowerSkillDefinition, quality: number, sta
     case 's16': return `伤害${number(3 * scale)}倍力量，破防${percent(Math.min(0.6, 0.3 * scale))}`;
     case 's17': return `直接攻击伤害减少${percent(Math.min(0.3, 0.12 * scale))}（持续毒伤除外）`;
     case 's18': return `普通攻击命中后${percent(Math.min(0.45, 0.2 * scale))}概率追击，伤害${number(0.5 * scale)}倍敏捷`;
+    case 's19': return `造成${number(1.2 * scale)}倍敏捷伤害，按实际生命伤害恢复25%（护盾吸收不计）`;
+    case 's20': return `造成${number(1.2 * scale)}倍速度伤害；非首领命中后震慑下一次行动`;
   }
 }
 

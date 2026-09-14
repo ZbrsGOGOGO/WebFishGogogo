@@ -3,16 +3,21 @@ import type { DataSource } from 'typeorm';
 import {
   createWordFrontState,
   createWordFrontV2State,
+  createWordFrontV3State,
   deployWordFrontUnit,
   applyWordFrontV2Action,
+  applyWordFrontV3Action,
   recruitWordFrontCards,
   replayWordFrontV2,
+  replayWordFrontV3,
   startWordFront,
   stepWordFront,
   stepWordFrontV2,
+  stepWordFrontV3,
   wordFrontHeroForLetters,
   type WordFrontAction,
   type WordFrontV2Action,
+  type WordFrontV3Action,
 } from '@stealth-reader/shared';
 
 import {
@@ -84,6 +89,30 @@ describe('arcade score validation', () => {
     expect(replayWordFrontV2('story', 1, seed, actions, state.tick)?.score).toBe(state.score);
     expect(() => validateArcadeResult('word_story_v2', { ...input, score: state.score + 1000 }, elapsedSeconds, seed, 2, 1)).toThrow(BadRequestException);
     expect(() => validateArcadeResult('future_key' as never, input, elapsedSeconds, seed, 2)).toThrow(BadRequestException);
+  });
+
+  it('replays v3 on its own leaderboard without changing v2 settlement', () => {
+    const seed = 8103;
+    let state = createWordFrontV3State('story', 1, seed);
+    const actions: WordFrontV3Action[] = [
+      { type: 'recruit', tick: 0 },
+      { type: 'deploy_hero', tick: 0, first: 0, second: 1, slot: 0 },
+      { type: 'start', tick: 0 },
+    ];
+    for (const action of actions) state = applyWordFrontV3Action(state, action)!;
+    while (state.status === 'running' && state.tick < 3000) state = stepWordFrontV3(state);
+    expect(['won', 'lost']).toContain(state.status);
+    const elapsedSeconds = Math.ceil(state.tick * 0.85) + 5;
+    const input = { score: state.score, metrics: { mode: 'story', chapter: 1,
+      wave: state.completedWaves, kills: state.kills, coreHp: state.coreHp,
+      drawCount: state.drawCount, outcome: state.status, finishTick: state.tick, actions } };
+    expect(validateArcadeResult('word_story_v3', input, elapsedSeconds, seed, 3, 1))
+      .toMatchObject({ rulesVersion: 3, chapter: 1, finishTick: state.tick });
+    expect(replayWordFrontV3('story', 1, seed, actions, state.tick)?.score).toBe(state.score);
+    expect(() => validateArcadeResult('word_story_v3', input, elapsedSeconds, seed, 2, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story_v2', input, elapsedSeconds, seed, 3, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story_v3', { ...input, score: state.score + 1 }, elapsedSeconds, seed, 3, 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story_v3', { ...input, metrics: { ...input.metrics, chapter: 2 } }, elapsedSeconds, seed, 3, 1)).toThrow(BadRequestException);
   });
 
   it('accepts a plausible tetris result and normalizes its metrics', () => {

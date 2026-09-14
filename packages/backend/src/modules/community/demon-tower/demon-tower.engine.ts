@@ -898,6 +898,19 @@ function castSkill(state: DemonTowerEngineState, battle: Battle, id: DemonTowerS
       break;
     }
     case 's16': directHit(state, battle, player, target, 3 * attributes.STR * scale, '崩山击'); if (target.hp > 0) putEffect(target, 'shred', Math.min(0.6, 0.3 * scale), 2); break;
+    case 's19': {
+      const actual = directHit(state, battle, player, target, 1.2 * attributes.AGI * scale, '嗜血');
+      if (actual > 0) heal(battle, player, actual * 0.25, '嗜血');
+      break;
+    }
+    case 's20': {
+      const actual = directHit(state, battle, player, target, 1.2 * attributes.SPD * scale, '镇魂喝');
+      if (actual > 0 && target.hp > 0 && !target.boss) {
+        putEffect(target, 'stun', 1, 2);
+        log(battle, 'player', 'effect', '镇魂喝震慑目标下一次行动。', undefined, target.id);
+      } else if (actual > 0 && target.boss) log(battle, 'system', 'info', '首领免疫镇魂喝的震慑，只结算实际伤害。');
+      break;
+    }
     default: fail('PASSIVE_SKILL');
   }
 }

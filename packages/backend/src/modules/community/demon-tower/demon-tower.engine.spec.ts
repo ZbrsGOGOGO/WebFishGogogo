@@ -121,12 +121,12 @@ describe('Server automatic exploration policy', () => {
 });
 
 describe('DemonTower engine contracts and authority', () => {
-  test('all nine floors, twenty weapons, eighteen skills are reachable before the level cap', () => {
+  test('all nine floors, twenty weapons, twenty skills are reachable before the level cap', () => {
     expect(DEMON_TOWER_FLOORS).toHaveLength(9);
     expect(DEMON_TOWER_WEAPONS).toHaveLength(20);
-    expect(DEMON_TOWER_SKILLS).toHaveLength(18);
+    expect(DEMON_TOWER_SKILLS).toHaveLength(20);
     expect(new Set(DEMON_TOWER_WEAPONS.map((item) => item.id)).size).toBe(20);
-    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(18);
+    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(20);
     expect(DEMON_TOWER_FLOORS.map((floor) => floor.requiredLevel)).toEqual([1, 5, 12, 22, 36, 52, 72, 94, 110]);
     expect(demonTowerPersonalUnlockedFloor(120)).toBe(9);
     expect(DEMON_TOWER_CATALOG.rules.dailyOfficeCoinCap).toBe(200);
@@ -389,14 +389,14 @@ describe('DemonTower progression, time and inventory', () => {
     expect(state.skills.length).toBeGreaterThan(originalSkills);
     expect(state.lootPity.stepsSinceGuarantee).toBeLessThan(4);
   });
-  test('weighted pools retain a free seeded path to all thirty-eight items without paid boxes', () => {
+  test('weighted pools retain a free seeded path to all forty items without paid boxes', () => {
     let state = fresh('finite-free-collection-synthetic'); state.level = 60;
     state.attributes = { STR: 1000, SPD: 1000, AGI: 1000, DEF: 1000, LUCK: 10 };
     state.hp = demonTowerMaxHp(state);
     let eligibleResults = 0;
     // v2 guarantees an item every four settlements, not a globally unowned rarity every fourth draw.
     // Missing-item preference is now within the weighted rarity. The resource-conserving campaign is below.
-    while (state.weapons.length + state.skills.length < 38 && eligibleResults < 1000) {
+    while (state.weapons.length + state.skills.length < 40 && eligibleResults < 1000) {
       state.stamina = 100;
       state = action(state, { kind: 'explore', payload: {} }).state;
       while (state.battle) state = attack(state);
@@ -498,18 +498,47 @@ describe('DemonTower combat effects', () => {
     expect(high.battle!.totalDamage).toBeGreaterThan(low.battle!.totalDamage);
     expect(high.battle!.cooldowns.s2).toBe(1);
   });
-  test.each(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's10', 's13', 's14', 's15', 's16'] as DemonTowerSkillId[])('active skill %s executes and creates its expected actual state effect', (id) => {
+  test.each(['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's10', 's13', 's14', 's15', 's16', 's19', 's20'] as DemonTowerSkillId[])('active skill %s executes and creates its expected actual state effect', (id) => {
     const state = combat(); state.hp = 100; state.battle!.player.hp = 100;
     const result = cast(state, id); const battle = result.battle!;
     expect(battle.turn).toBe(1);
     expect(battle.log.some((entry) => entry.text.includes(`施展${DEMON_TOWER_SKILLS.find((skill) => skill.id === id)!.name}`))).toBe(true);
-    if (['s2', 's5', 's6', 's10', 's15', 's16'].includes(id)) expect(battle.totalDamage).toBeGreaterThan(0);
+    if (['s2', 's5', 's6', 's10', 's15', 's16', 's19', 's20'].includes(id)) expect(battle.totalDamage).toBeGreaterThan(0);
     if (id === 's1' || id === 's13') expect(battle.player.hp).toBeGreaterThan(100);
     if (id === 's3') expect(battle.player.shield).toBeGreaterThan(0);
     if (id === 's4') expect(battle.player.effects.some((effect) => effect.id === 'strength')).toBe(true);
     if (id === 's7') expect(battle.player.effects.some((effect) => effect.id === 'illusion')).toBe(true);
     if (id === 's14') expect(battle.player.effects.some((effect) => effect.id === 'all')).toBe(true);
     if (id === 's16') expect(battle.enemies[0].effects.some((effect) => effect.id === 'shred')).toBe(true);
+  });
+  test('free active 嗜血 heals only from actual HP damage, never absorbed shield damage', () => {
+    const exposed = combat();
+    exposed.battle!.player.hp = 50; exposed.battle!.enemies[0].attributes.STR = 0;
+    const shielded = structuredClone(exposed);
+    const hit = cast(exposed, 's19').battle!;
+    const hitDamage = hit.log.find(entry => entry.text.startsWith('嗜血：'))?.amount ?? 0;
+    const recovered = hit.log.find(entry => entry.text.startsWith('嗜血恢复'))?.amount ?? 0;
+    expect(hitDamage).toBeGreaterThan(0);
+    expect(recovered).toBe(Math.round(hitDamage * 0.25));
+    expect(hit.player.hp).toBeGreaterThan(50);
+
+    shielded.battle!.enemies[0].shield = 10_000;
+    const blocked = cast(shielded, 's19').battle!;
+    expect(blocked.log.find(entry => entry.text.startsWith('嗜血：'))?.amount).toBe(0);
+    expect(blocked.log.some(entry => entry.text.startsWith('嗜血恢复'))).toBe(false);
+  });
+  test('free active 镇魂喝 stuns only a surviving non-boss for one enemy action', () => {
+    const ordinary = combat('w1', null, 's20-ordinary-synthetic-seed');
+    ordinary.battle!.enemies[0].attributes.STR = 0;
+    const after = cast(ordinary, 's20').battle!;
+    expect(after.log.some(entry => entry.text.includes('镇魂喝震慑目标下一次行动'))).toBe(true);
+    expect(after.log.filter(entry => entry.text.includes('受到震慑，本次无法行动'))).toHaveLength(1);
+
+    const boss = combat('w1', null, 's20-boss-synthetic-seed');
+    boss.battle!.enemies[0].boss = true; boss.battle!.enemies[0].attributes.STR = 0;
+    const bossAfter = cast(boss, 's20').battle!;
+    expect(bossAfter.log.some(entry => entry.text.includes('首领免疫镇魂喝的震慑'))).toBe(true);
+    expect(bossAfter.log.some(entry => entry.text.includes('受到震慑'))).toBe(false);
   });
   test('DoT lasts exactly two turn ends, temporary buffs expire and cannot stack indefinitely', () => {
     const first = cast(combat(), 's6');

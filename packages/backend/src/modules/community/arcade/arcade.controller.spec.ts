@@ -27,7 +27,7 @@ describe('ArcadeController game keys', () => {
     expect(() => controller.leaderboard('unknown')).toThrow(BadRequestException);
   });
 
-  it('negotiates v1 for old clients and requires explicit v2 on separate keys', async () => {
+  it('keeps old clients on v1/v2 and requires explicit v3 on separate keys', async () => {
     const arcade = { startRun: jest.fn().mockResolvedValue({ runId: 'run-a' }) } as unknown as ArcadeService;
     const controller = new ArcadeController(arcade);
     await controller.start('old-user', { gameKey: 'word_story' });
@@ -38,5 +38,10 @@ describe('ArcadeController game keys', () => {
     expect(() => controller.start('new-user', { gameKey: 'word_story_v2', rulesVersion: 2, chapter: 7 })).toThrow(BadRequestException);
     expect(() => controller.start('new-user', { gameKey: 'word_endless_v2', rulesVersion: 2, chapter: 2 })).toThrow(BadRequestException);
     expect(() => controller.start('old-user', { gameKey: 'word_story', rulesVersion: 2 })).toThrow(BadRequestException);
+    await controller.start('next-user', { gameKey: 'word_story_v3', rulesVersion: 3, chapter: 5 });
+    expect(arcade.startRun).toHaveBeenLastCalledWith('next-user', 'word_story_v3', 3, 5);
+    expect(() => controller.start('next-user', { gameKey: 'word_story_v3', rulesVersion: 2, chapter: 5 })).toThrow(BadRequestException);
+    expect(() => controller.start('next-user', { gameKey: 'word_story_v3', rulesVersion: 3, chapter: 7 })).toThrow(BadRequestException);
+    expect(() => controller.start('next-user', { gameKey: 'word_endless_v3', rulesVersion: 3, chapter: 2 })).toThrow(BadRequestException);
   });
 });

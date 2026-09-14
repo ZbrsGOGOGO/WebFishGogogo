@@ -38,15 +38,17 @@ export class ArcadeController {
     const gameKey = this.gameKey(String(value.gameKey ?? ''));
     const requested = value.rulesVersion;
     const v2 = gameKey === 'word_story_v2' || gameKey === 'word_endless_v2';
+    const v3 = gameKey === 'word_story_v3' || gameKey === 'word_endless_v3';
     const v1 = gameKey === 'word_story' || gameKey === 'word_endless';
-    if ((requested !== undefined && !v1 && !v2) || (v1 && requested !== undefined && requested !== 1) || (v2 && requested !== 2)) {
+    if ((requested !== undefined && !v1 && !v2 && !v3) ||
+      (v1 && requested !== undefined && requested !== 1) || (v2 && requested !== 2) || (v3 && requested !== 3)) {
       throw new BadRequestException({ code: 'ARCADE_RULES_VERSION_INVALID' });
     }
-    const chapter = v2 ? value.chapter : undefined;
-    if (v2 && (!Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (gameKey === 'word_endless_v2' ? 1 : 6))) {
+    const chapter = v2 || v3 ? value.chapter : undefined;
+    if ((v2 || v3) && (!Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (gameKey === 'word_endless_v2' || gameKey === 'word_endless_v3' ? 1 : 6))) {
       throw new BadRequestException({ code: 'ARCADE_CHAPTER_INVALID' });
     }
-    return this.arcade.startRun(userId, gameKey, v2 ? 2 : 1, v2 ? Number(chapter) : undefined);
+    return this.arcade.startRun(userId, gameKey, v3 ? 3 : v2 ? 2 : 1, v2 || v3 ? Number(chapter) : undefined);
   }
 
   @Post('runs/:runId/finish')
