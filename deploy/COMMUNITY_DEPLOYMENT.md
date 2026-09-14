@@ -6,7 +6,7 @@
 
 北京时间 15:28 已部署应用 `994b4797e561901297cdebc0dfbad6c466d81cd0`。迁移 `1700000000038` 仅扩展 `arcade_game_runs` 与 `arcade_best_scores` 的游戏键 CHECK，允许独立的 `word_story_v2` / `word_endless_v2` 成绩；生产为 schema38 / 39 条迁移 / 148 张表。未删除旧行，未改既有办公币和权限。迁移先在新鲜备份恢复副本上演练，候选与回滚桥实跑通过；生产只执行一次 UP，仅切换 API/Web，PostgreSQL、Redis、Gateway 容器不变。新技能 s17/s18 及 v2 成绩不被原 `9013da7` 完整识别，紧急应用回退只能使用兼容桥 `1f50c07f543d51ffa6688d90ff87b12b805ff921` 的 API/Web 不可变镜像，绝不可直接退到裸 `9013da7`、运行 DOWN 或回灌旧库。测试、镜像、备份和反馈状态见[本批发布记录](../docs/RELEASE_WORD_FRONT_V2_20260914.md)。
 
-### 2026-09-14 当前发布：文字战线与妖塔养成补齐
+### 2026-09-14 历史发布：文字战线与妖塔养成补齐
 
 已部署应用 `9013da770a51044965486efec9b201ae69d5f7e8`，北京时间 2026-09-14 09:42 上线。迁移清单新增 `1700000000037`，由 schema36 的 37 条迁移变为 schema37 的 38 条迁移。此迁移只扩展 `arcade_game_runs`、`arcade_best_scores` 两张表的游戏键 CHECK，允许独立的 `word_story` / `word_endless` 成绩；不改旧行、不增加表、不修改办公币。生产新鲜备份经隔离恢复，准确的 36→37 增量与旧数据摘要通过核验，之后只切换 API/Web；PostgreSQL、Redis、Gateway 容器身份及数据卷不变。API 镜像 `sha256:cda1dba1ba7d488c34d9292c1b86ceb41ceaf7fde10924b68f921eb8044acf36`，Web 镜像 `sha256:d45911911458f7c44e05f51e43ae671335085acf98064b7118c989e4440ed66d`。[发布与验收记录](../docs/RELEASE_WORD_FRONT_20260914.md)。
 
