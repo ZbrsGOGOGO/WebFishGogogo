@@ -129,6 +129,24 @@ describe('arcade score validation', () => {
     });
   });
 
+  it('rejects future game keys instead of misclassifying them as zhesi after rollback', () => {
+    const validZhesiPayload = {
+      score: 42_860,
+      metrics: {
+        realm: 38, aptitude: 100, physiqueTier: 'T0', hasWeapon: true,
+        selfBodyWeapon: true, zizhan: false, renyuKilled: false,
+        renyuBoai: false, renyuTongzheng: true, tianDi: true,
+        secondLife: true, immortalGate: true, age: 45_000,
+        grade: '帝', mode: 'yang',
+      },
+    };
+    expect(validateArcadeResult('zhesi', validZhesiPayload, 0)).toMatchObject({ realm: 38 });
+    const futureGameKey = 'word_story_v2' as Parameters<typeof validateArcadeResult>[0];
+    expect(() => validateArcadeResult(futureGameKey, validZhesiPayload, 0)).toThrow(
+      expect.objectContaining({ response: expect.objectContaining({ code: 'ARCADE_GAME_INVALID' }) }),
+    );
+  });
+
   it('accepts a self-cut emperor at realm 37 without counting emperor-only bonuses', () => {
     expect(validateArcadeResult('zhesi', {
       score: 38_080,

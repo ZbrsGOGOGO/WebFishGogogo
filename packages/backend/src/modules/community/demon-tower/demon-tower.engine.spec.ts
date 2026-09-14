@@ -121,12 +121,12 @@ describe('Server automatic exploration policy', () => {
 });
 
 describe('DemonTower engine contracts and authority', () => {
-  test('all nine floors, twenty weapons, sixteen skills are reachable before the level cap', () => {
+  test('all nine floors, twenty weapons, eighteen skills are reachable before the level cap', () => {
     expect(DEMON_TOWER_FLOORS).toHaveLength(9);
     expect(DEMON_TOWER_WEAPONS).toHaveLength(20);
-    expect(DEMON_TOWER_SKILLS).toHaveLength(16);
+    expect(DEMON_TOWER_SKILLS).toHaveLength(18);
     expect(new Set(DEMON_TOWER_WEAPONS.map((item) => item.id)).size).toBe(20);
-    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(16);
+    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(18);
     expect(DEMON_TOWER_FLOORS.map((floor) => floor.requiredLevel)).toEqual([1, 5, 12, 22, 36, 52, 72, 94, 110]);
     expect(demonTowerPersonalUnlockedFloor(120)).toBe(9);
     expect(DEMON_TOWER_CATALOG.rules.dailyOfficeCoinCap).toBe(200);
@@ -383,14 +383,14 @@ describe('DemonTower progression, time and inventory', () => {
     expect(state.skills.length).toBeGreaterThan(originalSkills);
     expect(state.lootPity.stepsSinceGuarantee).toBeLessThan(4);
   });
-  test('weighted pools retain a free seeded path to all thirty-six items without paid boxes', () => {
+  test('weighted pools retain a free seeded path to all thirty-eight items without paid boxes', () => {
     let state = fresh('finite-free-collection-synthetic'); state.level = 60;
     state.attributes = { STR: 1000, SPD: 1000, AGI: 1000, DEF: 1000, LUCK: 10 };
     state.hp = demonTowerMaxHp(state);
     let eligibleResults = 0;
     // v2 guarantees an item every four settlements, not a globally unowned rarity every fourth draw.
     // Missing-item preference is now within the weighted rarity. The resource-conserving campaign is below.
-    while (state.weapons.length + state.skills.length < 36 && eligibleResults < 1000) {
+    while (state.weapons.length + state.skills.length < 38 && eligibleResults < 1000) {
       state.stamina = 100;
       state = action(state, { kind: 'explore', payload: {} }).state;
       while (state.battle) state = attack(state);

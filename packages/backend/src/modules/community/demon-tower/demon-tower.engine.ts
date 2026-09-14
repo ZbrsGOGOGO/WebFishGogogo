@@ -760,6 +760,7 @@ function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter
   value *= (0.95 + random(state) * 0.1) * (critical ? 1.6 : 1);
   if (!playerSource && hasWeapon(state, 'w13')) value *= 1 - Math.min(0.6, 0.2 * weaponScale(state, 'w13'));
   if (!playerSource && battleInnate(battle, 'defense')) value *= 0.9;
+  if (!playerSource && hasPassive(state, 's17')) value *= 1 - Math.min(0.3, 0.12 * skillScale(state, 's17'));
   if (playerSource && target.boss) value *= 1 + affixBonus(state, battle, 'boss_damage');
   const actual = damage(battle, target, value, playerSource ? 'player' : 'enemy', `${label}${critical ? '·暴击' : ''}`);
   if (playerSource) battle.landedPlayerHits += 1;
@@ -795,6 +796,9 @@ function mainAttack(state: DemonTowerEngineState, battle: Battle, target: Fighte
     } else directHit(state, battle, player, enemy, base, main.name, forced);
   }
   if (hasWeapon(state, 'w6') && battle.landedPlayerHits > priorHits && target.hp > 0 && chance(state, 0.3 * weaponScale(state, 'w6'))) directHit(state, battle, player, target, attributes.AGI * 0.5 * weaponScale(state, 'w6') * mastery, '秋水连击');
+  if (hasPassive(state, 's18') && battle.landedPlayerHits > priorHits && target.hp > 0 && chance(state, Math.min(0.45, 0.2 * skillScale(state, 's18')))) {
+    directHit(state, battle, player, target, attributes.AGI * 0.5 * skillScale(state, 's18') * mastery, '无影手追击');
+  }
   if (hasWeapon(state, 'w12')) {
     directHit(state, battle, player, target, base * 0.5, '龙吟追击');
     for (const enemy of battle.enemies.filter((candidate) => candidate.id !== target.id && candidate.hp > 0)) directHit(state, battle, player, enemy, base * 0.4 * weaponScale(state, 'w12'), '龙吟溅射');

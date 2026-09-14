@@ -77,6 +77,8 @@ function skillEffect(definition: DemonTowerSkillDefinition, quality: number, sta
     case 's14': return `五属性各+${Math.round(5 * scale)}，持2回合`;
     case 's15': return `未压血时（1—4）倍幸运${multiplier(scale)}（压血率8%固定）`;
     case 's16': return `伤害${number(3 * scale)}倍力量，破防${percent(Math.min(0.6, 0.3 * scale))}`;
+    case 's17': return `直接攻击伤害减少${percent(Math.min(0.3, 0.12 * scale))}（持续毒伤除外）`;
+    case 's18': return `普通攻击命中后${percent(Math.min(0.45, 0.2 * scale))}概率追击，伤害${number(0.5 * scale)}倍敏捷`;
   }
 }
 

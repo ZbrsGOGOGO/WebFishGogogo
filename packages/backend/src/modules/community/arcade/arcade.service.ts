@@ -102,7 +102,10 @@ export function validateArcadeResult(
     return validateWordFrontResult(gameKey, input, metrics, elapsedSeconds, runSeed);
   }
 
-  return validateZhesiResult(input, metrics, elapsedSeconds);
+  if (gameKey === 'zhesi') return validateZhesiResult(input, metrics, elapsedSeconds);
+  // A newer database may contain game keys this rollback build does not know.
+  // Never interpret their results as Zhesi scores when falling back to this API.
+  throw new BadRequestException({ code: 'ARCADE_GAME_INVALID' });
 }
 
 function validateWordFrontResult(
