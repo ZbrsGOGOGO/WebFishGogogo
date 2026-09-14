@@ -63,6 +63,15 @@ describe('server-formula demon tower upgrade preview', () => {
     expect(preview.proficiency).toContain('达45自动免费升4星并清零');
   });
 
+  it('explains both forward active skills with their actual damage scaling and fixed effects', () => {
+    const lifesteal = demonTowerUpgradePreview({ kind: 'skill', definition: skill('s19'), owned: { id: 's19', quality: 2, spareCopies: 0, star: 2, favor: 4 } }, true);
+    expect(lifesteal.quality).toContain('倍敏捷伤害');
+    expect(lifesteal.quality).toContain('实际生命伤害恢复25%（护盾吸收不计）');
+    const stun = demonTowerUpgradePreview({ kind: 'skill', definition: skill('s20'), owned: { id: 's20', quality: 2, spareCopies: 0, star: 2, favor: 4 } }, true);
+    expect(stun.quality).toContain('倍速度伤害');
+    expect(stun.quality).toContain('非首领命中后震慑下一次行动');
+  });
+
   it('distinguishes passive accumulation and stops promising progress after the fifth star', () => {
     const passive = demonTowerUpgradePreview({ kind: 'skill', definition: skill('s8'), owned: { id: 's8', quality: 2, spareCopies: 0, star: 2, favor: 12 } }, true);
     expect(passive.proficiency).toContain('装入被动槽后，每个存活回合结束+1');

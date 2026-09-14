@@ -7,7 +7,7 @@ export type DemonTowerAttribute = typeof DEMON_TOWER_ATTRIBUTE_KEYS[number];
 export type DemonTowerAttributes = Record<DemonTowerAttribute, number>;
 export type DemonTowerRarity = '凡' | '精' | '灵' | '仙' | '神';
 export type DemonTowerWeaponId = 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'w6' | 'w7' | 'w8' | 'w9' | 'w10' | 'w11' | 'w12' | 'w13' | 'w14' | 'w15' | 'w16' | 'w17' | 'w18' | 'w19' | 'w20';
-export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16' | 's17' | 's18';
+export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16' | 's17' | 's18' | 's19' | 's20';
 export type DemonTowerMaterial = 'ore' | 'herb' | 'soul' | 'clue';
 export type DemonTowerMaterials = Record<DemonTowerMaterial, number>;
 export type DemonTowerTerrain = 'plain' | 'lake' | 'mountain' | 'sea';
@@ -341,6 +341,8 @@ export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
   // Rollback bridge: retain the actual free passives and their inventory IDs.
   skill('s17', '皮糙肉厚', '维度', 'passive', '精', 6, 0, '受到直接攻击时伤害减少12%（随品质和免费熟练度提高，最多30%）；不抵消持续毒伤。'),
   skill('s18', '无影手', '伤害', 'passive', '灵', 18, 0, '普通攻击命中且目标仍存活时，20%概率追加一击0.5倍敏捷伤害；每次行动最多触发一次。'),
+  skill('s19', '嗜血', '回复', 'active', '灵', 18, 3, '造成1.2倍敏捷直接伤害，按实际失去的生命恢复自身25%；被护盾吸收的伤害不计入治疗。'),
+  skill('s20', '镇魂喝', '伤害', 'active', '仙', 36, 4, '造成1.2倍速度直接伤害；命中仍存活的非首领目标后震慑其下一次行动，首领免疫震慑。'),
 ];
 /** Conditional on receiving this item kind. Level filtering and guarantees are applied before normalization. */
 export const DEMON_TOWER_SOURCE_WEIGHTS: Record<DemonTowerLootSource, { weapon: Record<DemonTowerRarity, number>; skill: Record<DemonTowerRarity, number> }> = {

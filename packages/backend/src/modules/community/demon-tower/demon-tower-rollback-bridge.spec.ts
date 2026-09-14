@@ -27,7 +27,41 @@ function ownedNewPassives(seed: string): DemonTowerEngineState {
   return state;
 }
 
-describe('rollback bridge for two new passive skills', () => {
+describe('rollback bridge for forward-only free skills', () => {
+  it('reads and advances a forward save with s19/s20 equipped, without granting them to old saves', () => {
+    const old = createDemonTowerState(NOW, DATE, 'bridge-old-active-save-seed');
+    const oldAfter = act(old, { kind: 'train', payload: {} });
+    expect(oldAfter.skills.some(item => item.id === 's19' || item.id === 's20')).toBe(false);
+
+    let state = createDemonTowerState(NOW, DATE, 'bridge-new-active-save-seed');
+    state.level = 60; state.attributes = { STR: 100, SPD: 100, AGI: 100, DEF: 100, LUCK: 100 };
+    state.hp = demonTowerMaxHp(state);
+    state.skills.push({ id: 's19', quality: 2, spareCopies: 0, star: 2, favor: 3 },
+      { id: 's20', quality: 2, spareCopies: 0, star: 2, favor: 3 });
+    state.loadout.activeSkills = ['s19', 's20'];
+    const read = demonTowerProfileView(advanceDemonTowerState(state, NOW, DATE), NOW, 1, 0, true);
+    expect(read.skills.filter(item => ['s19', 's20'].includes(item.id))).toHaveLength(2);
+    expect(read.loadout.activeSkills).toEqual(['s19', 's20']);
+    state = act(state, { kind: 'train', payload: {} });
+    for (let tries = 0; tries < 12 && !state.battle; tries += 1) {
+      state.stamina = 100; state = act(state, { kind: 'explore', payload: {} });
+    }
+    expect(state.battle).not.toBeNull();
+    state.battle!.enemies = [state.battle!.enemies[0]];
+    state.battle!.enemies[0].hp = 10_000; state.battle!.enemies[0].maxHp = 10_000;
+    state.battle!.enemies[0].attributes = { STR: 0, SPD: 0, AGI: 0, DEF: 0, LUCK: 0 };
+    state.battle!.enemies[0].mechanic = undefined; state.battle!.enemies[0].effects = [];
+    state.battle!.player.hp = 50;
+    const targetId = state.battle!.enemies[0].id;
+    state = act(state, { kind: 'skill', payload: { skillId: 's19', targetId } });
+    expect(state.battle?.log.some(entry => entry.text.includes('施展嗜血'))).toBe(true);
+    state = act(state, { kind: 'skill', payload: { skillId: 's20', targetId } });
+    expect(state.battle?.log.some(entry => entry.text.includes('施展镇魂喝'))).toBe(true);
+    state = act(state, { kind: 'flee', payload: {} });
+    expect(state.battle).toBeNull();
+    expect(state.skills.filter(item => ['s19', 's20'].includes(item.id))).toHaveLength(2);
+    expect(state.loadout.activeSkills).toEqual(['s19', 's20']);
+  });
   it('loads profile, trains, unequips, re-equips and starts exploration without deleting owned assets', () => {
     const original = ownedNewPassives('bridge-save-profile-seed');
     const read = demonTowerProfileView(advanceDemonTowerState(original, NOW, DATE), NOW, 1, 0, true);

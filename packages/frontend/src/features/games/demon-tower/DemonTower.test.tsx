@@ -233,6 +233,16 @@ describe('demon tower native interface contracts', () => {
     rendered.rerender(<DemonTowerBattle battle={{ ...battle, enemies: battle.enemies.map((enemy) => enemy.id === 'enemy-b' ? { ...enemy, hp: 0 } : enemy) }} catalog={catalog} disabled={false} onAction={onAction} />);
     fireEvent.click(screen.getByRole('button', { name: '普通攻击' })); expect(onAction).toHaveBeenLastCalledWith({ kind: 'attack', payload: { targetId: 'enemy-a' } });
   });
+  it('targets the selected enemy for the forward-only lifesteal skill during rollback', () => {
+    const onAction = vi.fn().mockResolvedValue(true);
+    const battle = towerBattle({ availableSkills: [{ id: 's19', cooldownRemaining: 0, usable: true }, { id: 's20', cooldownRemaining: 0, usable: true }] });
+    render(<DemonTowerBattle battle={battle} catalog={towerCatalog()} disabled={false} onAction={onAction} />);
+    fireEvent.change(screen.getByRole('combobox', { name: '当前攻击目标' }), { target: { value: 'enemy-b' } });
+    fireEvent.click(screen.getByRole('button', { name: '嗜血' }));
+    expect(onAction).toHaveBeenLastCalledWith({ kind: 'skill', payload: { skillId: 's19', targetId: 'enemy-b' } });
+    fireEvent.click(screen.getByRole('button', { name: '镇魂喝' }));
+    expect(onAction).toHaveBeenLastCalledWith({ kind: 'skill', payload: { skillId: 's20', targetId: 'enemy-b' } });
+  });
   it('shows the remaining daily wallet allowance instead of promising an uncapped reward', () => {
     const profile = towerProfile(); const props = { catalog: towerCatalog(), disabled: false, onAction: vi.fn() };
     const rendered = render(<DemonTowerDaily {...props} profile={{ ...profile, daily: { ...profile.daily, officeCoinsEarned: 190 } }} />);
@@ -264,7 +274,7 @@ describe('demon tower native interface contracts', () => {
     await waitFor(() => expect(onAction).toHaveBeenCalledWith({ kind: 'equip', payload: { mainHand: 'w17', artifact: null, activeSkills: ['s1', 's2', 's3'], passiveSkills: [] } }));
   });
 
-  it('keeps full 20-weapon and 16-skill catalogs inspectable without granting unowned items', () => {
+  it('keeps full 20-weapon and 20-skill catalogs inspectable without granting unowned items', () => {
     render(<DemonTowerInventory profile={towerProfile()} catalog={towerCatalog()} disabled={false} onAction={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: '查看完整图鉴' })); expect(screen.getAllByRole('article')).toHaveLength(6);
     expect(within(weaponCard('w2')).getByRole('button', { name: /选作主手|需要 Lv/ })).toBeDisabled();

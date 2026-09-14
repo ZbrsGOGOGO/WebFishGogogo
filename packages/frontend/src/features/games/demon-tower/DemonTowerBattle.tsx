@@ -31,7 +31,8 @@ export function DemonTowerBattle({ battle, catalog, disabled, onAction }: { batt
     return () => cancelAnimationFrame(frame);
   }, [battle.id]);
   const doSkill = (skill: DemonTowerSkillDefinition): void => {
-    const hasTarget = skill.category === '伤害';
+    // 嗜血同时回血，但其伤害仍须落在玩家当前选中的目标上。
+    const hasTarget = skill.category === '伤害' || skill.id === 's19';
     void onAction({ kind: 'skill', payload: { skillId: skill.id, ...(hasTarget && target ? { targetId: target.id } : {}) } });
   };
   return <section className={styles.panel} aria-label="当前探索战斗"><div className={styles.panelBody}>

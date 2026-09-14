@@ -39,7 +39,7 @@ function settlement(level: number, misses = { ling: 0, xian: 0 }): ReturnType<ty
 
 describe('Demon tower free growth, legacy saves and contracts', () => {
   it('keeps the original IDs and includes both new free passive skills', () => {
-    expect(DEMON_TOWER_WEAPONS).toHaveLength(20); expect(DEMON_TOWER_SKILLS).toHaveLength(18);
+    expect(DEMON_TOWER_WEAPONS).toHaveLength(20); expect(DEMON_TOWER_SKILLS).toHaveLength(20);
     expect(DEMON_TOWER_WEAPONS.filter(item => item.type === '重兵').map(item => [item.dropLevel, item.requiredLevel])).toEqual([[1, 16], [16, 31], [31, 46], [46, 61]]);
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's2')!.name).toBe('裂地斩');
     expect(DEMON_TOWER_SKILLS.find(item => item.id === 's9')!.name).toBe('疗伤真气');

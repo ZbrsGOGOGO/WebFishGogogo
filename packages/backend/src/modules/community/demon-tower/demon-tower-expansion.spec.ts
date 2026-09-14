@@ -182,7 +182,7 @@ describe('Demon tower free expansion rules', () => {
     const view = JSON.stringify(demonTowerProfileView(state, NOW, 1, 0, true));
     expect(view).not.toMatch(/rngSeed|rngCounter|arenaOpponentsToday|private-cooldown-id|requestHash/);
   });
-  it('publishes an exact recomputable weighted strength rubric for all 38 items', () => {
+  it('publishes an exact recomputable weighted strength rubric for all 40 items', () => {
     for (const [kind, items] of [['weapon', DEMON_TOWER_WEAPONS], ['skill', DEMON_TOWER_SKILLS]] as const) for (const item of items) {
       const rating = demonTowerStrengthRating(kind, item.id)!;
       expect(rating.score).toBe(Math.round(rating.numeric * 0.35 + rating.permanent * 0.25 + rating.utility * 0.25 + rating.breadth * 0.15));
