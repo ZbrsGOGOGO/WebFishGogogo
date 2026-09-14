@@ -2,11 +2,11 @@
 
 本文面向当前「摸摸公司」的 `community` 模式。**已运行站点更新、空站初始化、历史迁移是三种不同流程，不可混用。** 旧 `full`、`review`、`public` 模式见 [部署导航](README.md)。
 
-### 待发布：文字战线规则 v3 与免费真人房间
+### 2026-09-14 当前发布：文字战线 v3、免费双人房间与妖塔技能
 
-候选迁移 `1700000000039` 只扩展 `arcade_game_runs` 和 `arcade_best_scores` 的游戏键 CHECK，给独立的 `word_story_v3` / `word_endless_v3` 成绩留位；现网仍是下面记录的 schema38 / 39 条迁移。原 v1/v2 回放语义与成绩不改，生产仅在新鲜备份恢复、唯一增量迁移及旧局结算兼容演练通过后执行 UP。真人房间若验收通过，也只用免费局内资源，不改账号钱包、正式榜或权限；须显式开闸。房间采用 V2 双线规则、限单 API 实例内的 1V1 临时会话，API 重启或回滚会结束未完成的对局，不计正式榜。候选会增加妖塔技能目录，紧急回滚桥需先补齐新技能兼容并在隔离副本实测，不得直接回到旧桥或裸旧版。此段为发布准备，不代表已上线。
+北京时间 17:48 已部署应用 `d641ae0b0d6341a6ac3ed69db58e6ddd521362c1`。唯一迁移 `1700000000039` 只扩展 `arcade_game_runs` 和 `arcade_best_scores` 的游戏键 CHECK，增加独立 `word_story_v3` / `word_endless_v3` 成绩；现网 schema39 / 40 条迁移 / 148 张表。原 v1/v2 回放、旧榜与原工位塔防保持。v3 增固定岔路、干扰和仅局内装备；免费双人房间采用 v2 规则双线对攻，支持可选密码和当前 API 生命周期内重连，房间结果不入正式榜、不动办公币，API 重启会结束临时房。妖塔新增 s19/s20 免费主动技能。新鲜备份恢复、唯一增量迁移、旧局和新局结算、新兼容桥及双用户隔离 HTTP 均通过；仅顺序切换 API/Web，PostgreSQL、Redis、Gateway 容器和数据卷不变。直接回滚只用新桥 `22a4b363e4052cbc8c0fb816c99e3fe13818c603` 的已保留 API/Web 镜像与完整旧配置（IMAGE_TAG 指向新桥），保留 schema39 与全部数据，不执行 DOWN/旧库覆盖。旧桥 `1f50c07` 不认识 s19/s20，不能用于本次回滚。详见[本批发布记录](../docs/RELEASE_WORD_FRONT_V3_20260914.md)。
 
-### 2026-09-14 当前发布：文字战线 v2 与妖塔反馈补齐
+### 2026-09-14 历史发布：文字战线 v2 与妖塔反馈补齐
 
 北京时间 15:28 已部署应用 `994b4797e561901297cdebc0dfbad6c466d81cd0`。迁移 `1700000000038` 仅扩展 `arcade_game_runs` 与 `arcade_best_scores` 的游戏键 CHECK，允许独立的 `word_story_v2` / `word_endless_v2` 成绩；生产为 schema38 / 39 条迁移 / 148 张表。未删除旧行，未改既有办公币和权限。迁移先在新鲜备份恢复副本上演练，候选与回滚桥实跑通过；生产只执行一次 UP，仅切换 API/Web，PostgreSQL、Redis、Gateway 容器不变。新技能 s17/s18 及 v2 成绩不被原 `9013da7` 完整识别，紧急应用回退只能使用兼容桥 `1f50c07f543d51ffa6688d90ff87b12b805ff921` 的 API/Web 不可变镜像，绝不可直接退到裸 `9013da7`、运行 DOWN 或回灌旧库。测试、镜像、备份和反馈状态见[本批发布记录](../docs/RELEASE_WORD_FRONT_V2_20260914.md)。
 
@@ -175,7 +175,7 @@ chmod 600 .env.community
 
 分别为 JWT、认证 pepper、PostgreSQL、Redis、邮件 webhook 和 Outbox 加密准备独立随机秘密；可用 `openssl rand -hex 32` 每次生成新的值，不在多字段复用。`BETA_BOOTSTRAP_CODE` 至少 16 字符且限次；真实秘密不能写入示例、Git 或命令历史。设置正确的域名、隐私/备案/游戏依据和完整 40 位候选 SHA，再执行预检。预检验证静态配置、密钥基本条件、前后端映射等，不代替 Provider 或真实数据库验收。
 
-新站首先在隔离环境验证同一候选的完整初始化与恢复。源码 [迁移清单](../packages/backend/src/database/migrations/index.ts) 当前登记 `0000` 至 `0036`，共 37 条；成功初始化应逐条比对名称/时间戳，不只看数量。通过后，在新站独立项目中构建并启动：
+新站首先在隔离环境验证同一候选的完整初始化与恢复。源码 [迁移清单](../packages/backend/src/database/migrations/index.ts) 当前登记 `0000` 至 `0039`，共 40 条；成功初始化应逐条比对名称/时间戳，不只看数量。通过后，在新站独立项目中构建并启动：
 
 ```bash
 sh deploy/community-preflight.sh .env.community
