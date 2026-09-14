@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { createHash, randomUUID } from 'node:crypto';
 import { DataSource, EntityManager } from 'typeorm';
 
 import {
@@ -12,12 +13,18 @@ import {
   User,
 } from '../../../database/entities';
 import type { ArcadeGameKey } from '../../../database/entities/arcade-score.entity';
+import {
+  replayWordFront,
+  type WordFrontAction,
+} from '@stealth-reader/shared';
 import { assertCommunityWritesEnabled } from '../community-write-gate';
 
 const RUN_TTL_MS: Record<ArcadeGameKey, number> = {
   tetris: 2 * 60 * 60 * 1_000,
   tank: 30 * 60 * 1_000,
   zhesi: 2 * 60 * 60 * 1_000,
+  word_story: 2 * 60 * 60 * 1_000,
+  word_endless: 2 * 60 * 60 * 1_000,
 };
 
 const ZHESI_MAX_AGE = 120_000;
@@ -45,6 +52,7 @@ export function validateArcadeResult(
   gameKey: ArcadeGameKey,
   input: FinishRunInput,
   elapsedSeconds: number,
+  runSeed?: number,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(input.score) || input.score < 0) {
     throw new BadRequestException({ code: 'ARCADE_SCORE_INVALID' });
@@ -90,7 +98,50 @@ export function validateArcadeResult(
     return { outcome, enemiesDefeated, elapsedSeconds };
   }
 
+  if (gameKey === 'word_story' || gameKey === 'word_endless') {
+    return validateWordFrontResult(gameKey, input, metrics, elapsedSeconds, runSeed);
+  }
+
   return validateZhesiResult(input, metrics, elapsedSeconds);
+}
+
+function validateWordFrontResult(
+  gameKey: 'word_story' | 'word_endless',
+  input: FinishRunInput,
+  metrics: Record<string, unknown>,
+  elapsedSeconds: number,
+  runSeed: number | undefined,
+): Record<string, unknown> {
+  const expectedMode = gameKey === 'word_story' ? 'story' : 'endless';
+  const { mode, chapter, wave, kills, coreHp, drawCount, outcome, finishTick, actions } = metrics;
+  if (
+    mode !== expectedMode ||
+    !Number.isSafeInteger(runSeed) || Number(runSeed) < 0 || Number(runSeed) > 0xffffffff ||
+    !Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > 3 ||
+    !Number.isSafeInteger(finishTick) || Number(finishTick) < 1 || Number(finishTick) > 3_000 ||
+    !Array.isArray(actions) || actions.length < 2 || actions.length > 400 ||
+    actions.some((action) => !action || typeof action !== 'object' || Array.isArray(action)) ||
+    Number(finishTick) * 850 > (elapsedSeconds + 3) * 1_000
+  ) {
+    throw new BadRequestException({ code: 'ARCADE_RESULT_IMPLAUSIBLE' });
+  }
+
+  const state = replayWordFront(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontAction[], Number(finishTick));
+  if (
+    !state ||
+    state.status !== outcome ||
+    state.completedWaves !== wave ||
+    state.kills !== kills ||
+    state.coreHp !== coreHp ||
+    state.drawCount !== drawCount ||
+    state.score !== input.score
+  ) {
+    throw new BadRequestException({ code: 'ARCADE_RESULT_IMPLAUSIBLE' });
+  }
+  return {
+    mode, chapter, wave, kills, coreHp, drawCount, outcome,
+    finishTick, elapsedSeconds, rulesVersion: 1,
+  };
 }
 
 function validateZhesiResult(
@@ -256,8 +307,9 @@ export class ArcadeService {
         })
         .execute();
       const now = new Date();
-      const run = await manager.getRepository(ArcadeGameRun).save(
-        manager.getRepository(ArcadeGameRun).create({
+      const repo = manager.getRepository(ArcadeGameRun);
+      const run = repo.create({
+          id: randomUUID(),
           userId,
           gameKey,
           status: 'active',
@@ -266,13 +318,20 @@ export class ArcadeService {
           startedAt: now,
           expiresAt: new Date(now.getTime() + RUN_TTL_MS[gameKey]),
           completedAt: null,
-        }),
-      );
+        });
+      // The random server-generated run ID fixes the card order for this run.
+      // Persist the seed so a finished result can be replayed independently of
+      // any client-side draft or edited local storage.
+      if (gameKey === 'word_story' || gameKey === 'word_endless') {
+        run.metrics = { seed: Number.parseInt(run.id.replace(/-/g, '').slice(0, 8), 16) };
+      }
+      const saved = await repo.save(run);
       return {
-        runId: run.id,
-        gameKey: run.gameKey,
-        startedAt: run.startedAt.toISOString(),
-        expiresAt: run.expiresAt.toISOString(),
+        runId: saved.id,
+        gameKey: saved.gameKey,
+        startedAt: saved.startedAt.toISOString(),
+        expiresAt: saved.expiresAt.toISOString(),
+        ...(gameKey === 'word_story' || gameKey === 'word_endless' ? { seed: saved.metrics.seed } : {}),
       };
     });
   }
@@ -297,10 +356,19 @@ export class ArcadeService {
         throw new BadRequestException({ code: 'ARCADE_RUN_EXPIRED' });
       }
       const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - run.startedAt.getTime()) / 1_000));
-      const metrics = validateArcadeResult(run.gameKey, input, elapsedSeconds);
+      const metrics = validateArcadeResult(run.gameKey, input, elapsedSeconds, Number(run.metrics.seed));
+      const wordFront = run.gameKey === 'word_story' || run.gameKey === 'word_endless';
+      const actions = wordFront ? (input.metrics as Record<string, unknown>).actions : undefined;
+      const traceHash = wordFront
+        ? createHash('sha256').update(JSON.stringify(actions)).digest('hex')
+        : undefined;
       run.status = 'completed';
       run.score = input.score;
-      run.metrics = metrics;
+      // Preserve the bounded, verified trace on the run for later disputes or
+      // rules regressions. The public leaderboard uses only its small summary.
+      run.metrics = wordFront
+        ? { ...metrics, seed: run.metrics.seed, actions, traceHash }
+        : metrics;
       run.completedAt = now;
       await manager.getRepository(ArcadeGameRun).save(run);
 
@@ -314,7 +382,7 @@ export class ArcadeService {
         best ??= bestRepo.create({ gameKey: run.gameKey, userId });
         best.bestScore = input.score;
         best.runId = run.id;
-        best.metrics = metrics;
+        best.metrics = wordFront ? { ...metrics, traceHash } : metrics;
         best.achievedAt = now;
         best = await bestRepo.save(best);
       }

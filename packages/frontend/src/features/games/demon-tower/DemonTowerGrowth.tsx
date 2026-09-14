@@ -48,9 +48,11 @@ export function DemonTowerLootGuide({ profile }: { profile: DemonTowerProfileVie
     <details><summary className={styles.textButton}>掉落概率与保底怎么算？</summary>
       <p>先判定是否掉物品，再选择武器/技能，再按稀有度与单品权重抽取。武器精/灵/仙/神基础权重40/30/20/10；技能凡/精/灵/仙同权重。先排除当前等级不能获得的物品，再重新归一。</p>
       <p>图鉴“常规条件概率”指已确定该种类成功掉落、没有保底干预时的单品概率，不是每次探索的出货率。每4次可掉落探索结算保证一件物品，并在抽到的稀有度内优先补未收录。</p>
+      <p>真实升级通常有 50% 概率获得一件合资格武器或技能；如果本次没有获得物品，下次升级必得。同一动作已有探索物品时，会抵扣升级赠品，不再额外叠发；一次动作跨多级最多一份普通升级物品，升到满级的最后一次不会留下无法兑现的保底。</p>
       <p>Lv16起连续20次未得灵以上，下次保底；Lv31起连续50次未得仙以上，下次保底。未达等级不计数，符合资格的保底一定有合法物品；首领挑战不计入。幸运影响普通是否出货，不绕过获取等级。</p>
     </details>
     {growth ? <div className={styles.resourceList} style={{ marginTop: 16 }}>
+      <div className={styles.resource}><strong>{profile.level >= 120 ? '已满级' : growth.nextLevelItemGuaranteed === undefined ? '待同步' : growth.nextLevelItemGuaranteed ? '下次升级必得' : '尚未触发'}</strong><small>升级武器或技能 · 与探索物品不重复结算</small></div>
       <div className={styles.resource}><strong>{growth.eligible.ling ? `${growth.misses.ling} / 20` : 'Lv16开启'}</strong><small>灵以上连续未得 · 达20后下次保底</small></div>
       <div className={styles.resource}><strong>{growth.eligible.xian ? `${growth.misses.xian} / 50` : 'Lv31开启'}</strong><small>仙以上连续未得 · 达50后下次保底</small></div>
     </div> : null}

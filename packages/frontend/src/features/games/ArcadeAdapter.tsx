@@ -6,13 +6,15 @@ import {
   type ReactNode,
 } from 'react';
 
-export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless';
 
 export interface ArcadeRun {
   runId: string;
   gameKey: ArcadeGameKey;
   startedAt: string;
   expiresAt: string;
+  /** Present only for server-replayable games such as Word Front. */
+  seed?: number;
 }
 
 export interface ArcadeFinishResult {

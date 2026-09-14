@@ -1,12 +1,13 @@
 import { communityHttp } from './community-http';
 
-export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless';
 
 export interface ArcadeRun {
   runId: string;
   gameKey: ArcadeGameKey;
   startedAt: string;
   expiresAt: string;
+  seed?: number;
 }
 
 export interface ArcadeFinishResult {

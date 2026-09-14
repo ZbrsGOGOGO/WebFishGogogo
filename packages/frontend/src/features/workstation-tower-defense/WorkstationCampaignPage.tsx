@@ -88,7 +88,7 @@ function WorkstationCampaignContent({ character }: { character?: WorkstationTowe
   if (!view || !profile) return <main className={styles.page}><h1>工位任务台</h1><p role="status">{error || '正在读取你的存档…'}</p><Link to="/tower-defense/practice">先去本地练习</Link></main>;
   const appearance=OFFICE_COLLECTION.find(item=>item.id===view.appearance?.equipped);
   return <div className={styles.page} data-office-appearance={appearance?.id} style={appearance?{'--office-appearance':appearance.color} as React.CSSProperties:undefined}>
-    <header className={styles.heading}><div><span>WORKSPACE · 私人任务簿</span><h1>工位任务台</h1><p>六章故事 · 四种职业 · 服务器保存，随时放下。</p></div><nav aria-label="工位任务导航"><button type="button" onClick={()=>setDashboard(true)}>任务总览</button><Link to="/tower-defense/leaderboard">正式排行榜</Link><Link to="/tower-defense/practice">本地练习</Link></nav></header>
+    <header className={styles.heading}><div><span>WORKSPACE · 私人任务簿</span><h1>工位任务台</h1><p>六章故事 · 四种职业 · 服务器保存，随时放下。</p></div><nav aria-label="工位任务导航"><button type="button" onClick={()=>setDashboard(true)}>任务总览</button><Link to="/tower-defense/leaderboard">正式排行榜</Link><Link to="/tower-defense/word-front">文字战线</Link><Link to="/tower-defense/practice">本地练习</Link></nav></header>
     {error?<p className={styles.error} role="alert">{error}</p>:null}{notice?<p role="status">{notice}</p>:null}
     {!view.writesEnabled?<p role="status">正式任务当前只读，已有记录仍可查看。</p>:null}
     {appearance?<p className={styles.appearance}>已装备：{appearance.name} · 仅外观，不改变战力</p>:null}

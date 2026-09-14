@@ -47,6 +47,7 @@ export function useArcadeRun(gameKey: ArcadeGameKey) {
         if (startQueue.current === run.promise) startQueue.current = null;
       });
     }
+    return run.promise;
   }, [adapter, gameKey, signedIn]);
 
   const finish = useCallback(async (score: number, metrics: Record<string, unknown>) => {

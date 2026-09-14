@@ -187,14 +187,27 @@
 .skillAction strong { display: block; font-size: 12px; margin-bottom: 4px; }
 .skillAction small { display: block; color: #596952; font-size: 12px; line-height: 1.6; }
 .battleLog { margin: 15px 0 0; padding: 0; list-style: none; border-top: 1px dashed var(--tower-line); }
-.battleLog li { font-size: 12px; color: #596952; padding: 6px 0; border-bottom: 1px solid #eef1e8; overflow-wrap: anywhere; }
+.battleLog li { display: grid; grid-template-columns: 25px 30px minmax(0, 1fr); gap: 6px; font-size: 12px; color: #596952; padding: 7px 0; border-bottom: 1px solid #eef1e8; overflow-wrap: anywhere; }
 .battleLog li[data-kind="heal"] { color: #596952; }
 .battleLog li[data-kind="damage"] { color: #596952; }
-.battleLog li span { font: 12px var(--font-mono, monospace); color: #596952; margin-right: 8px; }
+.battleLog .logTurn { font: 12px var(--font-mono, monospace); color: #596952; }
+.battleLog .logActor { font-size: 11px; color: var(--tower-muted); white-space: nowrap; }
+.battleLog li[data-actor="enemy"] .logActor { color: #865c4f; }
+.battleLog li[data-kind="defeat"] .logText, .battleLog li[data-kind="reward"] .logText { font-weight: 600; }
+.battleLog .logText { min-width: 0; }
+.reportSummary { border-left: 3px solid var(--tower-accent); border-radius: 0 6px 6px 0; background: var(--tower-soft); padding: 10px 12px; font-size: 13px; }
+.reportSummary[data-outcome="defeat"], .reportSummary[data-outcome="timeout"] { border-left-color: #a77959; }
+.reportSummary[data-outcome="fled"] { border-left-color: #8c8f72; }
+.reportHighlights { margin-top: 16px; padding: 13px 15px; border: 1px solid var(--tower-line); border-radius: 8px; }
+.reportHighlights h3, .reportLogHeading { margin: 0; font-size: 13px; font-weight: 600; }
+.reportHighlights p { margin: 2px 0 0; color: var(--tower-muted); font-size: 12px; }
+.reportHighlights .battleLog { margin-top: 8px; }
+.reportLogHeading { margin-top: 16px; }
 .reportStats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 17px; }
 .reportStats div { display: grid; gap: 3px; padding: 12px; background: #f4f7ee; border-radius: 7px; }
 .reportStats dt { font-size: 12px; color: #596952; }
 .reportStats dd { font-size: 18px; margin: 0; color: #596952; font-variant-numeric: tabular-nums; }
+.reportStats .reportOutcome { font-size: 13px; }
 .itemGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .item { min-width: 0; border: 1px solid #dde5d4; border-radius: 8px; background: #fff; padding: 14px; }
 .item[data-selected="true"] { border-color: #8fa97d; background: #f5f8ef; }
@@ -293,6 +306,8 @@
   .skillAction { padding: 10px 8px; }
   .skillAction strong { font-size: 12px; }
   .skillAction small { font-size: 12px; }
+  .reportStats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .reportStats div:last-child { grid-column: 1 / -1; }
   .worldLayout { grid-template-columns: 94px minmax(0, 1fr); gap: 14px; }
   .worldSummary h3 { font-size: 17px; }
   .worldSummary p { font-size: 12px; }

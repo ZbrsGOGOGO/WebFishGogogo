@@ -130,6 +130,8 @@ export type DemonTowerInnateId = 'strength' | 'speed' | 'agility' | 'defense' | 
 export interface DemonTowerGrowthView {
   rulesVersion: 2; pendingLegacyBattle: boolean; chosenAttribute: DemonTowerAttribute | null;
   innates: DemonTowerInnateId[]; unlockedCount: number; nextInnateLevel: number | null;
+  /** Optional for a cached response from an older server; never exposes the RNG seed. */
+  nextLevelItemGuaranteed?: boolean;
   /** Counts eligible exploration settlements without these rarities, not secret RNG state. */
   misses: { ling: number; xian: number }; eligible: { ling: boolean; xian: boolean };
 }

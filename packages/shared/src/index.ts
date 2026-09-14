@@ -13,6 +13,7 @@ export * from './demon-tower-provisions';
 export * from './community-progression';
 export * from './tower-defense-engine';
 export * from './tower-defense-campaign';
+export * from './word-front-engine';
 export * from './office-hub';
 export * from './office-relief';
 export * from './paper-arena';

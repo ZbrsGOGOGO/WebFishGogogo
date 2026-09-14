@@ -49,7 +49,9 @@ export interface DemonTowerEngineState {
   economy?: DemonTowerEconomyState;
   expansion?: DemonTowerExpansionView;
   arenaOpponentsToday?: string[]; arenaBestRank?: number;
-  growth?: { rulesVersion: 2; chosenAttribute: DemonTowerAttribute | null; innates: DemonTowerInnateId[]; misses: { ling: number; xian: number } };
+  growth?: { rulesVersion: 2; chosenAttribute: DemonTowerAttribute | null; innates: DemonTowerInnateId[]; misses: { ling: number; xian: number };
+    /** Absent on older saves. A missed level-up item makes the next level-up certain. */
+    levelDropPending?: boolean };
   schemaVersion: 1; createdAt: number; lastActionAt: number; rngSeed: string; rngCounter: number;
   level: number; experience: number; totalExperience: number; attributes: DemonTowerAttributes; unspentPoints: number;
   /** Optional for saves created before free attribute resets were available. */
@@ -139,7 +141,7 @@ function unlockInnates(state: DemonTowerEngineState): void {
 /** Write-path-only additive migration. GET and old in-flight battles never persist or advance this adapter. */
 function enableGrowth(state: DemonTowerEngineState): void {
   if (state.battle || state.growth) return;
-  state.growth = { rulesVersion: 2, chosenAttribute: null, innates: [], misses: { ling: 0, xian: 0 } };
+  state.growth = { rulesVersion: 2, chosenAttribute: null, innates: [], misses: { ling: 0, xian: 0 }, levelDropPending: false };
   for (const item of state.weapons) { item.star = 1; item.favor = 0; item.levelExempt = true; }
   for (const item of state.skills) item.levelExempt = true;
 }
@@ -247,6 +249,7 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
   clock(now, serviceDate);
   if (input.schemaVersion !== 1 || now < Math.max(input.lastActionAt, input.staminaAt, input.healingAt) || serviceDate < input.daily.serviceDate) fail('INVALID_TIME');
   if (input.growth && (input.growth.rulesVersion !== 2 || !integer(input.growth.misses?.ling, 0, 20) || !integer(input.growth.misses?.xian, 0, 50) ||
+    (input.growth.levelDropPending !== undefined && typeof input.growth.levelDropPending !== 'boolean') ||
     (input.growth.chosenAttribute !== null && !DEMON_TOWER_ATTRIBUTE_KEYS.includes(input.growth.chosenAttribute)) || !Array.isArray(input.growth.innates) ||
     input.growth.innates.some(id => !DEMON_TOWER_INNATES.some(item => item.id === id)))) fail('INVALID_GROWTH_STATE');
   if (input.battle?.rulesVersion !== undefined && input.battle.rulesVersion !== 2) fail('INVALID_GROWTH_STATE');
@@ -1088,6 +1091,53 @@ function grantLootItem(state: DemonTowerEngineState, kind: 'weapon' | 'skill', i
   events.push(`获得${definition.rarity}·${definition.name}${owned ? state.expansion ? '，同名转为品质经验（超境界暂存，不丢失）' : '副本' : ''}。`);
   settleQualityExperience(state, events);
 }
+/** A conserved count of owned items and their copies/quality. Expansion adapts old
+ * copies into quality experience without changing this total, so an item already
+ * awarded by the same action can satisfy a level-up without another grant. */
+function itemAcquisitions(state: DemonTowerEngineState): number {
+  return [...state.weapons, ...state.skills].reduce((total, item) =>
+    total + 1 + item.quality + item.spareCopies + (item.qualityExperience ?? 0), 0);
+}
+function settleLevelDrops(state: DemonTowerEngineState, previousLevel: number, existingAwards: number, events: string[]): void {
+  const growth = state.growth;
+  if (!growth || state.level <= previousLevel) return;
+  let credits = Math.max(0, existingAwards);
+  // One action grants at most one ordinary level-up item even if an old save's
+  // accumulated XP crosses several levels at once. Milestones remain separate.
+  for (let level = previousLevel + 1; level <= state.level; level += 1) {
+    // Only real crossings count. In particular, old high-level saves receive no
+    // retroactive gifts when first adapted to the current growth rules.
+    const target = level === 5 ? 1 : level === 10 ? 2 : level === 15 ? 3 : 0;
+    let milestoneAwards = 0;
+    while (target > new Set(state.weapons.map(item => item.id)).size) {
+      const available = DEMON_TOWER_WEAPONS.filter(item => item.dropLevel <= level && !state.weapons.some(owned => owned.id === item.id));
+      if (!available.length) fail('LOOT_LEVEL_REQUIRED');
+      const selected = weighted(available, random(state));
+      grantLootItem(state, 'weapon', selected.id, events);
+      milestoneAwards += 1;
+    }
+    if (milestoneAwards) {
+      credits += milestoneAwards;
+      events.push(`妖塔 Lv.${level} 武器里程碑：已补足至少${target}件不同武器，不重发已有藏品。`);
+    }
+  }
+  if (credits > 0) { growth.levelDropPending = false; return; }
+  // Lv.120 is the final opportunity to redeem an upgrade drop. Never leave a
+  // pending guarantee that this character can no longer reach by leveling.
+  if (growth.levelDropPending || state.level === RULES.maxLevel || chance(state, 0.5)) {
+    const kind = random(state) < 0.5 ? 'weapon' : 'skill';
+    const owned = kind === 'weapon' ? state.weapons : state.skills;
+    const definitions = kind === 'weapon' ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS;
+    const missing = definitions.filter(item => !owned.some(existing => existing.id === item.id)).map(item => item.id);
+    const item = demonTowerWeightedLoot(kind, state.level, '凡', random(state), random(state), missing);
+    grantLootItem(state, kind, item.id, events);
+    events.push(`妖塔 Lv.${state.level} 升级掉落已兑现${growth.levelDropPending ? '（上次未掉落保底）' : ''}；不计入探索四次保底。`);
+    growth.levelDropPending = false;
+  } else {
+    growth.levelDropPending = true;
+    events.push(`妖塔 Lv.${state.level} 本次未掉落物品，下次升级必出武器或技能。`);
+  }
+}
 function sourceLoot(state: DemonTowerEngineState, source: DemonTowerLootSource, kind: 'weapon' | 'skill', events: string[], minimum: DemonTowerRarity = '凡'): void {
   if (!demonTowerLootPool(kind, state.level, minimum, source).length) fail('LOOT_LEVEL_REQUIRED');
   const item = demonTowerWeightedLoot(kind, state.level, minimum, random(state), random(state), undefined, source);
@@ -1420,6 +1470,8 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
   // Zero-based tracking starts only on a successful write in this release. Old
   // commands/reports are not a reliable exploration count and are not backfilled.
   state.provisions ??= initialProvisions(context.now, context.serviceDate);
+  const previousLevel = state.level, initialItems = itemAcquisitions(state);
+  const previousBattleWasLegacy = Boolean(state.battle && state.battle.rulesVersion !== 2);
   const result: DemonTowerEngineResult = { state, events, worldEffect: null, officeCoinIntent: 0 };
   if (root.kind === 'enroll') fail('ALREADY_ENROLLED');
   if (state.battle && !['attack', 'skill', 'flee'].includes(root.kind)) fail('BATTLE_IN_PROGRESS');
@@ -1620,6 +1672,7 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       break;
     default: fail('INVALID_ACTION');
   }
+  if (!previousBattleWasLegacy) settleLevelDrops(state, previousLevel, itemAcquisitions(state) - initialItems, events);
   state.lastActionAt = context.now;
   state.hp = Math.min(state.hp, state.battle?.player.maxHp ?? demonTowerMaxHp(state, context.expansionEnabled === true));
   return result;
@@ -1671,6 +1724,7 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
     growth: { rulesVersion: 2, pendingLegacyBattle: Boolean(state.battle && state.battle.rulesVersion !== 2),
       chosenAttribute: state.growth?.chosenAttribute ?? null, innates: [...(state.growth?.innates ?? [])],
       unlockedCount: Math.min(8, 1 + Math.floor((state.level - 1) / 15)), nextInnateLevel: state.level >= 106 ? null : (Math.floor((state.level - 1) / 15) + 1) * 15 + 1,
+      nextLevelItemGuaranteed: state.level < RULES.maxLevel && state.growth?.levelDropPending === true,
       misses: { ling: state.growth?.misses.ling ?? 0, xian: state.growth?.misses.xian ?? 0 }, eligible: { ling: state.level >= 16, xian: state.level >= 31 } },
     version, level: state.level, experience: state.experience, experienceToNext: demonTowerExperienceToNext(state.level), totalExperience: state.totalExperience,
     attributes: copyAttributes(state.attributes), effectiveAttributes: state.battle ? copyAttributes(state.battle.player.attributes) : demonTowerEffectiveAttributes(statState), unspentPoints: state.unspentPoints,

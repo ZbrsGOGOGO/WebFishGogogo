@@ -1,5 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
+import {
+  createWordFrontState,
+  deployWordFrontUnit,
+  recruitWordFrontCards,
+  startWordFront,
+  stepWordFront,
+  wordFrontHeroForLetters,
+  type WordFrontAction,
+} from '@stealth-reader/shared';
 
 import {
   ArcadeBestScore,
@@ -9,6 +18,47 @@ import {
 import { ArcadeService, validateArcadeResult } from './arcade.service';
 
 describe('arcade score validation', () => {
+  it('replays the server-seeded word-front battle instead of trusting client metrics', () => {
+    const seed = 20260914;
+    let state = createWordFrontState('story', 1, seed);
+    const actions: WordFrontAction[] = [{ type: 'recruit', tick: 0 }];
+    state = recruitWordFrontCards(state);
+    let first = -1, second = -1;
+    for (let a = 0; a < state.hand.length; a += 1) {
+      for (let b = a + 1; b < state.hand.length; b += 1) {
+        if (wordFrontHeroForLetters(state.hand[a]!, state.hand[b]!)) { first = a; second = b; break; }
+      }
+      if (first >= 0) break;
+    }
+    expect(first).toBeGreaterThanOrEqual(0);
+    actions.push({ type: 'deploy', tick: 0, first, second, slot: 0 }, { type: 'start', tick: 0 });
+    state = deployWordFrontUnit(state, first, second, 0);
+    state = startWordFront(state);
+    while (state.status === 'running' && state.tick < 3000) state = stepWordFront(state);
+    expect(['won', 'lost']).toContain(state.status);
+    const elapsedSeconds = Math.ceil(state.tick * 0.85) + 5;
+    const story = {
+      score: state.score,
+      metrics: {
+        mode: 'story', chapter: 1, wave: state.completedWaves, kills: state.kills,
+        coreHp: state.coreHp, drawCount: state.drawCount, outcome: state.status,
+        finishTick: state.tick, actions, ignored: 'not persisted',
+      },
+    };
+    expect(validateArcadeResult('word_story', story, elapsedSeconds, seed)).toEqual({
+      mode: 'story', chapter: 1, wave: state.completedWaves, kills: state.kills,
+      coreHp: state.coreHp, drawCount: state.drawCount, outcome: state.status,
+      finishTick: state.tick, elapsedSeconds, rulesVersion: 1,
+    });
+    expect(() => validateArcadeResult('word_endless', story, elapsedSeconds, seed)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story', { ...story, score: 999_999 }, elapsedSeconds, seed)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story', story, elapsedSeconds, seed + 1)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story', story, 0, seed)).toThrow(BadRequestException);
+    expect(() => validateArcadeResult('word_story', {
+      ...story, metrics: { ...story.metrics, outcome: state.status === 'won' ? 'lost' : 'won' },
+    }, elapsedSeconds, seed)).toThrow(BadRequestException);
+  });
+
   it('accepts a plausible tetris result and normalizes its metrics', () => {
     expect(validateArcadeResult('tetris', {
       score: 12_000,
@@ -147,6 +197,28 @@ describe('arcade score validation', () => {
 });
 
 describe('arcade run lifetime', () => {
+  it('issues and persists a server seed before a word-front draw', async () => {
+    const queryBuilder = {
+      update: jest.fn().mockReturnThis(), set: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(), execute: jest.fn().mockResolvedValue(undefined),
+    };
+    const runRepository = {
+      create: jest.fn((value) => value), save: jest.fn(async (value) => value),
+    };
+    const manager = {
+      createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
+      getRepository: jest.fn((entity) => entity === User
+        ? { findOne: jest.fn().mockResolvedValue({ id: 'user-1', accountStatus: 'active' }) }
+        : runRepository),
+    };
+    const dataSource = { transaction: jest.fn(async (work) => work(manager)) } as unknown as DataSource;
+    const run = await new ArcadeService(dataSource).startRun('user-1', 'word_story');
+    expect(run.runId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(run.seed).toEqual(expect.any(Number));
+    expect(runRepository.save).toHaveBeenCalledTimes(1);
+    expect(runRepository.save.mock.calls[0]![0].metrics).toEqual({ seed: run.seed });
+  });
+
   it('gives zhesi runs a two-hour expiry', async () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-09-04T08:00:00.000Z'));
     const execute = jest.fn().mockResolvedValue(undefined);

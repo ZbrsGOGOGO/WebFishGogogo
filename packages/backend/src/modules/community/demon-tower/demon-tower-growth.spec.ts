@@ -1,6 +1,6 @@
 import { DEMON_TOWER_INNATES, DEMON_TOWER_SKILLS, DEMON_TOWER_WEAPONS, demonTowerItemDropPercent, demonTowerLootPool } from '@stealth-reader/shared';
 import type { DemonTowerAction, DemonTowerAttribute, DemonTowerWeaponId, DemonTowerOwnedWeapon } from '@stealth-reader/shared';
-import { actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerAutomaticAction, demonTowerEffectiveAttributes, demonTowerMaxHp, demonTowerProfileView, demonTowerWeightedLoot, type DemonTowerEngineState } from './demon-tower.engine';
+import { actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerAutomaticAction, demonTowerEffectiveAttributes, demonTowerExperienceToNext, demonTowerMaxHp, demonTowerProfileView, demonTowerWeightedLoot, type DemonTowerEngineState } from './demon-tower.engine';
 import { demonTowerWorldView, initialDemonTowerWorld } from './demon-tower.rules';
 
 const NOW = Date.UTC(2026, 8, 9, 9), DATE = '2026-09-09';
@@ -147,6 +147,151 @@ describe('Demon tower weighted acquisition and eligible guarantees', () => {
     expect(result.events.some(event => event.includes('兑现仙以上'))).toBe(true);
     expect(result.state.growth!.misses).toEqual({ ling: 0, xian: 0 });
     expect(result.state.weapons.some(item => DEMON_TOWER_WEAPONS.find(def => def.id === item.id)!.rarity === '仙')).toBe(true);
+  });
+});
+
+describe('Demon tower level-up acquisition without duplicate exploration rewards', () => {
+  const itemTotal = (state: DemonTowerEngineState) => [...state.weapons, ...state.skills].reduce((sum, item) =>
+    sum + 1 + item.quality + item.spareCopies + (item.qualityExperience ?? 0), 0);
+  const readyToLevel = (state: DemonTowerEngineState, level: number) => {
+    state.level = level; state.experience = demonTowerExperienceToNext(level) - 1;
+    state.hp = demonTowerMaxHp(state); state.stamina = 100;
+    return state;
+  };
+
+  it('a missed level drop guarantees the next actual level, including an older growth save without the new optional flag', () => {
+    let missed: DemonTowerEngineState | null = null;
+    for (let seed = 0; seed < 100 && !missed; seed += 1) {
+      const candidate = readyToLevel(fresh(`level-miss-synthetic-${seed}`), 1);
+      delete candidate.growth!.levelDropPending;
+      const next = act(candidate, { kind: 'train', payload: {} }).state;
+      if (itemTotal(next) === itemTotal(candidate)) missed = next;
+    }
+    expect(missed).not.toBeNull();
+    expect(missed!.growth!.levelDropPending).toBe(true);
+    const before = itemTotal(missed!);
+    const second = act(readyToLevel(missed!, 2), { kind: 'train', payload: {} });
+    expect(second.state.level).toBe(3);
+    expect(itemTotal(second.state)).toBe(before + 1);
+    expect(second.state.growth!.levelDropPending).toBe(false);
+    expect(second.events).toContainEqual(expect.stringContaining('上次未掉落保底'));
+    expect(second.state.lootPity).toEqual(missed!.lootPity);
+    expect(second.state.materials.soul).toBe(missed!.materials.soul);
+  });
+
+  it('counts the real four-exploration-pity item as the level reward, without another item or resetting pity twice', () => {
+    let result: ReturnType<typeof act> | null = null, before: DemonTowerEngineState | null = null;
+    for (let seed = 0; seed < 100 && !result; seed += 1) {
+      const candidate = readyToLevel(fresh(`level-and-explore-${seed}`), 4);
+      candidate.lootPity = { stepsSinceGuarantee: 3, nextKind: 'skill' };
+      candidate.growth!.levelDropPending = true;
+      const next = act(candidate, { kind: 'explore', payload: {} });
+      if (!next.state.battle) { before = candidate; result = next; }
+    }
+    expect(result).not.toBeNull();
+    expect(result!.state.level).toBe(5);
+    expect(itemTotal(result!.state) - itemTotal(before!)).toBe(1);
+    expect(result!.state.lootPity).toEqual({ stepsSinceGuarantee: 0, nextKind: 'weapon' });
+    expect(result!.state.growth!.levelDropPending).toBe(false);
+    expect(result!.events.filter(event => event.includes('每4次探索物品保底'))).toHaveLength(1);
+    expect(result!.events.some(event => event.includes('升级掉落已兑现'))).toBe(false);
+  });
+
+  it('also counts a quality-experience item after the additive expansion adapter, without doubling the upgrade reward', () => {
+    let result: ReturnType<typeof act> | null = null, before: DemonTowerEngineState | null = null;
+    for (let seed = 0; seed < 100 && !result; seed += 1) {
+      const candidate = readyToLevel(fresh(`level-expansion-synthetic-${seed}`), 4);
+      candidate.weapons[0].spareCopies = 4;
+      candidate.lootPity = { stepsSinceGuarantee: 3, nextKind: 'weapon' };
+      candidate.growth!.levelDropPending = true;
+      const next = actDemonTower(candidate, { kind: 'explore', payload: {} },
+        { now: NOW, serviceDate: DATE, world: demonTowerWorldView(initialDemonTowerWorld(new Date(NOW))), expansionEnabled: true });
+      if (!next.state.battle) { before = candidate; result = next; }
+    }
+    expect(result).not.toBeNull();
+    expect(result!.state.expansion?.version).toBe(1);
+    expect(result!.state.level).toBe(5);
+    expect(itemTotal(result!.state) - itemTotal(before!)).toBe(1);
+    expect(result!.state.growth!.levelDropPending).toBe(false);
+    expect(result!.state.lootPity.stepsSinceGuarantee).toBe(0);
+    expect(result!.events.some(event => event.includes('升级掉落已兑现'))).toBe(false);
+  });
+
+  it.each([[10, 2], [15, 3]] as const)('fills only missing eligible weapon IDs when actually crossing Lv.%i', (level, target) => {
+    const state = readyToLevel(fresh(`level-weapon-synthetic-${level}`), level - 1);
+    state.weapons = [state.weapons[0]];
+    state.loadout = { mainHand: 'w1', artifact: null, activeSkills: [...state.loadout.activeSkills], passiveSkills: [] };
+    state.hp = demonTowerMaxHp(state);
+    const result = act(state, { kind: 'train', payload: {} });
+    expect(result.state.level).toBe(level);
+    expect(new Set(result.state.weapons.map(item => item.id)).size).toBe(target);
+    expect(result.state.weapons.every(item => DEMON_TOWER_WEAPONS.find(def => def.id === item.id)!.dropLevel <= level)).toBe(true);
+    expect(itemTotal(result.state) - itemTotal(state)).toBe(target - 1);
+    expect(result.state.growth!.levelDropPending).toBe(false);
+    expect(result.state.lootPity).toEqual(state.lootPity);
+    expect(result.state.materials).toEqual({ ...state.materials, herb: state.materials.herb + 1 });
+    expect(result.officeCoinIntent).toBe(0);
+  });
+
+  it('does not backfill milestone weapons on an unrelated write from an old high-level save', () => {
+    const state = oldSave(fresh('level-old-no-retroactive'));
+    state.level = 20; state.weapons = [state.weapons[0]]; state.loadout = { mainHand: 'w1', artifact: null, activeSkills: [], passiveSkills: [] };
+    state.hp = demonTowerMaxHp(state);
+    const result = act(state, { kind: 'choose_innate', payload: { attribute: 'DEF' } });
+    expect(result.state.weapons).toHaveLength(1);
+    expect(result.state.growth!.levelDropPending).toBe(false);
+    expect(result.state.lootPity).toEqual(state.lootPity);
+  });
+
+  it('bounds an accumulated multi-level XP settlement to one ordinary item and reaches both legal item kinds', () => {
+    const backlog = fresh('level-multi-jump-synthetic');
+    backlog.level = 20; backlog.experience = 100_000; backlog.hp = demonTowerMaxHp(backlog);
+    const settled = act(backlog, { kind: 'train', payload: {} });
+    expect(settled.state.level).toBeGreaterThan(21);
+    expect(itemTotal(settled.state) - itemTotal(backlog)).toBeLessThanOrEqual(1);
+    expect(settled.state.lootPity).toEqual(backlog.lootPity);
+
+    const kinds = new Set<string>();
+    for (let seed = 0; seed < 50; seed += 1) {
+      const state = readyToLevel(fresh(`level-kind-synthetic-${seed}`), 16);
+      state.growth!.levelDropPending = true;
+      const result = act(state, { kind: 'train', payload: {} }).state;
+      if (result.weapons.length > state.weapons.length || result.weapons.some((item, index) => item.spareCopies > (state.weapons[index]?.spareCopies ?? 0))) kinds.add('weapon');
+      if (result.skills.length > state.skills.length || result.skills.some((item, index) => item.spareCopies > (state.skills[index]?.spareCopies ?? 0))) kinds.add('skill');
+      expect([...result.weapons, ...result.skills].every(item => {
+        const definition = DEMON_TOWER_WEAPONS.find(def => def.id === item.id) ?? DEMON_TOWER_SKILLS.find(def => def.id === item.id);
+        return definition!.dropLevel <= result.level || (item as DemonTowerOwnedWeapon).levelExempt === true;
+      })).toBe(true);
+    }
+    expect(kinds).toEqual(new Set(['weapon', 'skill']));
+  });
+
+  it('always redeems the last Lv119→120 opportunity and never strands a pending level-drop guarantee', () => {
+    for (const pending of [false, true]) for (let seed = 0; seed < 12; seed += 1) {
+      const state = readyToLevel(fresh(`level-final-boundary-${pending}-${seed}`), 119);
+      state.growth!.levelDropPending = pending;
+      const viewBefore = demonTowerProfileView(state, NOW, 1);
+      expect(viewBefore.growth?.nextLevelItemGuaranteed).toBe(pending);
+      const before = structuredClone(state), total = itemTotal(state);
+      const result = act(state, { kind: 'train', payload: {} });
+      expect(result.state.level).toBe(120);
+      expect(itemTotal(result.state)).toBe(total + 1);
+      expect(result.state.growth!.levelDropPending).toBe(false);
+      expect(demonTowerProfileView(result.state, NOW, 2).growth?.nextLevelItemGuaranteed).toBe(false);
+      expect(result.state.lootPity).toEqual(before.lootPity);
+      expect(result.officeCoinIntent).toBe(0);
+      expect(state).toEqual(before);
+    }
+  });
+
+  it('rejects malformed saved pity but keeps a pure GET and deterministic duplicate action output', () => {
+    const state = readyToLevel(fresh('level-deterministic-save'), 2);
+    const original = structuredClone(state);
+    expect(demonTowerProfileView(state, NOW, 1)).toEqual(demonTowerProfileView(original, NOW, 1));
+    expect(state).toEqual(original);
+    expect(act(state, { kind: 'train', payload: {} })).toEqual(act(structuredClone(state), { kind: 'train', payload: {} }));
+    (state.growth as unknown as { levelDropPending: string }).levelDropPending = 'yes';
+    expect(() => advanceDemonTowerState(state, NOW, DATE)).toThrow('INVALID_GROWTH_STATE');
   });
 });
 

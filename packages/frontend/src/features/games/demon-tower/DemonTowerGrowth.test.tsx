@@ -6,7 +6,7 @@ import { DemonTowerInventory } from './DemonTowerInventory';
 import { towerCatalog, towerProfile } from './test-fixtures';
 
 const growth: DemonTowerGrowthView = { rulesVersion: 2, pendingLegacyBattle: false, chosenAttribute: null, innates: [], unlockedCount: 1,
-  nextInnateLevel: 16, misses: { ling: 0, xian: 0 }, eligible: { ling: false, xian: false } };
+  nextInnateLevel: 16, nextLevelItemGuaranteed: false, misses: { ling: 0, xian: 0 }, eligible: { ling: false, xian: false } };
 const profile = () => towerProfile({ growth: structuredClone(growth), availableActions: [...towerProfile().availableActions, 'choose_innate'] });
 
 describe('Demon tower free innate UI', () => {
@@ -37,7 +37,17 @@ describe('Demon tower free innate UI', () => {
   it('does not imply unqualified low-level players already build rarity guarantee counters', () => {
     render(<DemonTowerLootGuide profile={profile()} />);
     expect(screen.getByText('Lv16开启')).toBeVisible(); expect(screen.getByText('Lv31开启')).toBeVisible();
+    expect(screen.getByText('尚未触发')).toBeVisible();
     expect(screen.getByText(/150次普攻/)).toBeVisible();
+  });
+  it('shows the server-confirmed next-level item guarantee and closes it at the level cap', () => {
+    const current = profile(); current.growth!.nextLevelItemGuaranteed = true;
+    const view = render(<DemonTowerLootGuide profile={current} />);
+    expect(screen.getByText('下次升级必得')).toBeVisible();
+    current.level = 120;
+    view.rerender(<DemonTowerLootGuide profile={current} />);
+    expect(screen.getByText('已满级')).toBeVisible();
+    expect(screen.queryByText('下次升级必得')).toBeNull();
   });
   it('distinguishes gifted equipment from new locked drops, displays stars separately from +N and never hides the inventory', () => {
     const current = profile(); current.level = 16;

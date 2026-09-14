@@ -8,7 +8,8 @@ import styles from './DemonTower.module.css';
 
 export function TowerCombatLog({ entries, limit }: { entries: DemonTowerCombatLog[]; limit?: number }): JSX.Element {
   const visible = limit ? entries.slice(-limit) : entries;
-  return <ol className={styles.battleLog} aria-label="战斗记录">{visible.map((entry, index) => <li key={`${index}-${entry.turn}`} data-kind={entry.kind}><span>{String(entry.turn).padStart(2, '0')}</span>{entry.text}</li>)}</ol>;
+  const actors: Record<DemonTowerCombatLog['actor'], string> = { player: '我方', enemy: '敌方', system: '系统' };
+  return <ol className={styles.battleLog} aria-label="战斗记录">{visible.map((entry, index) => <li key={`${index}-${entry.turn}`} data-kind={entry.kind} data-actor={entry.actor}><span className={styles.logTurn}>{String(entry.turn).padStart(2, '0')}</span><span className={styles.logActor}>{actors[entry.actor]}</span><span className={styles.logText}>{entry.text}</span></li>)}</ol>;
 }
 
 function Fighter({ actor, enemy = false, children }: { actor: DemonTowerCombatantView; enemy?: boolean; children?: JSX.Element }): JSX.Element {
@@ -47,10 +48,30 @@ export function DemonTowerBattle({ battle, catalog, disabled, onAction }: { batt
 }
 
 export const TOWER_OUTCOME_LABELS: Record<DemonTowerBattleReport['outcome'], string> = { victory: '探索胜利', defeat: '暂时受挫', fled: '主动撤离', timeout: '回合上限', contributed: '协作已记录' };
+const TOWER_OUTCOME_SUMMARIES: Record<DemonTowerBattleReport['outcome'], string> = {
+  victory: '这场遭遇已由服务器判定胜利，所得经验与材料见下方结算。',
+  defeat: '这场遭遇已结束，当前没有胜利结算；可以休整后再挑战。',
+  fled: '这场遭遇因主动撤离结束，已消耗的探索体力不会退还。',
+  timeout: '达到本场回合上限，未按胜利结算。',
+  contributed: '本次世界首领协作已记录；有效贡献以服务器最终入账为准。',
+};
 
 export function DemonTowerReport({ report, catalog, compact = false }: { report: DemonTowerBattleReport; catalog: DemonTowerCatalog; compact?: boolean }): JSX.Element {
   const source = report.source === 'rift' ? '小秘境探索' : report.source === 'weekly_boss' ? '周常独立守关' : report.kind === 'boss' ? '世界首领协作' : '普通探索';
-  return <TowerPanel title={TOWER_OUTCOME_LABELS[report.outcome]} detail={<span className={styles.muted}>{towerTime(report.completedAt)}</span>}><p className={styles.muted}>{source} · 第 {report.floor} 层 · {report.turns} 回合</p><dl className={styles.reportStats}><div><dt>造成伤害</dt><dd>{report.damage.toLocaleString('zh-CN')}</dd></div><div><dt>妖塔经验</dt><dd>+{report.experience}</dd></div><div><dt>结算</dt><dd style={{ fontSize: 13 }}>{TOWER_OUTCOME_LABELS[report.outcome]}</dd></div></dl>{Object.entries(report.materials).some(([, amount]) => amount > 0) ? <div className={styles.effects}>{Object.entries(report.materials).filter(([, amount]) => amount > 0).map(([material, amount]) => <span className={styles.badge} key={material}>{catalog.materials[material as keyof typeof catalog.materials]} +{amount}</span>)}</div> : null}<p className={styles.muted} style={{ marginTop: 13 }}>此处记录战斗经验和材料。实际办公币到账、首领有效血池扣除以操作回执为准。</p><TowerCombatLog entries={report.log} limit={compact ? 5 : undefined} /></TowerPanel>;
+  // Reports retain at most 100 server log entries. Highlight only events actually present
+  // in that retained window; never infer a full battle timeline or coin payout from it.
+  const highlights = report.log.filter((entry) => ['defeat', 'reward', 'heal', 'shield', 'dodge', 'effect'].includes(entry.kind)).slice(-3);
+  const materials = Object.entries(report.materials).filter(([, amount]) => amount > 0);
+  return <TowerPanel title={TOWER_OUTCOME_LABELS[report.outcome]} detail={<span className={styles.muted}>{towerTime(report.completedAt)}</span>}>
+    <p className={styles.muted}>{source} · 第 {report.floor} 层 · {report.turns} 回合</p>
+    <p className={styles.reportSummary} data-outcome={report.outcome}>{TOWER_OUTCOME_SUMMARIES[report.outcome]}</p>
+    <dl className={styles.reportStats}><div><dt>{report.kind === 'boss' ? '有效首领伤害' : '造成伤害'}</dt><dd>{report.damage.toLocaleString('zh-CN')}</dd></div><div><dt>妖塔经验</dt><dd>{report.experience > 0 ? '+' : ''}{report.experience}</dd></div><div><dt>结算结果</dt><dd className={styles.reportOutcome}>{TOWER_OUTCOME_LABELS[report.outcome]}</dd></div></dl>
+    {materials.length ? <div className={styles.effects} aria-label="本次材料入账">{materials.map(([material, amount]) => <span className={styles.badge} key={material}>{catalog.materials[material as keyof typeof catalog.materials]} +{amount}</span>)}</div> : <p className={styles.muted}>本次无材料入账。</p>}
+    {highlights.length ? <section className={styles.reportHighlights} aria-label="关键过程"><h3>关键过程</h3><p>从服务器保留的最近战斗记录中摘取，不代表完整回合。</p><TowerCombatLog entries={highlights} /></section> : null}
+    <p className={styles.muted} style={{ marginTop: 13 }}>此处记录战斗经验和材料。实际办公币到账、首领有效血池扣除以操作回执为准。</p>
+    <h3 className={styles.reportLogHeading}>保留的战斗记录 · {report.log.length} 条</h3>
+    {report.log.length ? <TowerCombatLog entries={report.log} limit={compact ? 5 : undefined} /> : <p className={styles.muted}>这场战斗没有可展示的过程记录。</p>}
+  </TowerPanel>;
 }
 
 export function DemonTowerDaily({ profile, catalog, disabled, onAction, compact = false }: { profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; onAction: (action: DemonTowerAction) => Promise<boolean>; compact?: boolean }): JSX.Element {
