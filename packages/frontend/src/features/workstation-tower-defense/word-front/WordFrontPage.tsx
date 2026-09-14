@@ -218,7 +218,7 @@ function WordFrontRun({ mode, publicId, onModeChange }: { mode: WordFrontMode; p
         </div>
         {mode === 'story' ? <p className={styles.chapterDetail}>{CHAPTERS[chapter - 1]?.detail}</p> : <p className={styles.chapterDetail}>每波来客增多；保住五点核心生命，坚持到第 30 波。</p>}
         <div className={styles.metrics} aria-label="对局数据"><span>生命 <strong>{state.coreHp}/5</strong></span><span>波次 <strong>{state.wave || '未开始'}</strong></span><span>击败 <strong>{state.kills}</strong></span><span>得分 <strong>{state.score}</strong></span><span>局内经费 <strong>{state.credits}</strong></span></div>
-        <div className={styles.board} role="group" aria-label="文字战线路线图">
+        <div className={styles.boardViewport}><div className={styles.board} role="group" aria-label="文字战线路线图">
           {Array.from({ length: WORD_FRONT_WIDTH * WORD_FRONT_HEIGHT }, (_, slot) => {
             const pathIndex = WORD_FRONT_PATH.indexOf(slot as typeof WORD_FRONT_PATH[number]);
             const unit = state.units.find(item => item.slot === slot);
@@ -230,7 +230,7 @@ function WordFrontRun({ mode, publicId, onModeChange }: { mode: WordFrontMode; p
               {enemy.length > 0 ? <span className={styles.enemy} title={`来客血量 ${enemy.map(item => item.hp).join('/')}`}>{enemy.length > 1 ? enemy.length : '●'}</span> : null}
             </button>;
           })}
-        </div>
+        </div></div>
         <p className={styles.routeNote}>文件沿浅色路线进入档案室；相邻工位的角色会自动攻击。先选两张字卡，再点空位部署；点两位同角色同阶成员可二合一。</p>
         <div className={styles.controls}><button type="button" onClick={beginRun} disabled={state.status !== 'ready' || starting}>开始防守</button><button type="button" onClick={() => { announceLocalGameForeground(gameOwner); setPaused(false); }} disabled={!active || !paused}>继续</button><button type="button" onClick={() => setPaused(true)} disabled={!active || paused}>暂停 / Esc</button><button type="button" onClick={resetRun}>新开一局</button></div>
         <p role="status" className={styles.message}>{state.status === 'won' ? '护送成功 · ' : state.status === 'lost' ? '本局结束 · ' : active && paused ? '已暂停 · ' : ''}{state.message}</p>
@@ -238,9 +238,11 @@ function WordFrontRun({ mode, publicId, onModeChange }: { mode: WordFrontMode; p
       <aside className={styles.sidePanel} aria-label="招募和编队">
         <div className={styles.sideHeading}><span>01 / 招募</span><h2>字卡工作台</h2><p>每次补入五张单字卡，至少可组出一位成员。价格从 10 点开始，每次增加 2 点。</p></div>
         <button className={styles.recruit} type="button" disabled={starting || state.status === 'won' || state.status === 'lost'} onClick={() => { void recruit(); }}>{starting ? '正在建立可验证对局…' : `招募五张 · ${wordFrontDrawCost(state.drawCount)} 点`}</button>
-        <div className={styles.hand} role="group" aria-label="手中字卡">{state.hand.length ? state.hand.map((letter, index) => <button type="button" key={`${index}-${letter}`} data-selected={selectedCards.includes(index)} aria-pressed={selectedCards.includes(index)} onClick={() => chooseCard(index)}>{letter}</button>) : <p>还没有字卡，先招募一次。</p>}</div>
+        <div className={styles.hand} role="group" aria-label="手中字卡">{state.hand.length ? state.hand.map((letter, index) => <button type="button" key={`${index}-${letter}`} data-selected={selectedCards.includes(index)} aria-label={`第 ${index + 1} 张字卡：${letter}`} aria-pressed={selectedCards.includes(index)} onClick={() => chooseCard(index)}>{letter}</button>) : <p>还没有字卡，先招募一次。</p>}</div>
         <p className={styles.combo}>{chosenHero ? <>已组成 <strong>{WORD_FRONT_HEROES[chosenHero].name}</strong> · {WORD_FRONT_HEROES[chosenHero].role}，点击空白工位部署。</> : selectedCards.length === 2 ? '这两个字暂时无法组成成员，换一组试试。' : '选两张字卡，合成赵云、关羽、张飞或诸葛。'}</p>
         <div className={styles.roster}><h3>编队手册</h3>{(Object.keys(WORD_FRONT_HEROES) as Array<keyof typeof WORD_FRONT_HEROES>).map(key => <div key={key}><b>{WORD_FRONT_HEROES[key].letters.join(' + ')}</b><span>{WORD_FRONT_HEROES[key].name}</span><small>{WORD_FRONT_HEROES[key].role}</small></div>)}</div>
+      </aside>
+      <aside className={styles.rankingPanel} aria-label="文字战线成绩与规则">
         <div className={styles.ranking}><h3>独立成绩</h3><p>剧情与无尽分榜；旧工位塔防成绩、存档及办公币均不受影响。本期不发放办公币奖励。在线资格需在当前页面完成，刷新或切页后可续玩本机草稿，但不再参榜。</p>{state.drawCount > 0 && !rankEligible ? <p>本局为恢复或离线的本机草稿，不会提交在线榜；新开局取得服务端种子后才可参榜。</p> : null}{arcade.notice ? <p role="status">{arcade.notice}</p> : null}<ArcadeLeaderboard gameKey={mode === 'story' ? 'word_story' : 'word_endless'} refreshKey={arcade.revision} /></div>
         <button className={styles.rulesToggle} type="button" aria-expanded={showRules} onClick={() => setShowRules(value => !value)}>{showRules ? '收起规则' : '展开规则'}</button>
         {showRules ? <ol className={styles.rules}><li>每次招募五张字卡，消耗局内经费，不扣账号办公币。</li><li>选两字召唤成员，放在文件路线旁；同角色同阶的两位成员可合并升阶，最高三阶。</li><li>每漏过一名来客扣 1 点核心生命；五点耗尽即结束。</li><li>结束后按守住波次、击败数和剩余生命结算得分。</li></ol> : null}
