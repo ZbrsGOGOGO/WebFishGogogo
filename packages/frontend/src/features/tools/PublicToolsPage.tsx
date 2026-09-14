@@ -115,8 +115,9 @@ type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 export function PublicToolsPage({ embedded = false }: { embedded?: boolean }): JSX.Element {
   const { toolId } = useParams<{ toolId?: string }>();
   const navigate = useNavigate();
+  const palmStoryOpen = toolId === 'palm-story';
   const activeTool = PUBLIC_TOOLS.find((tool) => tool.slug === toolId) ?? null;
-  const unknownTool = toolId !== undefined && activeTool === null;
+  const unknownTool = toolId !== undefined && activeTool === null && !palmStoryOpen;
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<ToolCategory>('全部');
   const filteredTools = useMemo(() => {
@@ -171,6 +172,22 @@ export function PublicToolsPage({ embedded = false }: { embedded?: boolean }): J
           <span>本地处理</span>
           <span>无上传</span>
         </div>
+      </section>
+
+      <section className={styles.experience} aria-labelledby="palm-story-title">
+        <div className={styles.experienceArt} aria-hidden="true">
+          <svg viewBox="0 0 120 120" fill="none">
+            <path d="M31 93c-9-14-11-27-12-37-.4-5 6-7 9-3l8 12V27c0-6 8-7 9-1l3 25V19c0-7 9-7 10 0l1 31 4-28c1-7 10-6 10 1v31l5-20c2-6 10-4 9 2l-5 34c-1 19-10 34-26 36-11 2-20-2-25-13Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+            <path d="M38 64c9-9 23-9 38-3M35 76c16-6 27-3 38 6M48 90c8-10 15-16 23-19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" opacity=".55"/>
+          </svg>
+        </div>
+        <div className={styles.experienceCopy}>
+          <span>趣味体验 · 浏览器本地</span>
+          <h2 id="palm-story-title">掌心故事</h2>
+          <p>可在本地预览手掌照片，自己选择观察到的线条特点，再生成一张写明依据的趣味卡片。照片不会上传，也不会被自动识别。</p>
+          <small>仅供娱乐和自我表达，不作为健康、财务或人生决策依据。</small>
+        </div>
+        <Link className={styles.experienceLink} to="/tools/palm-story">体验掌心故事 <span aria-hidden="true">→</span></Link>
       </section>
 
       {unknownTool ? (
@@ -257,8 +274,8 @@ export function PublicToolsPage({ embedded = false }: { embedded?: boolean }): J
       </section>
 
       <ToolRunnerModal
-        slug={activeTool?.slug ?? null}
-        title={activeTool?.name}
+        slug={palmStoryOpen ? 'palm-story' : activeTool?.slug ?? null}
+        title={palmStoryOpen ? '掌心故事' : activeTool?.name}
         onClose={() => navigate('/tools')}
       />
     </main>

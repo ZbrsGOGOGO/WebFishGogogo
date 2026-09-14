@@ -125,6 +125,54 @@
   font-weight: 600;
 }
 
+.experience {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  margin-top: 28px;
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 26%, var(--color-border));
+  border-radius: var(--radius-lg);
+  background: linear-gradient(115deg, var(--color-brand-soft), var(--color-surface) 70%);
+}
+
+.experienceArt {
+  width: 112px;
+  height: 112px;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-brand) 24%, var(--color-border));
+  border-radius: var(--radius-lg);
+  color: var(--color-brand-strong);
+  background: var(--color-surface);
+}
+
+.experienceArt svg { width: 88px; height: 88px; }
+.experienceCopy { min-width: 0; }
+.experienceCopy > span {
+  color: var(--color-brand-strong);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: .07em;
+}
+.experienceCopy h2 { margin: 5px 0 7px; font-size: 22px; }
+.experienceCopy p { margin: 0 0 7px; color: var(--color-text-secondary); line-height: 1.7; }
+.experienceCopy small { color: var(--color-text-muted); line-height: 1.5; }
+.experienceLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-brand);
+  border-radius: var(--radius-md);
+  color: var(--color-brand-strong);
+  background: var(--color-surface);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.experienceLink:hover { background: var(--color-brand-soft); }
+
 .notice {
   display: flex;
   align-items: center;
@@ -358,6 +406,10 @@
 }
 
 @media (max-width: 900px) {
+  .experience { grid-template-columns: 88px minmax(0, 1fr); }
+  .experienceArt { width: 88px; height: 88px; }
+  .experienceArt svg { width: 70px; height: 70px; }
+  .experienceLink { grid-column: 2; width: fit-content; }
   .toolGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -373,6 +425,9 @@
 }
 
 @media (max-width: 680px) {
+  .experience { grid-template-columns: 1fr; gap: 12px; padding: 18px; }
+  .experienceArt { display: none; }
+  .experienceLink { grid-column: 1; }
   .page {
     padding: 0 16px 54px;
   }

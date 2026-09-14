@@ -18,6 +18,11 @@ export interface ToolRuntimeEntry {
 
 /** slug -> 运行时注册项。真实工具组件（default 导出）懒加载。 */
 export const toolRuntimeRegistry: Record<string, ToolRuntimeEntry> = {
+  'palm-story': {
+    slug: 'palm-story',
+    displayName: '掌心故事',
+    component: lazy(() => import('./tools/PalmStory')),
+  },
   // —— T2 时间 / 计算类 ——
   'off-work-countdown': {
     slug: 'off-work-countdown',

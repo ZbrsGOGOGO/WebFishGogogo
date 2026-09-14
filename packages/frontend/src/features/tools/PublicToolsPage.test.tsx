@@ -65,6 +65,15 @@ describe('PublicToolsPage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('keeps the eleven utility count and opens the separate local palm-story experience', async () => {
+    renderReviewAt('/tools/palm-story');
+    expect(screen.getByRole('heading', { name: '11 款轻量工具' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /体验掌心故事/ })).toHaveAttribute('href', '/tools/palm-story');
+    expect(await screen.findByRole('dialog', { name: '掌心故事' })).toBeInTheDocument();
+    expect(await screen.findByText('从自己的观察，写一张小卡片')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('filters tools by keyword and category', () => {
     renderReviewAt('/tools');
 
