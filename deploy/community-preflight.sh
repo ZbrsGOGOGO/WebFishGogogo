@@ -260,8 +260,9 @@ grep -Fq '/opt/webfish-review' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment guide must use the actual /opt/webfish-review checkout"
 grep -Fq -- '-p webfish-community' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment commands must explicitly use webfish-community"
-grep -Fq -- 'up -d --no-deps api web' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
-  fail "ordinary community deployment must preserve infrastructure and replace only api/web"
+grep -Fq -- 'up -d --no-deps --no-build --pull never --force-recreate --wait api' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" &&
+grep -Fq -- 'up -d --no-deps --no-build --pull never --force-recreate --wait web' "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
+  fail "ordinary community deployment must replace only api/web from immutable images"
 LATEST_REGISTERED_MIGRATION=$(grep -oE '[0-9]{13}' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" | sort -u | tail -n 1)
 [ -n "$LATEST_REGISTERED_MIGRATION" ] && grep -Fq "$LATEST_REGISTERED_MIGRATION" "$ROOT_DIR/deploy/COMMUNITY_DEPLOYMENT.md" ||
   fail "community deployment guide must review the latest registered migration"
