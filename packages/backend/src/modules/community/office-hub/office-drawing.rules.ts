@@ -4,6 +4,21 @@ import { officeStrokes } from './office-hub.rules';
 
 export const OFFICE_DRAWING_DURATION = 120_000;
 export const OFFICE_DRAWING_DAILY_LIMIT = 3;
+/** Existing asynchronous drawings use stable numeric IDs from the shared word bank. */
+export const OFFICE_DRAWING_FIRST_WORD_INDEX = 8;
+export const OFFICE_DRAWING_REPEAT_WINDOW = 12;
+export function chooseDrawingWordIndex(wordCount: number, recent: readonly number[], randomIndex: (max: number) => number): number {
+    if (!Number.isSafeInteger(wordCount) || wordCount <= OFFICE_DRAWING_FIRST_WORD_INDEX)
+        throw new Error('No asynchronous drawing words are available');
+    const all = Array.from({ length: wordCount - OFFICE_DRAWING_FIRST_WORD_INDEX }, (_, offset) => OFFICE_DRAWING_FIRST_WORD_INDEX + offset);
+    const seen = new Set(recent.slice(0, OFFICE_DRAWING_REPEAT_WINDOW));
+    const unused = all.filter(index => !seen.has(index));
+    const candidates = unused.length ? unused : all;
+    const picked = randomIndex(candidates.length);
+    if (!Number.isSafeInteger(picked) || picked < 0 || picked >= candidates.length)
+        throw new Error('Invalid asynchronous drawing word selection');
+    return candidates[picked];
+}
 export interface DrawingLifecycle {
     startedAt: number;
     strokes: OfficeStroke[];

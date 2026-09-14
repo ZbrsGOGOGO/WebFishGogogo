@@ -102,6 +102,14 @@ describe('Demon tower expansion workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '残魂升星 · 40残魂' }));
     expect(within(screen.getByRole('dialog')).getByText(/本次成功率30%.*不降星/)).toBeVisible();
   });
+  it('labels a five-star 裂地斩 as capped instead of implying that 0/75 should still grow', () => {
+    const current = profile(); current.skills = [{ id: 's2', quality: 3, spareCopies: 0, star: 5, favor: 0, qualityExperience: 0 }];
+    render(<DemonTowerExpansion profile={current} disabled={false} onAction={vi.fn()} selectedItem="s2" />);
+    expect(screen.getByText(/凡 · 裂地斩 \+3 · 5\/5星 · 熟练度已满（5星上限，不再累积）/)).toBeVisible();
+    expect(screen.queryByText(/熟练度 0\/75/)).toBeNull();
+    expect(screen.getByLabelText('服务端实际成长数值')).toHaveTextContent('5星已满，不再累积');
+    expect(screen.getByRole('button', { name: '残魂升星 · 40残魂' })).toBeDisabled();
+  });
   it('puts the server-applied current-to-next values in the workbench and both spend confirmations', () => {
     const current = profile(); current.availableActions.push('upgrade'); current.weapons[0] = { id: 'w1', quality: 2, spareCopies: 1, star: 2, favor: 9 };
     render(<DemonTowerExpansion profile={current} disabled={false} onAction={vi.fn()} selectedItem="w1" />);

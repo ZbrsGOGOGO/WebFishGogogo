@@ -107,12 +107,16 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
         expect((await state()).counters.drawing_start).toBe(1);
     });
     it('records blank expiration without a public image or automatic chance refunds', async () => {
+        const words = new Set<string>();
         for (let i = 0; i < 3; i++) {
             const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
+            expect(d.word).not.toBeNull();
+            words.add(d.word!);
             now = Date.parse(d.deadlineAt!);
             const view = await service.overview(users[0].id);
             expect(view.drawingWorkspace).toMatchObject({ dailyUsed: i + 1, dailyRemaining: 2 - i, current: { status: 'expired_empty', submission: 'automatic', strokes: [] } });
         }
+        expect(words.size).toBe(3);
         expect((await service.overview(users[1].id)).drawings).toEqual([]);
         expect((await state()).stats.drawings).toBe(0);
         await expect(action(0, 'drawing_start')).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_DAILY_LIMIT' } });

@@ -96,6 +96,14 @@ describe('compact demon tower inventory and dedicated cultivation navigation',()
     const skill=screen.getByRole('article',{name:catalog.skills[0]!.name});expect(skill).toHaveTextContent('★ 2/5');expect(skill).toHaveTextContent('熟练度 17');
     expect(screen.getByRole('article',{name:catalog.skills[1]!.name})).not.toHaveTextContent('熟练度');
   });
+  it('marks a capped five-star 裂地斩 as complete on the skill card, without a fictitious next threshold',()=>{
+    const current=towerProfile({skills:[{id:'s2',quality:3,spareCopies:0,star:5,favor:0}]});
+    render(<DemonTowerInventory {...props(current)}/>);click('技能');
+    const skill=screen.getByRole('article',{name:'裂地斩'});
+    expect(skill).toHaveTextContent('★ 5/5');
+    expect(skill).toHaveTextContent('熟练度已满（不再累积）');
+    expect(skill).not.toHaveTextContent('0 / 75');
+  });
   it('keeps read-only and combat inventories navigable without issuing mutations',()=>{
     const p=props(towerProfile({battle:towerBattle(),availableActions:['attack']}));render(<DemonTowerInventory {...p} disabled/>);
     expect(screen.getByRole('button',{name:'保存配装'})).toBeDisabled();expect(within(card('w5')).getByRole('button',{name:'选作主手'})).toBeDisabled();

@@ -94,7 +94,7 @@ describe('Demon tower appearance and loadout reference', () => {
     open(); rerender(<GamePrivacyProvider value={{ covered: true, toggleCover: null }}><DemonTowerAppearancePanel {...value} /></GamePrivacyProvider>);
     expect(document.body.style.overflow).not.toBe('hidden'); expect(value.onAction).not.toHaveBeenCalled();
   });
-  it('keeps skin actions below the legend instead of squeezing them beside a full-width float', () => {
+  it('keeps skin actions in a normal block below the heading instead of a fieldset legend', () => {
     const value = props();
     value.profile.expansion = {
       version: 1, skillPages: 0, essences: 0, weaponBoxes: 0, weaponBoxPity: 0,
@@ -104,10 +104,11 @@ describe('Demon tower appearance and loadout reference', () => {
     render(<DemonTowerAppearancePanel {...value} showSkins />);
     const skins = screen.getByRole('group', { name: /低调工作台皮肤/ });
     expect(within(skins).getAllByRole('button')).toHaveLength(3);
+    expect(skins.tagName).toBe('SECTION');
+    expect(within(skins).getByRole('heading', { name: /低调工作台皮肤/ })).toBeVisible();
     const css = readFileSync(resolve(process.cwd(), 'src/features/games/demon-tower/DemonTowerProfile.module.css'), 'utf8');
-    const legend = css.match(/\.skins legend\s*\{([^}]+)\}/)?.[1];
-    expect(legend).toContain('float: none');
-    expect(legend).not.toMatch(/(?:^|;)\s*(?:float:\s*left|width:\s*100%)/);
+    expect(css).toMatch(/\.skins h3\s*\{[^}]*display:\s*block/);
+    expect(css).not.toMatch(/\.skins legend/);
   });
   it('renders every option using distinct trusted SVG shapes, without remote images or user markup', () => {
     const { container, rerender } = render(<TowerPortrait name="<script>" appearance={{ ...DEMON_TOWER_DEFAULT_APPEARANCE }} />);

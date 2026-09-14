@@ -11,7 +11,7 @@ import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome, type OfficeReliefDrop }
 import { CommunityAchievementUnlock } from '../../../database/entities/community-progression.entity';
 import { actOfficeRelief, readOfficeRelief } from './office-relief.rules';
 import { grantOfficeReliefDrop } from './office-relief-grants';
-import { drawingStatus, OFFICE_DRAWING_DAILY_LIMIT, OFFICE_DRAWING_DURATION, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { chooseDrawingWordIndex, drawingStatus, OFFICE_DRAWING_DAILY_LIMIT, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_REPEAT_WINDOW, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
 interface Author extends OfficeAuthor {
     userId: string | null;
 }
@@ -509,7 +509,9 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             now = Date.now(); accrueOffice(p, now);
             if ((p.counters.drawing_start ?? 0) >= OFFICE_DRAWING_DAILY_LIMIT) throw new ConflictException({ code: 'OFFICE_DRAWING_DAILY_LIMIT' });
             officeRateLimit(p, String(input.action), now, OFFICE_DRAWING_DAILY_LIMIT, 700);
-            const wordIndex = 8 + randomInt(0, 28);
+            const recentWords: Array<{ word_index: string | null }> = await m.query(`SELECT state->>'wordIndex' word_index FROM office_hub_posts
+                WHERE author_id=$1 AND kind='drawing' ORDER BY created_at DESC,id DESC LIMIT $2`, [userId, OFFICE_DRAWING_REPEAT_WINDOW]);
+            const wordIndex = chooseDrawingWordIndex(DRAW_WORDS.length, recentWords.map(row => Number(row.word_index)), randomInt);
             await this.createPost(m, userId, 'drawing', { author, theme: officeTheme(now).theme, wordIndex, strokes: [], published: false, startedAt: now, revision: 0, savedAt: null, guesses: {}, reports: [], hidden: false });
             this.drawingGate();
             return '绘画任务已领取：2 分钟后自动提交已保存的画作；本次已计入今日 3 次机会';

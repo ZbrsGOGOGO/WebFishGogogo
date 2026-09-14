@@ -11,8 +11,8 @@
 .appearanceSummary p { margin: 0; color: var(--tower-muted, #596a5e); font-size: 12px; }
 .appearanceSummary h3 { margin: 0 0 5px; font-size: 13px; }
 .skins { padding: 15px 0 0; margin: 15px 0 0; border: 0; border-top: 1px solid var(--tower-line, #dce3db); min-width: 0; }
-.skins legend { float: none; width: auto; max-width: 100%; margin-bottom: 10px; padding: 0 4px 0 0; font-size: 12px; color: var(--tower-muted, #596a5e); }
-.skins > div { clear: both; min-width: 0; }
+.skins h3 { display: block; margin: 0 0 10px; font-size: 12px; font-weight: 400; color: var(--tower-muted, #596a5e); }
+.skins > div { min-width: 0; }
 .editor { display: grid; grid-template-columns: minmax(140px, .65fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 .preview { position: sticky; top: 0; text-align: center; min-width: 0; }
 .preview svg { display: block; width: min(100%, 210px); height: auto; margin: auto; }

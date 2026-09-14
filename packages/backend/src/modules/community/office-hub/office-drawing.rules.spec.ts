@@ -1,8 +1,26 @@
-import { drawingStatus, OFFICE_DRAWING_DURATION, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { chooseDrawingWordIndex, drawingStatus, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_FIRST_WORD_INDEX, OFFICE_DRAWING_REPEAT_WINDOW, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { DRAW_WORDS } from '../play/engines/word-bank';
 
 const strokes = [{ color: '#334155', width: 4, points: [{ x: 0, y: 0 }, { x: 30, y: 50 }] }];
 const draft = (): DrawingLifecycle => ({ startedAt: 1_000_000, published: false, strokes: [], revision: 0 });
 describe('Persistent office drawing lifecycle', () => {
+    it('selects from every existing asynchronous word without changing saved numeric IDs', () => {
+        const choices = new Set<number>();
+        for (let position = 0; position < DRAW_WORDS.length - OFFICE_DRAWING_FIRST_WORD_INDEX; position += 1)
+            choices.add(chooseDrawingWordIndex(DRAW_WORDS.length, [], () => position));
+        expect(choices.size).toBe(DRAW_WORDS.length - OFFICE_DRAWING_FIRST_WORD_INDEX);
+        expect(Math.min(...choices)).toBe(8);
+        expect(Math.max(...choices)).toBe(DRAW_WORDS.length - 1);
+        expect(DRAW_WORDS[8].word).toBe('电脑');
+        expect(DRAW_WORDS[63].word).toBe('西瓜');
+    });
+    it('avoids the last twelve owned topics and degrades safely if a future bank is smaller than the repeat window', () => {
+        const recent = Array.from({ length: OFFICE_DRAWING_REPEAT_WINDOW }, (_, offset) => OFFICE_DRAWING_FIRST_WORD_INDEX + offset);
+        expect(chooseDrawingWordIndex(DRAW_WORDS.length, recent, () => 0)).toBe(20);
+        expect(chooseDrawingWordIndex(10, [8, 9], () => 1)).toBe(9);
+        expect(() => chooseDrawingWordIndex(8, [], () => 0)).toThrow();
+        expect(() => chooseDrawingWordIndex(10, [], () => 2)).toThrow();
+    });
     it('saves a validated versioned draft without publishing or extending its deadline', () => {
         const d = draft(); updateDrawing(d, { strokes, expectedRevision: 0 }, d.startedAt + 5, false);
         expect(d).toMatchObject({ strokes, revision: 1, savedAt: 1_000_005, published: false, startedAt: 1_000_000 });

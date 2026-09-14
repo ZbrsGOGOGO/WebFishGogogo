@@ -162,6 +162,20 @@ describe('Demon tower free expansion rules', () => {
     const bound = act(state, { kind: 'skill', payload: { skillId: 's16' } }).state;
     expect(bound.skills.some(item => item.id === 's16')).toBe(false); expect(bound.battle!.totalDamage).toBeGreaterThan(0);
   });
+  it('promotes 裂地斩 at 4-star 59/60 and correctly stops mastery at the five-star cap', () => {
+    const state = battle('w1', 1); state.loadout.activeSkills = ['s2'];
+    const skill = state.skills.find(item => item.id === 's2')!;
+    Object.assign(skill, { quality: 3, star: 4, favor: 59 });
+    const targetId = state.battle!.enemies[0]!.id;
+    const promoted = act(state, { kind: 'skill', payload: { skillId: 's2', targetId } }).state;
+    expect(promoted.skills.find(item => item.id === 's2')).toMatchObject({ quality: 3, star: 5, favor: 0 });
+    expect(promoted.battle!.totalDamage).toBeGreaterThan(0);
+    const capped = battle('w1', 1); capped.loadout.activeSkills = ['s2'];
+    Object.assign(capped.skills.find(item => item.id === 's2')!, { quality: 3, star: 5, favor: 0 });
+    const castAtCap = act(capped, { kind: 'skill', payload: { skillId: 's2', targetId: capped.battle!.enemies[0]!.id } }).state;
+    expect(castAtCap.skills.find(item => item.id === 's2')).toMatchObject({ quality: 3, star: 5, favor: 0 });
+    expect(castAtCap.battle!.totalDamage).toBeGreaterThan(0);
+  });
   it('free star symbols never reduce star, quality, favor on failure and max star never spends', () => {
     for (let index = 0; index < 80; index += 1) {
       const state = fresh(61, `star-probability-${index}`); state.weapons[0].star = 4; state.weapons[0].favor = 37;

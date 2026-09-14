@@ -48,8 +48,8 @@ export function DemonTowerExpansion({ profile, disabled, onAction, selectedItem,
       {selectedItem && !items.some(item => item.id === selectedItem) ? <p role="status" className={styles.notice}>链接中的物品尚未拥有或已变化，请从自己的物品中选择；不会按无效链接提交操作。</p> : null}
       <label className={styles.field}>选择已收录物品 <select aria-label="成长工坊物品" value={selected} onChange={event => { setSelection(event.target.value); setConfirmation(null); setUpgrading(false); onSelectItem?.(event.target.value); }}>{items.map(item => <option key={item.id} value={item.id}>{(item.id.startsWith('w') ? DEMON_TOWER_WEAPONS : DEMON_TOWER_SKILLS).find(entry => entry.id === item.id)?.name}</option>)}</select></label>
       {owned && definition ? <>
-        <p>{rarity} · {definition.name} +{owned.quality}{advanced ? ` · ${star}/5星 · 熟练度 ${owned.favor ?? 0}/${star * 15} · 暂存品质经验 ${owned.qualityExperience ?? 0}` : ` · 同名副本 ${owned.spareCopies}`}</p>
-        {advanced ? <p className={styles.muted}>当前境界最高 +{demonTowerQualityLimit(rarity, profile.level)}，旧有更高强化保留。新重复自动变为品质经验，达境界后自动兑现；既有副本完整迁移，不丢弃。技能每星效果+8%，施放和被动生效都可累积熟练度。</p> : null}
+        <p>{rarity} · {definition.name} +{owned.quality}{advanced ? ` · ${star}/5星 · ${star >= 5 ? '熟练度已满（5星上限，不再累积）' : `熟练度 ${owned.favor ?? 0}/${star * 15}`} · 暂存品质经验 ${owned.qualityExperience ?? 0}` : ` · 同名副本 ${owned.spareCopies}`}</p>
+        {advanced ? <p className={styles.muted}>当前境界最高 +{demonTowerQualityLimit(rarity, profile.level)}，旧有更高强化保留。新重复自动变为品质经验，达境界后自动兑现；既有副本完整迁移，不丢弃。技能每星效果+8%；未满5星时施放和被动生效可累积熟练度，满星后停止累积。</p> : null}
         {advanced && ownedWeapon ? <p>突破 {ownedWeapon.breakthrough ?? 0} 次 · +3/+6/+9开放词条：{ownedWeapon.affixes?.map(key => `${DEMON_TOWER_AFFIXES[key].name}（${DEMON_TOWER_AFFIXES[key].description}）`).join('、') || '尚未开放'}。每次突破主维+3、相邻第二主维+4；精→灵→仙→神需要更高等级、精魄和矿石。</p> : null}
         {advanced && ultimate ? <p className={styles.notice}>{ultimate.name}：{ultimate.description} 当前{star >= 5 ? '已激活' : '需5星'}。</p> : null}
         {progressItem ? <DemonTowerUpgradePreview item={progressItem} showStars={advanced} /> : null}
