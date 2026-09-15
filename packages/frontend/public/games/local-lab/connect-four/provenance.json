@@ -1,0 +1,38 @@
+{
+  "sourceUrl": "https://github.com/kenrick95/c4",
+  "sourceSha": "35b1d25fcc05961b91153fd6c2c09f01f1c32cc9",
+  "license": "MIT",
+  "toolchain": {
+    "esbuild": "0.25.12",
+    "tailwindcss": "3.4.17"
+  },
+  "network": "none",
+  "persistence": "iframe-session-only",
+  "audio": "disabled",
+  "artifacts": {
+    "adaptation.css": {
+      "bytes": 1742,
+      "sha256": "0805df255b9f20369f799f115224e72c726f369c6e4fcb30465bdce1fc602f94"
+    },
+    "bootstrap.js": {
+      "bytes": 1535,
+      "sha256": "c68311172d2ecd804d96f77b29adcb4a6348a41925755df8caefe1c61a1187e7"
+    },
+    "game.css": {
+      "bytes": 1561,
+      "sha256": "5bc2adfba32206a2d29a1958211577f2a106cf5c2c593cc44be8380026f9bb6b"
+    },
+    "game.js": {
+      "bytes": 13970,
+      "sha256": "a813e83decace789ee27bb86756ef490e6dc318568b7bb43a33eaa1008e068bc"
+    },
+    "index.html": {
+      "bytes": 5556,
+      "sha256": "1b767608bc9dca4bd718a2c1f0fe676e9a73b915fb70ae84f181a236823541bb"
+    },
+    "logo.svg": {
+      "bytes": 410,
+      "sha256": "ba0809746f12817d0af5fb8b6b73dbe33c21149095b815388e4127a26ea894bf"
+    }
+  }
+}

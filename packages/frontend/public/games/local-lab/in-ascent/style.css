@@ -1,0 +1,102 @@
+* {
+	padding: 0;
+	margin: 0;
+	overflow: hidden;
+}
+
+body {
+	background-color: #000;
+	color: #ccc;
+}
+
+div, canvas {
+	position: absolute;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+canvas {
+	pointer-events: none;
+}
+
+#gameDiv {
+	font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', Arial, sans-serif;
+	font-size: 64px;
+}
+
+#gameDiv div {
+	position: relative;
+}
+
+#gameDiv nav {
+	margin: 0 10px;
+	float: left;
+	opacity: 0.75;
+	font-size: 128px;
+	cursor: pointer;
+}
+
+#gameDiv nav:hover, #frameDiv:hover {
+	opacity: 1;
+}
+
+#menuDiv {
+	position: fixed !important;
+	top: 0;
+	text-align: center;
+}
+
+#menuDiv nav {
+	position: absolute;
+	width: 920px;
+	padding: 20px 10px;
+	float: unset;
+	font-size: 60px;
+}
+
+#menuDiv div {
+	font-size: 80px;
+	width: 1920px;
+	height: 940px;
+	background-color: rgba(0,0,0,0.5);
+}
+
+#menuDiv div br {
+	line-height: 25px;
+}
+
+#menuDiv b {
+	font-family: Verdana;
+	font-size: 50px;
+	line-height: 70px;
+}
+
+#resDiv {
+	pointer-events: none;
+	position: fixed !important;
+	top: 120px;
+	margin: 15px;
+}
+
+#resDiv b {
+	font-family: Verdana;
+	font-size: 50px;
+	line-height: 85px;
+}
+
+#resDiv u, #menuDiv u {
+	font-size: 50px;
+	line-height: 120px;
+	text-underline-offset: 10px;
+}
+
+#lst::-webkit-scrollbar {
+	display: none;
+}
+
+
+
+html, body { width: 100%; height: 100%; touch-action: manipulation; }
+html[data-momo-paused='true'] *,
+html[data-momo-paused='true'] *::before,
+html[data-momo-paused='true'] *::after { animation-play-state: paused !important; }

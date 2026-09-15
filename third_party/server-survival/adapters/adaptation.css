@@ -1,0 +1,25 @@
+/* Site chrome only: the original Three r128 scene, services and simulation
+   mechanics remain intact. No CSS/SVG reconstruction of the original game. */
+html, body { font-family: system-ui, -apple-system, sans-serif; font-size: 16px; }
+button, select, input[type=number] { min-height: 44px; }
+button { touch-action: manipulation; }
+.text-xs, .text-\[9px\], .text-\[10px\], .text-\[11px\] { font-size: 12px; }
+.pulse-green { animation: none !important; }
+html[data-momo-paused='true'] *, html[data-momo-paused='true'] *::before, html[data-momo-paused='true'] *::after { animation-play-state: paused !important; }
+#lab-time-controls { top: 8px; right: 8px; left: auto; transform: none; max-width: calc(100vw - 116px); overflow-x: auto; }
+#lab-metrics-panel { position: fixed; top: 60px; left: 8px; z-index: 35; width: min(288px, calc(100vw - 16px)); max-height: calc(100vh - 180px); display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; pointer-events: auto; }
+#lab-metrics-panel > :is(#statsPanel, #detailsPanel, #healthPanel, #metricsPanel, #financesPanel) { position: static; width: 100%; flex: 0 0 auto; margin: 0; padding: 14px; }
+.lab-metrics-collapsed :is(#lab-metrics-panel, #statsPanel, #detailsPanel, #healthPanel, #metricsPanel, #financesPanel) { display: none !important; }
+#lab-metrics-toggle { position: fixed; top: 8px; left: 8px; z-index: 40; min-width: 88px; padding: 8px 12px; border: 1px solid #526171; border-radius: 8px; background: #1f2937; color: #dce8f4; font-size: 14px; }
+#lab-session-notice { font-size: 12px; line-height: 1.6; color: #bac7d5; margin: 16px 0 0; }
+#main-menu-modal, #save-modal, #share-modal, #campaign-briefing-modal, #campaign-debrief-modal { overflow: auto; padding: 12px; align-items: safe center; }
+#main-menu-modal > div, #save-modal > div, #share-modal > div { padding: 24px; }
+@media (max-width: 720px) {
+  #objectivesPanel { left: 8px; bottom: 104px; max-width: min(272px, calc(100vw - 16px)); max-height: 24vh; overflow: auto; padding: 10px; }
+  #sandboxPanel { left: 8px; bottom: 104px; width: min(272px, calc(100vw - 16px)); max-height: 36vh; overflow: auto; padding: 12px; }
+  #main-menu-modal > div, #save-modal > div { padding: 18px; }
+  #main-menu-modal h1 { font-size: 30px; line-height: 1.15; }
+  #toolbar { bottom: 8px; max-width: calc(100vw - 16px); }
+}
+@media (max-width: 540px) { #lab-time-controls { top: 58px; left: 8px; right: 8px; width: calc(100vw - 16px); max-width: none; } #lab-metrics-panel { top: 116px; max-height: calc(100vh - 236px); } }
+@media (prefers-reduced-motion: reduce) { .pulse-green, .flow-packet, .intervention-warning { animation: none !important; } }

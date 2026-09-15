@@ -90,6 +90,7 @@ const PaperArenaPage = lazy(() => import('../features/games/paper-arena').then(m
 const PaperArenaRoomPage = lazy(() => import('../features/games/paper-arena').then(module => ({ default: module.PaperArenaRoomPage })));
 const Office2048Page = lazy(() => import('../features/games/office-2048').then(module => ({ default: module.Office2048Page })));
 const UnderrunPage = lazy(() => import('../features/games/underrun').then(module => ({ default: module.UnderrunPage })));
+const LocalLabPage = lazy(() => import('../features/games/local-lab/LocalLabPage').then(module => ({ default: module.LocalLabPage })));
 const CommunityGameRoomsPage = lazy(() => import('../features/games/rooms/CommunityGameRoomsPage').then((module) => ({ default: module.CommunityGameRoomsPage })));
 const CommunityGameRoomPage = lazy(() => import('../features/games/rooms/CommunityGameRoomPage').then((module) => ({ default: module.CommunityGameRoomPage })));
 const CommunityGameLeaderboardPage = lazy(() => import('../features/games/rooms/CommunityGameLeaderboardPage').then((module) => ({ default: module.CommunityGameLeaderboardPage })));
@@ -354,6 +355,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="ballpoint-breach" element={<BallpointBreachEntryPage />} />
         <Route path="office-2048" element={loading(<Office2048Page />)} />
         <Route path="underrun" element={loading(<UnderrunPage />)} />
+        <Route path="lab/:slug" element={loading(<LocalLabPage />)} />
         <Route element={<RequireCommunityAccount />}>
           <Route path="office-boss" element={COMMUNITY_FEATURE_FLAGS.officeHub ? loading(<OfficeBossPage />) : <CommunityUnavailablePage system="officeHub" title="轻松工单暂未开放" />} />
           <Route path="ballpoint-breach/arena" element={COMMUNITY_FEATURE_FLAGS.paperArena ? loading(<PaperArenaPage />) : <CommunityUnavailablePage system="games" title="纸上突围联机暂未开放" />} />

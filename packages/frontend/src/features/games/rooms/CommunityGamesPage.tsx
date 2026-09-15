@@ -9,9 +9,10 @@ import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
 import { PRACTICE_PATHS, usePlayCatalog } from './play-ui-state';
 import styles from './CommunityGamesPage.module.css';
 import { useBallpointWindow } from '../ballpoint-breach/BallpointWindow';
+import { LOCAL_LAB_GAMES } from '../local-lab/local-games';
 
-type GameCategory = 'all' | 'solo' | 'rooms' | 'growth' | 'local';
-type CoverKind = ArcadeGameKey | 'paper' | 'tower' | 'word' | 'office' | 'boss' | 'demon' | 'rail' | 'numbers' | 'underrun';
+type GameCategory = 'all' | 'solo' | 'rooms' | 'growth' | 'local' | 'new';
+type CoverKind = ArcadeGameKey | 'paper' | 'tower' | 'word' | 'office' | 'boss' | 'demon' | 'rail' | 'numbers' | 'underrun' | 'lab';
 interface GameCardDefinition {
   id: string;
   title: string;
@@ -19,6 +20,8 @@ interface GameCardDefinition {
   description: string;
   categories: Exclude<GameCategory, 'all'>[];
   cover: CoverKind;
+  coverMark?: string;
+  coverLabel?: string;
   time: string;
   device: string;
   access: string;
@@ -30,23 +33,24 @@ interface GameCardDefinition {
 const FILTERS: { key: GameCategory; label: string }[] = [
   { key: 'all', label: '全部游戏' }, { key: 'solo', label: '单机挑战' },
   { key: 'rooms', label: '实时房间' }, { key: 'growth', label: '角色与养成' }, { key: 'local', label: '本机练习' },
+  { key: 'new', label: '新接入精选' },
 ];
 const SOLO_TIMES: Record<ArcadeGameKey, string> = { snake: '最多 2 分钟', tetris: '最多 2 分钟', tank: '最多 2 分钟', zhesi: '最多 80 秒', draw: '最多 2 分钟', undercover: '最多 150 秒' };
-const COVER_MARKS: Record<CoverKind, string> = { snake: 'SNAKE', tetris: 'BLOCKS', tank: 'TANK', zhesi: 'TRIAL', draw: 'DRAW', undercover: 'SECRET', paper: 'PAPER', tower: 'DEFEND', word: 'WORD', office: 'CONNECT', boss: 'RELIEF', demon: 'EXPLORE', rail: 'DECIDE', numbers: 'MERGE', underrun: 'PATROL' };
+const COVER_MARKS: Record<CoverKind, string> = { snake: 'SNAKE', tetris: 'BLOCKS', tank: 'TANK', zhesi: 'TRIAL', draw: 'DRAW', undercover: 'SECRET', paper: 'PAPER', tower: 'DEFEND', word: 'WORD', office: 'CONNECT', boss: 'RELIEF', demon: 'EXPLORE', rail: 'DECIDE', numbers: 'MERGE', underrun: 'PATROL', lab: 'LOCAL LAB' };
 
-const COVER_ICONS: Record<CoverKind, string> = { snake: '⌁', tetris: '▦', tank: '✥', zhesi: '◇', draw: '✎', undercover: '?', paper: '↗', tower: '▤', word: '字', office: '☷', boss: '◎', demon: '九', rail: '⇄', numbers: '2048', underrun: '⌘' };
-const COVER_LABELS: Record<CoverKind, string> = { snake: '方向与节奏', tetris: '排列与消除', tank: '移动与射击', zhesi: '命格与试炼', draw: '画笔与猜词', undercover: '描述与推理', paper: '纸笔与突围', tower: '职业与防守', word: '招募与布阵', office: '接力与互动', boss: '挑战与收藏', demon: '探索与成长', rail: '讨论与抉择', numbers: '数字与合并', underrun: '机房与巡检' };
+const COVER_ICONS: Record<CoverKind, string> = { snake: '⌁', tetris: '▦', tank: '✥', zhesi: '◇', draw: '✎', undercover: '?', paper: '↗', tower: '▤', word: '字', office: '☷', boss: '◎', demon: '九', rail: '⇄', numbers: '2048', underrun: '⌘', lab: '✧' };
+const COVER_LABELS: Record<CoverKind, string> = { snake: '方向与节奏', tetris: '排列与消除', tank: '移动与射击', zhesi: '命格与试炼', draw: '画笔与猜词', undercover: '描述与推理', paper: '纸笔与突围', tower: '职业与防守', word: '招募与布阵', office: '接力与互动', boss: '挑战与收藏', demon: '探索与成长', rail: '讨论与抉择', numbers: '数字与合并', underrun: '机房与巡检', lab: '新规则与新挑战' };
 
 /** Typographic category covers load no artwork, remote resources or game runtime. */
-function GameCover({ kind }: { kind: CoverKind }): JSX.Element {
+function GameCover({ kind, mark, label }: { kind: CoverKind; mark?: string; label?: string }): JSX.Element {
   return <div className={styles.cover} data-cover={kind} aria-hidden="true">
-    <span className={styles.coverCode}>{COVER_MARKS[kind]}</span><span className={styles.coverIcon}>{COVER_ICONS[kind]}</span><span className={styles.coverLabel}>{COVER_LABELS[kind]}</span><span className={styles.coverCorner}>↗</span>
+    <span className={styles.coverCode}>{mark ?? COVER_MARKS[kind]}</span><span className={styles.coverIcon}>{COVER_ICONS[kind]}</span><span className={styles.coverLabel}>{label ?? COVER_LABELS[kind]}</span><span className={styles.coverCorner}>↗</span>
   </div>;
 }
 
 function GameCard({ card }: { card: GameCardDefinition }): JSX.Element {
   return <article className={styles.card} aria-label={card.title}>
-    <GameCover kind={card.cover} />
+    <GameCover kind={card.cover} mark={card.coverMark} label={card.coverLabel} />
     <div className={styles.cardBody}><p className={styles.cardSubtitle}>{card.subtitle}</p><h2>{card.title}</h2><p className={styles.description}>{card.description}</p>
       <dl className={styles.metadata}><div><dt>时长</dt><dd>{card.time}</dd></div><div><dt>设备</dt><dd>{card.device}</dd></div><div><dt>访问</dt><dd>{card.access}</dd></div><div><dt>进度</dt><dd>{card.save}</dd></div></dl>
       <p className={styles.ranking}><span aria-hidden="true">◇</span>{card.ranking}</p><div className={styles.cardActions}>{card.actions}</div>
@@ -113,6 +117,11 @@ export function CommunityGamesPage(): JSX.Element {
   add({ id: 'paper-local', title: '纸上突围 · 本地单机', subtitle: '纸笔世界 · 低调工作稿', cover: 'paper', categories: ['local'], time: '五轮生存练习', device: '桌面键鼠 · WebGL 2', access: '无需登录', save: '小窗保留当前轮', ranking: '不计官方排行、成就或办公币', description: '五轮关卡、五种工具和抓钩，右下角工作稿可随时收起恢复。', rules: <p>站内切页保留本轮并自动暂停，默认静音。此本地练习独立于红蓝联机房间；关闭、刷新或切换账号会结束本轮。</p>, actions: <><button className={styles.primaryButton} type="button" onClick={ballpoint.openWindow}>{ballpoint.isOpen ? '恢复工作稿小窗' : '打开工作稿小窗'}</button><Link className={styles.textLink} to="/games/ballpoint-breach">玩法与来源说明</Link></> });
   add({ id: '2048', title: '表格工作稿 · 2048', subtitle: '数字合并 · 静音小窗', cover: 'numbers', categories: ['local'], time: '随时结束的短局', device: '键盘 / 触屏', access: '无需登录', save: '仅本轮状态', ranking: '不计官方排行、成就或办公币', description: '把相同数字合并，做一份不太普通的表格工作稿。', rules: <p>本站本地运行，无第三方嵌入或广告，开源许可保留。离开页面结束本轮，失焦自动暂停。</p>, actions: <Link className={styles.primaryButton} to="/games/office-2048">打开表格工作稿</Link> });
   add({ id: 'underrun', title: '机房巡检 · Underrun', subtitle: '灰调俯视射击 · 静音小窗', cover: 'underrun', categories: ['local'], time: '按关卡推进', device: '桌面键鼠', access: '无需登录', save: '仅本轮状态', ranking: '不计官方排行、成就或办公币', description: '穿行低饱和机房场景，完成一次俯视射击巡检。', rules: <p>本站本地运行，无第三方嵌入或广告，开源许可保留。离开页面结束本轮，失焦自动暂停。</p>, actions: <Link className={styles.primaryButton} to="/games/underrun">打开机房巡检</Link> });
+  for (const game of LOCAL_LAB_GAMES) add({
+    id: `lab-${game.slug}`, title: game.title, subtitle: `${game.genre} · 本地实验室`, description: game.description, categories: ['local', 'new'], cover: 'lab', coverMark: game.mark, coverLabel: game.genre, time: game.time, device: game.device, access: '无需登录', save: '仅本轮状态', ranking: '不计官方排行、成就或办公币',
+    rules: <><p>{game.controls}</p><p>原版规则、本地静音运行。收起冻结本轮，主动点击继续；离开、刷新或切换会话结束。没有外站嵌入、广告或成绩上传，不等于本站实时建房。</p><a href={game.licensePath} target="_blank" rel="noreferrer">{game.license} 许可与归属</a></>,
+    actions: <Link className={styles.primaryButton} to={`/games/lab/${game.slug}`}>打开{game.draftTitle}</Link>,
+  });
   for (const game of catalog?.games ?? []) {
     const path = PRACTICE_PATHS[game.gameKey];
     if (!path) continue;
@@ -123,7 +132,7 @@ export function CommunityGamesPage(): JSX.Element {
   const visibleCards = cards.filter(card => (filter === 'all' || card.categories.includes(filter)) && (!query || `${card.title} ${card.subtitle} ${card.description}`.toLocaleLowerCase().includes(query)));
   return <section className={styles.gallery} aria-label="小游戏专区">
     <header className={styles.hero}>
-      <div className={styles.heroCopy}><span className={styles.eyebrow}><span />工作台 / 游戏大厅</span><h1>留一点时间，<br /><span>给好玩的事。</span></h1><p>短局挑战、同事组队与长期养成，都在这里。<br />选一个适合现在的节奏，随时返回工作台。</p><div className={styles.heroActions}><button type="button" className={styles.primaryButton} onClick={() => { setFilter('solo'); setSearch(''); }}>来一局短挑战 <span aria-hidden="true">↗</span></button><Link className={styles.secondaryButton} to="/games/rooms">玩家建房</Link></div><div className={styles.heroHints}><span>◌ 默认静音</span><span>◇ 本地练习与账号日榜独立</span></div></div>
+      <div className={styles.heroCopy}><span className={styles.eyebrow}><span />工作台 / 游戏大厅</span><h1>留一点时间，<br /><span>给好玩的事。</span></h1><p>短局挑战、同事组队与长期养成，都在这里。<br />选一个适合现在的节奏，随时返回工作台。</p><div className={styles.heroActions}><button type="button" className={styles.primaryButton} onClick={() => { setFilter('solo'); setSearch(''); }}>来一局短挑战 <span aria-hidden="true">↗</span></button><button type="button" className={styles.secondaryButton} onClick={() => { setFilter('new'); setSearch(''); }}>试试六款新玩法</button><Link className={styles.secondaryButton} to="/games/rooms">玩家建房</Link></div><div className={styles.heroHints}><span>◌ 默认静音</span><span>◇ 本地练习与账号日榜独立</span></div></div>
       <aside className={styles.heroGuide} aria-label="收起与计时说明"><span className={styles.guideIcon} aria-hidden="true">⌘</span><span className={styles.eyebrow}>工作稿模式</span><h2>好玩，也能随时收起。</h2><p>支持小窗的游戏可以收起或切换便签，界面保持低调。</p><dl><div><dt>本地练习</dt><dd>收起画面可暂停本轮</dd></div><div><dt>实时赛局</dt><dd>联机与账号赛局仍正常计时</dd></div></dl><small>存档、暂停和参榜条件，以各游戏说明为准。</small></aside>
     </header>
     <div className={styles.directoryToolbar}><div><span className={styles.eyebrow}>挑选你的下一局</span><h2>游戏目录</h2></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>搜索游戏</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索名称或玩法" /></label></div>

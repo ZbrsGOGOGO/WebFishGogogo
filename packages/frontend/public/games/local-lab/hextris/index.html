@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>六边形消除 · Hextris 静音自托管版</title>
+  <link rel="stylesheet" href="style/style.css">
+  <script src="../bridge.js"></script>
+  <script src="vendor/jquery-1.9.1.js"></script><script src="vendor/keypress.js"></script><script src="storage.js"></script>
+  <script src="js/save-state.js"></script><script src="js/view.js"></script><script src="js/wavegen.js"></script><script src="js/math.js"></script>
+  <script src="js/Block.js"></script><script src="js/Hex.js"></script><script src="js/Text.js"></script><script src="js/comboTimer.js"></script>
+  <script src="js/checking.js"></script><script src="js/update.js"></script><script src="js/render.js"></script><script src="js/input.js"></script>
+  <script src="js/main.js"></script><script src="js/initialization.js"></script>
+</head><body>
+  <canvas id="canvas" aria-label="六边形消除游戏画面"></canvas>
+  <div id="overlay" class="faded overlay"></div><div id="startBtn"></div><div id="helpScreen" class="unselectable"><div id="inst_main_body"></div></div>
+  <img id="openSideBar" class="helpText" src="images/btn_help.svg" alt="玩法说明"><div class="faded overlay"></div>
+  <img id="pauseBtn" src="images/btn_pause.svg" alt="暂停"><img id="restartBtn" src="images/btn_restart.svg" alt="重新开始">
+  <div id="HIGHSCORE">本轮最高分</div><div id="highScoreInGameText"><div id="highScoreInGameTextHeader">本轮最高分</div><div id="currentHighScore">0</div></div>
+  <div id="gameoverscreen"><div id="container"><div id="gameOverBox" class="GOTitle">本轮结束</div><div id="cScore">0</div><div id="highScoresTitle" class="GOTitle">本轮成绩</div>
+    <div class="score"><span class="scoreNum">1.</span><div id="1place">0</div></div><div class="score"><span class="scoreNum">2.</span><div id="2place">0</div></div><div class="score"><span class="scoreNum">3.</span><div id="3place">0</div></div>
+  </div><div id="bottomContainer"><img id="restart" src="images/btn_restart.svg" alt="再玩一轮" height="57"><div id="socialShare"></div><div id="buttonCont">← → / A D 旋转 · P / 空格暂停；手机点左右两边。</div></div></div>
+  <aside id="localLegal">Hextris © Logan Engstrom、Garrett Finucane、Noah Moroze、Michael Yang · GPL-3.0-or-later · 2026-09-15 本站静音改编 · 无担保。成绩仅本轮内存，不会永久保存。源码及依赖许可请在父页操作、存档与来源说明中打开。</aside>
+</body></html>

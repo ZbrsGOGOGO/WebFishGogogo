@@ -1,0 +1,644 @@
+{
+  "upstream": "https://github.com/masylum/whatajong",
+  "commit": "45fe3da7a7d1e87a66ae41b72ee74cc4e0a920d5",
+  "basis": "The pinned repository declares MIT for software and associated documentation. These accompanying graphics carry no contradictory license noticed in the pinned tree; this is not individual image-author certification.",
+  "excluded": [
+    "all fonts",
+    "all audio",
+    "rotate.webp (unused forced rotation UI)"
+  ],
+  "graphics": [
+    {
+      "file": "source/src/renderer/assets/tiles/bam1.webp",
+      "bytes": 3738,
+      "sha256": "f4511896882d67489f1253ca0bcfc4d70b66fd3b1fec80fbf1f8f2794aa0779a",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam2.webp",
+      "bytes": 4024,
+      "sha256": "e440d297cca5a8b3de50c17d64d8a11c083ea37ac6c23cf2f9b73ad9e7ed9031",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam3.webp",
+      "bytes": 5928,
+      "sha256": "472820804caa3a2faba23534289859d44e41df5fae18ec3b59933beac1d29006",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam4.webp",
+      "bytes": 5400,
+      "sha256": "0d626d7ebfc1cc274dcd334697e2f42073aa5586aae47743b4d789b1db580fae",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam5.webp",
+      "bytes": 7220,
+      "sha256": "36ab4db2f572fd690caba915349cbbb43a0cb7d2ad8df7fd499a1e62ace241ba",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam6.webp",
+      "bytes": 7300,
+      "sha256": "f99bc9fe3e95c659cd43c0c8e0e727599cc1cbd8d9f6e63434112123adc1bbf7",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam7.webp",
+      "bytes": 7190,
+      "sha256": "74de8efa45953e162aee6ae5543a40fd2fc210f3f8740fab3d82f818c018b661",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam8.webp",
+      "bytes": 8156,
+      "sha256": "19352db834851047ede30559d8d7fd70550603639f851897488a248078194140",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/bam9.webp",
+      "bytes": 8304,
+      "sha256": "35430bb995e79437f661e56b40cfbff9b281cfcadbfcbc4cf665581483cb4bdf",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack1.webp",
+      "bytes": 4554,
+      "sha256": "f88facb76ec16f2cd841a8faa90ff84f4854daf495f6c339259c5bb0c1d72dd3",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack2.webp",
+      "bytes": 4932,
+      "sha256": "ab847792f866fa6235b66431079f4af0226fba87e9bf8f076cd4200eecb25026",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack3.webp",
+      "bytes": 5068,
+      "sha256": "93a1d152dcf52b862e9d6d542ce89f127fcc2333571494b78ec7ef060827be36",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack4.webp",
+      "bytes": 5196,
+      "sha256": "72cbae907f6d4590d528ab8ebb76f20182f428082e5c8f06d10edd7c10dd777d",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack5.webp",
+      "bytes": 5426,
+      "sha256": "b5eaa8c6b23403bc8206fadde8777ff8c07d08ae0912ca5736c84f4b65aa9422",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack6.webp",
+      "bytes": 5276,
+      "sha256": "272855a0696e275486c90ebc92f5f16ccdd89bc1b62f0f694d266a95a59a6fbc",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack7.webp",
+      "bytes": 5468,
+      "sha256": "aa3df09dda724755df60bf7d346f22e433b60a36539c56c3f611083a9294dcd1",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack8.webp",
+      "bytes": 5232,
+      "sha256": "e2883cf81506df07aef222fece861ef2a4b2056f6dfb5d94ba0020e08da8ecd8",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/crack9.webp",
+      "bytes": 5234,
+      "sha256": "1219e6f7baf74fbae902406d821734151ddd9fbbdf0f9a6c490771d7511b9dab",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dargonr.webp",
+      "bytes": 7434,
+      "sha256": "b480c9bdcc0b287a01d827c2415b9b9344669d2f11c7317c5003d75f4679b158",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot1.webp",
+      "bytes": 6852,
+      "sha256": "479172bc8d743c05d8495e58345835b29686f025b30eab94b4f95ae1068aa26d",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot2.webp",
+      "bytes": 6560,
+      "sha256": "9265cbc4eabd0c6f9417f1d1952e8ec46d8513dc95e66f3387a4f1c05ab38320",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot3.webp",
+      "bytes": 6692,
+      "sha256": "2f9c5aa663e1f4096c82e627da448bcc74b97963acbfb41e46778b9c6d5d0b2b",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot4.webp",
+      "bytes": 6616,
+      "sha256": "7bc18500f6fc898b69c4fdbc07ec5d3b247149448578a5c1fe4a76c268d6d9c4",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot5.webp",
+      "bytes": 6544,
+      "sha256": "27c526e099129a5bdf9eded8e569221b9ba06cfc0050dc0dda71fe26010504b4",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot6.webp",
+      "bytes": 7732,
+      "sha256": "61b563a6bafe82c8adae91818116842daf981e4065329f4d13bb7afb6b3fdba0",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot7.webp",
+      "bytes": 7674,
+      "sha256": "bd834692223f4f5df429a4c3c8b0388face3049bc0b7c8936b4e0dafc0394177",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot8.webp",
+      "bytes": 7766,
+      "sha256": "3d1f5c54e2d30b90d6caed73e7a7761cd1db4ec2b44939eae8d596851ff6f075",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dot9.webp",
+      "bytes": 8126,
+      "sha256": "7e203a1ba8cfeaefaafbdc18ff47efc15c0f5104cce745a50ffe26fb447b9bac",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dragonb.webp",
+      "bytes": 8070,
+      "sha256": "1fbe6545e535c743d8592f1e52507571a3832a5e3e3cd19c8e0429c4bada952b",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dragong.webp",
+      "bytes": 7816,
+      "sha256": "743111cfeba529dc327bf5881bcab832f60b036f433694fcd82da9951ec634a5",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dragonk.webp",
+      "bytes": 6314,
+      "sha256": "1f5eb6186007411256d592c690568caec24354714a0173896d8c88e0e959cd03",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/dragonr.webp",
+      "bytes": 7488,
+      "sha256": "be196a88ebb2e00a6dfa58819580fb1bc04353b6bc2222c1a2097c72acad9a68",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementb1.webp",
+      "bytes": 7912,
+      "sha256": "7700d95b5a4707e728b3e362fc8d9d9cc67f7577f51053e592b13f4bbc932163",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementb2.webp",
+      "bytes": 2180,
+      "sha256": "ae090fc17a414b3d53857ed9f82e3197f308918611281957010f1dfc3135fa9e",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementg1.webp",
+      "bytes": 6950,
+      "sha256": "c2d8be98ed8a2c05404f6d1b9e284451f199218a02e497848051a52248359179",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementg2.webp",
+      "bytes": 2588,
+      "sha256": "5e56ad53867a7ab6bfb1cbedfca639d836622520938458d40cdaf1487db8af17",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementk1.webp",
+      "bytes": 6244,
+      "sha256": "e378dc37a21e4516757587064e1ebc186527fb132340fdad44dbb953007a3df6",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementk2.webp",
+      "bytes": 2688,
+      "sha256": "f44b49ac1ec2eb55d44bbac6c8544af6bc580ac58d751c3cd5244fe50f0d4b4f",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementr1.webp",
+      "bytes": 6600,
+      "sha256": "e6ea27120a8433579c8f33dd72ce5619f1de77c0a4c3c737a87c0a7f8609b3a4",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/elementr2.webp",
+      "bytes": 2264,
+      "sha256": "c8b91029fab02eeee3aea78caa01fcc103562531f3c2f7e50655821fa045b163",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/flower1.webp",
+      "bytes": 6772,
+      "sha256": "7971b6daa0baa529e9de585ff90be7fe6778a9e29367656130105d253b28faa2",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/flower2.webp",
+      "bytes": 6064,
+      "sha256": "9f972d3305b510e325e058debec4361efd4a2464371dd4eb366489618b6a2886",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/flower3.webp",
+      "bytes": 5402,
+      "sha256": "264e7dddc535d1df6e18fffd0c7201709594e2dadde2262e84b0f34aa0a3cff7",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/frogb.webp",
+      "bytes": 5276,
+      "sha256": "3ad72b3fed84ba051460549ad4a00ae364768e3fb2461ede33a67246b0bca1a8",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/frogg.webp",
+      "bytes": 4696,
+      "sha256": "5df5042340cc39b0ccf82b7edf0b91a9f032a35082af0238518a2a7cc3e9f5c9",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/frogr.webp",
+      "bytes": 4984,
+      "sha256": "15fcaabaea843416bd18f8bdcd3ee4a55fb7186fa330669537c6211da78072b7",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/gemb.webp",
+      "bytes": 5886,
+      "sha256": "26650d7707fa4c03a9e7ef3a1c292b385e5f745667834ef492cdb76f1aaf05ad",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/gemg.webp",
+      "bytes": 5366,
+      "sha256": "5164ee7a973026f85f628057a667ce4af15331f2c4bfe38f7ece2ff0e972ace5",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/gemk.webp",
+      "bytes": 3272,
+      "sha256": "a24b281c90ed3670edc1cb72578fb0484445e94b1f0ffaa8f7c47744a3087954",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/gemr.webp",
+      "bytes": 5596,
+      "sha256": "9a29e4fadcb13b0f21ba459714f4f019cde5f835d4f93947abd99f156b8ac617",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/joker.webp",
+      "bytes": 7416,
+      "sha256": "16908f450d87381201d6b5121ba1c93809fa3503a727e3dceb99ba39ca518c79",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/lotusb.webp",
+      "bytes": 5660,
+      "sha256": "768988cfc7e93fdad39a3d72c735e03eaf4b2868d7ee2c60b0c3923cbb882aa1",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/lotusg.webp",
+      "bytes": 5638,
+      "sha256": "912a307f885153deecd24f1da69aebd72cd0d2232d16b5798a8aede223410382",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/lotusr.webp",
+      "bytes": 5354,
+      "sha256": "c57acf2189ce5b915757de0c44a846825dcfd002cea936030fad20270e16e210",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/mutation1.webp",
+      "bytes": 4844,
+      "sha256": "d4a92c2f18e613a66d42bf7201936d2c6a36b84ea8c95f183d37da5abdc05dfe",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/mutation2.webp",
+      "bytes": 5636,
+      "sha256": "21172feb4771982c0ae9a9481715de3d7fa8b059c92edba577d333e02fdf437a",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/mutation3.webp",
+      "bytes": 5066,
+      "sha256": "6796c8df2bded99d6fb40912e242856fde5b1eb32eebb6f453c03b81df573050",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/mutation4.webp",
+      "bytes": 4754,
+      "sha256": "106b807adfa9f60afe26b5f8f0feff98adef0a3c8c7c0d0931a24b330c941857",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/mutation5.webp",
+      "bytes": 5602,
+      "sha256": "c7a3325f9c77f71eefe3ae8437deb1d3221eb90e616fda2ba67a01ad7e89e8e5",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/phoenix.webp",
+      "bytes": 5368,
+      "sha256": "fa7efd164a423406729b7675286d5b73e1bf1f3d171e909e2c687d567ff97539",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/rabbitb.webp",
+      "bytes": 7604,
+      "sha256": "679ad3855a885870a14559a371b95d0e270eb6353a6498ee4dc8be77ae5081d3",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/rabbitg.webp",
+      "bytes": 7236,
+      "sha256": "13beeca29348aec8b0e53f5bb9e4d451b39998c827e0470a0b6f5d229b280e88",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/rabbitr.webp",
+      "bytes": 6244,
+      "sha256": "72c71dbb32e7960e86502787fff9d1aac03da7c164579adf1145a8d520e721f7",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/shadowb.webp",
+      "bytes": 3774,
+      "sha256": "3ffaa824cbf43778b22e130ed4c24d0b0e46159a4918992bf516d55b8a0aa018",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/shadowg.webp",
+      "bytes": 2790,
+      "sha256": "863e1ca6ea01e23b9ce39fca93ef0775639fc0b45d735c289841526c9e19a714",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/shadowr.webp",
+      "bytes": 3058,
+      "sha256": "cc5e5bfe860c3ba6b44840b04e140b4da5ab56b018cfa16ee7b9ad306d096636",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/sparrowb.webp",
+      "bytes": 5174,
+      "sha256": "79bd1d5765260c8bbfb8b96c264338b41b928b81bec3d2463be2ab862c5cbe14",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/sparrowg.webp",
+      "bytes": 7102,
+      "sha256": "c6d0a966c857afe82bd51bda0898174dced3f0b9602f6e7f01e3d46aad86b669",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/sparrowr.webp",
+      "bytes": 6420,
+      "sha256": "640c9e588cbd35fbc6b82ec2e6404e507b2a31520494ce8d4809158d9d47b96f",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitub1.webp",
+      "bytes": 3884,
+      "sha256": "9b0135359dc38162778b0796b055d93b3b9e52ea824a5fa658d93d51159317b8",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitub2.webp",
+      "bytes": 3304,
+      "sha256": "0bbe568c4f4cf42216206c123b1cecf8463f09270f00f93515ff5fa155d5c170",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitug1.webp",
+      "bytes": 4068,
+      "sha256": "3acfb99676c46d50252bf252c96561c5680edd8df356979d04989331ce04c305",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitug2.webp",
+      "bytes": 3170,
+      "sha256": "f371ccc85f0f4208e83ba33ee70bbbeb9a106da878ede997d2c6988aba51cdcf",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijituk1.webp",
+      "bytes": 2698,
+      "sha256": "6363bc1f66e15b2ec77106bb89697bffdd1d0d52c5bb31d5610f70c7a8d589c9",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijituk2.webp",
+      "bytes": 2492,
+      "sha256": "82590e29a2940193bffe8208d6337fab4c4e6443734c4bacc20f4dfd6c10ed10",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitur1.webp",
+      "bytes": 3730,
+      "sha256": "021e74f68fe580d9f9ce6b724ce5de6abbee5647c9960645fc84f6e9681282f9",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/taijitur2.webp",
+      "bytes": 3356,
+      "sha256": "fab0e7047bf1a94762e0e37fc1b46b191ada8a46cf35f64936aca316a239713b",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/winde.webp",
+      "bytes": 3050,
+      "sha256": "280efda50df58d64cb47eff2f4a11401c2ac6860ff70487d7a42adea81dc1b57",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/windn.webp",
+      "bytes": 2832,
+      "sha256": "1b43250a812d1de256ac73591b815dc4d30968e3312aaa80b45ce4f2d42c0af0",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/winds.webp",
+      "bytes": 2958,
+      "sha256": "edbd1c98dc7c944ab1366b20fd5cccd651ecc4d7c59f8b167f013de41d6f5d70",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/tiles/windw.webp",
+      "bytes": 3168,
+      "sha256": "17cc62fd6272747dc5339db6820a637029a865050c2572aecc3d16c03cc62772",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/0.webp",
+      "bytes": 170724,
+      "sha256": "bf02c186a4c08160886058590a4cbb7ee08845ba4d09243b609f7ad4b346a9c2",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/1.webp",
+      "bytes": 272158,
+      "sha256": "b6351e8c66d9cbd4010c9f3ee1abbc5576a9be24c87700a1af77ff22762473a9",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/2.webp",
+      "bytes": 227768,
+      "sha256": "7c68b2a88c85660523839caf2b2afd22aa2808bb9b5812a7fdd1f78cb4f08971",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/3.webp",
+      "bytes": 270978,
+      "sha256": "ca89fe2e3b6fb26d328781e774e929af1e58e70725631983e0f9f0a3a25af7db",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/4.webp",
+      "bytes": 271464,
+      "sha256": "16511d4d843563587970eb805eef7c2d892e25f898f88541fbe36129b22fb578",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/backgrounds/5.webp",
+      "bytes": 110486,
+      "sha256": "a4bf61f9269f626d1f796b95b5c5aca4e700df37c1c97672723c51c9d8df007f",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/textures/1.webp",
+      "bytes": 16008,
+      "sha256": "5a15f1f0e3f1246ed30ff8516adc226d420f1de124be40d34ee9c4cc3c9d85f1",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/textures/2.webp",
+      "bytes": 13832,
+      "sha256": "74c98c36d564a6ac0b50422e8ce9fd14669d6196c4fd39bdea68a330d7614a25",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/textures/3.webp",
+      "bytes": 12930,
+      "sha256": "52a10fd1a0a4ba0e6738fc932ecb3a501c86fe6e9bf9b97bdc7030c250b24ca6",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/textures/4.webp",
+      "bytes": 12522,
+      "sha256": "e27a7dc5d3cda99b68bfd5da9abca3f9d3b0dcbf86372bf2d82f8f820326b3ff",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/textures/5.webp",
+      "bytes": 13436,
+      "sha256": "31ec87926199dd315e766e87e1da8c4645522305417d9535d8675aee9cfb3a50",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/sprites/muzzle.webp",
+      "bytes": 57860,
+      "sha256": "6ecf5d40f6d727554a5050a3e175bf368c024b7c3f7ea6b14fab24b7739217f9",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    },
+    {
+      "file": "source/src/renderer/assets/sprites/smoke.webp",
+      "bytes": 105944,
+      "sha256": "9fe8e0e26b9003c111f2f747c9b375b9d5d299720dc6d1a1293f700087286164",
+      "license": "Whatajong repository MIT; no contrary notice found"
+    }
+  ],
+  "build": {
+    "command": "npm ci --ignore-scripts --no-audit --no-fund && npm run build (inside an independent copy of source/)",
+    "postprocess": "source/postprocess.mjs: fixed-lock PostCSS parse, only whitespace in node raws.before after a closed block canonical LF + source/local.css; trailing spaces/tabs removed, single LF at EOF; no declaration/string/comment/image/rule/minification changes.",
+    "outputs": [
+      {
+        "file": "game.js",
+        "bytes": 1212578,
+        "sha256": "2ccb73127d602f7d48e3a35c3a3f55e6733eee6a0542b48b52ea7e8a70f28570"
+      },
+      {
+        "file": "game.css",
+        "bytes": 2314530,
+        "sha256": "711d573f73c62eae832b56ab8c897fa41cefdc60a39921b3d282a85ea6f28a69"
+      }
+    ],
+    "inputs": [
+      {
+        "file": "source/package.json",
+        "bytes": 1080,
+        "sha256": "ddfb5368137fda8a694a306feb9b8bbfcd845091bf645d9c633e6789dc43fda2"
+      },
+      {
+        "file": "source/package-lock.json",
+        "bytes": 112214,
+        "sha256": "1200823784423629e22c51f1e084d54d397db21df594352d408f2d57f1ac5104"
+      },
+      {
+        "file": "source/web.vite.config.mjs",
+        "bytes": 1323,
+        "sha256": "cb57a0761310a8e1c85ccdb49958ab0299b7dddd3aa9d895fe32127c62679365"
+      },
+      {
+        "file": "source/postprocess.mjs",
+        "bytes": 1661,
+        "sha256": "893ff898c4a3deacaff7548488fbaf445258e0fd4bcba585b2c48e28bd62f131"
+      },
+      {
+        "file": "source/local.css",
+        "bytes": 560,
+        "sha256": "2a59b2403d90990ccffaf15ba395e9b72bb9026b6b1edf10a9ba4cd6031369e2"
+      },
+      {
+        "file": "source/src/renderer/components/game/tileBody.tsx",
+        "bytes": 1562,
+        "sha256": "f6c50b8430ce22f4c3f1569b7250725ca3de8222750435f980b7042a99eabcbf"
+      },
+      {
+        "file": "source/src/renderer/components/game/tileComponent.tsx",
+        "bytes": 7310,
+        "sha256": "a1eb5e8b5d45926eb8a730cfebbf17f1ec7c289b279d6394747d728e07d7090d"
+      },
+      {
+        "file": "source/src/renderer/components/game/tileComponent.css.ts",
+        "bytes": 8894,
+        "sha256": "9b22ae6af15e0bc7c5e9037076224292d2104cb659e827d6e06e00f82b8ce8d1"
+      },
+      {
+        "file": "source/src/renderer/components/game/tileInteraction.ts",
+        "bytes": 2078,
+        "sha256": "b932255b02384a8ee2010121b8e95281455e96456838e7d41b36abeade4291bb"
+      },
+      {
+        "file": "source/src/renderer/routes/settings.tsx",
+        "bytes": 2741,
+        "sha256": "2bcbafb6259bcac5c0acb5ab9141799cbb36a7a664ddc7fdd217b4544266edfa"
+      }
+    ]
+  }
+}

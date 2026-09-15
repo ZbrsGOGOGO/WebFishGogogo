@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="in ASCENT: Solar system exploration and colony building. Silent self-hosted edition using system emoji. Progress exists only in this open game window; expand for desktop or landscape touch.">
+  <title>in ASCENT · 摸司工作台</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="main">
+    <canvas id="spaceCanvas" width="3840" height="3840"></canvas><div id="spaceDiv"></div>
+    <canvas id="bgrCanvas" width="3840" height="1080"></canvas>
+    <canvas id="gameCanvas" width="1920" height="1080"></canvas>
+    <canvas id="overCanvas" width="1920" height="1080"></canvas>
+    <div id="gameDiv"><div id="frameDiv"></div><div id="uiDiv"></div><div id="resDiv"></div><div id="menuDiv"></div></div>
+  </div>
+  <script src="../bridge.js"></script>
+  <script src="js/actions.js"></script>
+  <script src="js/Planet.js"></script><script src="js/Star.js"></script>
+  <script src="js/TweenFX.js"></script><script src="js/app.js"></script>
+  <script src="js/main.js"></script><script src="js/surface.js"></script>
+</body>
+</html>

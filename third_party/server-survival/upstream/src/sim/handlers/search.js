@@ -1,0 +1,16 @@
+// Search Engine job handler (#155 PR 9). Terminal node: completes SEARCH
+// requests only. Logic lifted unchanged from the per-type if-chain in
+// Service.update().
+
+import { failRequest, finishRequest } from "../../core/actions.js";
+import { FAIL_REASONS } from "../../core/failure-reasons.js";
+
+export function process(service, job) {
+  if (job.req.type === "SEARCH") {
+    finishRequest(job.req, service.type, service);
+  } else {
+    // A search index serves SEARCH and nothing else (#156).
+    failRequest(job.req, FAIL_REASONS.SEARCH_ONLY);
+  }
+  return "next";
+}

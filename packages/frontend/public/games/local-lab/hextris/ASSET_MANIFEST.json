@@ -1,0 +1,184 @@
+{
+  "upstream": "https://github.com/Hextris/hextris",
+  "commit": "3f4847dc8fd7dab3d1c87e6324b9159d92fbd396",
+  "modified": "2026-09-15",
+  "graphicsBasis": "The four original control SVGs are covered by the pinned repository GPL declaration; no contrary notice found. Not individual image-author certification.",
+  "excluded": [
+    "all fonts",
+    "all audio",
+    "store/social/trademark images",
+    "unused libraries",
+    "trackers/ads/external score requests"
+  ],
+  "files": [
+    {
+      "file": "LICENSE.md",
+      "bytes": 35179,
+      "sha256": "4052be61f35ad6a156dcee919b8f99058b24b0417a152ecef746f702c7f34c5c",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "SOURCE.md",
+      "bytes": 2788,
+      "sha256": "b2f1c6314e4c81f44513fb65d92a22353a566edff6b1c34b7735bbc053225012",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "images/btn_back.svg",
+      "bytes": 1211,
+      "sha256": "cf044b7a1d7802f2e44d8cb95fe848b9820833a1e27de2c73087fb5af0ba9abf",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "images/btn_help.svg",
+      "bytes": 3175,
+      "sha256": "4f4fdb4148d8901f0ef80c0bc390bd3a593888e5bea2049524c27b7f0d550255",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "images/btn_pause.svg",
+      "bytes": 1180,
+      "sha256": "65acac0d7fcae9883c04d03f44c59515ea954670079f801894e0000b06e5222f",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "images/btn_restart.svg",
+      "bytes": 1580,
+      "sha256": "5d4d7f5f0239fc8c6320e9130fc411701327e511974c68c5892146d0ee822693",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "index.html",
+      "bytes": 2838,
+      "sha256": "ca73c6e8e1c658bf55505ef026996cef9d30f8b5b241314ad013e927137949a4",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/Block.js",
+      "bytes": 6000,
+      "sha256": "ce22f016c524fe2e0e3e59c0a5c2186d6f0e56de5a0fef0525079a04665d6620",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/Hex.js",
+      "bytes": 5073,
+      "sha256": "9fa689efe9b6baeba6a4c211146e558c97dc99ca0e073445a1025e58ac6fee53",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/Text.js",
+      "bytes": 669,
+      "sha256": "1024fade1f435751977492df9b0083f0c265bb1057a3970e36442fa0e064a4f2",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/checking.js",
+      "bytes": 2962,
+      "sha256": "92ab19f786e44e7d70cf07994538d65426bd53c48d8445686b78c2fc65c101c3",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/comboTimer.js",
+      "bytes": 2299,
+      "sha256": "fce6859a3a6665bacd37c1cd6ecc0391eb4c9bfb1415c81e2028957c06c9927f",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/initialization.js",
+      "bytes": 6455,
+      "sha256": "db95553b6e5f66506e01127f513f8807fd7e295fca87d03938cf09430202a42a",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/input.js",
+      "bytes": 5002,
+      "sha256": "5865297018335f37cbc95950798f97fd448d7b8639a0680653b6715583cc7493",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/main.js",
+      "bytes": 9157,
+      "sha256": "b84b05b0f51242b1768bf468e355e61ffbc0ab89b7bb307a097633e29afdba42",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/math.js",
+      "bytes": 387,
+      "sha256": "025ca6fa9528041067f45b34fd89af83e5ea026dc59168a3f68f91e04bcfe41d",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/render.js",
+      "bytes": 3691,
+      "sha256": "5eb8148d0eaadcf2c846f69fd759fd521d9f360bc0947cac32813b7abc08f99c",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/save-state.js",
+      "bytes": 1359,
+      "sha256": "c3525a95f180088eac0c22917a3158f484671f0228364828c44b3dc852a70c09",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/update.js",
+      "bytes": 1909,
+      "sha256": "03e16ee3b24b9a9061a3286ff837633ebc6ef0fbd16693090987ff9fd22d977f",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/view.js",
+      "bytes": 6646,
+      "sha256": "84766deccf6ba0aef6d816b233d3ae3b758753769cab1db263b436db1f2632dd",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "js/wavegen.js",
+      "bytes": 5460,
+      "sha256": "cc366aea93849cd7bb515aa718e4b0469982bbc86fd59891e404b52c93beb09b",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "storage.js",
+      "bytes": 473,
+      "sha256": "7ca4a77c6252c227cb4886960b491b0b85c714c0a859a39da2b38d979a6ab359",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "style/style.css",
+      "bytes": 8283,
+      "sha256": "439858d5972024edead992cd89d296853dd477fa8fd97c25a30b9c4ebeb29e86",
+      "license": "GPL-3.0-or-later (Hextris independent program)"
+    },
+    {
+      "file": "vendor/jquery-1.9.1.js",
+      "bytes": 268281,
+      "sha256": "6169c85976da5ffc80cedda29f55a162a2207dbd5d36513bc12e7756d0ff3a31",
+      "license": "MIT (jQuery Foundation/Sizzle)"
+    },
+    {
+      "file": "vendor/jquery-MIT.txt",
+      "bytes": 1099,
+      "sha256": "956cece9133e2cf3a3536ae1c67331aaa90a5e9eb2d96757f660221c424ff424",
+      "license": "MIT (jQuery Foundation/Sizzle)"
+    },
+    {
+      "file": "vendor/keypress-Apache-2.0.txt",
+      "bytes": 10257,
+      "sha256": "01a94f220308e1e756e01c29aac3a371d804f016e009117e2115e4a8fb7b915f",
+      "license": "Apache-2.0 (David Mauro)"
+    },
+    {
+      "file": "vendor/keypress.coffee",
+      "bytes": 26438,
+      "sha256": "8939529d8e6e35a2f4b334b903a68e0916049743705e9b13da886bf6b254629b",
+      "license": "Apache-2.0 (David Mauro)"
+    },
+    {
+      "file": "vendor/keypress.js",
+      "bytes": 28875,
+      "sha256": "bf0b7f24155c66980cfdcc467b0bec4e1b3dd06caf4627c0ad7460551b06b01a",
+      "license": "Apache-2.0 (David Mauro)"
+    }
+  ],
+  "textNormalization": "JS/CSS/CoffeeScript: trailing spaces/tabs removed, single LF at EOF; view.js mixed indentation corrected. Rules and graphic bytes unchanged."
+}

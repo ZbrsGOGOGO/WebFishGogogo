@@ -1,0 +1,46 @@
+{
+  "sourceUrl": "https://github.com/pshenok/server-survival",
+  "sourceSha": "01796362d3b7bfa6c85efab5e2685f4d955dc137",
+  "license": "MIT",
+  "toolchain": {
+    "esbuild": "0.25.12",
+    "tailwindcss": "3.4.17"
+  },
+  "network": "none",
+  "persistence": "iframe-session-only",
+  "audio": "disabled",
+  "artifacts": {
+    "actions.js": {
+      "bytes": 4288,
+      "sha256": "e840fd437a36c710ddc7182619f7463989ef612c77e9da73690e08998dc33c1d"
+    },
+    "adaptation.css": {
+      "bytes": 2706,
+      "sha256": "3710602dae2cbb6729c23f361b86466b5f2b87d27ad079659215144e97fa822f"
+    },
+    "bootstrap.js": {
+      "bytes": 3422,
+      "sha256": "20c19d8c96fae5a844279bf2c3ebe386b60a05e9bacd567b19e11e5947fbaf91"
+    },
+    "game.js": {
+      "bytes": 1189685,
+      "sha256": "a61feaa0e9eb9ffa520e07faae5720a3d8526c11822a48de2cdd00c639388f38"
+    },
+    "index.html": {
+      "bytes": 100146,
+      "sha256": "931d99d4fb71e33bf1bd5f2c2bf7c837a08d66fec457f61aca5c42272c57f090"
+    },
+    "style.css": {
+      "bytes": 6349,
+      "sha256": "48884d8d4bc7966aaa7d9a6f4de469e9904b5ba6a6dccb2d6e4c2bf745f2c072"
+    },
+    "three-r128.min.js": {
+      "bytes": 603445,
+      "sha256": "9274bbcec8d96168626c732b5d31c775aa8cfb7eaa0599bec0c175908a2c1ce2"
+    },
+    "utility.css": {
+      "bytes": 126128,
+      "sha256": "17e414bda2da016d1c1340dfe1e99b75ab3bf4219e056c4543fcb60951a29574"
+    }
+  }
+}

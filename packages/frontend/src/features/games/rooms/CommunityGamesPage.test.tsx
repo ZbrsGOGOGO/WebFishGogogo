@@ -15,6 +15,7 @@ import { setCommunitySessionTokens } from '../../../api/community-http';
 import { resetCommunityAuthStoreForTests, useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import { CommunityGamesPage } from './CommunityGamesPage';
 import { GAME_NAMES } from './play-ui-state';
+import { LOCAL_LAB_GAMES } from '../local-lab/local-games';
 
 const catalog: PlayCatalog = {
   games: (Object.keys(GAME_NAMES) as Array<keyof typeof GAME_NAMES>).map(gameKey => ({ gameKey, name: GAME_NAMES[gameKey], minPlayers: gameKey === 'undercover' ? 3 : 2, maxPlayers: 6, soloDescription: `${GAME_NAMES[gameKey]}服务端单机说明`, roomDescription: `${GAME_NAMES[gameKey]}服务端房间说明`, dailyChampionCoins: 100 })),
@@ -81,7 +82,7 @@ describe('redesigned community games directory', () => {
     expect(screen.getAllByRole('article')).toHaveLength(4);
     expect(screen.getByRole('article', { name: '九层妖塔 · 角色养成' })).toBeInTheDocument();
     fireEvent.click(category('本机练习'));
-    expect(screen.getAllByRole('article')).toHaveLength(8);
+    expect(screen.getAllByRole('article')).toHaveLength(8 + LOCAL_LAB_GAMES.length);
     expect(screen.queryByRole('button', { name: '开始挑战' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '遮司 · 原命格录' })).toHaveAttribute('href', '/games/zhesi');
     fireEvent.click(category('单机挑战'));
@@ -101,7 +102,27 @@ describe('redesigned community games directory', () => {
     fireEvent.click(screen.getByRole('button', { name: '查看全部游戏' }));
     expect(screen.getByRole('searchbox')).toHaveValue('');
     expect(category('全部游戏')).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByRole('article')).toHaveLength(21);
+    expect(screen.getAllByRole('article')).toHaveLength(21 + LOCAL_LAB_GAMES.length);
+  });
+
+  it('offers six new local games to guests as an explicit collection, with no score/reward creation or runtime preload', async () => {
+    useCommunityAuthStore.setState({ phase: 'guest', user: null });
+    const create = vi.spyOn(communityGameRoomsApi, 'create'); const rendered = renderGallery();
+    await screen.findByText('贪食蛇服务端单机说明');
+    fireEvent.click(screen.getByRole('button', { name: '试试六款新玩法' }));
+    expect(category('新接入精选')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getAllByRole('article')).toHaveLength(LOCAL_LAB_GAMES.length);
+    for (const game of LOCAL_LAB_GAMES) {
+      const card = within(screen.getByRole('article', { name: game.title }));
+      expect(card.getByRole('link', { name: `打开${game.draftTitle}` })).toHaveAttribute('href', `/games/lab/${game.slug}`);
+      expect(card.getByText('无需登录')).toBeInTheDocument(); expect(card.getByText('仅本轮状态')).toBeInTheDocument();
+      expect(card.getByText('不计官方排行、成就或办公币')).toBeInTheDocument();
+      expect(card.getByText(game.mark)).toBeInTheDocument();
+      expect(card.getByText(game.genre)).toBeInTheDocument();
+    }
+    expect(create).not.toHaveBeenCalled(); expect(rendered.container.querySelector('iframe,img,canvas')).toBeNull();
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '麻将' } });
+    expect(screen.getAllByRole('article')).toHaveLength(1); expect(screen.getByRole('article', { name: '麻将奇旅 · Whatajong' })).toBeInTheDocument();
   });
 
   it('retains other open entries when the server catalog fails and recovers on retry', async () => {
@@ -109,6 +130,7 @@ describe('redesigned community games directory', () => {
     renderGallery();
     expect(await screen.findByRole('alert')).toHaveTextContent('目录读取失败');
     expect(screen.getByRole('link', { name: '打开表格工作稿' })).toBeInTheDocument();
+    for (const game of LOCAL_LAB_GAMES) expect(screen.getByRole('link', { name: `打开${game.draftTitle}` })).toHaveAttribute('href', `/games/lab/${game.slug}`);
     expect(screen.queryByRole('button', { name: '开始挑战' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '重试目录' }));
     expect(await screen.findByText('贪食蛇服务端单机说明')).toBeInTheDocument();

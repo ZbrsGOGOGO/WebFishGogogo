@@ -1,0 +1,25 @@
+/* Adapted controls only; the original Canvas board and minimax AI remain. */
+html, body { background: #f3f6f9; color: #263445; font-size: 16px; line-height: 1.5; overflow-x: hidden; }
+html[data-momo-paused='true'] *, html[data-momo-paused='true'] *::before, html[data-momo-paused='true'] *::after { animation-play-state: paused !important; }
+body { padding: 8px; }
+.header { background: #f3f6f9; }
+.header-title { font-size: 18px; }
+button, input[type=text], .game-settings-mode-list label { min-height: 44px; font-size: 14px; }
+input[type=text] { width: 100%; min-width: 0; border: 1px solid #b6c2cf; border-radius: 6px; padding: 8px; background: #fff; color: #263445; }
+button { padding: 8px 14px; border-radius: 6px; touch-action: manipulation; }
+.game-settings-mode-list label { display: flex; align-items: center; gap: 8px; }
+.section { margin: 10px auto 0; }
+canvas { display: block; margin: 0 auto; touch-action: manipulation; }
+.init-screen, .message-body { max-width: min(480px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; border: 1px solid #becbd8; border-radius: 10px; padding: 16px; font-size: 14px; }
+.init-screen h1, .message-body h1 { font-size: 20px; }
+.init-screen h2 { font-size: 16px; margin-top: 16px; }
+.game-settings-form { gap: 10px; }
+.statusbox { padding: 10px; border: 1px solid #cfdae5; border-radius: 8px; margin: 12px 0; font-size: 14px; }
+.statusbox-body { flex-wrap: wrap; gap: 6px 14px; }
+.statusbox-controls { margin-top: 6px; }
+.footer { font-size: 12px; line-height: 1.6; margin: 16px 0; color: #5b6c7d; }
+@media (max-width: 420px) {
+  .game-settings-form { grid-template-columns: 1fr; }
+  .game-settings-form-section { grid-column: 1; }
+  .game-settings-submit { width: 100%; }
+}

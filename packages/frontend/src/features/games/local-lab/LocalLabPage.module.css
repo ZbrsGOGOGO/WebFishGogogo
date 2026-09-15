@@ -1,0 +1,40 @@
+.page { --text-main: var(--color-text); --text-muted: var(--color-text-secondary); --surface: var(--color-surface); --surface-subtle: var(--color-surface-2); --border: var(--color-border); --brand: var(--color-accent); --text-on-brand: var(--color-on-accent, #fff); max-width: 1100px; margin-inline: auto; padding: clamp(12px, 3vw, 28px); color: var(--text-main); }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.heading p { font-size: 12px; color: var(--text-muted); letter-spacing: .06em; }
+.heading h1 { font-size: clamp(24px, 4vw, 34px); margin: 8px 0; }
+.heading a { min-height: 44px; display: inline-flex; align-items: center; color: var(--brand); }
+.description { max-width: 760px; line-height: 1.8; font-size: 16px; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 24px; }
+.facts span { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 10px; font-size: 12px; color: var(--text-muted); }
+.draft { max-width: 660px; border: 1px solid var(--border); background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.draft[data-expanded='true'] { max-width: 1100px; }
+.draft[data-game='whatajong'][data-expanded='false'] { max-width: 480px; }
+.draft[data-game='whatajong'][data-expanded='false'] .surface { height: 700px; }
+.draft[data-game='connect-four'][data-expanded='false'] { max-width: 540px; }
+.draft[data-game='connect-four'][data-expanded='false'] .surface { height: 610px; }
+.toolbar { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 12px 16px; background: var(--surface-subtle); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.surface { height: 510px; position: relative; background: var(--surface-subtle); }
+.draft[data-expanded='true'] .surface { height: min(78vh, 750px); min-height: 460px; }
+.surface iframe { width: 100%; height: 100%; border: 0; display: block; background: #111827; }
+.surface iframe[data-paused='true'] { visibility: hidden; pointer-events: none; }
+.cover { position: absolute; inset: 0; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: clamp(18px, 4vw, 36px); box-sizing: border-box; background: var(--surface-subtle); }
+.mark { color: var(--brand); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; letter-spacing: .16em; font-family: monospace; font-size: 14px; }
+.cover h2 { font-size: clamp(20px, 3vw, 26px); margin: 24px 0 12px; }
+.cover p { font-size: 16px; line-height: 1.8; max-width: 520px; margin: 0 0 20px; }
+.cover > span:last-child { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; padding: 16px 16px 0; }
+.actions button { min-height: 44px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--text-main); padding: 9px 12px; cursor: pointer; font: inherit; font-size: 14px; }
+.actions button:first-child { background: var(--color-brand, #236fc6); color: #fff; border-color: var(--color-brand, #236fc6); }
+.actions button:disabled { opacity: .55; cursor: not-allowed; }
+.actions button:focus-visible, .next a:focus-visible, .details summary:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.notice { padding: 0 16px 16px; color: var(--text-muted); font-size: 12px; line-height: 1.8; }
+.details { margin-top: 24px; max-width: 850px; border-top: 1px solid var(--border); padding-top: 12px; }
+.details summary { min-height: 44px; cursor: pointer; color: var(--text-main); display: list-item; align-content: center; font-size: 16px; }
+.details p { font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
+.details a { color: var(--brand); }
+.next { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin-top: 30px; }
+.next h2 { grid-column: 1 / -1; font-size: 20px; margin-bottom: 4px; }
+.next a { display: flex; min-height: 60px; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); padding: 12px; color: var(--text-main); text-decoration: none; overflow-wrap: anywhere; }
+.next a span { font-size: 12px; color: var(--text-muted); }
+.next a span:last-child { align-self: flex-end; }
+@media (max-width: 480px) { .surface { height: 500px; } .draft[data-expanded='true'] .surface { height: 72vh; min-height: 440px; } .actions button { flex: 1 1 calc(50% - 8px); } }

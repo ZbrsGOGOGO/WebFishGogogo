@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="zh-CN" dir="ltr">
+  <head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'none'; media-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'none'" />
+<meta name="referrer" content="no-referrer" />
+<script src="../bridge.js"></script>
+<link rel="stylesheet" href="game.css" />
+<link rel="stylesheet" href="adaptation.css" />
+    <meta charset="utf-8" />
+    <title>四子连线 · Connect Four</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Connect Four game in JS + Canvas. Play against artificial intelligence or with another player on this device."
+    />
+
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="四子连线 · Connect Four" />
+    <meta
+      property="og:description"
+      content="Connect Four game in JS + Canvas. Play against artificial intelligence or with another player on this device."
+    />
+    <link rel="icon" type="image/svg+xml" href="logo.svg" />
+  </head>
+
+  <body>
+    <header class="header">
+      <h1 class="header-title">
+        <img
+          src="logo.svg"
+          alt="四子连线 · Connect Four logo"
+          width="24"
+          height="24"
+        />
+        四子连线 · Connect Four
+      </h1>
+    </header>
+    <section class="section">
+      <div class="section-message"></div>
+      <canvas class="section-canvas"></canvas>
+    </section>
+
+    <dialog class="init-screen">
+      <h1>
+        <img
+          src="logo.svg"
+          alt="四子连线 · Connect Four logo"
+          width="24"
+          height="24"
+        />
+        四子连线 · Connect Four
+      </h1>
+      <h2>游戏规则</h2>
+      <p>双方轮流落子，在 7 列、6 行的棋盘上率先连成四子的一方获胜。</p>
+      <p>
+        点击任意一列，棋子会落在该列最低的空位。每次只能放入一枚棋子，不能落在已满的一列。
+      </p>
+      <p>
+        横向、纵向或斜向连续四子均为胜利；棋盘填满仍无人获胜，则为平局。人机模式使用原版 AI；同屏双人模式由两人在这台设备上轮流操作。
+      </p>
+
+      <h2>开始一局</h2>
+      <form method="dialog" class="game-settings-form">
+        <div class="game-settings-form-section">
+          玩法：
+          <ul class="game-settings-mode-list">
+            <li>
+              <label
+                ><input
+                  class="game-settings-mode-input"
+                  type="radio"
+                  name="mode"
+                  value="offline-ai"
+                  checked
+                  autofocus
+                />
+                人机练习：与原版 AI 对弈</label
+              >
+            </li>
+            <li>
+              <label
+                ><input
+                  class="game-settings-mode-input"
+                  type="radio"
+                  name="mode"
+                  value="offline-human"
+                />
+                同屏双人：轮流在这台设备落子</label
+              >
+            </li>
+            <li>
+              <label
+                ><input
+                  class="game-settings-mode-input"
+                  type="radio"
+                  name="mode"
+                  value="ai-vs-ai"
+                />
+                AI 观战：观察双方对弈</label
+              >
+            </li>
+
+          </ul>
+        </div>
+        <label class="game-settings-player-1-name-label" for="player-1-name">
+          玩家名字：
+        </label>
+        <input
+          type="text"
+          class="game-settings-player-1-name-input" maxlength="40"
+          value="红方"
+          name="player-1-name"
+          placeholder="红方"
+        />
+        <label class="game-settings-player-2-name-label" for="player-2-name">
+          玩家名字：
+        </label>
+        <input
+          type="text"
+          class="game-settings-player-2-name-input" maxlength="40"
+          value="蓝方"
+          name="player-2-name"
+          placeholder="蓝方"
+        />
+        <button class="game-settings-submit" type="submit" value="confirm">
+          开始对弈
+        </button>
+      </form>
+    </dialog>
+    <div class="statusbox hidden">
+      <div class="statusbox-body">
+        <div class="statusbox-body-connection">...</div>
+        <div class="statusbox-body-game">...</div>
+        <div class="statusbox-body-player">...</div>
+      </div>
+      <div class="statusbox-controls">
+        <button
+          class="hidden statusbox-button statusbox-button-share"
+          type="button"
+        >
+          Share game
+        </button>
+        <button
+          class="hidden statusbox-button statusbox-button-back"
+          type="button"
+        >
+          返回玩法
+        </button>
+      </div>
+    </div>
+
+    <dialog class="message-body">
+      <form method="dialog" class="message-form">
+        <div class="message-body-content"></div>
+        <button class="message-body-dismiss" type="submit" value="ok">
+          OK
+        </button>
+      </form>
+    </dialog>
+    <footer class="footer">原版 Connect Four · Kenrick · MIT<br />仅本小窗会话；人机、同屏双人和 AI 观战，不含联网房间或本站排行榜。</footer>
+    <script src="bootstrap.js"></script>
+<script src="game.js"></script>
+  </body>
+</html>
