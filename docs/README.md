@@ -1,12 +1,12 @@
 # 摸摸公司文档索引
 
-最新发布：[个人工作台与成长档案第二阶段](RELEASE_UI_PHASE2_20260915.md)：私人/公开档案统一、44 项成长收藏五分类与搜索/状态、称号确认、权益及管理员按需台账。只更新 Web；[第一阶段首页与游戏大厅](RELEASE_UI_PHASE1_20260915.md)、原[文字战线 v3 与免费双人房](RELEASE_WORD_FRONT_V3_20260914.md)、[协作反馈修复](RELEASE_FEEDBACK_20260914.md)、[压力整理与统一导航](RELEASE_RELIEF_NAVIGATION_20260911.md)、[妖塔提案适配](DEMON_TOWER_PROPOSALS_20260911.md)、[灵石经济](DEMON_TOWER_ECONOMY.md)、[成员投稿与站长审核](RELEASE_POSTING_20260910.md)、[深色模式](RELEASE_DARK_MODE_20260910.md)、[工作台与桌宠增强](MY_WORKSPACE.md)能力保留。
+最新发布：[六款本地小游戏第三阶段](RELEASE_GAME_PACK_20260915.md)：六款自托管原版玩法、低调工作稿小窗、精选筛选，目录共 27 个入口，不接新经济或本站房间。只更新 Web；[个人工作台与成长档案第二阶段](RELEASE_UI_PHASE2_20260915.md)、[第一阶段首页与游戏大厅](RELEASE_UI_PHASE1_20260915.md)、原[文字战线 v3 与免费双人房](RELEASE_WORD_FRONT_V3_20260914.md)、[协作反馈修复](RELEASE_FEEDBACK_20260914.md)、[压力整理与统一导航](RELEASE_RELIEF_NAVIGATION_20260911.md)、[妖塔提案适配](DEMON_TOWER_PROPOSALS_20260911.md)、[灵石经济](DEMON_TOWER_ECONOMY.md)、[成员投稿与站长审核](RELEASE_POSTING_20260910.md)、[深色模式](RELEASE_DARK_MODE_20260910.md)、[工作台与桌宠增强](MY_WORKSPACE.md)能力保留。
 
 更新日期：2026-09-15。先看[项目首页](../README.md)与[当前进度](PROGRESS.md)，再按下面的主题查阅。
 
-2026-09-15 **15:12:40（北京时间）**已完成 Web-only 发布：线上 Web 为 `cd11419949b4f9cfcb949f34fddc53c69cde2451`，镜像 `sha256:4616269aaaf608e78b82a23dc8348e191a8289582b6035236a3016004fa1675f`；API 仍运行 `832f5288ea46a6018263c887865040014e56d42d` 的原镜像。数据库保持 **schema39 / 40 条迁移 / 148 张 public 表**，无迁移；API、PostgreSQL、Redis、Gateway 四个非 Web 容器及数据卷不变，环境只变更 `IMAGE_TAG`。GitHub `main` 已正常同步应用代码，后续文档提交不代表重新部署应用。
+2026-09-15 **16:30:24（北京时间）**已完成 Web-only 发布：线上 Web 为 `2b7b8d9c03a99cea0a7e1fd3e66f714e68baceb9`，镜像 `sha256:3799fae5386a3eab46b61aea9e77d7675405c725369de0e50fd6297adebee91a`；API 仍运行 `832f5288ea46a6018263c887865040014e56d42d` 的原镜像。数据库保持 **schema39 / 40 条迁移 / 148 张 public 表**，无迁移；API、PostgreSQL、Redis、Gateway 四个非 Web 容器及数据卷不变，环境只变更 `IMAGE_TAG`。GitHub `main` 已正常同步应用代码，后续文档提交不代表重新部署应用。
 
-本阶段前端 208 文件 / 1811 项测试通过，最终 65 项公网烟测通过，18 个发行文件哈希与同一不可变镜像匹配；本机回环合成成员/管理员/只读/失败状态验收与线上匿名首页、手机游戏大厅、成长档案登录边界检查通过。深浅色代表场景未发现横向溢出或页面错误；不代理生产或操作真实支持台账。**生产认证 Cookie 烟测明确跳过**，不把这些结果称为全站认证或全部游戏平衡验收；烟测失败及复跑记录见发布文档。本轮未读取或回写新的协作反馈，不新增小游戏、Palm AI、支付或经济规则。
+本阶段前端 217 文件 / 1900 项测试通过，最终 65 项公网烟测通过，100 个发行文件哈希与同一不可变镜像匹配；六款最终镜像本机匿名交互、390px 麻将/四子棋及 320px 深浅色大厅代表场景验收通过，线上匿名目录和四子棋实操通过。不代理生产或操作真实支持台账。**生产认证 Cookie 烟测明确跳过**，不把这些结果称为全站认证、真人手机矩阵或全部游戏平衡验收；切换 502、连接超时与完整复跑事实见发布文档。本轮未读取或回写新的协作反馈，不恢复 Palm AI，不新增支付、经济或权限。
 
 确认运行版本、发布结果和回滚边界时，以对应的**正式发布记录**为准；设计文档中的“待验收”或旧提交号是该阶段的历史，不是新的部署指令。
 
@@ -27,6 +27,7 @@
 | 农场与办公币 | [农场玩法](FARM_GAMEPLAY.md)、[基础收益与余额](FARM_ECONOMY_2026-09-08.md) | 每次成熟收获有基础收入，前三次仅限制额外订单；当前余额以服务端钱包为准 |
 | 新闻与热榜 | [新闻分类](NEWS_CATEGORIES_2026-09-08.md)、[快照机制](TRENDING_NEWS_SNAPSHOTS_2026-09-08.md)、[历史来源验收](RELEASE_COMPLETION_20260909.md#热榜实际验收)、[历史关闭跟进](RELEASE_ECONOMY_20260911.md) | 微博、知乎、抖音仍为外链；微博、知乎反馈按站长要求关闭，保留未接入分项，不宣称站内同步成功 |
 | 低调本地游戏与素材 | [2048 / Underrun 源码与许可](LOWKEY_GAME_SOURCE_REVIEW_20260909.md)、[遮司导入边界](ZHENGDAO_GAME_IMPORT.md)、[Ballpoint 来源](../third_party/ballpoint-breach/README.md) | 本地练习、长期存档和正式奖励榜不是同一套数据；遮罩不隐藏网络访问 |
+| 六款本地小游戏实验室 | [玩法、固定来源、首选源码与许可](LOCAL_GAME_LAB.md)、[第三阶段发布验收](RELEASE_GAME_PACK_20260915.md) | 架构守关、麻将构筑、六角消除、AI 四子棋、街机生存、太空经营；仅本轮内存，不发办公币、不入正式榜或本站房间；Radius 限桌面键鼠，in ASCENT 建议桌面/横屏放大 |
 | 首页、游戏大厅与导航 | [界面风格化第一阶段](RELEASE_UI_PHASE1_20260915.md)、[统一跨页目录与自定义](RELEASE_RELIEF_NAVIGATION_20260911.md)、[ThreeUI Community 来源与许可](../third_party/threeui/README.md) | 今日/交流/游戏/工具/我的五组快捷入口，Ctrl/⌘K 查找栏目；游戏按类型与关键词筛选，旧玩法入口保留。按账号在当前浏览器排序/隐藏/重置，不跨设备同步，不覆盖工作台收藏或绕过权限；3D 工位可关闭、空闲休眠，不读取账户资料 |
 | 工位搭子 | [本机桌宠规则与隐私](DESK_PET.md)、[发布验收](RELEASE_DESK_PET_20260910.md) | 免费自定义图片与互动，按账号隔离本机保存，不调用 AI 或上传服务器 |
 
@@ -56,7 +57,7 @@
 | [Compose 定义](../deploy/docker-compose.community.yml) | 社区环境服务与配置的代码依据 |
 | [容量规划](CAPACITY_4000_USERS.md) / [压测说明](../loadtest/README.md) | 4,000 注册 / 1,000 在线是规划目标，不是已验收容量 |
 
-当前 schema39、40 条迁移历史、148 张 public 表；本次只更新 Web，不执行迁移。**本阶段直接回滚为 Web-only**：恢复已保留的第一阶段 `f88ba2c8af2334d419d831ce027896f5d7f5ee3f` Web 镜像 `sha256:9e00d51fa9c33bac236fef42db1f742564f2c24f93e03149d2def20753a3665d` 与本批切换前完整配置，只重建 Web；API 继续运行 `832f5288` 原镜像，数据库、Redis、Gateway、房间服务和全部玩家数据不动。不执行 DOWN、旧库回灌、权限/权益重放，不套用第一阶段 832 Web 回退、旧版妖塔暂停或 v3 API 兼容桥回切。详见[本次发布记录](RELEASE_UI_PHASE2_20260915.md)；另行回退 API 必须重新评审。
+当前 schema39、40 条迁移历史、148 张 public 表；本次只更新 Web，不执行迁移。**本阶段直接回滚为 Web-only**：恢复已保留的第二阶段 `cd11419949b4f9cfcb949f34fddc53c69cde2451` Web 镜像 `sha256:4616269aaaf608e78b82a23dc8348e191a8289582b6035236a3016004fa1675f` 与本批切换前完整配置，只重建 Web；API 继续运行 `832f5288` 原镜像，数据库、Redis、Gateway、房间服务和全部玩家数据不动。不执行 DOWN、旧库回灌、权限/权益重放，不套用阶段一/二旧回退、旧版妖塔暂停或 v3 API 兼容桥回切。详见[本次发布记录](RELEASE_GAME_PACK_20260915.md)；另行回退 API 必须重新评审。
 
 ## 正式发布记录
 
@@ -64,7 +65,8 @@
 
 | 阶段 | 记录 |
 | --- | --- |
-| 当前 Web：个人工作台与成长档案第二阶段，cd11419 | [2026-09-15 第二阶段发布](RELEASE_UI_PHASE2_20260915.md) |
+| 当前 Web：六款本地小游戏第三阶段，2b7b8d9 | [2026-09-15 第三阶段发布](RELEASE_GAME_PACK_20260915.md) |
+| 历史 Web-only：个人工作台与成长档案第二阶段，cd11419 | [2026-09-15 第二阶段发布](RELEASE_UI_PHASE2_20260915.md) |
 | 历史 Web-only：首页与游戏目录第一阶段，f88ba2c | [2026-09-15 第一阶段发布](RELEASE_UI_PHASE1_20260915.md) |
 | 当前 API / 历史 Web：协作反馈修复，832f5288 | [2026-09-14 反馈修复发布](RELEASE_FEEDBACK_20260914.md) |
 | 历史 Web-only：掌心故事本地体验，9994fe9 | [2026-09-14 掌心故事发布](RELEASE_PALM_STORY_20260914.md) |
