@@ -23,6 +23,7 @@ export async function cleanupOfficeHubUser(manager: EntityManager, userId: strin
             }
         if (row.kind === 'drawing') {
             delete state.guesses[userId];
+            delete state.ratings?.[userId];
             state.reports = state.reports.filter((id: string) => id !== userId);
         }
         if (row.kind === 'spy') {

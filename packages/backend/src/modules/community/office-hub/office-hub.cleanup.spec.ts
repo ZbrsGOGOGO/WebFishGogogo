@@ -8,4 +8,22 @@ describe('office soft-deletion cleanup',()=>{
     const query=jest.fn().mockImplementation((sql:string)=>Promise.resolve(sql.includes('information_schema')?[{table_name:'office_hub_posts'}]:sql.startsWith('SELECT id,kind')?rows:[]));await cleanupOfficeHubUser({query} as unknown as EntityManager,'u1');
     const updates=query.mock.calls.filter(([sql])=>String(sql).startsWith('UPDATE office_hub_posts'));expect(JSON.stringify(updates)).not.toContain('私密旧名');expect(JSON.stringify(updates)).not.toContain('私有创作');expect(JSON.stringify(updates)).not.toContain('私有描述');expect(JSON.stringify(updates)).not.toContain('p1');expect(JSON.stringify(updates)).toContain('保留的共同创作');expect(query.mock.calls.some(([sql,args])=>sql==='DELETE FROM office_hub_social_awards WHERE user_id=$1'&&args[0]==='u1')).toBe(true);
   });
+  it('removes only the deleted participant rating and guess while preserving unknown drawing state',async()=>{
+    const state={author:{userId:'u2',publicId:'p2',displayName:'保留作者'},wordIndex:8,published:true,startedAt:123,strokes:[{points:[{x:1,y:2},{x:3,y:4}],color:'#334155',width:4}],guesses:{u1:{attempts:1,solved:false},u2:{attempts:2,solved:true}},ratings:{u1:1,u2:5},reports:['u1','u2'],futureExtension:{nested:['must','remain']}};
+    const rows=[{id:'drawing',kind:'drawing',author_id:'u2',reports:['u1','u2'],state}];
+    const query=jest.fn().mockImplementation((sql:string)=>Promise.resolve(sql.includes('information_schema')?[{table_name:'office_hub_posts'}]:sql.startsWith('SELECT id,kind')?rows:[]));
+    await cleanupOfficeHubUser({query} as unknown as EntityManager,'u1');
+    const update=query.mock.calls.find(([sql])=>String(sql).startsWith('UPDATE office_hub_posts'))!;
+    const stored=JSON.parse(update[1][2]);
+    expect(stored).toEqual({...state,guesses:{u2:{attempts:2,solved:true}},ratings:{u2:5},reports:['u2']});
+    expect(JSON.stringify(stored)).not.toContain('u1');
+    expect(stored.futureExtension).toEqual({nested:['must','remain']});
+  });
+  it('cleans legacy drawings without introducing a ratings property',async()=>{
+    const state={guesses:{u1:{attempts:1,solved:false}},reports:[],published:true,wordIndex:8,unknown:'preserved'};
+    const query=jest.fn().mockImplementation((sql:string)=>Promise.resolve(sql.includes('information_schema')?[{table_name:'office_hub_posts'}]:sql.startsWith('SELECT id,kind')?[{id:'drawing',kind:'drawing',author_id:'u2',reports:[],state}]:[]));
+    await cleanupOfficeHubUser({query} as unknown as EntityManager,'u1');
+    expect(state).toEqual({guesses:{},reports:[],published:true,wordIndex:8,unknown:'preserved'});
+    expect(state).not.toHaveProperty('ratings');
+  });
 });
