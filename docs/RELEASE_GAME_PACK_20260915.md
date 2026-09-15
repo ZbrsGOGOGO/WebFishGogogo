@@ -47,7 +47,7 @@ Hextris 以 **GPL-3.0-or-later** 独立程序运行，不混入 React bundle，�
 
 所有运行资源本地自托管，广告、遥测、外传分数、原远端房间、商业化及不支持的文件分享入口移除或禁用。游戏 `sandbox` 仅 `allow-scripts`，不授予 same-origin、表单、弹窗、下载或顶层导航；消息只交换生命周期，校验当前窗口、来源及 nonce，不传账号、Cookie 或成绩。
 
-Nginx **仅六个确切游戏文档**使用 `SAMEORIGIN` / `frame-ancestors 'self'`；站点外壳继续 `DENY` / `frame-ancestors 'none'`。游戏 `connect-src 'none'`，不使用脚本 `unsafe-inline` / `unsafe-eval`，缺失游戏文件返回 404，不伪装 SPA 脚本。来源链接在父页说明中显式新页查看，不替换游戏沙箱。
+Nginx 本批仅新增**六个确切实验室游戏文档**的 `SAMEORIGIN` / `frame-ancestors 'self'` 例外，既有遮司嵌入例外保留；站点外壳继续 `DENY` / `frame-ancestors 'none'`。六款游戏 `connect-src 'none'`，不使用脚本 `unsafe-inline` / `unsafe-eval`，缺失游戏文件返回 404，不伪装 SPA 脚本。来源链接在父页说明中显式新页查看，不替换游戏沙箱。
 
 ## 本批验证与限制
 
