@@ -7,3 +7,27 @@
 .quota, .saveStatus, .hint { font-size: 12px; overflow-wrap: anywhere; }
 .warning { padding: 10px 12px; border: 1px solid var(--color-border); border-left: 3px solid var(--color-danger, #cf222e); border-radius: var(--radius-md); color: var(--color-text) !important; background: var(--color-surface-2); font-size: 13px; }
 .hint { margin-bottom: 0; }
+.wall { min-width: 0; font-size: 16px; }
+.wall .card { background: var(--color-surface); color: var(--color-text); }
+.wall .card h2 { font-size: 20px; }
+.wall .card h3 { font-size: 18px; overflow-wrap: anywhere; }
+.wall .card label { font-size: 14px; }
+.wall .card button, .wall .card input, .wall .card select { min-height: 44px; }
+.wall .card input { min-width: 0; width: 100%; }
+.wall .card button { background: var(--color-surface); color: var(--color-text); }
+.wall .card button:hover:not(:disabled) { background: var(--color-surface-2); }
+.wall .quota, .wall .saveStatus, .wall .hint { font-size: 14px; }
+.wall .warning { font-size: 14px; }
+.rating { min-width: 0; margin: 16px 0; padding: 14px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-2); }
+.rating legend { padding: 0 6px; color: var(--color-text); font-size: 14px; font-weight: 600; }
+.ratingControls { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.ratingControls label { min-width: 110px; flex: 1 1 130px; }
+.ratingControls button { flex: 0 1 auto; }
+.ratingSummary { margin: 10px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.ratingSummary strong { color: var(--color-text); font-variant-numeric: tabular-nums; }
+.empty { padding: 22px; border: 1px dashed var(--color-border); border-radius: var(--radius-lg); color: var(--color-text-secondary); background: var(--color-surface); }
+@media (max-width: 480px) {
+    .wall .card { padding: 14px; }
+    .rating { padding: 10px; }
+    .ratingControls button { width: 100%; }
+}

@@ -8,6 +8,46 @@ import {
 
 const NOW = Date.UTC(2026, 8, 8, 12);
 const DATE = '2026-09-08';
+describe('Exploration departure presentation', () => {
+  it.each(['battle', 'treasure', 'blessing'] as const)('reports actual %s departure costs and rewards without changing the input', (outcome) => {
+    let checked = false;
+    for (let seed = 0; seed < 100 && !checked; seed++) {
+      const before = fresh(`exploration-presentation-${seed}`), copy = structuredClone(before);
+      const result = action(before, { kind: 'explore', payload: {} });
+      if (result.exploration?.outcome !== outcome) continue;
+      expect(before).toEqual(copy);
+      expect(result.state.stamina).toBe(before.stamina - DEMON_TOWER_CATALOG.rules.exploreCost);
+      expect(result.exploration).toEqual({ outcome, floor: 1, staminaSpent: 5, passesSpent: 0,
+        experience: result.state.totalExperience - before.totalExperience, spiritStones: 0,
+        materials: { ore: result.state.materials.ore - before.materials.ore, herb: result.state.materials.herb - before.materials.herb,
+          soul: result.state.materials.soul - before.materials.soul, clue: result.state.materials.clue - before.materials.clue } });
+      expect(Boolean(result.state.battle)).toBe(outcome === 'battle');
+      if (outcome !== 'battle') { expect(result.officeCoinIntent).toBe(2); expect(result.events.some(text => /宝匣|灵脉/.test(text))).toBe(true); }
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+  it('reports manual pass consumption and capped resources, without pretending it consumed stamina', () => {
+    const context = { now: NOW, serviceDate: DATE, world: world(), expansionEnabled: true };
+    let checked = false;
+    for (let seed = 0; seed < 100 && !checked; seed++) {
+      const prepared = actDemonTower(fresh(`pass-presentation-${seed}`), { kind: 'train', payload: {} }, context).state;
+      prepared.provisions!.passes = 1; prepared.materials = { ore: 1_000_000, herb: 1_000_000, soul: 1_000_000, clue: 1_000_000 };
+      const copy = structuredClone(prepared), result = actDemonTower(prepared, { kind: 'explore_with_pass', payload: {} }, context);
+      if (result.exploration?.outcome === 'battle') continue;
+      expect(prepared).toEqual(copy); expect(result.state.stamina).toBe(prepared.stamina); expect(result.state.provisions!.passes).toBe(0);
+      expect(result.exploration).toMatchObject({ staminaSpent: 0, passesSpent: 1, materials: { ore: 0, herb: 0, soul: 0, clue: 0 },
+        spiritStones: result.state.economy!.balance - prepared.economy!.balance });
+      checked = true;
+    }
+    expect(checked).toBe(true);
+  });
+  it('never returns a departure result for other actions or mutates input after rejected exploration', () => {
+    expect(action(fresh(), { kind: 'train', payload: {} }).exploration).toBeUndefined();
+    const state = fresh(); state.stamina = 4; const copy = structuredClone(state);
+    expectCode(() => action(state, { kind: 'explore', payload: {} }), 'NOT_ENOUGH_STAMINA'); expect(state).toEqual(copy);
+  });
+});
 function world(floor = 1, phase: DemonTowerWorldView['phase'] = 'boss'): DemonTowerWorldView {
   const definition = DEMON_TOWER_FLOORS[floor - 1];
   return { version: 1, unlockedFloor: floor, currentFloor: floor, phase,

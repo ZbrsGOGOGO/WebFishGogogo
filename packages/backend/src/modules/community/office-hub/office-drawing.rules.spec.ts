@@ -1,4 +1,4 @@
-import { chooseDrawingWordIndex, drawingStatus, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_FIRST_WORD_INDEX, OFFICE_DRAWING_REPEAT_WINDOW, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { canRateDrawing, chooseDrawingWordIndex, drawingRatingSummary, drawingStatus, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_FIRST_WORD_INDEX, OFFICE_DRAWING_PARTICIPANT_LIMIT, OFFICE_DRAWING_REPEAT_WINDOW, OFFICE_DRAWING_STATE_MAX_BYTES, rateDrawing, settleDrawing, updateDrawing, type DrawingLifecycle, type DrawingParticipation } from './office-drawing.rules';
 import { DRAW_WORDS } from '../play/engines/word-bank';
 
 const strokes = [{ color: '#334155', width: 4, points: [{ x: 0, y: 0 }, { x: 30, y: 50 }] }];
@@ -80,5 +80,48 @@ describe('Persistent office drawing lifecycle', () => {
     it('never accepts hostile SVG stroke payloads in autosave', () => {
         const d = draft(); expect(() => updateDrawing(d, { expectedRevision: 0, strokes: [{ ...strokes[0], color: 'url(https://evil.invalid)' }] }, d.startedAt, false)).toThrow();
         expect(d.strokes).toEqual([]);
+    });
+    it('requires a nonauthor to have actually guessed, but does not require solving or reveal the topic', () => {
+        const d: DrawingParticipation = { published:true,hidden:false,guesses:{} };
+        expect(canRateDrawing(d,false,'participant')).toBe(false);
+        expect(() => rateDrawing(d,false,'participant',3)).toThrow(expect.objectContaining({response:expect.objectContaining({code:'OFFICE_DRAWING_RATE_PARTICIPATION_REQUIRED'})}));
+        d.guesses.participant={attempts:1,solved:false};
+        expect(canRateDrawing(d,false,'participant')).toBe(true);
+        expect(canRateDrawing(d,true,'participant')).toBe(false);
+        rateDrawing(d,false,'participant',3);
+        expect(drawingRatingSummary(d,'participant')).toEqual({score:3,ratings:1,myRating:3});
+        expect(drawingRatingSummary(d,'outsider')).toEqual({score:3,ratings:1,myRating:null});
+        expect(() => rateDrawing(d,true,'participant',3)).toThrow(expect.objectContaining({response:expect.objectContaining({code:'OFFICE_SELF_RATE'})}));
+        d.hidden=true; expect(canRateDrawing(d,false,'participant')).toBe(false);
+    });
+    it.each([undefined,null,0,6,2.5,'3',NaN,Infinity])('rejects invalid drawing rating %s without changing votes', rating => {
+        const d: DrawingParticipation = {published:true,hidden:false,guesses:{participant:{attempts:1,solved:false}},ratings:{participant:4}};
+        expect(() => rateDrawing(d,false,'participant',rating)).toThrow();
+        expect(d.ratings).toEqual({participant:4});
+    });
+    it('updates one vote rather than appending votes, and keeps legacy unknown invalid values out of averages', () => {
+        const d: DrawingParticipation = {published:true,hidden:false,guesses:{a:{attempts:1,solved:false},b:{attempts:1,solved:true}},ratings:{invalid:99}};
+        rateDrawing(d,false,'a',1); rateDrawing(d,false,'b',5);
+        expect(drawingRatingSummary(d,'a')).toEqual({score:3,ratings:2,myRating:1});
+        rateDrawing(d,false,'a',3);
+        expect(drawingRatingSummary(d,'a')).toEqual({score:4,ratings:2,myRating:3});
+        expect(d.ratings?.invalid).toBe(99);
+        expect(drawingRatingSummary({},'a')).toEqual({score:null,ratings:0,myRating:null});
+    });
+    it('limits new participants without denying an existing participant a vote correction', () => {
+        const ratings=Object.fromEntries(Array.from({length:OFFICE_DRAWING_PARTICIPANT_LIMIT},(_,i)=>[`voter-${i}`,3]));
+        const d: DrawingParticipation = {published:true,hidden:false,guesses:{new:{attempts:1,solved:false},'voter-0':{attempts:1,solved:false}},ratings};
+        expect(() => rateDrawing(d,false,'new',5)).toThrow();
+        rateDrawing(d,false,'voter-0',5); expect(d.ratings?.['voter-0']).toBe(5);
+    });
+    it('bounds the maximum validated artwork and 1000 UUID guesses/votes well below the hard state-byte ceiling', () => {
+        const ids=Array.from({length:OFFICE_DRAWING_PARTICIPANT_LIMIT},(_,i)=>`12345678-1234-4234-8234-${String(i).padStart(12,'0')}`);
+        const points=Array.from({length:30},()=>({x:1000,y:1000}));
+        const strokes=Array.from({length:100},()=>({color:'#334155',width:8,points}));
+        const d={author:{userId:ids[0],publicId:ids[0],displayName:'测'.repeat(100)},theme:'测'.repeat(100),wordIndex:8,startedAt:Date.now(),published:true,revision:1000,savedAt:Date.now(),submittedAt:Date.now(),submission:'manual',strokes,
+            guesses:Object.fromEntries(ids.map(id=>[id,{attempts:5,solved:false}])),ratings:Object.fromEntries(ids.map(id=>[id,5])),reports:ids.slice(0,3),hidden:false};
+        const bytes=Buffer.byteLength(JSON.stringify(d),'utf8');
+        expect(bytes).toBeLessThan(OFFICE_DRAWING_STATE_MAX_BYTES);
+        expect(bytes).toBeLessThan(190_000);
     });
 });

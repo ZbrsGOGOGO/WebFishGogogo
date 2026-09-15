@@ -9,7 +9,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
 import { PlatformAssetsService } from '../../platform/platform-assets.service';
 import { DemonTowerController } from './demon-tower.controller';
-import { type DemonTowerEngineState } from './demon-tower.engine';
+import { actDemonTower, type DemonTowerEngineState } from './demon-tower.engine';
 import { DemonTowerService } from './demon-tower.service';
 
 /** pg-mem checks real mappings/queries. Concurrent locks and failure rollback require the real-PG script. */
@@ -44,6 +44,41 @@ describe('DemonTowerService entity integration', () => {
   async function prepareState(actor: User, change: (state: DemonTowerEngineState) => void): Promise<void> {
     const row = await rawProfile(actor); change(row.state as unknown as DemonTowerEngineState); await db.getRepository(DemonTowerProfile).save(row);
   }
+
+  it('restores complete departure text while retaining the old receipt event limits and private scope', async () => {
+    process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED = 'true';
+    const a = await user('explorer-a'), b = await user('explorer-b'); await act(a, 'enroll'); await act(b, 'enroll');
+    const world = (await service.overview(a.id)).world;
+    await prepareState(a, state => {
+      state.level = 100; state.totalExperience = 100_000;
+      state.weapons = DEMON_TOWER_CATALOG.weapons.map(item => ({ id: item.id, quality: 0, spareCopies: 1 }));
+      state.skills = DEMON_TOWER_CATALOG.skills.map(item => ({ id: item.id, quality: 0, spareCopies: 1 }));
+      let found = false;
+      for (let seed = 0; seed < 100 && !found; seed++) {
+        state.rngSeed = `full-departure-service-${seed}`; state.rngCounter = 0;
+        found = actDemonTower(state, { kind: 'explore', payload: {} }, { now: now.getTime(), serviceDate: '2099-09-08', world, expansionEnabled: true }).exploration?.outcome !== 'battle';
+      }
+      expect(found).toBe(true);
+    });
+    const result = await act(a, 'explore'); expect(result.exploration!.events.length).toBeGreaterThan(13);
+    expect(result.events.length).toBeLessThanOrEqual(13);
+    expect(result.exploration!.events.some(text => /宝匣|灵脉/.test(text))).toBe(true);
+    const before = await rawProfile(a), restored = await service.overview(a.id);
+    expect(restored.lastExploration).toEqual(result.exploration); expect(await rawProfile(a)).toEqual(before);
+    expect((await service.overview(b.id)).lastExploration).toBeNull();
+    expect(JSON.stringify(restored.lastExploration)).not.toMatch(/rngSeed|rngCounter|email|wallet|loadout|state/);
+  });
+
+  it('reads an old command without inventing departure numbers, and does not mutate it on replay', async () => {
+    const a = await user('legacy-explorer'); await act(a, 'enroll'); const result = await act(a, 'explore');
+    const repo = db.getRepository(DemonTowerCommand), row = await repo.createQueryBuilder('command').addSelect('command.receipt')
+      .where('command.user_id = :id AND command.request_id = :requestId', { id: a.id, requestId: result.requestId }).getOneOrFail();
+    delete (row.receipt as Record<string, unknown>).exploration; await repo.save(row);
+    const legacy = (await service.overview(a.id)).lastExploration!;
+    expect(legacy).toEqual({ requestId: result.requestId, appliedVersion: row.appliedVersion, completedAt: row.createdAt.getTime(), source: 'legacy', events: result.events, officeCoinsGranted: result.officeCoinsGranted });
+    const replay = await service.action(a.id, { requestId: row.requestId, expectedVersion: row.expectedVersion, kind: 'explore', payload: {} });
+    expect(replay.replayed).toBe(true); expect(replay.exploration).toBeUndefined(); expect(replay.overview.lastExploration).toEqual(legacy);
+  });
 
   it('protects personal endpoints and authenticates optional tokens on public leaderboards', () => {
     for (const name of ['overview', 'action'] as const) expect(Reflect.getMetadata(GUARDS_METADATA, DemonTowerController.prototype[name])).toContain(JwtAuthGuard);

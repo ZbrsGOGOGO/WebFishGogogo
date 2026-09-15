@@ -16,13 +16,16 @@ const TABS: Array<[
 ]> = [['company', '我的公司'], ['collection', '每日收藏'], ['stories', '故事接龙'], ['drawings', '异步猜画'], ['spy', '描述墙'], ['boss', '减压日常']];
 function useOfficeHub(tab:Tab) {
     const [view, setView] = useState<OfficeHubOverview | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+    // A mounted workspace belongs to one auth generation, even before React
+    // has rerendered after logout or same-account reauthentication.
+    const sessionGeneration = useRef(getCommunitySessionGeneration());
     const alive = useRef(false), serial = useRef(0), pending = useRef<{
         fingerprint: string;
         id: string;
     } | null>(null), locked = useRef(false);
     const currentCursor=useRef<string|undefined>(undefined);
     const kind=tab==='stories'?'story':tab==='drawings'?'drawing':tab==='spy'?'spy':undefined;
-    const refresh = useCallback(async (cursor?:string) => { const id = ++serial.current, generation = getCommunitySessionGeneration(); try {
+    const refresh = useCallback(async (cursor?:string) => { if (!alive.current || sessionGeneration.current !== getCommunitySessionGeneration()) return; const id = ++serial.current, generation = sessionGeneration.current; try {
         const next = await officeHubApi.overview(cursor,kind);
         if (alive.current && serial.current === id && generation === getCommunitySessionGeneration()) {
             setView(next);
@@ -37,18 +40,18 @@ function useOfficeHub(tab:Tab) {
     useEffect(() => { alive.current = true; void refresh(); const timer = window.setInterval(() => { if (!document.hidden && !locked.current)
         void refresh(currentCursor.current); }, 15000); return () => { alive.current = false; ++serial.current; window.clearInterval(timer); }; }, [refresh]);
     const command: Command = async (action, data = {}) => {
-        if (locked.current)
+        if (!alive.current || sessionGeneration.current !== getCommunitySessionGeneration() || locked.current)
             return false;
         locked.current = true;
         setBusy(true);
         setError('');
-        const id = ++serial.current, generation = getCommunitySessionGeneration();
+        const id = ++serial.current, generation = sessionGeneration.current;
         const fingerprint = JSON.stringify({ action, data });
         if (pending.current?.fingerprint !== fingerprint)
             pending.current = { fingerprint, id: crypto.randomUUID() };
         try {
             let next = await officeHubApi.action(action, data, pending.current.id);
-            if(kind&&generation===getCommunitySessionGeneration())next={...await officeHubApi.overview(currentCursor.current,kind),notice:next.notice};
+            if(kind&&alive.current&&serial.current===id&&generation===getCommunitySessionGeneration())next={...await officeHubApi.overview(currentCursor.current,kind),notice:next.notice};
             if (!alive.current || serial.current !== id || generation !== getCommunitySessionGeneration())
                 return false;
             setView(next);
@@ -62,7 +65,7 @@ function useOfficeHub(tab:Tab) {
         }
         finally {
             locked.current = false;
-            if (alive.current)
+            if (alive.current && generation === getCommunitySessionGeneration())
                 setBusy(false);
         }
     };
@@ -73,7 +76,10 @@ export function OfficeHubPage({ initialTab = 'company' }: {
 }) {
     const [params, setParams] = useSearchParams();
     const requested = params.get('tab');
-    const user = useCommunityAuthStore((state) => state.user);
+    // Subscribe to the auth snapshot so a new session for the same publicId
+    // also remounts private forms; this does not create business requests.
+    const auth = useCommunityAuthStore((state) => state);
+    const user = auth.user;
     const scope = `${user?.publicId ?? 'guest'}:${getCommunitySessionGeneration()}`;
     return <OfficeHubContent key={scope} initialTab={initialTab} requested={requested} setTab={(next) => setParams({ tab: next })}/>;
 }

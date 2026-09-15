@@ -7,6 +7,8 @@ import { migrations } from '../../../database/migrations';
 import { PlatformAssetsService } from '../../platform';
 import { OfficeHubService } from './office-hub.service';
 import { cleanupOfficeHubUser } from './office-hub.cleanup';
+import { OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT, OFFICE_DRAWING_PARTICIPANT_LIMIT, OFFICE_DRAWING_STATE_MAX_BYTES, OFFICE_DRAWING_STORAGE_LIMIT } from './office-drawing.rules';
+import { queueOfficeSocialAwards } from './office-social-awards';
 /** Real PostgreSQL only: supply a DEDICATED database office_test_* / webfish_test_* / feedback_test_*.
  * Does not run automatically against application DB_*. Never logs connection credentials.
  */
@@ -80,7 +82,7 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
         const started = await action(0, 'drawing_start'), d = started.drawingWorkspace!.current!;
         const strokes = [{ points: [{ x: 0, y: 0 }, { x: 900, y: 900 }], color: '#334155', width: 4 }];
         const saved = await action(0, 'drawing_save', { postId: d.id, expectedRevision: 0, strokes });
-        expect(saved.drawingWorkspace).toMatchObject({ dailyLimit: 3, dailyUsed: 1, dailyRemaining: 2, current: { id: d.id, revision: 1, status: 'draft', strokes } });
+        expect(saved.drawingWorkspace).toMatchObject({ dailyLimit: null, dailyUnlimited: true, dailyUsed: 1, dailyRemaining: null, canStart: false, storageLimit: 1000, storageUsed: 1, current: { id: d.id, revision: 1, status: 'draft', strokes } });
         expect((await service.overview(users[0].id, undefined, 'story')).drawingWorkspace?.current).toMatchObject({ id: d.id, strokes });
         expect((await service.overview(users[1].id)).drawings.some(x => x.id === d.id)).toBe(false);
         expect((await service.overview(users[1].id)).drawingWorkspace?.current).toBeNull();
@@ -106,22 +108,25 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
         await service.settleDueDrawings(); expect((await state()).stats.drawings).toBe(1);
         expect((await state()).counters.drawing_start).toBe(1);
     });
-    it('records blank expiration without a public image or automatic chance refunds', async () => {
+    it('allows more than three daily creations and does not accumulate expired empty tasks in artwork capacity', async () => {
         const words = new Set<string>();
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 20; i++) {
             const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
             expect(d.word).not.toBeNull();
-            words.add(d.word!);
+            if(i<7) words.add(d.word!);
             now = Date.parse(d.deadlineAt!);
             const view = await service.overview(users[0].id);
-            expect(view.drawingWorkspace).toMatchObject({ dailyUsed: i + 1, dailyRemaining: 2 - i, current: { status: 'expired_empty', submission: 'automatic', strokes: [] } });
+            expect(view.drawingWorkspace).toMatchObject({ dailyUsed: i + 1, dailyRemaining: null, canStart:true, storageUsed:0, current: { status: 'expired_empty', submission: 'automatic', strokes: [] } });
         }
-        expect(words.size).toBe(3);
+        expect(words.size).toBe(7);
         expect((await service.overview(users[1].id)).drawings).toEqual([]);
         expect((await state()).stats.drawings).toBe(0);
-        await expect(action(0, 'drawing_start')).rejects.toMatchObject({ response: { code: 'OFFICE_DRAWING_DAILY_LIMIT' } });
+        // Twelve bounded topic-history rows plus the latest terminal result;
+        // none of these empty tasks uses public artwork storage.
+        expect(await db.query("SELECT id FROM office_hub_posts WHERE author_id=$1 AND kind='drawing'",[users[0].id])).toHaveLength(13);
+        expect((await action(0,'drawing_start')).drawingWorkspace?.dailyUsed).toBe(21);
         now += 86400000;
-        expect((await action(0, 'drawing_start')).drawingWorkspace?.dailyRemaining).toBe(2);
+        expect((await action(0, 'drawing_start')).drawingWorkspace).toMatchObject({dailyLimit:null,dailyRemaining:null,dailyUsed:1});
     });
     it('replays original draft and publish requests without duplicate revisions or drawing credit', async () => {
         const d = (await action(0, 'drawing_start')).drawingWorkspace!.current!;
@@ -391,8 +396,184 @@ integration('OfficeHub real PostgreSQL transactions / ownership / lifecycle', ()
     it('queues drawer rewards without waiting for the drawer users lock or writing their wallet',async()=>{
         const started=await action(0,'drawing_start'),d=started.drawings[0];await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
         let ready!:()=>void,release!:()=>void;const locked=new Promise<void>(r=>{ready=r;});const hold=new Promise<void>(r=>{release=r;});
-        const tx=db.transaction(async m=>{await m.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[users[0].id]);ready();await hold;});await locked;
+        const tx=db.transaction(async m=>{await m.query('SELECT id FROM users WHERE id=$1 FOR NO KEY UPDATE',[users[0].id]);ready();await hold;});await locked;
         try{await action(1,'drawing_guess',{postId:d.id,guess:d.word});expect(await db.getRepository(WalletBalance).countBy({userId:users[0].id})).toBe(0);}finally{release();await tx;}
         expect((await action(0,'collect_social')).collection.socialPoints).toBe(5);
+    },20000);
+    it('does not impose the old daily save/publish/guess/general caps on drawing requests while retaining short-interval throttling',async()=>{
+        await patch(0,p=>{p.counters={all:5000,drawing_start:999,drawing_save:999,drawing_publish:999};});
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        const strokes=[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}];
+        const saved=await action(0,'drawing_save',{postId:d.id,expectedRevision:0,strokes});
+        now+=101;
+        await expect(service.action(users[0].id,{requestId:randomUUID(),action:'drawing_save',postId:d.id,expectedRevision:1,strokes})).rejects.toMatchObject({response:{code:'OFFICE_RATE_LIMIT'}});
+        await action(0,'drawing_publish',{postId:d.id,expectedRevision:1,strokes});
+        expect(saved.drawingWorkspace?.dailyUsed).toBe(1000);
+        expect((await state()).counters.all).toBe(5000);
+        await patch(1,p=>{p.counters={all:5000,drawing_guess:999,drawing_rate:999};});
+        await action(1,'drawing_guess',{postId:d.id,guess:'不正确的词'});
+        expect((await action(1,'drawing_rate',{postId:d.id,rating:4})).drawings.find(x=>x.id===d.id)).toMatchObject({score:4,ratings:1,myRating:4,word:null});
+    });
+    it('does not consume the daily request allowance of unrelated office activities',async()=>{
+        await patch(0,p=>{p.counters.all=1499;});
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        expect((await state()).counters.all).toBe(1499);
+        expect((await action(0,'daily_ticket')).collection.tickets).toBe(1);
+        expect((await state()).counters.all).toBe(1500);
+    });
+    it('blocks additional stored artwork at capacity and permits creation after the owner explicitly deletes a historical drawing',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        const [{state: drawing}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);
+        const ids=Array.from({length:OFFICE_DRAWING_STORAGE_LIMIT-1},()=>randomUUID());
+        await db.query("INSERT INTO office_hub_posts(id,author_id,kind,state) SELECT id,$2,'drawing',$3::jsonb FROM unnest($1::uuid[]) id",[ids,users[0].id,JSON.stringify(drawing)]);
+        const full=await service.overview(users[0].id);
+        expect(full.drawingWorkspace).toMatchObject({storageUsed:1000,storageLimit:1000,canStart:false,capacityReason:'personal'});
+        await expect(action(0,'drawing_start')).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_CAPACITY'}});
+        await action(0,'post_delete',{postId:ids[0]});
+        expect((await action(0,'drawing_start')).drawingWorkspace).toMatchObject({storageUsed:1000,current:{status:'draft'}});
+        expect((await state()).counters.drawing_start).toBe(2);
+    });
+    it('reports global storage protection distinctly without deleting any real artwork',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        const [{state: drawing}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);
+        const ids=Array.from({length:OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT-1},()=>randomUUID());
+        // Synthetic records only: the dedicated test database is isolated.
+        await db.query("INSERT INTO office_hub_posts(id,author_id,kind,state) SELECT id,$2,'drawing',$3::jsonb FROM unnest($1::uuid[]) id",[ids,users[0].id,JSON.stringify(drawing)]);
+        expect((await service.overview(users[7].id)).drawingWorkspace).toMatchObject({storageUsed:0,canStart:false,capacityReason:'global'});
+        await expect(action(7,'drawing_start')).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_GLOBAL_CAPACITY'}});
+        expect(await db.query("SELECT id FROM office_hub_posts WHERE author_id=$1 AND kind='drawing'",[users[0].id])).toHaveLength(5000);
+    });
+    it('requires actual guess participation, rejects self/invalid votes, updates one vote and never reveals an unsolved answer or voter identities',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        await expect(action(0,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'OFFICE_SELF_RATE'}});
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_RATE_PARTICIPATION_REQUIRED'}});
+        await action(1,'drawing_guess',{postId:d.id,guess:'不正确的词'});
+        for(const rating of [0,6,2.5,'3',null])await expect(action(1,'drawing_rate',{postId:d.id,rating})).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_RATING_INVALID'}});
+        const requestId=randomUUID();
+        const vote=await action(1,'drawing_rate',{postId:d.id,rating:1},requestId);
+        const mine=vote.drawings.find(x=>x.id===d.id)!;
+        expect(mine).toMatchObject({word:null,canRate:true,score:1,ratings:1,myRating:1});
+        expect(JSON.stringify(mine)).not.toContain(users[1].id);
+        expect(mine).not.toHaveProperty('wordIndex'); expect(mine).not.toHaveProperty('guesses',expect.any(Object));
+        expect((await action(1,'drawing_rate',{postId:d.id,rating:1},requestId)).drawings.find(x=>x.id===d.id)).toMatchObject({ratings:1});
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:2},requestId)).rejects.toMatchObject({response:{code:'OFFICE_IDEMPOTENCY_CONFLICT'}});
+        await action(2,'drawing_guess',{postId:d.id,guess:'也不正确'});
+        now+=1100;
+        await Promise.all([service.action(users[1].id,{action:'drawing_rate',postId:d.id,rating:3,requestId:randomUUID()}),service.action(users[2].id,{action:'drawing_rate',postId:d.id,rating:5,requestId:randomUUID()})]);
+        const outsider=(await service.overview(users[3].id)).drawings.find(x=>x.id===d.id)!;
+        expect(outsider).toMatchObject({score:4,ratings:2,myRating:null,canRate:false,word:null});
+        expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=ANY($1::uuid[])',[users.slice(0,3).map(u=>u.id)])).toEqual([]);
+        expect(await db.getRepository(WalletBalance).countBy({userId:users[1].id})).toBe(0);
+        await db.transaction(m=>cleanupOfficeHubUser(m,users[1].id));
+        expect((await service.overview(users[3].id)).drawings.find(x=>x.id===d.id)).toMatchObject({score:5,ratings:1});
+        const [{state:stored}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);
+        expect(stored.ratings).not.toHaveProperty(users[1].id); expect(stored.guesses).not.toHaveProperty(users[1].id);
+    });
+    it('does not permit drawing votes through blocked/hidden content, inactive accounts or disabled feature/write gates',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        await action(1,'drawing_guess',{postId:d.id,guess:'不正确'});
+        await db.getRepository(UserBlock).save({blockerId:users[1].id,blockedId:users[0].id});
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'OFFICE_RELATIONSHIP_BLOCKED'}});
+        await db.getRepository(UserBlock).delete({blockerId:users[1].id,blockedId:users[0].id});
+        await db.query('UPDATE office_hub_posts SET hidden=true WHERE id=$1',[d.id]);
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'OFFICE_POST_NOT_FOUND'}});
+        await db.query('UPDATE office_hub_posts SET hidden=false WHERE id=$1',[d.id]);
+        await db.getRepository(User).update(users[1].id,{accountStatus:'suspended'});
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'ACCOUNT_NOT_ACTIVE'}});
+        await db.getRepository(User).update(users[1].id,{accountStatus:'active'});
+        for(const flag of ['FEATURE_OFFICE_HUB_ENABLED','FEATURE_COMMUNITY_WRITES_ENABLED']){
+            process.env[flag]='false';
+            try{await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({status:503});}
+            finally{process.env[flag]='true';}
+        }
+        const [{state:stored}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);expect(stored.ratings).toEqual({});
+    });
+    it('rejects an oversized drawing-state write atomically while leaving legacy unknown fields readable',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        await action(1,'drawing_guess',{postId:d.id,guess:'不正确'});
+        const [{state:stored}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);
+        stored.unknownFutureField='x'.repeat(OFFICE_DRAWING_STATE_MAX_BYTES);
+        await db.query('UPDATE office_hub_posts SET state=$2::jsonb WHERE id=$1',[d.id,JSON.stringify(stored)]);
+        expect((await service.overview(users[1].id)).drawings.find(x=>x.id===d.id)?.word).toBeNull();
+        await expect(action(1,'drawing_rate',{postId:d.id,rating:5})).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_PARTICIPANT_CAPACITY'}});
+        const [{state:after}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);expect(after).toEqual(stored);
+    });
+    it('keeps five attempts per drawing and limits new participants without exposing other guesses',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        for(let i=0;i<5;i++)await action(1,'drawing_guess',{postId:d.id,guess:'不正确'});
+        await expect(action(1,'drawing_guess',{postId:d.id,guess:d.word})).rejects.toMatchObject({response:{code:'OFFICE_GUESS_LIMIT'}});
+        await action(1,'drawing_rate',{postId:d.id,rating:3});
+        const [{state:stored}]=await db.query('SELECT state FROM office_hub_posts WHERE id=$1',[d.id]);
+        stored.guesses=Object.fromEntries(Array.from({length:OFFICE_DRAWING_PARTICIPANT_LIMIT},()=>[randomUUID(),{attempts:1,solved:false}]));
+        await db.query('UPDATE office_hub_posts SET state=$2::jsonb WHERE id=$1',[d.id,JSON.stringify(stored)]);
+        await expect(action(2,'drawing_guess',{postId:d.id,guess:'不正确'})).rejects.toMatchObject({response:{code:'OFFICE_DRAWING_PARTICIPANT_CAPACITY'}});
+    });
+    it('counts claimed drawing rewards toward daily generation, leaves old rewards intact and still accepts successful guesses after reward limits',async()=>{
+        const drawings: OfficeHubOverview['drawings']=[];
+        for(let i=0;i<2;i++){const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});drawings.push(d);}
+        for(let i=0;i<9;i++)await db.query("INSERT INTO office_hub_social_awards(user_id,source,points,claimed,created_at) VALUES($1,$2,10,true,$3)",[users[1].id,`guess:prior-${i}`,new Date(now)]);
+        await db.query("INSERT INTO office_hub_social_awards(user_id,source,points,created_at) VALUES($1,'guess:legacy-unclaimed',10,$2)",[users[1].id,new Date(now-86400000)]);
+        await action(1,'drawing_guess',{postId:drawings[0].id,guess:drawings[0].word});
+        expect((await action(1,'collect_social')).collection.socialPoints).toBe(20);
+        const second=await action(1,'drawing_guess',{postId:drawings[1].id,guess:drawings[1].word});
+        expect(second.drawings.find(x=>x.id===drawings[1].id)).toMatchObject({solved:true,canRate:true});
+        expect(second.notice).toMatch(/已达上限/);
+        expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=$1',[users[1].id])).toHaveLength(11);
+        expect((await state(1)).stats.correctGuesses).toBe(2);
+    });
+    it('does not generate additional drawing award rows while the existing pending queue is full',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        await db.query("INSERT INTO office_hub_social_awards(user_id,source,points,created_at) SELECT $1,'spy:legacy-'||n,1,$2 FROM generate_series(1,200) n",[users[1].id,new Date(now-86400000)]);
+        const solved=await action(1,'drawing_guess',{postId:d.id,guess:d.word});
+        expect(solved.drawings.find(x=>x.id===d.id)?.solved).toBe(true);
+        expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=$1',[users[1].id])).toHaveLength(200);
+        expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=$1',[users[0].id])).toHaveLength(1);
+    });
+    it('serializes concurrent drawing award generation for the same recipient at the exact daily boundary',async()=>{
+        await db.query("INSERT INTO office_hub_social_awards(user_id,source,points,claimed,created_at) SELECT $1,'guess:prior-'||n,5,true,$2 FROM generate_series(1,19) n",[users[0].id,new Date(now)]);
+        const results=await Promise.all([db.transaction(m=>queueOfficeSocialAwards(m,[{userId:users[0].id,source:'draw:concurrent-a',points:5}],now)),db.transaction(m=>queueOfficeSocialAwards(m,[{userId:users[0].id,source:'draw:concurrent-b',points:5}],now))]);
+        expect(results.flat().sort()).toEqual([false,true]);
+        const [{points}]=await db.query("SELECT sum(points)::int points FROM office_hub_social_awards WHERE user_id=$1",[users[0].id]);expect(points).toBe(100);
+    });
+    it('finishes two cross-account guesses and a simultaneous collection without acquiring the other account profile lock',async()=>{
+        const d0=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d0.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        const d1=(await action(1,'drawing_start')).drawingWorkspace!.current!;
+        await action(1,'drawing_publish',{postId:d1.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        now+=1100;
+        const results=await Promise.all([service.action(users[0].id,{action:'drawing_guess',postId:d1.id,guess:d1.word,requestId:randomUUID()}),service.action(users[1].id,{action:'drawing_guess',postId:d0.id,guess:d0.word,requestId:randomUUID()})]);
+        expect(results.every(v=>v.drawings.some(d=>d.solved))).toBe(true);
+        expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=ANY($1::uuid[])',[users.slice(0,2).map(u=>u.id)])).toHaveLength(4);
+        const d2=(await action(2,'drawing_start')).drawingWorkspace!.current!;
+        await action(2,'drawing_publish',{postId:d2.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        now+=1100;
+        await Promise.all([service.action(users[0].id,{action:'drawing_guess',postId:d2.id,guess:d2.word,requestId:randomUUID()}),service.action(users[2].id,{action:'collect_social',requestId:randomUUID()})]);
+        const [{count}]=await db.query('SELECT count(*)::int count FROM office_hub_social_awards WHERE user_id=$1 AND source=$2',[users[2].id,`draw:${d2.id}:${users[0].id}`]);expect(count).toBe(1);
+    },20000);
+    it('waits for author deletion before post locking and never resurrects deleted drawing/award/ratings state',async()=>{
+        const d=(await action(0,'drawing_start')).drawingWorkspace!.current!;
+        await action(0,'drawing_publish',{postId:d.id,strokes:[{points:[{x:0,y:0},{x:20,y:30}],color:'#334155',width:4}]});
+        const holder=db.createQueryRunner();await holder.connect();await holder.startTransaction();
+        let queued:Promise<OfficeHubOverview>|undefined;
+        try{
+            const [{pid}]=await holder.query('SELECT pg_backend_pid() pid');
+            await holder.query('SELECT id FROM users WHERE id=$1 FOR UPDATE',[users[0].id]);
+            now+=1100;queued=service.action(users[1].id,{action:'drawing_guess',postId:d.id,guess:d.word,requestId:randomUUID()});void queued.catch(()=>{});
+            await waitForBlockedBy(Number(pid));
+            await holder.query("UPDATE users SET account_status='deleted' WHERE id=$1",[users[0].id]);
+            await cleanupOfficeHubUser(holder.manager,users[0].id);
+            await holder.commitTransaction();
+            await expect(queued).rejects.toMatchObject({response:{code:'OFFICE_POST_NOT_FOUND'}});
+            expect(await db.query('SELECT id FROM office_hub_posts WHERE id=$1',[d.id])).toEqual([]);
+            expect(await db.query('SELECT source FROM office_hub_social_awards WHERE user_id=ANY($1::uuid[])',[users.slice(0,2).map(u=>u.id)])).toEqual([]);
+        }finally{if(holder.isTransactionActive)await holder.rollbackTransaction();await holder.release();if(queued)await queued.catch(()=>{});}
     },20000);
 });

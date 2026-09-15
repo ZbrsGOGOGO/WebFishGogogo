@@ -11,12 +11,12 @@ import {
 import type {
   DemonTowerAction, DemonTowerActionKind, DemonTowerAttribute, DemonTowerAttributes, DemonTowerBattleReport,
   DemonTowerBattleView, DemonTowerCombatantView, DemonTowerCombatLog, DemonTowerEffectView,
-  DemonTowerLoadout, DemonTowerMaterials, DemonTowerOwnedSkill, DemonTowerOwnedWeapon,
+  DemonTowerLoadout, DemonTowerMaterial, DemonTowerMaterials, DemonTowerOwnedSkill, DemonTowerOwnedWeapon,
   DemonTowerProfileView, DemonTowerSkillId, DemonTowerWeaponId, DemonTowerWorldView, DemonTowerInnateId, DemonTowerRarity,
   DemonTowerExpansionView, DemonTowerLootSource, DemonTowerAffix, DemonTowerSkin,
   DemonTowerArenaSkillId, DemonTowerEconomyView, DemonTowerShopOffer, DemonTowerShopOfferId, DemonTowerEconomyLedgerEntry,
   DemonTowerAppearance, DemonTowerCombatPower,
-  DemonTowerProvisionsView, DemonTowerOfficeOffer, DemonTowerOfficeOfferView,
+  DemonTowerProvisionsView, DemonTowerOfficeOffer, DemonTowerOfficeOfferView, DemonTowerExplorationResult,
 } from '@stealth-reader/shared';
 import { demonTowerArenaRank, simulateDemonTowerDuel, type DemonTowerSocialBuild } from './demon-tower-social.engine';
 
@@ -78,6 +78,8 @@ export interface DemonTowerEngineContext { now: number; serviceDate: string; wor
   arenaOpponent?: { publicId: string; displayName: string; build: DemonTowerSocialBuild } }
 export interface DemonTowerWorldEffect { kind: 'boss_damage' | 'construction'; floor: number; amount: number }
 export interface DemonTowerEngineResult {
+  /** Safe departure presentation; never used to calculate or replay rewards. */
+  exploration?: DemonTowerExplorationResult;
   /** Intent only. The service MUST debit the real unified wallet in the SAME transaction. */
   officeCoinCost?: number;
   state: DemonTowerEngineState; events: string[]; worldEffect: DemonTowerWorldEffect | null;
@@ -1503,6 +1505,7 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
   const previousLevel = state.level, initialItems = itemAcquisitions(state);
   const previousBattleWasLegacy = Boolean(state.battle && state.battle.rulesVersion !== 2);
   const result: DemonTowerEngineResult = { state, events, worldEffect: null, officeCoinIntent: 0 };
+  let departureBefore: { experience: number; materials: DemonTowerMaterials; spiritStones: number } | null = null;
   if (root.kind === 'enroll') fail('ALREADY_ENROLLED');
   if (state.battle && !['attack', 'skill', 'flee'].includes(root.kind)) fail('BATTLE_IN_PROGRESS');
   if (!state.battle && ['attack', 'skill', 'flee'].includes(root.kind)) fail('NO_BATTLE');
@@ -1511,6 +1514,7 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
     case 'explore': case 'explore_with_pass': {
       if (state.hp <= 0) fail('REST_REQUIRED');
       if (state.selectedFloor > context.world.unlockedFloor || state.selectedFloor > demonTowerPersonalUnlockedFloor(state.level)) fail('FLOOR_LOCKED');
+      departureBefore = { experience: state.totalExperience, materials: copyMaterials(state.materials), spiritStones: state.economy?.balance ?? 0 };
       if (root.kind === 'explore_with_pass') {
         if (!context.expansionEnabled || !state.expansion) fail('EXPANSION_DISABLED');
         if (state.provisions.passStarted >= PROVISIONS.passUseDaily) fail('PASS_DAILY_LIMIT');
@@ -1523,6 +1527,9 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
         state.provisions.ordinaryStarted = Math.min(MAX_RESOURCE, state.provisions.ordinaryStarted + 1);
       }
       const roll = random(state), floor = state.selectedFloor;
+      result.exploration = { outcome: roll < 0.7 ? 'battle' : roll < 0.85 ? 'treasure' : 'blessing', floor,
+        staminaSpent: root.kind === 'explore' ? RULES.exploreCost : 0, passesSpent: root.kind === 'explore_with_pass' ? 1 : 0,
+        experience: 0, materials: emptyMaterials(), spiritStones: 0 };
       if (roll < 0.7) {
         gainXp(state, 6 + floor * 2, events);
         state.battle = newBattle(state, 'explore', floor, context.world, context.expansionEnabled === true);
@@ -1703,6 +1710,11 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
     default: fail('INVALID_ACTION');
   }
   if (!previousBattleWasLegacy) settleLevelDrops(state, previousLevel, itemAcquisitions(state) - initialItems, events);
+  if (result.exploration && departureBefore) {
+    result.exploration.experience = state.totalExperience - departureBefore.experience;
+    for (const key of Object.keys(result.exploration.materials) as DemonTowerMaterial[]) result.exploration.materials[key] = state.materials[key] - departureBefore.materials[key];
+    result.exploration.spiritStones = (state.economy?.balance ?? 0) - departureBefore.spiritStones;
+  }
   state.lastActionAt = context.now;
   state.hp = Math.min(state.hp, state.battle?.player.maxHp ?? demonTowerMaxHp(state, context.expansionEnabled === true));
   return result;

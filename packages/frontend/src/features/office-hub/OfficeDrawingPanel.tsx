@@ -130,7 +130,7 @@ export function OfficeDrawingEditor({ drawing, serverTime, onSettled }: { drawin
             <progress aria-label="绘画剩余进度" max={120} value={remaining} />
             {remaining > 0 && remaining <= 30 && <p className={drawingStyles.warning} role="status">还剩 30 秒以内，到时将自动提交已保存的画作。</p>}
             {remaining === 0 && <p role="status">时间到，画布已锁定，正在核对服务器自动提交结果…</p>}
-            <p className={drawingStyles.saveStatus} role="status">{saving ? '正在保存到服务器…' : dirty ? '有笔画尚未确认保存，请勿刷新或切换页面。' : remote.savedAt ? '草稿已保存到服务器，可刷新恢复；到期自动提交。' : '还没有保存的笔画；空白到期会结束并保留机会使用记录。'}</p>
+            <p className={drawingStyles.saveStatus} role="status">{saving ? '正在保存到服务器…' : dirty ? '有笔画尚未确认保存，请勿刷新或切换页面。' : remote.savedAt ? '草稿已保存到服务器，可刷新恢复；到期自动提交。' : '还没有保存的笔画；空白到期会结束，不会发布空画。'}</p>
             <div className={styles.actions}><label>笔色<select value={color} disabled={disabled} onChange={e => setColor(e.target.value)}><option value="#334155">墨色</option><option value="#2563eb">蓝</option><option value="#dc2626">红</option><option value="#16a34a">绿</option></select></label><button disabled={disabled || !strokes.length || active.current !== null} onClick={() => updateLocal(local.current.slice(0, -1))}>撤销一笔</button><span>最多 100 笔，不写字母和文字</span></div>
             <svg className={`${styles.drawing} ${styles.pad}`} viewBox="0 0 1000 1000" role="img" aria-label="绘画画布" aria-disabled={disabled}
                 onPointerDown={e => { if (disabled || serverNow() >= Date.parse(remoteRef.current.deadlineAt!) || local.current.length >= 100 || local.current.reduce((n, x) => n + x.points.length, 0) > 2998 || active.current !== null) return; active.current = e.pointerId; e.currentTarget.setPointerCapture?.(e.pointerId); const p = point(e); updateLocal([...local.current, { points: [p, p], color, width: 4 }]); }}
@@ -139,7 +139,7 @@ export function OfficeDrawingEditor({ drawing, serverTime, onSettled }: { drawin
                 {strokes.map((s, i) => <polyline key={i} points={s.points.map(p => `${p.x},${p.y}`).join(' ')} stroke={s.color} strokeWidth={s.width} fill="none" strokeLinecap="round" />)}
             </svg>
             <div className={styles.actions}><button disabled={disabled || saving || !strokes.length} onClick={() => void send(true)}>提前提交到猜画墙</button><button disabled={disabled || saving || !dirty} onClick={() => void send()}>立即保存草稿</button></div>
-        </> : <p className={state === 'expired_empty' ? drawingStyles.warning : styles.notice} role="status">{state === 'expired_empty' ? '本次空白结束：截止时没有已保存的笔画，没有发布空画；本次机会已使用。' : remote.submission === 'automatic' ? '时间到，服务器已自动提交最后保存的画作。' : '你的画作已提交到猜画墙。'}</p>}
+        </> : <p className={state === 'expired_empty' ? drawingStyles.warning : styles.notice} role="status">{state === 'expired_empty' ? '本次空白结束：截止时没有已保存的笔画，没有发布空画；本次绘画已结束。' : remote.submission === 'automatic' ? '时间到，服务器已自动提交最后保存的画作。' : '你的画作已提交到猜画墙。'}</p>}
         {error && <p className={drawingStyles.warning} role="alert">{error}</p>}
         {state !== 'draft' && dirty && <p className={drawingStyles.warning}>部分本地笔画未在截止前保存，不在已发布画作中；服务器不会补写过期内容。</p>}
         <div className={styles.actions}>
@@ -147,18 +147,58 @@ export function OfficeDrawingEditor({ drawing, serverTime, onSettled }: { drawin
             {(remaining === 0 || error) && <button disabled={saving} onClick={() => void readResult()}>重新查询保存与结算结果</button>}
             {conflict && <button disabled={saving} onClick={loadSaved}>放弃本页未保存笔画，读取服务器草稿</button>}
         </div>
-        <p className={drawingStyles.hint}>已保存内容由服务器到期结算，关闭页面也会处理。断网或离开前未确认保存的部分无法保证提交；机会在领取时扣除，不因空白或离线自动返还。</p>
+        <p className={drawingStyles.hint}>已保存内容由服务器到期结算，关闭页面也会处理。断网或离开前未确认保存的部分无法保证提交；同时只能进行一份草稿，新主题是否可领取以服务器状态为准。</p>
     </section>;
 }
 
 export function OfficeDrawingPanel({ view, busy, command, refresh }: { view: OfficeHubOverview; busy: boolean; command: Command; refresh: () => Promise<void> }) {
     const [guesses, setGuesses] = useState<Record<string, string>>({});
+    const [ratings, setRatings] = useState<Record<string, string>>({});
+    const generation = useRef(getCommunitySessionGeneration());
+    const ownSession = (): boolean => generation.current === getCommunitySessionGeneration();
     const workspace = view.drawingWorkspace, current = workspace?.current;
+    const unlimited = workspace?.dailyUnlimited === true;
+    const activeDraft = Boolean(current && statusOf(current) === 'draft');
+    const storageKnown = workspace && Number.isSafeInteger(workspace.storageUsed) && Number.isSafeInteger(workspace.storageLimit) && workspace.storageUsed! >= 0 && workspace.storageLimit! > 0;
+    const storageFull = Boolean(storageKnown && workspace!.storageUsed! >= workspace!.storageLimit!);
+    const canStart = Boolean(workspace && workspace.canStart !== false && !activeDraft && !storageFull && (unlimited || workspace.dailyRemaining !== null && workspace.dailyRemaining > 0));
     const legacyDraft = !workspace ? view.drawings.find(d => d.mine && !d.strokes.length) : null;
-    return <div className={styles.stack}><section className={styles.panel}>
-        <div className={styles.sectionTitle}><h2>异步猜画墙 · {view.collection.theme}</h2><button disabled={busy || !workspace || workspace.dailyRemaining <= 0 || Boolean(current && statusOf(current) === 'draft')} onClick={() => void command('drawing_start')}>领取绘画主题</button></div>
-        <p>无需在线匹配。每题 2 分钟，到期自动提交已保存的画作；猜手每张最多猜 5 次，猜中后双方可领社交积分。投稿不得写文字。</p>
-        {workspace ? <p className={drawingStyles.quota}>今日剩余 <strong>{workspace.dailyRemaining} / {workspace.dailyLimit}</strong> 次 · 已使用 {workspace.dailyUsed} 次 · 北京时间零点更新</p> : <p role="status">当前服务器尚未提供自动保存状态，请刷新后再开始绘画。{legacyDraft && <>仅你可见的题目：{legacyDraft.word}</>}</p>}
+    const published = view.drawings.filter(d => statusOf(d) === 'published');
+    if (!ownSession()) return null;
+    return <div className={`${styles.stack} ${drawingStyles.wall}`}><section className={`${styles.panel} ${drawingStyles.card}`}>
+        <div className={styles.sectionTitle}><h2>异步猜画墙 · {view.collection.theme}</h2><button disabled={busy || !canStart} onClick={() => { if (ownSession() && canStart && !busy) void command('drawing_start'); }}>领取绘画主题</button></div>
+        <p>免费创作，无需在线匹配。每题 2 分钟，到期自动提交已保存的画作；猜手每张最多猜 5 次。投稿不得写文字。</p>
+        {unlimited ? <p className={drawingStyles.quota}>不限制每日创作次数 · 同时只能进行一份草稿 · 连续操作保留节流</p> : workspace ? <p className={drawingStyles.quota} role="status">当前服务器仍使用旧版创作规则，请刷新同步后继续；不能将旧状态当作已开放不限次数。</p> : <p role="status">当前服务器尚未提供自动保存状态，请刷新后再开始绘画。{legacyDraft && <>仅你可见的题目：{legacyDraft.word}</>}</p>}
+        {storageKnown && <p className={drawingStyles.quota}>作品容量 <strong>{workspace!.storageUsed} / {workspace!.storageLimit}</strong>{storageFull ? ' · 容量已满，暂不能领取新主题；撤下本人旧画可释放空间。' : ' · 这是保存容量，不是每日次数。'}</p>}
+        {workspace?.canStart === false && !activeDraft && workspace.capacityReason === 'global' && <p className={drawingStyles.warning} role="status">猜画墙已达全局保存保护上限，请稍后刷新或联系管理员整理；不是每日次数限制。</p>}
+        {workspace?.canStart === false && !activeDraft && !storageFull && workspace.capacityReason !== 'global' && <p className={drawingStyles.warning} role="status">{workspace.capacityReason === 'personal' ? '本人作品容量已满，撤下本人旧画可释放空间。' : '暂不能领取新主题，请刷新核对草稿与作品容量。'}</p>}
         {current && <OfficeDrawingEditor key={current.id} drawing={current} serverTime={view.serverTime} onSettled={() => void refresh()} />}
-    </section><div className={styles.gallery}>{view.drawings.filter(d => statusOf(d) === 'published').map(d => <article className={styles.panel} key={d.id}><div className={styles.sectionTitle}><h3>{d.author.displayName}的画</h3><span>{d.theme}</span></div><OfficeDrawingImage strokes={d.strokes} /><p>{d.word ? `答案：${d.word}` : `${d.wordLength} 个字`} · {d.guesses} 人猜中</p>{d.mine ? <button disabled={busy} onClick={() => void command('post_delete', { postId: d.id })}>撤下我的画</button> : <><form onSubmit={e => { e.preventDefault(); void command('drawing_guess', { postId: d.id, guess: guesses[d.id] ?? '' }); }}><label>你的答案<input required maxLength={30} disabled={d.solved || d.attempts >= 5} value={guesses[d.id] ?? ''} onChange={e => setGuesses({ ...guesses, [d.id]: e.target.value })} /></label><button disabled={busy || d.solved || d.attempts >= 5}>{d.solved ? '已猜中' : `提交（还剩 ${5 - d.attempts} 次）`}</button></form><button disabled={busy} onClick={() => void command('post_report', { postId: d.id })}>举报文字提示 / 不当内容</button></>}</article>)}</div></div>;
+    </section>{published.length === 0 && <p className={drawingStyles.empty}>这里还没有已发布的画作。可以领取主题创作，或稍后刷新猜画墙。</p>}<div className={styles.gallery}>{published.map(d => {
+        const selected = ratings[d.id] ?? (d.myRating == null ? '' : String(d.myRating));
+        const rating = Number(selected);
+        const validRating = Number.isInteger(rating) && rating >= 1 && rating <= 5;
+        const ratingKnown = Number.isSafeInteger(d.ratings) && d.ratings! >= 0;
+        const scoreKnown = typeof d.score === 'number' && Number.isFinite(d.score) && d.score >= 1 && d.score <= 5;
+        return <article className={`${styles.panel} ${drawingStyles.card}`} key={d.id}>
+            <div className={styles.sectionTitle}><h3>{d.author.displayName}的画</h3><span>{d.theme}</span></div>
+            <OfficeDrawingImage strokes={d.strokes} />
+            <p>{d.word ? `答案：${d.word}` : `${d.wordLength} 个字`} · {d.guesses} 人猜中</p>
+            {!d.mine && <form onSubmit={e => { e.preventDefault(); if (ownSession() && !busy && !d.solved && d.attempts < 5) void command('drawing_guess', { postId: d.id, guess: guesses[d.id] ?? '' }); }}>
+                <label>你的答案<input required maxLength={30} disabled={busy || d.solved || d.attempts >= 5} value={guesses[d.id] ?? ''} onChange={e => setGuesses(previous => ({ ...previous, [d.id]: e.target.value }))} /></label>
+                <button disabled={busy || d.solved || d.attempts >= 5}>{d.solved ? '已猜中' : `提交（还剩 ${5 - d.attempts} 次）`}</button>
+            </form>}
+            <fieldset className={drawingStyles.rating}>
+                <legend>画作评价</legend>
+                {!d.mine && d.canRate === true ? <form onSubmit={e => { e.preventDefault(); if (ownSession() && !busy && validRating && d.canRate === true) void command('drawing_rate', { postId: d.id, rating }); }}>
+                    <div className={drawingStyles.ratingControls}>
+                        <label>你的评分（1–5 分）<select value={selected} disabled={busy} onChange={e => setRatings(previous => ({ ...previous, [d.id]: e.target.value }))}><option value="">请选择</option>{[1, 2, 3, 4, 5].map(value => <option key={value} value={value}>{value} 分</option>)}</select></label>
+                        <button disabled={busy || !validRating || d.myRating === rating}>{d.myRating == null ? '提交评分' : '修改评分'}</button>
+                    </div>
+                </form> : <p className={drawingStyles.hint}>{d.mine ? '不能给自己的画评分。' : d.canRate === false ? '先提交一次猜题即可评分，不要求猜中。' : '当前服务器未提供评分状态，请刷新同步。'}</p>}
+                <p className={drawingStyles.ratingSummary} aria-live="polite">{!ratingKnown ? '评分尚未读取' : d.ratings === 0 ? '暂无评分' : <><strong>{scoreKnown ? `平均 ${d.score!.toFixed(1)} / 5 分` : '均分待确认'}</strong> · {d.ratings} 人评分</>}{d.myRating != null && <> · 我的评分 {d.myRating} 分</>}</p>
+                <p className={drawingStyles.hint}>每人一票，可修改；评分不产生奖励。</p>
+            </fieldset>
+            {d.mine ? <button disabled={busy} onClick={() => { if (ownSession() && !busy) void command('post_delete', { postId: d.id }); }}>撤下我的画</button> : <button disabled={busy} onClick={() => { if (ownSession() && !busy) void command('post_report', { postId: d.id }); }}>举报文字提示 / 不当内容</button>}
+        </article>;
+    })}</div></div>;
 }

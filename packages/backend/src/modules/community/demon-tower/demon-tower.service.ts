@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, HttpException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { DEMON_TOWER_CATALOG, type DemonTowerActionInput, type DemonTowerActionReceipt, type DemonTowerCatalog, type DemonTowerOverview, type DemonTowerSocialView, type DemonTowerSquadView } from '@stealth-reader/shared';
+import { DEMON_TOWER_CATALOG, type DemonTowerActionInput, type DemonTowerActionReceipt, type DemonTowerCatalog, type DemonTowerOverview, type DemonTowerSocialView, type DemonTowerSquadView, type DemonTowerExplorationReceipt, type DemonTowerExplorationResult } from '@stealth-reader/shared';
 import { DataSource, EntityManager, In, IsNull, MoreThan } from 'typeorm';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor, User, WalletBalance } from '../../../database/entities';
 import { DemonTowerAutoRun } from '../../../database/entities/demon-tower-auto-run.entity';
@@ -19,6 +19,7 @@ import { initialDemonTowerSquad, stepDemonTowerSquad, type DemonTowerSquadState 
 
 interface StoredReceipt {
   events: string[]; officeCoinsGranted: number; officeCoinsSpent?: number; effectiveBossDamage: number; passageContribution: number;
+  exploration?: DemonTowerExplorationReceipt;
 }
 
 @Injectable()
@@ -167,6 +168,13 @@ export class DemonTowerService {
         ...(officeCoinsSpent > 0 ? { officeCoinsSpent } : {}),
       };
       if (result!.officeCoinIntent > officeCoinsGranted) stored.events.push('已达到妖塔当日日常办公币上限；经验与绑定材料正常结算。');
+      if (result!.exploration) {
+        const departureEvents = [...result!.events, ...applied.events];
+        if (result!.officeCoinIntent > officeCoinsGranted) departureEvents.push('已达到妖塔当日日常办公币上限；经验与绑定材料正常结算。');
+        stored.exploration = this.explorationReceipt({ requestId: input.requestId, appliedVersion: (profile?.version ?? 0) + 1,
+          completedAt: now.getTime(), source: auto ? 'auto' : 'manual', result: result!.exploration,
+          events: departureEvents.map(event => event.slice(0, 240)), officeCoinsGranted });
+      }
       if (!profile) {
         profile = manager.getRepository(DemonTowerProfile).create({ userId, version: 1, state: result!.state as unknown as Record<string, unknown>, actionWindowAt: now, actionWindowCount: 1, createdAt: now, updatedAt: now });
       } else {
@@ -356,8 +364,18 @@ export class DemonTowerService {
     const auto = await manager.getRepository(DemonTowerAutoRun).findOneBy({ userId, status: 'running' }) ?? await manager.getRepository(DemonTowerAutoRun).findOne({ where: { userId }, order: { createdAt: 'DESC', id: 'DESC' } });
     const profileView = profile && state ? demonTowerProfileView(state, now.getTime(), profile.version, daily?.officeCoins ?? 0, demonTowerExpansionEnabled()) : null;
     if (profileView && auto?.status === 'running') profileView.availableActions = [];
+    // Reuse immutable commands, under the same owned-user lock/transaction.
+    // Only departures are selected: a later train/attack does not fabricate another exploration.
+    const departure = profile ? await manager.getRepository(DemonTowerCommand).createQueryBuilder('command').addSelect('command.receipt')
+      .where('command.user_id = :userId', { userId }).andWhere('command.kind IN (:...kinds)', { kinds: ['explore', 'explore_with_pass'] })
+      .orderBy('command.created_at', 'DESC').addOrderBy('command.applied_version', 'DESC').take(1).getOne() : null;
+    const departureReceipt = departure ? this.receipt(departure.receipt) : null;
+    const lastExploration = departure && departureReceipt ? departureReceipt.exploration ?? {
+      requestId: departure.requestId, appliedVersion: departure.appliedVersion, completedAt: departure.createdAt.getTime(), source: 'legacy' as const,
+      events: departureReceipt.events, officeCoinsGranted: departureReceipt.officeCoinsGranted,
+    } : null;
     return {
-      serverNow: now.getTime(), profile: profileView, autoExplore: auto ? demonTowerAutoView(auto) : null,
+      serverNow: now.getTime(), profile: profileView, autoExplore: auto ? demonTowerAutoView(auto) : null, lastExploration,
       world: demonTowerWorldView(worlds ?? await manager.getRepository(DemonTowerWorldFloor).find({ order: { floor: 'ASC' } })),
       wallet: { officeCoinBalance: balance }, writesEnabled,
     };
@@ -368,7 +386,35 @@ export class DemonTowerService {
     if (Object.prototype.hasOwnProperty.call(raw, 'officeCoinsSpent') &&
       (!Number.isSafeInteger(raw.officeCoinsSpent) || (raw.officeCoinsSpent as number) < 1 || (raw.officeCoinsSpent as number) > 300)) throw new Error('Demon tower receipt invariant failed');
     return { events: [...raw.events], officeCoinsGranted: raw.officeCoinsGranted as number, effectiveBossDamage: raw.effectiveBossDamage as number, passageContribution: raw.passageContribution as number,
+      ...(raw.exploration !== undefined ? { exploration: this.explorationReceipt(raw.exploration) } : {}),
       ...(raw.officeCoinsSpent === undefined ? {} : { officeCoinsSpent: raw.officeCoinsSpent as number }) };
+  }
+  private explorationReceipt(raw: unknown): DemonTowerExplorationReceipt {
+    const invalid = (): never => { throw new Error('Demon tower exploration receipt invariant failed'); };
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
+    const value = raw as Record<string, unknown>;
+    const count = (input: unknown, max = Number.MAX_SAFE_INTEGER): input is number => typeof input === 'number' && Number.isSafeInteger(input) && input >= 0 && input <= max;
+    if (typeof value.requestId !== 'string' || !/^[0-9a-f-]{36}$/i.test(value.requestId) || !count(value.appliedVersion) || value.appliedVersion === 0 ||
+      !count(value.completedAt, 8_640_000_000_000_000) || !['manual', 'auto', 'legacy'].includes(String(value.source)) ||
+      !Array.isArray(value.events) || value.events.length > 1024 || value.events.some(event => typeof event !== 'string' || event.length > 240) ||
+      !count(value.officeCoinsGranted, DEMON_TOWER_DAILY_COINS)) return invalid();
+    let result: DemonTowerExplorationResult | undefined;
+    if (value.result !== undefined) {
+      if (!value.result || typeof value.result !== 'object' || Array.isArray(value.result)) return invalid();
+      const entry = value.result as Record<string, unknown>;
+      if (!['battle', 'treasure', 'blessing'].includes(String(entry.outcome)) || !count(entry.floor, 9) || entry.floor === 0 ||
+        !count(entry.staminaSpent) || !count(entry.passesSpent) ||
+        !((entry.staminaSpent === DEMON_TOWER_CATALOG.rules.exploreCost && entry.passesSpent === 0) || (entry.staminaSpent === 0 && entry.passesSpent === 1)) ||
+        !count(entry.experience, 1_000_000_000) || !count(entry.spiritStones, 1_000_000) || !entry.materials || typeof entry.materials !== 'object' || Array.isArray(entry.materials)) return invalid();
+      const materials = entry.materials as Record<string, unknown>;
+      if (!['ore', 'herb', 'soul', 'clue'].every(key => count(materials[key], 1_000_000))) return invalid();
+      result = { outcome: entry.outcome as DemonTowerExplorationResult['outcome'], floor: entry.floor, staminaSpent: entry.staminaSpent,
+        passesSpent: entry.passesSpent, experience: entry.experience, spiritStones: entry.spiritStones,
+        materials: { ore: materials.ore as number, herb: materials.herb as number, soul: materials.soul as number, clue: materials.clue as number } };
+    }
+    return { requestId: value.requestId, appliedVersion: value.appliedVersion, completedAt: value.completedAt,
+      source: value.source as DemonTowerExplorationReceipt['source'], events: [...value.events] as string[], officeCoinsGranted: value.officeCoinsGranted,
+      ...(result ? { result } : {}) };
   }
   private async applyWorld(manager: EntityManager, worlds: DemonTowerWorldFloor[], effect: DemonTowerWorldEffect | null, now: Date): Promise<{ effectiveBossDamage: number; passageContribution: number; events: string[] }> {
     const result = { effectiveBossDamage: 0, passageContribution: 0, events: [] as string[] };

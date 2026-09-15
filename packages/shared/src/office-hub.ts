@@ -104,11 +104,23 @@ export interface OfficeDrawing {
     savedAt?: string | null;
     submittedAt?: string | null;
     submission?: 'manual' | 'automatic' | null;
+    /** Aggregate only: no voter identities or unrevealed topic in this projection. */
+    score?: number | null;
+    ratings?: number;
+    myRating?: number | null;
+    canRate?: boolean;
 }
 export interface OfficeDrawingWorkspace {
-    dailyLimit: number;
+    /** null means no daily creation quota on newer servers. */
+    dailyLimit: number | null;
     dailyUsed: number;
-    dailyRemaining: number;
+    dailyRemaining: number | null;
+    dailyUnlimited?: boolean;
+    canStart?: boolean;
+    /** Own published work + current active draft, not terminal empty tasks. */
+    storageLimit?: number;
+    storageUsed?: number;
+    capacityReason?: 'personal' | 'global' | null;
     /** Latest own drawing, independent of public feed pagination. */
     current: OfficeDrawing | null;
 }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { OfficeHubOverview, OfficeSpyView } from '@stealth-reader/shared';
@@ -134,5 +134,41 @@ describe('Office workspace functional controls', () => {
         session.generation++;vi.mocked(officeHubApi.overview).mockImplementation(()=>new Promise(()=>{}));
         rendered.rerender(<MemoryRouter initialEntries={['/office?tab=drawings']}><OfficeHubPage/></MemoryRouter>);
         expect(screen.queryByText(/秘密办公题目/)).not.toBeInTheDocument();
+    });
+    it('retries an unconfirmed drawing vote using its exact original request key and displays only the confirmed average', async () => {
+        const v = fixture();
+        v.drawings = [{ id: 'rating-a', author: { publicId: 'other', displayName: '同事' }, mine: false, theme: '今日', strokes: [{ points: [{ x: 0, y: 0 }, { x: 10, y: 10 }], color: '#334155', width: 4 }], word: null, wordLength: 2, guesses: 0, solved: false, attempts: 1, createdAt: v.serverTime, status: 'published', canRate: true, ratings: 0, score: null, myRating: null }];
+        const confirmed = { ...v, drawings: [{ ...v.drawings[0], ratings: 1, score: 5, myRating: 5 }] };
+        vi.mocked(officeHubApi.action).mockRejectedValueOnce(new Error('网络中断')).mockResolvedValueOnce(confirmed);
+        page('drawings', v);
+        fireEvent.change(await screen.findByRole('combobox', { name: '你的评分（1–5 分）' }), { target: { value: '5' } });
+        fireEvent.click(screen.getByRole('button', { name: '提交评分' }));
+        expect(await screen.findByRole('alert')).toHaveTextContent('网络中断');
+        expect(screen.getByText('暂无评分')).toBeVisible();
+        vi.mocked(officeHubApi.overview).mockResolvedValue(confirmed);
+        fireEvent.click(screen.getByRole('button', { name: '提交评分' }));
+        await waitFor(() => expect(officeHubApi.action).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(officeHubApi.action).mock.calls[0]).toEqual(vi.mocked(officeHubApi.action).mock.calls[1]);
+        expect(vi.mocked(officeHubApi.action).mock.calls[0]).toEqual(['drawing_rate', { postId: 'rating-a', rating: 5 }, expect.any(String)]);
+        expect(await screen.findByText(/平均 5.0/)).toBeVisible();
+        expect(screen.getByText(/1 人评分/)).toBeVisible();
+        expect(screen.getByRole('button', { name: '修改评分' })).toBeDisabled();
+        expect(screen.queryByText(/答案：/)).not.toBeInTheDocument();
+    });
+    it('does not refresh the next authenticated session or publish a delayed old vote response', async () => {
+        const v = fixture();
+        v.drawings = [{ id: 'rating-a', author: { publicId: 'other', displayName: '同事' }, mine: false, theme: '今日', strokes: [{ points: [{ x: 0, y: 0 }, { x: 10, y: 10 }], color: '#334155', width: 4 }], word: null, wordLength: 2, guesses: 0, solved: false, attempts: 1, createdAt: v.serverTime, status: 'published', canRate: true, ratings: 0, score: null, myRating: null }];
+        let settle!: (value: OfficeHubOverview) => void;
+        vi.mocked(officeHubApi.action).mockReturnValue(new Promise(resolve => { settle = resolve; }));
+        page('drawings', v);
+        fireEvent.change(await screen.findByRole('combobox', { name: '你的评分（1–5 分）' }), { target: { value: '4' } });
+        fireEvent.click(screen.getByRole('button', { name: '提交评分' }));
+        await waitFor(() => expect(officeHubApi.action).toHaveBeenCalledOnce());
+        const reads = vi.mocked(officeHubApi.overview).mock.calls.length;
+        session.generation += 1;
+        await act(async () => { settle({ ...v, notice: '上一会话评分已确认', drawings: [{ ...v.drawings[0], ratings: 1, score: 4, myRating: 4 }] }); });
+        await waitFor(() => expect(screen.queryByText('上一会话评分已确认')).not.toBeInTheDocument());
+        expect(officeHubApi.overview).toHaveBeenCalledTimes(reads);
+        expect(screen.queryByText(/平均 4.0/)).not.toBeInTheDocument();
     });
 });

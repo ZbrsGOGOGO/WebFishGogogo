@@ -214,6 +214,24 @@ export interface DemonTowerOverview {
   wallet: { officeCoinBalance: number }; writesEnabled: boolean;
   /** Server-owned automation. Omitted only by older clients/test fixtures. */
   autoExplore?: DemonTowerAutoRunView | null;
+  /** Latest owned successful departure command, not the final battle settlement.
+   * Omitted by older servers; null means this server has no exploration command. */
+  lastExploration?: DemonTowerExplorationReceipt | null;
+}
+
+/** Actual rewards already settled when exploration starts; battle rewards come later. */
+export interface DemonTowerExplorationResult {
+  outcome: 'battle' | 'treasure' | 'blessing'; floor: number;
+  staminaSpent: number; passesSpent: number; experience: number;
+  materials: DemonTowerMaterials; spiritStones: number;
+}
+/** Immutable safe presentation only: no save/RNG/world/identity/wallet balance. */
+export interface DemonTowerExplorationReceipt {
+  requestId: string; appliedVersion: number; completedAt: number;
+  source: 'manual' | 'auto' | 'legacy';
+  /** A legacy command retains its original text; unknown numeric rewards are not inferred. */
+  result?: DemonTowerExplorationResult;
+  events: string[]; officeCoinsGranted: number;
 }
 export const DEMON_TOWER_AUTO_LIMITS = { maxExplorations: 20, maxSteps: 260, durationMs: 900_000, stepIntervalMs: 2000, startHealthPercent: 30, battleHealthPercent: 20 } as const;
 export type DemonTowerAutoStopReason = 'completed' | 'manual_stop' | 'low_health' | 'defeat' | 'battle_timeout' | 'stamina_empty' | 'vip_expired' | 'session_ended' | 'account_inactive' | 'day_changed' | 'maintenance' | 'time_limit' | 'step_limit' | 'profile_changed' | 'floor_changed' | 'quota_reached' | 'server_error';
@@ -272,6 +290,8 @@ export type DemonTowerActionInput = DemonTowerAction & { requestId: string; expe
 export interface DemonTowerActionReceipt {
   /** Actual unified-wallet debit, omitted by older servers. */
   officeCoinsSpent?: number;
+  /** Present only for this action's successful exploration departure, including exact replays. */
+  exploration?: DemonTowerExplorationReceipt;
   requestId: string; replayed: boolean; overview: DemonTowerOverview;
   events: string[]; officeCoinsGranted: number; effectiveBossDamage: number; passageContribution: number;
 }

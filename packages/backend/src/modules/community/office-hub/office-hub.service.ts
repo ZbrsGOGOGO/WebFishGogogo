@@ -11,7 +11,8 @@ import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome, type OfficeReliefDrop }
 import { CommunityAchievementUnlock } from '../../../database/entities/community-progression.entity';
 import { actOfficeRelief, readOfficeRelief } from './office-relief.rules';
 import { grantOfficeReliefDrop } from './office-relief-grants';
-import { chooseDrawingWordIndex, drawingStatus, OFFICE_DRAWING_DAILY_LIMIT, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_REPEAT_WINDOW, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { canRateDrawing, chooseDrawingWordIndex, drawingRatingSummary, drawingStatus, OFFICE_DRAWING_DURATION, OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT, OFFICE_DRAWING_PARTICIPANT_LIMIT, OFFICE_DRAWING_REPEAT_WINDOW, OFFICE_DRAWING_STATE_MAX_BYTES, OFFICE_DRAWING_STORAGE_LIMIT, rateDrawing, settleDrawing, updateDrawing, type DrawingLifecycle } from './office-drawing.rules';
+import { queueOfficeSocialAwards } from './office-social-awards';
 interface Author extends OfficeAuthor {
     userId: string | null;
 }
@@ -40,6 +41,7 @@ interface DrawingState extends DrawingLifecycle {
         attempts: number;
         solved: boolean;
     }>;
+    ratings?: Record<string, number>;
     reports: string[];
     hidden: boolean;
 }
@@ -177,6 +179,15 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             throw new BadRequestException({ code: 'OFFICE_COMMAND_INVALID' });
         const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
         return this.db.transaction(async (m) => {
+            // Take light account references BEFORE any profile/post lock.
+            // Deletion locks an account then its authored/participated posts;
+            // acquiring recipient account locks after a post would deadlock.
+            if (input.postId && input.action === 'drawing_guess') {
+                const [snapshot] = await m.query('SELECT author_id,kind,state FROM office_hub_posts WHERE id=$1', [uuid(input.postId)]);
+                const referenced = snapshot?.kind === 'drawing' ? [snapshot.author_id] : [];
+                const ids = [...new Set([userId, ...referenced].filter((id): id is string => Boolean(id)))].sort();
+                await m.query('SELECT id FROM users WHERE id=ANY($1::uuid[]) ORDER BY id FOR KEY SHARE', [ids]);
+            }
             const p = await this.profile(m, userId);
             let now = Date.now();
             if (String(input.action).startsWith('relief_')) this.reliefGate();
@@ -197,7 +208,7 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             const allowed: Record<string, string[]> = {
                 daily_ticket: [], collect_social: [], exchange_ticket: [], draw: ['source', 'pool'], equip: ['itemId'],
                 story_create: ['title', 'text', 'starter'], story_reply: ['postId', 'parentId', 'text'], story_rate: ['postId', 'nodeId', 'rating'],
-                drawing_start: [], drawing_save: ['postId', 'strokes', 'expectedRevision'], drawing_publish: ['postId', 'strokes', 'expectedRevision'], drawing_guess: ['postId', 'guess'], post_delete: ['postId'], post_report: ['postId'], post_moderate: ['postId', 'hidden', 'reason'],
+                drawing_start: [], drawing_save: ['postId', 'strokes', 'expectedRevision'], drawing_publish: ['postId', 'strokes', 'expectedRevision'], drawing_guess: ['postId', 'guess'], drawing_rate: ['postId', 'rating'], post_delete: ['postId'], post_report: ['postId'], post_moderate: ['postId', 'hidden', 'reason'],
                 spy_create: ['title', 'department'], spy_join: ['postId'], spy_leave: ['postId'], spy_start: ['postId'], spy_describe: ['postId', 'text'], spy_vote: ['postId', 'targetId'],
                 announcement: ['text'], weekly_claim: [], boss_start: [], boss_hit: ['tool'], boss_claim: [],
                 relief_play: ['expectedVersion', 'tool'], relief_buy: ['expectedVersion', 'skinId'],
@@ -228,7 +239,7 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
                 }
             }
             if (action.startsWith('drawing_')) { this.drawingGate(); now = Date.now(); accrueOffice(p, now); }
-            if (!action.startsWith('relief_')) officeRateLimit(p, 'all', now, 1500, 100);
+            if (!action.startsWith('relief_')) officeRateLimit(p, action.startsWith('drawing_') ? 'all_drawing' : 'all', now, action.startsWith('drawing_') ? Number.MAX_SAFE_INTEGER : 1500, 100);
             let notice = '已保存';
             let reliefOutcome: OfficeReliefOutcome | undefined;
             let claimedReliefDrop: OfficeReliefDrop | undefined;
@@ -407,7 +418,9 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
         });
     }
     private async profile(m: EntityManager, userId: string): Promise<OfficeProfileState> {
-        const [user] = await m.query('SELECT id,account_status FROM users WHERE id=$1 FOR UPDATE', [userId]);
+        // Still serialises this account, but allows recipients' KEY SHARE
+        // locks so cross-account awards never need to lock another profile.
+        const [user] = await m.query('SELECT id,account_status FROM users WHERE id=$1 FOR NO KEY UPDATE', [userId]);
         if (!user || user.account_status !== 'active')
             throw new ForbiddenException({ code: 'ACCOUNT_NOT_ACTIVE' });
         const now = Date.now(); // Clock after user serialization, including midnight-crossing queued requests.
@@ -434,7 +447,12 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
     } | null> { const [r] = await m.query('SELECT gm.guild_id,gm.role,g.name FROM guild_members gm JOIN guilds g ON g.id=gm.guild_id WHERE gm.user_id=$1', [userId]); return r ?? null; }
     private async post(m: EntityManager, id: string, kind?: string): Promise<Post> { const [p] = await m.query('SELECT * FROM office_hub_posts WHERE id=$1 FOR UPDATE', [id]); if (!p || kind && p.kind !== kind)
         throw new NotFoundException({ code: 'OFFICE_POST_NOT_FOUND' }); return p; }
-    private savePost(m: EntityManager, p: Post) { return m.query('UPDATE office_hub_posts SET state=$2::jsonb,updated_at=now() WHERE id=$1', [p.id, JSON.stringify(p.state)]); }
+    private savePost(m: EntityManager, p: Post) {
+        const state = JSON.stringify(p.state);
+        if (p.kind === 'drawing' && Buffer.byteLength(state, 'utf8') > OFFICE_DRAWING_STATE_MAX_BYTES)
+            throw new ConflictException({ code: 'OFFICE_DRAWING_PARTICIPANT_CAPACITY', message: '本画作数据容量已满，请选择另一幅画。' });
+        return m.query('UPDATE office_hub_posts SET state=$2::jsonb,updated_at=now() WHERE id=$1', [p.id, state]);
+    }
     private async createPost(m: EntityManager, userId: string, kind: Post['kind'], state: Post['state']) { const id = randomUUID(); await m.query('INSERT INTO office_hub_posts(id,author_id,kind,state) VALUES($1,$2,$3,$4::jsonb)', [id, userId, kind, JSON.stringify(state)]); return id; }
     private async award(m: EntityManager, userId: string | null, source: string, points: number): Promise<void> { if (userId)
         await m.query('INSERT INTO office_hub_social_awards(user_id,source,points) SELECT id,$2,$3 FROM users WHERE id=$1 AND account_status=\'active\' ON CONFLICT DO NOTHING', [userId, source, points]); }
@@ -507,14 +525,30 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             const author = await this.author(m, userId);
             this.drawingGate();
             now = Date.now(); accrueOffice(p, now);
-            if ((p.counters.drawing_start ?? 0) >= OFFICE_DRAWING_DAILY_LIMIT) throw new ConflictException({ code: 'OFFICE_DRAWING_DAILY_LIMIT' });
-            officeRateLimit(p, String(input.action), now, OFFICE_DRAWING_DAILY_LIMIT, 700);
+            // Empty expired tasks are not real artwork. Keep only bounded topic
+            // history so blank tasks still respect the last-12 topic rule.
+            await m.query(`DELETE FROM office_hub_posts WHERE author_id=$1 AND kind='drawing'
+                AND state->>'expiredEmpty'='true' AND state->>'published'='false' AND state->'strokes'='[]'::jsonb
+                AND id NOT IN (SELECT id FROM office_hub_posts WHERE author_id=$1 AND kind='drawing'
+                    ORDER BY created_at DESC,id DESC LIMIT $2)`, [userId, OFFICE_DRAWING_REPEAT_WINDOW]);
+            // Serialise creation capacity across accounts without taking any
+            // other account/profile row lock.
+            await m.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', ['office-drawing-storage']);
+            this.drawingGate();
+            const [capacity] = await m.query(`SELECT count(*)::int total,count(*) FILTER(WHERE author_id=$1)::int own
+                FROM office_hub_posts WHERE kind='drawing' AND COALESCE(state->>'expiredEmpty','false')='false'`, [userId]);
+            if (capacity.own >= OFFICE_DRAWING_STORAGE_LIMIT)
+                throw new ConflictException({ code: 'OFFICE_DRAWING_CAPACITY', message: '作品存储达到保护上限，请撤下本人历史画作后再开始。' });
+            if (capacity.total >= OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT)
+                throw new ConflictException({ code: 'OFFICE_DRAWING_GLOBAL_CAPACITY', message: '画墙整体存储达到保护上限，请联系管理员整理容量。' });
+            now = Date.now(); accrueOffice(p, now);
+            officeRateLimit(p, String(input.action), now, Number.MAX_SAFE_INTEGER, 700);
             const recentWords: Array<{ word_index: string | null }> = await m.query(`SELECT state->>'wordIndex' word_index FROM office_hub_posts
                 WHERE author_id=$1 AND kind='drawing' ORDER BY created_at DESC,id DESC LIMIT $2`, [userId, OFFICE_DRAWING_REPEAT_WINDOW]);
             const wordIndex = chooseDrawingWordIndex(DRAW_WORDS.length, recentWords.map(row => Number(row.word_index)), randomInt);
-            await this.createPost(m, userId, 'drawing', { author, theme: officeTheme(now).theme, wordIndex, strokes: [], published: false, startedAt: now, revision: 0, savedAt: null, guesses: {}, reports: [], hidden: false });
+            await this.createPost(m, userId, 'drawing', { author, theme: officeTheme(now).theme, wordIndex, strokes: [], published: false, startedAt: now, revision: 0, savedAt: null, guesses: {}, ratings: {}, reports: [], hidden: false });
             this.drawingGate();
-            return '绘画任务已领取：2 分钟后自动提交已保存的画作；本次已计入今日 3 次机会';
+            return '绘画任务已领取：2 分钟后自动提交已保存的画作；每日创作次数不限';
         }
         const post = await this.post(m, uuid(input.postId), 'drawing'), d = post.state as DrawingState;
         this.drawingGate();
@@ -527,18 +561,25 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             if (settleDrawing(d, now)) { if (d.published) p.stats.drawings += 1; this.drawingGate(); await this.savePost(m, post); this.drawingGate(); }
             if (drawingStatus(d) !== 'draft') return d.published
                 ? (d.submission === 'automatic' ? '时间到，服务器已自动提交最后保存的画作；未重复发布' : '画作已提交，未重复发布')
-                : '时间到，没有已保存的笔画，本次为空白结束；今日机会已使用';
-            officeRateLimit(p, String(input.action), now, input.action === 'drawing_save' ? 500 : 100, 700);
+                : '时间到，没有已保存的笔画，本次为空白结束；可以再开一局';
+            officeRateLimit(p, String(input.action), now, Number.MAX_SAFE_INTEGER, 700);
             updateDrawing(d, { strokes: input.strokes, expectedRevision: input.expectedRevision }, now, input.action === 'drawing_publish');
             if (d.published) p.stats.drawings += 1;
         }
         else {
-            officeRateLimit(p, String(input.action), now, 100, 700);
+            officeRateLimit(p, String(input.action), now, Number.MAX_SAFE_INTEGER, 700);
             if (!d.published || d.hidden)
                 throw new NotFoundException({ code: 'OFFICE_POST_NOT_FOUND' });
+            if (input.action === 'drawing_rate') {
+                rateDrawing(d, post.author_id === userId, userId, input.rating);
+                this.drawingGate(); await this.savePost(m, post); this.drawingGate();
+                return '评分已保存，每人一票，可修改；评分不发放奖励';
+            }
             if (post.author_id === userId)
                 throw new ForbiddenException({ code: 'OFFICE_SELF_GUESS' });
             {
+                if (!Object.prototype.hasOwnProperty.call(d.guesses, userId) && Object.keys(d.guesses).length >= OFFICE_DRAWING_PARTICIPANT_LIMIT)
+                    throw new ConflictException({ code: 'OFFICE_DRAWING_PARTICIPANT_CAPACITY', message: '本画作参与容量已满，请选择另一幅画。' });
                 const guess = d.guesses[userId] ?? { attempts: 0, solved: false };
                 if (guess.solved || guess.attempts >= 5)
                     throw new ConflictException({ code: 'OFFICE_GUESS_LIMIT' });
@@ -547,13 +588,16 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
                 d.guesses[userId] = guess;
                 if (guess.solved) {
                     p.stats.correctGuesses += 1;
-                    await this.award(m, userId, `guess:${post.id}`, 10);
-                    await this.award(m, post.author_id, `draw:${post.id}:${userId}`, 5);
+                    const accepted = await queueOfficeSocialAwards(m, [{ userId, source: `guess:${post.id}`, points: 10 },
+                        { userId: post.author_id, source: `draw:${post.id}:${userId}`, points: 5 }], now);
+                    this.drawingGate(); await this.savePost(m, post); this.drawingGate();
+                    return accepted[0] ? '猜中了！既有社交积分可在收藏页领取，评分不额外发奖'
+                        : '猜中了！本日猜画积分生成或待领取容量已达上限，本次不再发积分，仍可评分';
                 }
                 this.drawingGate();
                 await this.savePost(m, post);
                 this.drawingGate();
-                return guess.solved ? '猜中了！可在收藏页领取社交积分' : '再想想，还剩 ' + (5 - guess.attempts) + ' 次';
+                return '再想想，还剩 ' + (5 - guess.attempts) + ' 次';
             }
         }
         this.drawingGate();
@@ -665,6 +709,7 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
         return { id: post.id, author: { publicId: d.author.publicId, displayName: d.author.displayName }, mine, theme: d.theme, strokes: d.strokes,
             word: mine || g?.solved ? DRAW_WORDS[d.wordIndex].word : null, wordLength: DRAW_WORDS[d.wordIndex].word.length,
             guesses: Object.values(d.guesses).filter(x => x.solved).length, solved: g?.solved ?? false, attempts: g?.attempts ?? 0,
+            ...drawingRatingSummary(d, userId), canRate: !post.hidden && canRateDrawing(d, mine, userId),
             createdAt: new Date(post.created_at).toISOString(), status: drawingStatus(d), deadlineAt: new Date(d.startedAt + OFFICE_DRAWING_DURATION).toISOString(),
             revision: d.revision ?? 0, savedAt: d.savedAt ? new Date(d.savedAt).toISOString() : null,
             submittedAt: d.submittedAt ? new Date(d.submittedAt).toISOString() : null, submission: d.submission ?? (d.published ? 'manual' : null) };
@@ -720,8 +765,13 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
         }
         const moderation=moderator?posts.filter(x=>x.kind!=='drawing'||(x.state as DrawingState).published).map(x=>({id:x.id,kind:x.kind,title:'title' in x.state?x.state.title:'异步画作',hidden:x.hidden,reports:x.reports.length,preview:x.kind==='story'?(x.state as StoryState).nodes.map(n=>n.text).join('\n\n').slice(0,5000):x.kind==='spy'?(x.state as OfficeSpyState).descriptions.map(d=>d.text).join('\n').slice(0,5000):'已发布的画作，不展示题目答案',strokes:x.kind==='drawing'?(x.state as DrawingState).strokes:undefined})):null;
         const [ownDrawing]: Post[] = await m.query(`SELECT * FROM office_hub_posts WHERE author_id=$1 AND kind='drawing' AND hidden=false ORDER BY created_at DESC,id DESC LIMIT 1`, [userId]);
-        const dailyUsed = Math.min(OFFICE_DRAWING_DAILY_LIMIT, p.counters.drawing_start ?? 0);
-        const drawingWorkspace = { dailyLimit: OFFICE_DRAWING_DAILY_LIMIT, dailyUsed, dailyRemaining: OFFICE_DRAWING_DAILY_LIMIT - dailyUsed, current: ownDrawing ? this.drawingView(ownDrawing,userId) : null };
+        const [storage] = await m.query(`SELECT count(*)::int total,count(*) FILTER(WHERE author_id=$1)::int used FROM office_hub_posts WHERE kind='drawing'
+            AND COALESCE(state->>'expiredEmpty','false')='false'`, [userId]);
+        const current = ownDrawing ? this.drawingView(ownDrawing,userId) : null;
+        const capacityReason = storage.used >= OFFICE_DRAWING_STORAGE_LIMIT ? 'personal' : storage.total >= OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT ? 'global' : null;
+        const drawingWorkspace: NonNullable<OfficeHubOverview['drawingWorkspace']> = { dailyLimit: null, dailyUnlimited: true, dailyUsed: p.counters.drawing_start ?? 0, dailyRemaining: null,
+            canStart: current?.status !== 'draft' && capacityReason === null,
+            storageLimit: OFFICE_DRAWING_STORAGE_LIMIT, storageUsed: storage.used, capacityReason, current };
         return {drawingWorkspace,...(process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED === 'true' ? { relief: readOfficeRelief(p.relief, now) } : {}),page:{nextCursor,historical:Boolean(page?.before)},serverTime: new Date(now).toISOString(), collection: { day: p.day, promotionTier: p.promotionTier, hourlyExp: OFFICE_HOURLY_EXP[p.promotionTier], waveExp: OFFICE_WAVE_EXP[p.promotionTier], farmExp: Math.max(0, Math.floor(p.farmEarned) - p.farmSpent), farmEarned: Math.floor(p.farmEarned), farmDraws: p.farmSpent / 100, creditedWaves: p.creditedWaves, tickets: p.tickets, dailyTicketClaimed: p.dailyTicketClaimed, socialPoints: p.socialPoints, socialEarnedToday: p.socialEarnedToday, socialExchangesToday: p.socialExchangesToday, pityR: p.pityR, pitySSR: p.pitySSR, draws: p.draws, owned: p.owned, equipped: p.equipped, lastDraw: p.lastDraw, reputation: Object.keys(p.owned).length * 10, ...officeTheme(now) }, weekly: await this.weekly(m, userId, p, now), boss: { startedAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt).toISOString(), endsAt: p.boss.startedAt === null ? null : new Date(p.boss.startedAt + 30000).toISOString(), hits: p.boss.hits, damage: p.boss.damage, claimed: p.boss.claimed, rewardCoins: 20 }, stories, drawings, spies, notice, moderation };
     }
 }

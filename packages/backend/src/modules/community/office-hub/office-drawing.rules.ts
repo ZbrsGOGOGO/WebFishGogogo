@@ -1,9 +1,13 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import type { OfficeDrawing, OfficeStroke } from '@stealth-reader/shared';
 import { officeStrokes } from './office-hub.rules';
 
 export const OFFICE_DRAWING_DURATION = 120_000;
-export const OFFICE_DRAWING_DAILY_LIMIT = 3;
+export const OFFICE_DRAWING_STORAGE_LIMIT = 1000;
+export const OFFICE_DRAWING_GLOBAL_STORAGE_LIMIT = 5000;
+export const OFFICE_DRAWING_PARTICIPANT_LIMIT = 1000;
+/** At most 1.28GB raw JSON for the global wall, before indexes/WAL/backups. */
+export const OFFICE_DRAWING_STATE_MAX_BYTES = 256_000;
 /** Existing asynchronous drawings use stable numeric IDs from the shared word bank. */
 export const OFFICE_DRAWING_FIRST_WORD_INDEX = 8;
 export const OFFICE_DRAWING_REPEAT_WINDOW = 12;
@@ -28,6 +32,30 @@ export interface DrawingLifecycle {
     submittedAt?: number | null;
     submission?: 'manual' | 'automatic';
     expiredEmpty?: boolean;
+}
+export interface DrawingParticipation {
+    guesses: Record<string, { attempts: number; solved: boolean }>;
+    ratings?: Record<string, number>;
+    published: boolean;
+    hidden: boolean;
+}
+export function drawingRatingSummary(d: Pick<DrawingParticipation, 'ratings'>, userId: string): { score: number | null; ratings: number; myRating: number | null } {
+    const entries = Object.entries(d.ratings ?? {}).filter(([, value]) => Number.isInteger(value) && value >= 1 && value <= 5);
+    return { score: entries.length ? entries.reduce((sum, [, value]) => sum + value, 0) / entries.length : null,
+        ratings: entries.length, myRating: entries.find(([id]) => id === userId)?.[1] ?? null };
+}
+export function canRateDrawing(d: DrawingParticipation, owner: boolean, userId: string): boolean {
+    return !owner && d.published && !d.hidden && (d.guesses[userId]?.attempts ?? 0) >= 1;
+}
+export function rateDrawing(d: DrawingParticipation, owner: boolean, userId: string, rating: unknown): void {
+    if (!Number.isInteger(rating) || Number(rating) < 1 || Number(rating) > 5)
+        throw new BadRequestException({ code: 'OFFICE_DRAWING_RATING_INVALID' });
+    if (owner) throw new ForbiddenException({ code: 'OFFICE_SELF_RATE' });
+    if (!canRateDrawing(d, false, userId)) throw new ForbiddenException({ code: 'OFFICE_DRAWING_RATE_PARTICIPATION_REQUIRED' });
+    if (!Object.prototype.hasOwnProperty.call(d.ratings ?? {}, userId) && Object.keys(d.ratings ?? {}).length >= OFFICE_DRAWING_PARTICIPANT_LIMIT)
+        throw new ConflictException({ code: 'OFFICE_DRAWING_PARTICIPANT_CAPACITY' });
+    d.ratings ??= {};
+    d.ratings[userId] = Number(rating);
 }
 export function drawingStatus(d: DrawingLifecycle): NonNullable<OfficeDrawing['status']> {
     return d.published ? 'published' : d.expiredEmpty ? 'expired_empty' : 'draft';

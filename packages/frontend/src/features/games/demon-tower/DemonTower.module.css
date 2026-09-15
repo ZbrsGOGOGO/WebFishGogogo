@@ -719,3 +719,32 @@
 :global(html[data-site-mode='community'][data-color-mode='dark']) .attributeReset {
     border-top: 1px solid var(--color-border)
 }
+
+.explorationEvents {
+    margin: 14px 0 0;
+    padding-left: 1.35rem;
+    line-height: 1.7;
+    overflow-wrap: anywhere;
+}
+.explorationStats > div {
+    min-width: 0;
+}
+.explorationStats dd {
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+.explorationMetadata {
+    margin-top: 14px;
+    color: var(--color-text-secondary, #54625b);
+    font-size: .82rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+.explorationMetadata summary {
+    cursor: pointer;
+}
+.explorationMetadata code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}

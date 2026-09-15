@@ -32,8 +32,10 @@ export interface DemonTowerState {
 }
 
 export function useDemonTower(): DemonTowerState {
-  const user = useCommunityAuthStore((state) => state.user);
-  const phase = useCommunityAuthStore((state) => state.phase);
+  // Full auth snapshots also reveal a fresh generation when the same owner logs in again.
+  const auth = useCommunityAuthStore();
+  const user = auth.user;
+  const phase = auth.phase;
   const ownerId = phase === 'active' ? user?.publicId ?? null : null;
   const generation = getCommunitySessionGeneration();
   const key = `${ownerId ?? 'guest'}:${generation}`;
@@ -48,7 +50,9 @@ export function useDemonTower(): DemonTowerState {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const pendingRef = useRef<PendingAction | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [stale, setStale] = useState(false);
+  const [stale, setStaleState] = useState(false);
+  const staleRef = useRef(false);
+  const setStale = useCallback((next: boolean): void => { staleRef.current = next; setStaleState(next); }, []);
   const [clock, setClock] = useState(Date.now());
   const serverClock = useRef({ key, offset: 0 });
   const readRef = useRef<{ key: string; promise: Promise<void>; controller: AbortController } | null>(null);
@@ -72,6 +76,8 @@ export function useDemonTower(): DemonTowerState {
     let value = previous && next.world.version < previous.world.version ? { ...next, world: previous.world, serverNow: Math.max(previous.serverNow, next.serverNow) } : next;
     const oldRun = previous?.autoExplore; const nextRun = value.autoExplore;
     if (oldRun && (nextRun === undefined || nextRun && (oldRun.id === nextRun.id && oldRun.version > nextRun.version || oldRun.createdAt > nextRun.createdAt))) value = { ...value, autoExplore: oldRun };
+    const oldDeparture = previous?.lastExploration; const nextDeparture = value.lastExploration;
+    if (oldDeparture && nextDeparture && nextDeparture.appliedVersion < oldDeparture.appliedVersion) value = { ...value, lastExploration: oldDeparture };
     const state = { key: requestKey, value };
     snapshotRef.current = state; setSnapshot(state);
     serverClock.current = { key: requestKey, offset: value.serverNow - Date.now() };
@@ -181,7 +187,7 @@ export function useDemonTower(): DemonTowerState {
 
   const act = useCallback((action: DemonTowerAction, expectation?: DemonTowerActionExpectation): Promise<boolean> => {
     const current = snapshotRef.current;
-    if (!ownerId || !isCurrent(key) || pendingRef.current || current?.key !== key || !current.value.writesEnabled || catalog?.enabled !== true) return Promise.resolve(false);
+    if (!ownerId || !isCurrent(key) || pendingRef.current || staleRef.current || current?.key !== key || !current.value.writesEnabled || catalog?.enabled !== true) return Promise.resolve(false);
     if (current.value.autoExplore?.status === 'running' || (action.kind === 'enroll' ? current.value.profile !== null : !current.value.profile?.availableActions.includes(action.kind))) return Promise.resolve(false);
     if (expectation) {
       const now = Date.now() + (serverClock.current.key === key ? serverClock.current.offset : 0);

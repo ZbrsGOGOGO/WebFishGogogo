@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { officeBossError, officeHubApi } from './office-hub';
+import { officeBossError, officeHubApi, officeHubError } from './office-hub';
 import { communityHttp, CommunityApiError } from './community-http';
 import * as wallet from '../app/store/community-wallet-store';
 
@@ -35,5 +35,21 @@ describe('office boss transport and isolated wallet observation', () => {
   it('does not expose unknown server or runtime messages', () => {
     expect(officeBossError(new CommunityApiError(500, 'private internal detail'))).not.toContain('private');
     expect(officeBossError(new Error('private runtime detail'))).not.toContain('private');
+  });
+  it('sends a drawing vote with its immutable request ID and no wallet operation or extra identity', async () => {
+    const post = vi.spyOn(communityHttp, 'post').mockResolvedValue({});
+    await officeHubApi.action('drawing_rate', { postId: 'published-drawing', rating: 5 }, '00000000-0000-4000-8000-000000000005');
+    expect(post).toHaveBeenCalledWith('/v1/office-hub/actions', { action: 'drawing_rate', postId: 'published-drawing', rating: 5, requestId: '00000000-0000-4000-8000-000000000005' }, { retryAfterRefresh: false });
+    expect(wallet.beginCommunityWalletObservation).not.toHaveBeenCalled();
+    expect(wallet.refreshCommunityWallet).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['OFFICE_DRAWING_CAPACITY', '容量'], ['OFFICE_DRAWING_GLOBAL_CAPACITY', '管理员'], ['OFFICE_DRAWING_PARTICIPANT_CAPACITY', '其他同事'],
+    ['OFFICE_DRAWING_RATING_INVALID', '1–5'], ['OFFICE_DRAWING_RATE_PARTICIPATION_REQUIRED', '不要求猜中'], ['OFFICE_SELF_RATE', '自己的画'],
+    ['OFFICE_DRAWING_DAILY_LIMIT', '旧版每日创作规则'], ['OFFICE_RATE_LIMIT', '稍快'],
+  ])('explains drawing protection %s without inventing rewards or exposing server detail', (code, expected) => {
+    const message = officeHubError(new CommunityApiError(409, 'private server detail', { code }));
+    expect(message).toContain(expected);
+    expect(message).not.toMatch(/private|今天的 3 次|办公币|奖励到账/);
   });
 });

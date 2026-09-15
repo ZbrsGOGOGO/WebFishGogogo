@@ -11,7 +11,7 @@ function draft(patch: Partial<OfficeDrawing> = {}): OfficeDrawing {
     return { id: 'draft-a', author: { publicId: 'synthetic-a', displayName: '测试画手' }, mine: true, theme: '今日', strokes: [], word: '键盘', wordLength: 2, guesses: 0, solved: false, attempts: 0, createdAt: NOW, status: 'draft', deadlineAt: END, revision: 0, savedAt: null, submittedAt: null, submission: null, ...patch };
 }
 function overview(current = draft(), time = NOW): OfficeHubOverview {
-    return { serverTime: time, notice: null, moderation: null, drawingWorkspace: { dailyLimit: 3, dailyUsed: 1, dailyRemaining: 2, current },
+    return { serverTime: time, notice: null, moderation: null, drawingWorkspace: { dailyLimit: null, dailyUsed: 1, dailyRemaining: null, dailyUnlimited: true, canStart: current.status !== 'draft', storageLimit: 1000, storageUsed: current.status === 'expired_empty' ? 0 : 1, current },
         collection: { day: '2026-09-12', promotionTier: 0, hourlyExp: 40, waveExp: 150, farmExp: 0, farmEarned: 0, farmDraws: 0, creditedWaves: 0, tickets: 0, dailyTicketClaimed: false, socialPoints: 0, socialEarnedToday: 0, socialExchangesToday: 0, pityR: 0, pitySSR: 0, draws: 0, owned: {}, equipped: null, lastDraw: null, reputation: 0, dailyUp: 'skin-mint', theme: '茶水间故事' },
         weekly: { guildId: null, guildName: null, week: '2026-09-07', announcement: '', canEdit: false, totalWaves: 0, targetWaves: 40, rewardClaimed: false, myWaves: 0, reputation: 0, leaderboard: [], departments: [] },
         boss: { startedAt: null, endsAt: null, hits: 0, damage: 0, claimed: false, rewardCoins: 20 }, stories: [], drawings: [current], spies: [] };
@@ -48,7 +48,8 @@ describe('persistent asynchronous drawing workspace', () => {
         expect(screen.queryByRole('img', { name: '同事的画作' })).not.toBeInTheDocument();
         expect(screen.getByText(/草稿已保存到服务器/)).toBeVisible();
         expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
-        expect(screen.getByText(/今日剩余/)).toHaveTextContent('2 / 3');
+        expect(screen.getByText(/不限制每日创作次数/)).toBeVisible();
+        expect(screen.queryByText(/今日剩余/)).not.toBeInTheDocument();
     });
     it('autosaves an immutable bounded snapshot with the exact server revision and a UUID', async () => {
         editor(); await draw();
@@ -140,13 +141,13 @@ describe('persistent asynchronous drawing workspace', () => {
         expect(screen.queryByRole('img', { name: '绘画画布' })).not.toBeInTheDocument();
         expect(officeHubApi.action).not.toHaveBeenCalled(); expect(settled).toHaveBeenCalledTimes(1);
     });
-    it('shows a blank terminal result and used quota instead of silently removing the task', () => {
+    it('shows a blank terminal result without spending a fictitious daily opportunity and permits another task', () => {
         const view = overview(draft({ status: 'expired_empty', submission: 'automatic', submittedAt: END }));
-        view.drawingWorkspace!.dailyUsed = 3; view.drawingWorkspace!.dailyRemaining = 0;
+        view.drawingWorkspace!.dailyUsed = 99;
         render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
         expect(screen.getByText(/本次空白结束/)).toBeVisible();
-        expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
-        expect(screen.getByText(/今日剩余/)).toHaveTextContent('0 / 3');
+        expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeEnabled();
+        expect(screen.queryByText(/今日剩余|机会已使用|本次机会/)).not.toBeInTheDocument();
         expect(screen.queryByRole('img')).not.toBeInTheDocument();
     });
     it('does not claim the unsaved local tail was included after a failed final save', async () => {
@@ -196,5 +197,100 @@ describe('persistent asynchronous drawing workspace', () => {
         render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
         expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
         expect(screen.getByText(/当前服务器尚未提供自动保存状态/)).toBeVisible();
+    });
+    it('starts another free creation after hundreds of same-day drawings without sending fabricated quotas', () => {
+        const view = overview(draft({ status: 'published', strokes: STROKES }));
+        view.drawingWorkspace!.dailyUsed = 700;
+        const command = vi.fn();
+        render(<OfficeDrawingPanel view={view} busy={false} command={command} refresh={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: '领取绘画主题' }));
+        expect(command).toHaveBeenCalledWith('drawing_start');
+        expect(screen.getByText(/不限制每日创作次数/)).toBeVisible();
+        expect(screen.queryByText(/猜中后双方可领|无限积分|3 次|3次/)).not.toBeInTheDocument();
+    });
+    it('separates actual storage exhaustion from daily creation limits', () => {
+        const view = overview(draft({ status: 'published', strokes: STROKES }));
+        view.drawingWorkspace = { ...view.drawingWorkspace!, canStart: false, storageUsed: 1000 };
+        render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
+        expect(screen.getByText(/作品容量/)).toHaveTextContent('1000 / 1000');
+        expect(screen.getByText(/作品容量/)).toHaveTextContent('容量已满');
+        expect(screen.getByText(/不限制每日创作次数/)).toBeVisible();
+    });
+    it('does not infer unlimited creation from an old server or a missing quota value', () => {
+        const view = overview(); view.drawingWorkspace = { dailyLimit: 3, dailyUsed: 3, dailyRemaining: 0, current: null };
+        render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
+        expect(screen.queryByText(/^不限制每日创作次数/)).not.toBeInTheDocument();
+        expect(screen.getByText(/当前服务器仍使用旧版创作规则/)).toBeVisible();
+    });
+    it('distinguishes a full public wall from the current author storage and does not promise deleting their pictures is enough', () => {
+        const view = overview();
+        view.drawingWorkspace = { ...view.drawingWorkspace!, current: null, canStart: false, capacityReason: 'global', storageUsed: 1 };
+        render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.getByRole('button', { name: '领取绘画主题' })).toBeDisabled();
+        expect(screen.getByText(/全局保存保护上限/)).toHaveTextContent('管理员');
+        expect(screen.getByText(/作品容量/)).toHaveTextContent('1 / 1000');
+        expect(screen.queryByText(/撤下本人旧画可释放空间/)).not.toBeInTheDocument();
+    });
+    it('puts real ratings below the guess box and sends one integer vote without an answer or another user identity', () => {
+        const view = overview(); view.drawingWorkspace!.current = null;
+        view.drawings = [draft({ id: 'rated', mine: false, status: 'published', strokes: STROKES, word: null, attempts: 1, canRate: true, score: 4.25, ratings: 4, myRating: null })];
+        const command = vi.fn();
+        render(<OfficeDrawingPanel view={view} busy={false} command={command} refresh={vi.fn()} />);
+        const select = screen.getByRole('combobox', { name: '你的评分（1–5 分）' });
+        expect(screen.getByRole('button', { name: '提交评分' })).toBeDisabled();
+        expect(within(select).getAllByRole('option').map(option => option.getAttribute('value'))).toEqual(['', '1', '2', '3', '4', '5']);
+        fireEvent.change(select, { target: { value: '5' } });
+        fireEvent.submit(select.closest('form')!);
+        expect(command).toHaveBeenCalledWith('drawing_rate', { postId: 'rated', rating: 5 });
+        expect(screen.getByText(/平均 4.3/)).toBeVisible();
+        expect(screen.getByText(/4 人评分/)).toBeVisible();
+        expect(screen.getByRole('textbox', { name: '你的答案' }).compareDocumentPosition(screen.getByText(/平均 4.3/)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(screen.queryByText('键盘')).not.toBeInTheDocument();
+    });
+    it('lets an actual participant revise one saved vote, but not submit the unchanged vote', () => {
+        const view = overview(); view.drawingWorkspace!.current = null;
+        view.drawings = [draft({ id: 'rated', mine: false, status: 'published', strokes: STROKES, word: null, canRate: true, ratings: 1, score: 2, myRating: 2 })];
+        const command = vi.fn();
+        render(<OfficeDrawingPanel view={view} busy={false} command={command} refresh={vi.fn()} />);
+        expect(screen.getByRole('button', { name: '修改评分' })).toBeDisabled();
+        fireEvent.change(screen.getByRole('combobox', { name: '你的评分（1–5 分）' }), { target: { value: '4' } });
+        fireEvent.click(screen.getByRole('button', { name: '修改评分' }));
+        expect(command).toHaveBeenCalledWith('drawing_rate', { postId: 'rated', rating: 4 });
+        expect(screen.getByText(/我的评分 2 分/)).toBeVisible();
+        expect(screen.getByText(/每人一票，可修改；评分不产生奖励/)).toBeVisible();
+    });
+    it('never exposes self-rating controls even if a malformed projection marks the author eligible', () => {
+        const view = overview(draft({ status: 'published', strokes: STROKES, canRate: true, ratings: 2, score: 3, myRating: null }));
+        render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.queryByRole('combobox', { name: '你的评分（1–5 分）' })).not.toBeInTheDocument();
+        expect(screen.getByText('不能给自己的画评分。')).toBeVisible();
+        expect(screen.getByText(/平均 3.0/)).toBeVisible();
+    });
+    it('requires server-confirmed guessing participation and does not fill missing or inconsistent averages with zero', () => {
+        const view = overview(); view.drawingWorkspace!.current = null;
+        view.drawings = [draft({ id: 'other', mine: false, status: 'published', strokes: STROKES, word: null, canRate: false, ratings: 2, score: null })];
+        const rendered = render(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.getByText(/先提交一次猜题即可评分，不要求猜中/)).toBeVisible();
+        expect(screen.getByText(/均分待确认/)).toBeVisible();
+        expect(screen.queryByRole('button', { name: '提交评分' })).not.toBeInTheDocument();
+        delete view.drawings[0].ratings; delete view.drawings[0].canRate; delete view.drawings[0].score;
+        rendered.rerender(<OfficeDrawingPanel view={view} busy={false} command={vi.fn()} refresh={vi.fn()} />);
+        expect(screen.getByText('评分尚未读取')).toBeVisible();
+        expect(screen.getByText(/当前服务器未提供评分状态/)).toBeVisible();
+        expect(screen.queryByText(/平均 0|暂无评分/)).not.toBeInTheDocument();
+    });
+    it('does not send stale form callbacks after the authentication generation changes', () => {
+        const view = overview(); view.drawingWorkspace!.current = null;
+        view.drawings = [draft({ id: 'other', mine: false, status: 'published', strokes: STROKES, word: null, canRate: true, ratings: 0, score: null })];
+        const command = vi.fn();
+        render(<OfficeDrawingPanel view={view} busy={false} command={command} refresh={vi.fn()} />);
+        const select = screen.getByRole('combobox', { name: '你的评分（1–5 分）' });
+        fireEvent.change(select, { target: { value: '3' } });
+        setCommunitySessionTokens('new-auth-session');
+        fireEvent.submit(select.closest('form')!);
+        fireEvent.submit(screen.getByRole('textbox', { name: '你的答案' }).closest('form')!);
+        expect(command).not.toHaveBeenCalled();
     });
 });
