@@ -5,7 +5,7 @@ import styles from './Progression.module.css';
 /** Only server-selected, known cosmetic labels. Never part of the login name. */
 export function CommunityTitleBadge({ title, hidden = false, equipped = true }: { title?: TitleBadge | null; hidden?: boolean; equipped?: boolean }): JSX.Element | null {
   if (hidden || !title || !COMMUNITY_ACHIEVEMENTS.some((item) => item.title.key === title.key && item.title.label === title.label)) return null;
-  return <span className={styles.titleBadge} aria-label={`${equipped ? '佩戴称号' : '称号'}：${title.label}`}>{title.label}</span>;
+  return <span className={styles.titleBadge} data-equipped={equipped} aria-label={`${equipped ? '佩戴称号' : '称号'}：${title.label}`}><span aria-hidden="true">◇</span>{title.label}</span>;
 }
 
 export function CommunityHonors({ honors }: { honors: ReadonlyArray<TitleBadge | string> }): JSX.Element {

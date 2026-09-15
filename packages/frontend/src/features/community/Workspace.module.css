@@ -1,16 +1,19 @@
 .overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 20px 0; }
-.metric { background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; min-width: 0; }
-.metric h2 { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); margin: 0 0 12px; }
+.metric { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 20px; min-width: 0; }
+.metric h2 { font-size: 14px; font-weight: 500; color: var(--color-text-secondary); margin: 0 0 12px; }
 .metric strong { display: block; font-size: clamp(24px,3vw,34px); color: var(--color-text); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .metric p, .note { color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.toolbar button, .shortcuts button { border: 1px solid var(--color-border); border-radius: 8px; padding: 8px 12px; background: #fff; color: var(--color-text); cursor: pointer; }
-.shortcuts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: #fff; margin-bottom: 24px; }
+.toolbar button, .shortcuts button { border: 1px solid var(--color-border); border-radius: 8px; min-height: 44px; padding: 8px 12px; background: var(--color-surface); color: var(--color-text); cursor: pointer; font: inherit; font-size: 14px; }
+.toolbar > a { display: inline-flex; min-height: 44px; align-items: center; font-size: 14px; color: var(--color-link); }
+.shortcuts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; padding: 24px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface); margin-bottom: 0; }
 .shortcuts h2 { font-size: 16px; margin-top: 0; }
 .shortcuts nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.shortcuts nav a { background: var(--color-surface-2); border: 1px solid var(--color-border); padding: 8px 10px; color: var(--color-link); border-radius: 8px; text-decoration: none; font-size: 13px; }
-.shortcuts summary { cursor: pointer; font-size: 12px; }
-.options { display: grid; gap: 10px; margin: 16px 0; font-size: 13px; }
+.shortcuts nav a { background: var(--color-surface-2); border: 1px solid var(--color-border); padding: 8px 10px; color: var(--color-link); border-radius: 8px; text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; min-height: 44px; }
+.shortcuts nav p { font-size: 16px; line-height: 1.75; color: var(--color-text-secondary); }
+.shortcuts summary { cursor: pointer; font-size: 14px; min-height: 44px; padding-block: 12px; }
+.options { display: grid; gap: 10px; margin: 16px 0; font-size: 14px; }
+.options label { min-height: 44px; display: flex; align-items: center; gap: 8px; }
 .shortcuts > .note { grid-column: 1 / -1; margin: 0; }
 @media(max-width: 640px) { .overview { grid-template-columns: minmax(0,1fr); } .metric { padding: 16px; } .shortcuts { grid-template-columns: minmax(0,1fr); padding: 18px; } }
 

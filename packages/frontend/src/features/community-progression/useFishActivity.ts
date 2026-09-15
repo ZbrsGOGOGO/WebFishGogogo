@@ -2,19 +2,23 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { FISH_RULES, type FishProgressView } from '@stealth-reader/shared';
 import { communityProgressionApi } from '../../api/community-progression';
+import { getCommunitySessionGeneration } from '../../api/community-http';
 import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { useBallpointWindow } from '../games/ballpoint-breach/BallpointWindow';
 
 export const FISH_EVENT = 'community:fish-progress';
-export type FishEventDetail = { owner: string; progress: FishProgressView };
+export type FishEventDetail = { owner: string; generation: number; progress: FishProgressView };
 export const isFishGamePath = (path: string): boolean => !/\/(?:leaderboards?|rooms)\/?$|\/leaderboards?\//.test(path) && /^\/(?:games\/(?!rooms\/?$)[^/]+|tower-defense(?:\/|$))/.test(path);
 
 /** Coarse activity totals only. No keystrokes, URLs, chat contents or client-supplied durations are sent. */
 export function useFishActivity(): void {
   const { isOpen, isPlaying } = useBallpointWindow();
   const floating = useRef({ isOpen, isPlaying }); floating.current = { isOpen, isPlaying };
-  const phase = useCommunityAuthStore(s => s.phase), owner = useCommunityAuthStore(s => s.user?.publicId);
+  // Session publication can keep the same phase and public id. Read every auth
+  // snapshot so its generation change still replaces the previous tracker.
+  const auth = useCommunityAuthStore(), { phase, loading } = auth, owner = auth.user?.publicId;
+  const generation = getCommunitySessionGeneration();
   const location = useLocation(), path = useRef(location.pathname); path.current = location.pathname;
   const boundary = useRef<(() => void) | null>(null);
   const signature = `${location.pathname}:${isOpen}:${isPlaying}`;
@@ -24,7 +28,7 @@ export function useFishActivity(): void {
     previousSignature.current = signature;
   }, [signature]);
   useEffect(() => {
-    if (phase !== 'active' || !owner || !COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled) return;
+    if (phase !== 'active' || loading || !owner || !COMMUNITY_FEATURE_FLAGS.communityProgressionEnabled) return;
     const controller = new AbortController(), tabId = crypto.randomUUID();
     let sequence = 0, lastActivity = Date.now(), busy = false, paused = false, needsPause = false;
     const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart'] as const;
@@ -41,7 +45,7 @@ export function useFishActivity(): void {
       }
     };
     const tick = async (): Promise<void> => {
-      if (busy || controller.signal.aborted) return;
+      if (busy || controller.signal.aborted || generation !== getCommunitySessionGeneration()) return;
       connectFrames();
       const active = !needsPause && !document.hidden && document.hasFocus() && Date.now() - lastActivity < FISH_RULES.idleSeconds * 1000;
       if (!active && paused) { needsPause = false; return; }
@@ -52,7 +56,7 @@ export function useFishActivity(): void {
         const progress = await communityProgressionApi.heartbeat({ tabId, sequence: ++sequence, mode: !active ? 'pause' : game ? 'game' : 'browse' }, controller.signal);
         paused = !active;
         if (!active) needsPause = false;
-        if (!controller.signal.aborted && useCommunityAuthStore.getState().user?.publicId === owner && useCommunityAuthStore.getState().phase === 'active') window.dispatchEvent(new CustomEvent<FishEventDetail>(FISH_EVENT, { detail: { owner, progress } }));
+        if (!controller.signal.aborted && generation === getCommunitySessionGeneration() && useCommunityAuthStore.getState().user?.publicId === owner && useCommunityAuthStore.getState().phase === 'active') window.dispatchEvent(new CustomEvent<FishEventDetail>(FISH_EVENT, { detail: { owner, generation, progress } }));
       } catch { /* No optimistic XP, replay queue or offline catch-up. Retry next bounded heartbeat. */ }
       finally { busy = false; }
     };
@@ -73,7 +77,7 @@ export function useFishActivity(): void {
       for (const frame of frameWindows) for (const event of events) { try { frame.removeEventListener(event, activity); } catch { /* Detached frame. */ } }
       document.removeEventListener('visibilitychange', visibility); window.removeEventListener('blur', visibility); window.removeEventListener('focus', visibility);
     };
-  }, [phase, owner]);
+  }, [phase, owner, loading, generation]);
 }
 
 /** Mounted once above every community route, including standalone tools/games. */
