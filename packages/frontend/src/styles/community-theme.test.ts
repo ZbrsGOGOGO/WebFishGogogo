@@ -40,4 +40,8 @@ describe('community interface palette', () => {
     expect(css).toContain('color-scheme: light');
     expect(css).not.toMatch(/\[class[*^$]/);
   });
+  it('uses the dark semantic surface for the company shell even with an inline light paper skin', () => {
+    const officeCss = readFileSync(resolve(process.cwd(), 'src/features/office-hub/OfficeHubPage.module.css'), 'utf8');
+    expect(officeCss).toMatch(/:global\(html\[data-site-mode='community'\]\[data-color-mode='dark'\]\)\s+\.hub\s*\{\s*background:\s*var\(--color-surface\)/);
+  });
 });

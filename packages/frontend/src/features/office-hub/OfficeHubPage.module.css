@@ -3,6 +3,9 @@
 @media(prefers-reduced-motion:reduce){.paperBoss{transition:none;transform:none!important}}
 
 /* Dark-mode chrome; preserve original artwork and light-mode styling. */
+:global(html[data-site-mode='community'][data-color-mode='dark']) .hub {
+    background: var(--color-surface)
+}
 :global(html[data-site-mode='community'][data-color-mode='dark']) .hub button {
     background: var(--color-surface)
 }
