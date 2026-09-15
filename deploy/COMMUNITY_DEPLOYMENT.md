@@ -2,11 +2,21 @@
 
 本文面向当前「摸摸公司」的 `community` 模式。**已运行站点更新、空站初始化、历史迁移是三种不同流程，不可混用。** 旧 `full`、`review`、`public` 模式见 [部署导航](README.md)。
 
-### 2026-09-14 当前 Web 发布：掌心故事本地趣味体验
+### 2026-09-15 当前发布：工作台视觉升级第一阶段（仅 Web）
+
+北京时间 14:30:54 仅替换 Web，生产源码与 Web 标签固定到 `f88ba2c8af2334d419d831ce027896f5d7f5ee3f`，Web 镜像 `sha256:9e00d51fa9c33bac236fef42db1f742564f2c24f93e03149d2def20753a3665d`。API 继续运行 `832f5288ea46a6018263c887865040014e56d42d` / `sha256:8b99cf12840f6c15e59ad9f7f96d03e178a077f723de055ee246ba1072d93592` 的原容器；数据库为 schema39 / 40 条迁移 / 148 表，本批无迁移。API、PostgreSQL、Redis、Gateway 与数据卷未重建，环境仅 IMAGE_TAG 改变。Compose 共用新标签对应的 API 别名仍是旧镜像，不据此重启 API 或全栈启动。
+
+新鲜加密备份隔离完整恢复与异机校验通过，1732 前端测试、不可变镜像浏览器验收、65 项公网烟测及 17 个发行文件哈希通过；认证 Cookie 烟测明确跳过，私有页未借用玩家登录态视觉重验。直接回退仅恢复 `832f528` Web 镜像 `sha256:a33a22043af255bd4f543dca4a9eddaccec3ff49164f6c549101b5214100c98a` 和切换前完整环境，API/房间服务不重启，不执行 DOWN、旧库回灌或数据卷删除。[本次发布记录](../docs/RELEASE_UI_PHASE1_20260915.md) · [路线图](../docs/UI_ROADMAP_20260915.md)。
+
+### 2026-09-14 历史发布：协作反馈修复
+
+当晚 API/Web 应用 `832f5288ea46a6018263c887865040014e56d42d` 发布，修复技能满熟练度说明、档案外观布局与异步猜画题库范围；无限次数/评价仍进行中。schema39 / 40 条迁移 / 148 表，无迁移，原基础设施不变。[当批记录](../docs/RELEASE_FEEDBACK_20260914.md)。该 API 是本次视觉升级继续运行的实际后端，不再把下述 d641ae0 作为当前 API。
+
+### 2026-09-14 历史 Web 发布：掌心故事本地趣味体验
 
 北京时间 18:14 已发布纯前端提交 `9994fe9c2ee0cbfe790d2e00c53e9b20df95da7f`，只重建 Web 容器；运行 API 仍是 `d641ae0` 镜像，PostgreSQL、Redis、Gateway 与数据卷不变，无迁移（schema39 / 40 条迁移 / 148 张表）。`/tools/palm-story` 使用浏览器本地照片预览和用户手动纹路观察，明确不做 AI 看图、四柱计算或命运预测；不发图片到本站/第三方，不写账号/办公币/成绩。原 11 款实用工具目录保留，新增体验独立呈现。直接回退只切回 `d641ae0` 已保留 Web 镜像与切换前环境，不重启 API，也不触碰数据库；底座 v3 的 API 回滚仍遵循下一段的新兼容桥预案。[本次发布记录](../docs/RELEASE_PALM_STORY_20260914.md)。
 
-### 2026-09-14 当前 API 底座：文字战线 v3、免费双人房间与妖塔技能
+### 2026-09-14 历史 API 底座：文字战线 v3、免费双人房间与妖塔技能
 
 北京时间 17:48 已部署应用 `d641ae0b0d6341a6ac3ed69db58e6ddd521362c1`。唯一迁移 `1700000000039` 只扩展 `arcade_game_runs` 和 `arcade_best_scores` 的游戏键 CHECK，增加独立 `word_story_v3` / `word_endless_v3` 成绩；现网 schema39 / 40 条迁移 / 148 张表。原 v1/v2 回放、旧榜与原工位塔防保持。v3 增固定岔路、干扰和仅局内装备；免费双人房间采用 v2 规则双线对攻，支持可选密码和当前 API 生命周期内重连，房间结果不入正式榜、不动办公币，API 重启会结束临时房。妖塔新增 s19/s20 免费主动技能。新鲜备份恢复、唯一增量迁移、旧局和新局结算、新兼容桥及双用户隔离 HTTP 均通过；仅顺序切换 API/Web，PostgreSQL、Redis、Gateway 容器和数据卷不变。直接回滚只用新桥 `22a4b363e4052cbc8c0fb816c99e3fe13818c603` 的已保留 API/Web 镜像与完整旧配置（IMAGE_TAG 指向新桥），保留 schema39 与全部数据，不执行 DOWN/旧库覆盖。旧桥 `1f50c07` 不认识 s19/s20，不能用于本次回滚。详见[本批发布记录](../docs/RELEASE_WORD_FRONT_V3_20260914.md)。
 
@@ -24,7 +34,7 @@
 
 ### 2026-09-12 历史发布：协作反馈适配
 
-当前已部署应用 `e1838603c80aafce459cb2d2ef8a3507f4b4678c`，北京时间 2026-09-12 16:51:53 上线；GitHub `main` 的已部署应用代码基线为同一提交，后续单独形成的文档提交不作为线上应用版本。本轮保留塔防随机起手、工具搬移、锁槽提示与下一局天赋保存、异步猜画持久草稿与到期提交及本地 CMYK 转换，并完成妖塔六工作区整合、36 件武器/技能分页、升阶实际数值说明和完整站点壳层响应式。不改变原经济、支付或权限边界；不代表妖塔 v0.11 / v0.12 的其余规划已经完成。[正式发布记录](../docs/RELEASE_COLLABORATION_20260912.md)。
+当时已部署应用 `e1838603c80aafce459cb2d2ef8a3507f4b4678c`，北京时间 2026-09-12 16:51:53 上线；GitHub `main` 的当时应用代码基线为同一提交，后续单独形成的文档提交不作为线上应用版本。该批保留塔防随机起手、工具搬移、锁槽提示与下一局天赋保存、异步猜画持久草稿与到期提交及本地 CMYK 转换，并完成妖塔六工作区整合、36 件武器/技能分页、升阶实际数值说明和完整站点壳层响应式。不改变原经济、支付或权限边界；不代表妖塔 v0.11 / v0.12 的其余规划已经完成。[正式发布记录](../docs/RELEASE_COLLABORATION_20260912.md)。
 
 API 镜像 `sha256:61be2a4d9a19c0c2b6ffc0ed442edece33dcb038756c6a2116a9ed49f69296b6`，容器 `7a62b71476e1528041c113f69202c07159b13b1fceb37f6d53785de9354acb06`；Web 镜像 `sha256:1cf3cc5eea0f06df461b25e0c4f2e5ea30106be07011c9bb5a4036c872eac885`，容器 `1aa24ce2bc50ab387a7ad372b154d06620d2b33a8f33a47d16a40399f21f7fe3`。PostgreSQL `d6a05c51b910df69d54ac934ca27a6015ebb1c42982f0406e7eca444e746ab50`、Redis `43393cf27593ad6c899e50ffae6491ab21b4e51552ff702e6a61fb927ad3277f`、Gateway `850da9cb348572d24a1d5c8ac633997f65ef02ee990992060f05c144fd3f8160` 及生产数据卷保持不变。无 SQL 迁移，保持 schema36 / 37 条迁移 / 148 张表。
 
@@ -131,11 +141,11 @@ API 镜像 `sha256:61be2a4d9a19c0c2b6ffc0ed442edece33dcb038756c6a2116a9ed49f6929
 
 1. **只读盘点。** 核对干净提交、已确认的 GitHub 分支、生产源码 SHA、API/Web 不可变镜像 ID、完整环境备份、基础设施容器 ID/挂载、迁移历史、磁盘及内存余量。保留用户和协作者改动；存在冲突或证据不一致时停止。
 2. **确定发布边界。** 比较候选与实际生产迁移清单，明确是无迁移更新还是指定增量迁移；登记精确回滚版本和兼容限制。不得用“最新迁移编号相同”代替完整名称、时间戳和 schema 核验。
-3. **回归与构建。** 按影响范围跑测试、类型检查、社区功能开关下的构建。候选 `IMAGE_TAG` 使用其完整 40 位提交 SHA；构建 API/Web 并记录实际镜像 ID。真实候选验收必须复用最终不可变镜像，不用临时覆盖的源码/dist 代替。
+3. **回归与构建。** 按影响范围跑测试、类型检查、社区功能开关下的构建。候选 `IMAGE_TAG` 使用其完整 40 位提交 SHA；只构建已授权变更的服务并记录实际镜像 ID。纯前端先确认 backend/shared、锁文件及部署配置与生产基线无差异，构建 Web-only，API 保留原镜像。真实候选验收必须复用最终不可变镜像，不用临时覆盖的源码/dist 代替。
 4. **新鲜备份与恢复。** 为该目标保留限权加密备份、完整环境和旧镜像，完整恢复到隔离副本并做内容/结构/序列/迁移历史核对，异机传输并校验。生产备份副本不得与合成浏览器账号或外部提供方测试混在同一环境。仓库旧 `backup.sh` / `restore.sh` 面向 full 文档卷，**不是当前 community 发布的一键备份/回滚工具**；沿用当批已审阅的私有发布流程，不把私有路径、凭据或备份放进仓库。
 5. **验证数据库兼容。** 无迁移更新在新鲜恢复副本上验证候选映射、无待执行迁移及全库内容不变；不执行生产 UP/DOWN。有增量迁移时，先在隔离副本验证确切起点→终点及旧数据不变；只有必要的待执行迁移可以另行批准进入生产。破坏性迁移或备份/演练失败时停止发布。
 6. **候选功能验收。** 新建隔离网络、合成数据库和普通测试账号，限制 CPU/内存；跑受影响的真实 HTTP/WSS、浏览器、权限及资产边界。账号/资产并发测试要使用真实 PostgreSQL，pg-mem 或页面可见不能替代它。记录失败，修复后在最终镜像复验。
-7. **有限切换。** 所有门禁通过后才更新已审阅的发布配置；排空在途操作，告知临时房间中断。常规应用更新依次以 `up -d --no-deps --no-build --pull never --force-recreate --wait api` 和 `up -d --no-deps --no-build --pull never --force-recreate --wait web` 替换 API/Web，先等 API ready 再启动 Web；保持 PostgreSQL、Redis、网关及数据卷不变。不能合并依赖顺序、无条件执行全栈 `up` / `down`、现场重建镜像或启动旧 Worker / `migrate`。
+7. **有限切换。** 所有门禁通过后才更新已审阅配置。涉及 API 的更新排空在途操作并告知临时房间中断，依次以 `up -d --no-deps --no-build --pull never --force-recreate --wait api` 和对应 `web` 替换，先等 API ready 再启动 Web。**Web-only 只执行 `up -d --no-deps --no-build --pull never --force-recreate --wait web`，不重启 API/房间，逐字核对其完整容器身份不变。** PostgreSQL、Redis、网关及数据卷保持不变；不能无条件全栈 `up` / `down`、现场重建镜像或启动旧 Worker / `migrate`。
 8. **线上复核与留档。** 验证健康、实际镜像、环境差分、完整迁移登记、基础设施 ID；按授权范围完成公网及匿名/手机浏览器检查。普通合成账号的资产与残留须单独核对，未知副作用停止清理；不能自动删除真实用户。隔离材料归档并逐项校验后，只按已确认 ID/挂载清理本次测试资源。
 
 准备后续实际候选时的预检与构建命令如下；它们不切流，不替代上述备份和验收，也不表示当前运行应用需要重复构建或切换：
@@ -145,8 +155,10 @@ sh deploy/community-preflight.sh .env.community
 docker compose -p webfish-community \
   -f deploy/docker-compose.community.yml --env-file .env.community config -q
 docker compose -p webfish-community \
-  -f deploy/docker-compose.community.yml --env-file .env.community build api web
+ -f deploy/docker-compose.community.yml --env-file .env.community build api web
 ```
+
+上述构建示例适用于已授权 API/Web 同时更新；Web-only 将末尾改为 `build web`，保留 API 镜像及其经验证的共用标签别名，不执行 API 的 `up`。文档提交不运行任何构建或发布。
 
 预检要求 `IMAGE_TAG` 与当前干净 checkout 的完整 HEAD 一致，因此**不应用它来判断“旧运行镜像 + 新文档 HEAD”是否健康，更不能为让预检通过而擅自改生产 IMAGE_TAG**。`config -q` 只校验配置；不要把会展开密钥的完整 Compose 配置打印到公共日志。构建仍会占用 CPU/内存，需避开备份恢复及双浏览器等峰值。
 
@@ -199,7 +211,7 @@ docker compose -p webfish-community \
 
 ### 旧迁移演练脚本的适用范围
 
-[community-migration-rehearsal.sh](community-migration-rehearsal.sh) 当前硬编码 `BASELINE_TIMESTAMP=1700000000007`、`LATEST_TIMESTAMP=1700000000030`；预检也只检查其这套历史覆盖。它使用脱敏 0007 plain SQL 快照，在临时 PostgreSQL 16 中验证旧 `up/down/up`、邮箱冲突和锁超时，**不是 schema35 或 schema36 的当前发布门禁**。把含 0035/0036 的最新镜像直接交给它，会与“最高迁移必须为 0030”的断言冲突；不得忽略失败或声称它已验证本次版本。本轮没有修改该脚本。
+[community-migration-rehearsal.sh](community-migration-rehearsal.sh) 当前硬编码 `BASELINE_TIMESTAMP=1700000000007`、`LATEST_TIMESTAMP=1700000000030`；预检也只检查其这套历史覆盖。它使用脱敏 0007 plain SQL 快照，在临时 PostgreSQL 16 中验证旧 `up/down/up`、邮箱冲突和锁超时，**不是 schema39 的当前发布门禁**。把含 0031–0039 的最新镜像直接交给它，会与“最高迁移必须为 0030”的断言冲突；不得忽略失败或声称它已验证本次版本。本轮没有修改该脚本。
 
 从旧快照升级或新站初始化，须先为真实起点和当前候选补齐独立演练并审阅；旧脚本的历史通过不能替代它。历史 f46 无迁移发布使用的是新鲜备份恢复、最终镜像只读克隆及数据不变核验，详见发布记录。其他 `community-*-rehearsal.cjs` 是会写合成数据的专项测试，也不能当作生产只读命令运行。
 
