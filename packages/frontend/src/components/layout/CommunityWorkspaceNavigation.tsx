@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { COMMUNITY_FEATURE_FLAGS, COMMUNITY_SYSTEM_NAV, communitySystemByPath, type CommunitySystemNavItem, type CommunitySystemId } from '../../app/community-nav';
+import { groupedCommunityNavigation } from '../../app/community-navigation-groups';
 import { getCommunitySessionGeneration } from '../../api/community-http';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import {
@@ -22,6 +23,7 @@ interface NavigationContextValue {
   developmentAccess: DevelopmentAccessState;
   developmentAllowed: boolean;
   canCustomize: boolean;
+  customOrder: boolean;
   open: boolean;
   show: (panel?: Panel) => void;
   close: () => void;
@@ -85,10 +87,19 @@ export function CommunityWorkspaceNavigationProvider({ children }: { children: R
   const allowed = COMMUNITY_SYSTEM_NAV.filter(item => item.enabled);
   const ordered = preferences.order.map(id => allowed.find(item => item.id === id)).filter((item): item is CommunitySystemNavItem => Boolean(item));
   const items = ordered.filter(item => !preferences.hidden.includes(item.id));
-  const show = (mode: Panel = 'directory'): void => {
+  const show = useCallback((mode: Panel = 'directory'): void => {
     setQuery(''); setNotice('');
     setEditor({ scope, route: location.key, mode: mode === 'settings' && !owner ? 'directory' : mode, draft: normalizeCommunityNavigationPreferences(preferences), baseline: JSON.stringify(preferences) });
-  };
+  }, [scope, location.key, owner, preferences]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent): void => {
+      if (event.key.toLowerCase() !== 'k' || !(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing || event.repeat) return;
+      if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return;
+      event.preventDefault(); event.stopImmediatePropagation(); show();
+    };
+    window.addEventListener('keydown', shortcut, true);
+    return () => window.removeEventListener('keydown', shortcut, true);
+  }, [show]);
   const changedElsewhere = visibleEditor?.mode === 'settings' && visibleEditor.baseline !== JSON.stringify(preferences);
   const save = (reset: boolean): void => {
     if (!owner || !visibleEditor || !current()) { close(); return; }
@@ -127,16 +138,19 @@ export function CommunityWorkspaceNavigationProvider({ children }: { children: R
     setNotice('');
   };
   const canModerate = auth.phase === 'active' && auth.user?.roles?.some(role => role === 'moderator' || role === 'admin');
-  const directory = allowed.filter(item => `${item.label} ${item.description}`.includes(query.trim()));
+  const search = query.trim().toLocaleLowerCase();
+  const directory = allowed.filter(item => `${item.label} ${item.description}`.toLocaleLowerCase().includes(search));
   const currentSystem = communitySystemByPath(location.pathname);
   const settingsItems = visibleEditor?.draft.order.map(id => allowed.find(item => item.id === id)).filter((item): item is CommunitySystemNavItem => Boolean(item)) ?? [];
 
-  return <NavigationContext.Provider value={{ items, developmentAccess, developmentAllowed, canCustomize: Boolean(owner), open: Boolean(visibleEditor), show, close }}>
+  const defaultOrder = defaultCommunityNavigationPreferences().order;
+  const customOrder = preferences.order.some((id, index) => id !== defaultOrder[index]);
+  return <NavigationContext.Provider value={{ items, developmentAccess, developmentAllowed, canCustomize: Boolean(owner), customOrder, open: Boolean(visibleEditor), show, close }}>
     <DevelopmentAccessProvider value={developmentAccess}>
       {children}
       <NavigationDialog open={Boolean(visibleEditor)} title={visibleEditor?.mode === 'settings' ? '目录设置' : '全部栏目'} onClose={close}>
         {visibleEditor?.mode === 'settings' ? <>
-          <p className={styles.hint}>仅保存当前账号在本浏览器的侧目录，不跨设备同步。隐藏不会关闭功能，仍可从“全部栏目”访问。</p>
+          <p className={styles.hint}>仅保存当前账号在本浏览器的侧目录，不跨设备同步。默认按功能分组；调整顺序后按你的整列排序显示。隐藏不会关闭功能，仍可从“全部栏目”访问。</p>
           <p className={styles.fixedHint}>“全部栏目”和“目录设置”始终保留；管理入口按账号权限显示。</p>
           {changedElsewhere ? <div className={styles.warning} role="status">另一个页面已更新目录，未保存草稿不会自动覆盖它。<button type="button" onClick={() => { setEditor({ ...visibleEditor, draft: normalizeCommunityNavigationPreferences(preferences), baseline: JSON.stringify(preferences) }); setNotice('已载入最新设置，原草稿已丢弃。'); }}>载入最新设置</button></div> : null}
           <ol className={styles.settingsList} aria-label="侧目录显示与顺序">
@@ -151,7 +165,7 @@ export function CommunityWorkspaceNavigationProvider({ children }: { children: R
           <div className={styles.editorActions}><button type="button" onClick={() => save(true)} disabled={Boolean(changedElsewhere)}>恢复默认</button><span /><button type="button" onClick={close}>取消编辑</button><button type="button" className={styles.primary} onClick={() => save(false)} disabled={Boolean(changedElsewhere)}>保存目录</button></div>
         </> : <>
           <div className={shell.navigationSearch}><label htmlFor="workspace-navigation-search">查找栏目</label><input id="workspace-navigation-search" type="search" placeholder="例如：工具、聊天室、排行榜" maxLength={80} value={query} onChange={event => setQuery(event.target.value)} /></div>
-          <nav className={shell.navigationGrid} aria-label="栏目目录">{directory.map(item => <Link key={item.id} to={item.path} onClick={close} aria-current={currentSystem?.id === item.id ? 'page' : undefined}><SystemIcon name={item.id} /><span>{item.label}</span></Link>)}{developmentAllowed && '开发协作'.includes(query.trim()) ? <Link to="/development" onClick={close}><SystemIcon name="development" /><span>开发协作</span></Link> : null}</nav>
+          <nav className={styles.directoryGroups} aria-label="栏目目录">{groupedCommunityNavigation(directory).map(group => <section key={group.id}><h3>{group.label}</h3><div className={shell.navigationGrid}>{group.entries.map(item => <Link key={item.id} to={item.path} onClick={close} aria-current={currentSystem?.id === item.id ? 'page' : undefined}><SystemIcon name={item.id} /><span>{item.label}</span></Link>)}</div></section>)}{developmentAllowed && '开发协作'.includes(search) ? <section><h3>开发协作</h3><div className={shell.navigationGrid}><Link to="/development" onClick={close}><SystemIcon name="development" /><span>开发协作</span></Link></div></section> : null}</nav>
           {!directory.length && !(developmentAllowed && '开发协作'.includes(query.trim())) ? <p role="status">没有匹配的栏目，试试更短的关键词。</p> : null}
           <div className={shell.navigationFooter}>
             {owner ? <button type="button" className={styles.smallButton} onClick={() => show('settings')}>目录设置</button> : null}
@@ -168,16 +182,17 @@ export function CommunityWorkspaceNavigationProvider({ children }: { children: R
 
 export function CommunityDirectoryTrigger({ neutral = false }: { neutral?: boolean }): JSX.Element {
   const nav = useCommunityWorkspaceNavigation();
-  return <button type="button" className={shell.navigationTrigger} aria-label="浏览全部栏目" aria-haspopup="dialog" aria-expanded={nav.open} onClick={() => nav.show()}><SystemIcon name="menu" /><span>{neutral ? '工作台目录' : '全部栏目'}</span></button>;
+  return <button type="button" className={shell.navigationTrigger} aria-label="浏览全部栏目" aria-haspopup="dialog" aria-expanded={nav.open} aria-keyshortcuts="Control+k Meta+k" title="查找栏目 · Ctrl / ⌘ K" onClick={() => nav.show()}><SystemIcon name="menu" /><span>{neutral ? '工作台目录' : '全部栏目'}</span></button>;
 }
 
 export function CommunitySidebarLinks({ unreadCount = 0 }: { unreadCount?: number }): JSX.Element {
   const nav = useCommunityWorkspaceNavigation();
   const location = useLocation();
   const current = communitySystemByPath(location.pathname);
+  const groups = nav.customOrder ? [{ id: 'custom', label: '自定义目录', entries: nav.items }] : groupedCommunityNavigation(nav.items);
   return <>
-    <nav className={shell.sideNav} aria-label="全部系统"><p>工作台</p>
-      {nav.items.map(item => <Link key={item.id} to={item.path} aria-label={item.id === 'messages' && unreadCount > 0 ? `${item.label}，${unreadCount} 条未读` : undefined} data-current={current?.id === item.id} aria-current={current?.id === item.id ? 'page' : undefined}><span aria-hidden="true"><SystemIcon name={item.id} /></span><b>{item.label}</b>{item.id === 'messages' && unreadCount > 0 ? <em className={shell.unreadBadge}>{Math.min(unreadCount, 99)}</em> : null}</Link>)}
+    <nav className={shell.sideNav} aria-label="全部系统">
+      {groups.map(group => <div className={shell.sideGroup} key={group.id}><p>{group.label}</p>{group.entries.map(item => <Link key={item.id} to={item.path} aria-label={item.id === 'messages' && unreadCount > 0 ? `${item.label}，${unreadCount} 条未读` : undefined} data-current={current?.id === item.id} aria-current={current?.id === item.id ? 'page' : undefined}><span aria-hidden="true"><SystemIcon name={item.id} /></span><b>{item.label}</b>{item.id === 'messages' && unreadCount > 0 ? <em className={shell.unreadBadge}>{Math.min(unreadCount, 99)}</em> : null}</Link>)}</div>)}
       {nav.developmentAllowed ? <Link to="/development" data-current={location.pathname.startsWith('/development')} aria-current={location.pathname.startsWith('/development') ? 'page' : undefined}><span aria-hidden="true"><SystemIcon name="development" /></span><b>开发协作</b></Link> : null}
     </nav>
     {!nav.items.length ? <p className={styles.hint}>已隐藏全部可选栏目，可从下方找回。</p> : null}

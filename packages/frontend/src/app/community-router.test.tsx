@@ -39,7 +39,7 @@ describe('community mode routes', () => {
   it('renders the playable workbench homepage without advertising disabled systems', () => {
     renderAt('/');
 
-    expect(screen.getByRole('heading', { name: '你的日常工作台' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /把日常，.*安排得刚刚好/ })).toBeInTheDocument();
     const systemNavigation = screen.getByRole('navigation', { name: '全部系统' });
     expect(within(systemNavigation).getByRole('link', { name: '首页' })).toHaveAttribute('href', '/');
     expect(within(systemNavigation).getByRole('link', { name: '工位塔防' })).toHaveAttribute('href', '/tower-defense');
@@ -49,6 +49,12 @@ describe('community mode routes', () => {
     for (const label of ['热点新闻', '经验交流', '农场', '投喂', '邀请', '好友']) {
       expect(systemNavigation).not.toHaveTextContent(label);
     }
+    const primaryNavigation = screen.getByRole('navigation', { name: '快捷导航' });
+    expect(within(primaryNavigation).getByRole('link', { name: '今日' })).toHaveAttribute('href', '/');
+    expect(within(primaryNavigation).getByRole('link', { name: '游戏' })).toHaveAttribute('href', '/games');
+    expect(within(primaryNavigation).getByRole('link', { name: '工具' })).toHaveAttribute('href', '/tools');
+    expect(within(primaryNavigation).getByRole('link', { name: '我的' })).toHaveAttribute('href', '/me');
+    expect(within(primaryNavigation).queryByRole('link', { name: '交流' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: '注册工位' })).toHaveAttribute('href', '/register');
     const footer = screen.getByRole('contentinfo', { name: '站点信息' });
@@ -80,7 +86,8 @@ describe('community mode routes', () => {
     unmount();
 
     renderAt('/games');
-    expect(await screen.findByRole('heading', { name: '小游戏专区' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /留一点时间，.*给好玩的事/ })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '小游戏专区' })).toBeInTheDocument();
   });
 
   it.each(['/tools', '/games', '/games/demon-tower', '/office', '/users/member-1', '/privacy-policy', '/terms-of-service', '/not-a-real-page'])(
@@ -98,18 +105,37 @@ describe('community mode routes', () => {
   );
 
   it.each([
-    ['全部系统', '小游戏', '/games', '小游戏专区'],
+    ['全部系统', '小游戏', '/games', /留一点时间，.*给好玩的事/],
     ['全部系统', '工具', '/tools', '常用的小工具，打开就能用'],
-    ['小游戏、工具与搭子快捷入口', '小游戏', '/games', '小游戏专区'],
-    ['小游戏、工具与搭子快捷入口', '工具', '/tools', '常用的小工具，打开就能用'],
     ['全部系统', '工位搭子', '/desk-pet', '领一个工位搭子'],
-    ['小游戏、工具与搭子快捷入口', '工位搭子', '/desk-pet', '领一个工位搭子'],
+    ['快捷导航', '游戏', '/games', /留一点时间，.*给好玩的事/],
+    ['快捷导航', '工具', '/tools', '常用的小工具，打开就能用'],
+    ['移动端快捷导航', '游戏', '/games', /留一点时间，.*给好玩的事/],
+    ['移动端快捷导航', '工具', '/tools', '常用的小工具，打开就能用'],
+    ['首页主行动', '探索休闲项目', '/games', /留一点时间，.*给好玩的事/],
+    ['首页主行动', '打开工具箱', '/tools', '常用的小工具，打开就能用'],
   ])('opens %s / %s in one click without requiring login', async (navigation, label, path, heading) => {
     renderAt('/');
-    const link = within(screen.getByRole('navigation', { name: navigation })).getByRole('link', { name: label });
+    const link = navigation === '首页主行动'
+      ? screen.getByRole('link', { name: label })
+      : within(screen.getByRole('navigation', { name: navigation })).getByRole('link', { name: label });
     expect(link).toHaveAttribute('href', path);
     fireEvent.click(link);
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: '欢迎回来' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the desk companion guest-accessible through two explicit grouped-directory clicks', async () => {
+    renderAt('/');
+    // The five-item mobile dock groups the companion under tools instead of duplicating a home shortcut.
+    expect(within(screen.getByRole('navigation', { name: '移动端快捷导航' })).queryByRole('link', { name: '工位搭子' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+    const directory = await screen.findByRole('dialog', { name: '全部栏目' });
+    const companion = within(directory).getByRole('link', { name: '工位搭子' });
+    expect(companion).toHaveAttribute('href', '/desk-pet');
+    fireEvent.click(companion);
+    expect(await screen.findByRole('heading', { name: '领一个工位搭子' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: '全部栏目' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '欢迎回来' })).not.toBeInTheDocument();
   });
 

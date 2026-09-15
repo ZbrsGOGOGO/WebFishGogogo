@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEVELOPMENT_LIMITS } from '@stealth-reader/shared';
@@ -99,14 +99,35 @@ describe('community news release flag', () => {
   it('adds news and official-board entrances to the responsive workbench homepage', async () => {
     vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'true');
     vi.resetModules();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
     const [{ CommunityHomePage }, { resetCommunityAuthStoreForTests }] = await Promise.all([
       import('../features/community/CommunityHomePage'), import('./store/community-auth-store'),
     ]);
     resetCommunityAuthStoreForTests();
     render(<MemoryRouter><CommunityHomePage /></MemoryRouter>);
-    expect(screen.getByRole('heading', { name: '今日资讯，一站浏览' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '分类新闻' })).toHaveAttribute('href', '/news');
-    expect(screen.getByRole('link', { name: '每日热榜' })).toHaveAttribute('href', '/news/trending');
+    const newsEntry = screen.getByRole('region', { name: '世界很大，看看正在发生什么。' });
+    expect(within(newsEntry).getByRole('heading', { name: '世界很大，看看正在发生什么。' })).toBeInTheDocument();
+    expect(within(newsEntry).getByRole('link', { name: '分类新闻' })).toHaveAttribute('href', '/news');
+    expect(within(newsEntry).getByRole('link', { name: '每日热榜' })).toHaveAttribute('href', '/news/trending');
+    expect(within(newsEntry).getByText(/需登录后查看/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('does not expose the homepage news or board entrances when the news feature is disabled', async () => {
+    vi.stubEnv('VITE_COMMUNITY_NEWS_ENABLED', 'false');
+    vi.resetModules();
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const [{ CommunityHomePage }, { resetCommunityAuthStoreForTests }] = await Promise.all([
+      import('../features/community/CommunityHomePage'), import('./store/community-auth-store'),
+    ]);
+    resetCommunityAuthStoreForTests();
+    render(<MemoryRouter><CommunityHomePage /></MemoryRouter>);
+    expect(screen.queryByRole('region', { name: '世界很大，看看正在发生什么。' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '分类新闻' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '每日热榜' })).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it.each([

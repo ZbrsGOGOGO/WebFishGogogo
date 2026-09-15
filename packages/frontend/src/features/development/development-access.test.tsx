@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEVELOPMENT_LIMITS, type DevelopmentAccess } from '@stealth-reader/shared';
@@ -80,9 +80,11 @@ describe('development access boundary', () => {
     expect(await screen.findByText('当前账号没有访问权限')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: '私有开发页' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+    expect(within(screen.getByRole('dialog', { name: '全部栏目' })).queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
   });
 
-  it('shows the private route and desktop/mobile entries only after an allowed response', async () => {
+  it('shows the private route and actual header, sidebar and directory entries only after an allowed response', async () => {
     const pending = deferred<DevelopmentAccess>();
     vi.spyOn(communityDevelopmentApi, 'getAccess').mockReturnValue(pending.promise);
 
@@ -95,8 +97,21 @@ describe('development access boundary', () => {
     });
 
     expect(await screen.findByRole('heading', { name: '私有开发页' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: '开发协作' }).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByRole('link', { name: '开发' })).toHaveAttribute('href', '/development');
+    expect(within(screen.getByRole('banner')).getByRole('link', { name: '开发协作' })).toHaveAttribute('href', '/development');
+    expect(within(screen.getByRole('complementary', { name: '我的工作台' })).getByRole('link', { name: '开发协作' })).toHaveAttribute('href', '/development');
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+    expect(within(screen.getByRole('dialog', { name: '全部栏目' })).getByRole('link', { name: '开发协作' })).toHaveAttribute('href', '/development');
+  });
+
+  it('keeps development entries and private content unavailable to a visitor without requesting permission', () => {
+    const getAccess = vi.spyOn(communityDevelopmentApi, 'getAccess');
+    useCommunityAuthStore.setState({ phase: 'guest', user: null });
+    renderDevelopmentRoute();
+    expect(screen.queryByRole('heading', { name: '私有开发页' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '浏览全部栏目' }));
+    expect(within(screen.getByRole('dialog', { name: '全部栏目' })).queryByRole('link', { name: '开发协作' })).not.toBeInTheDocument();
+    expect(getAccess).not.toHaveBeenCalled();
   });
 
   it('clears account A immediately and ignores its late allow response after switching to B', async () => {

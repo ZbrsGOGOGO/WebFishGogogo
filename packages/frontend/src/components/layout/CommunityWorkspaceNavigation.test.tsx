@@ -48,6 +48,29 @@ describe('community workspace navigation preferences and shared shells', () => {
   });
   afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); resetCommunityAuthStoreForTests(); });
 
+  it('groups default navigation, searches with the shortcut, and ignores typing shortcuts', () => {
+    renderNav();
+    expect(side().getByText('游戏与挑战')).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByLabelText('测试草稿'), { key: 'k', ctrlKey: true });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const directory = within(screen.getByRole('dialog', { name: '全部栏目' }));
+    expect(directory.getByRole('heading', { name: '随手工具' })).toBeInTheDocument();
+    fireEvent.change(directory.getByLabelText('查找栏目'), { target: { value: '工具' } });
+    expect(directory.getByRole('link', { name: '工具' })).toBeInTheDocument();
+    expect(directory.queryByRole('link', { name: '小游戏' })).not.toBeInTheDocument();
+  });
+
+  it('retains the exact whole-column order when a user has customized it', () => {
+    const order = [...defaultCommunityNavigationPreferences().order].reverse();
+    writeCommunityNavigationPreferences(USER.publicId, { version: 1, order, hidden: [] });
+    renderNav();
+    expect(side().getByText('自定义目录')).toBeInTheDocument();
+    const paths = side().getAllByRole('link').map(link => link.getAttribute('href'));
+    expect(paths[0]).toBe('/achievements');
+    expect(paths.at(-1)).toBe('/');
+  });
+
   it('saves visibility and order explicitly, keeping hidden links recoverable and fixed controls present', () => {
     renderNav();
     let edit = settings();

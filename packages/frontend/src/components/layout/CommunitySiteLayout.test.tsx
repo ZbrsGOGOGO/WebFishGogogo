@@ -166,6 +166,16 @@ describe('CommunitySiteLayout private-message connection and unread badge', () =
     expect(communityDirectMessagesApi.listConversations).toHaveBeenCalledTimes(1);
   });
 
+  it('never retains another account unread count when the next account fails to synchronize', async () => {
+    renderLayout();
+    await screen.findByRole('link', { name: '私人消息，3 条未读' });
+    vi.mocked(communityDirectMessagesApi.listConversations).mockRejectedValueOnce(new Error('offline'));
+    act(() => useCommunityAuthStore.setState({ user: { ...ACTIVE_USER, id: 'user-2', publicId: 'public-2' } }));
+    expect(screen.queryByRole('link', { name: '私人消息，3 条未读' })).not.toBeInTheDocument();
+    await waitFor(() => expect(communityDirectMessagesApi.listConversations).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('link', { name: '私人消息' })).toBeInTheDocument();
+  });
+
   it('opens a searchable directory, hides unauthorized development, and closes on navigation', async () => {
     renderLayout('/messages/friend-1');
     const trigger = screen.getByRole('button', { name: '浏览全部栏目' });

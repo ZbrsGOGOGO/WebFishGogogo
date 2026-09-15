@@ -1,0 +1,7 @@
+.scene { position: relative; min-width: 0; min-height: 260px; height: 100%; }
+.canvasHost { position: absolute; inset: 0; }.canvasHost canvas { display: block; width: 100%; height: 100%; }
+.fallback { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 12px; padding: 24px; color: var(--color-text-secondary); }
+.fallback strong { font-size: 16px; font-weight: 600; line-height: 1.6; }.fallback p { margin: 0; max-width: 24em; font-size: 16px; line-height: 1.8; }
+.controls { position: absolute; left: 0; right: 0; bottom: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 8px; color: var(--color-text-secondary); font-size: 12px; }
+.controls button { min-height: 40px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface); color: var(--color-text); padding: 7px 10px; font-size: 14px; cursor: pointer; }.controls button:hover { border-color: var(--color-border-strong); }.controls button:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 3px; }
+@media (max-width: 760px) { .scene { min-height: 230px; }.controls { padding: 0; } }

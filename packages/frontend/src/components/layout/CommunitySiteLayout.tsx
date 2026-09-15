@@ -2,11 +2,10 @@ import { useEffect, useState, type JSX } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 
 import { communityDirectMessagesApi } from '../../api/community';
+import { getCommunitySessionGeneration } from '../../api/community-http';
 import {
   COMMUNITY_FEATURE_FLAGS,
-  COMMUNITY_SYSTEM_NAV,
   communitySystemByPath,
-  type CommunitySystemId,
 } from '../../app/community-nav';
 import { SITE_NAME } from '../../app/site-config';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
@@ -21,8 +20,8 @@ import {
 } from '../../features/community-chat/community-chat-connection';
 import { Button } from '../ui';
 import { CommunityDirectoryTrigger, CommunitySidebarLinks, CommunityWorkspaceNavigationBoundary, useCommunityWorkspaceNavigation } from './CommunityWorkspaceNavigation';
-import { SystemIcon } from './SystemIcon';
 import { ThemeSwitch } from './ThemeSwitch';
+import { CommunityPrimaryNavigation } from './CommunityPrimaryNavigation';
 import styles from './CommunityShell.module.css';
 import { FishGrowthSummary } from '../../features/community-progression/FishGrowthSummary';
 
@@ -55,8 +54,9 @@ function CommunitySiteLayoutContent(): JSX.Element {
   const user = useCommunityAuthStore((state) => state.user);
   const restoreSession = useCommunityAuthStore((state) => state.restoreSession);
   const logout = useCommunityAuthStore((state) => state.logout);
-  const currentSystem = communitySystemByPath(location.pathname);
-  const [directUnreadCount, setDirectUnreadCount] = useState(0);
+  const unreadScope = `${phase}:${user?.publicId ?? 'guest'}:${getCommunitySessionGeneration()}`;
+  const [directUnread, setDirectUnread] = useState({ scope: unreadScope, count: 0 });
+  const directUnreadCount = directUnread.scope === unreadScope && phase === 'active' ? directUnread.count : 0;
   const navigation = useCommunityWorkspaceNavigation();
   const wallet = useCommunityWalletStore();
 
@@ -83,7 +83,7 @@ function CommunitySiteLayoutContent(): JSX.Element {
       !COMMUNITY_FEATURE_FLAGS.chat ||
       !COMMUNITY_FEATURE_FLAGS.friends
     ) {
-      setDirectUnreadCount(0);
+      setDirectUnread({ scope: unreadScope, count: 0 });
       return;
     }
     let active = true;
@@ -93,10 +93,12 @@ function CommunitySiteLayoutContent(): JSX.Element {
       try {
         const page = await communityDirectMessagesApi.listConversations();
         if (active && requestVersion === unreadRequestVersion) {
-          setDirectUnreadCount(Math.max(0, page.totalUnread ?? 0));
+          const auth = useCommunityAuthStore.getState();
+          if (`${auth.phase}:${auth.user?.publicId ?? 'guest'}:${getCommunitySessionGeneration()}` !== unreadScope) return;
+          setDirectUnread({ scope: unreadScope, count: Math.max(0, page.totalUnread ?? 0) });
         }
       } catch {
-        // 保留上一次可信未读数；实时连接恢复后会再次同步。
+        // 只保留同一账号会话的可信未读数；旧账号计数不会参与新页面展示。
       }
     };
     const connection = acquireCommunityChatConnection();
@@ -120,24 +122,15 @@ function CommunitySiteLayoutContent(): JSX.Element {
       removeListener();
       releaseCommunityChatConnection(connection);
     };
-  }, [phase, user?.publicId]);
+  }, [phase, user?.publicId, unreadScope]);
 
   const signedIn = phase !== 'guest' && phase !== 'bootstrapping';
   const workspaceRoute = signedIn || isWorkspaceRoute(location.pathname);
-  const primaryNav = COMMUNITY_SYSTEM_NAV.filter((item) => item.enabled).slice(0, 5);
-  const utilityNav = COMMUNITY_SYSTEM_NAV.filter((item) =>
-    item.enabled && (item.id === 'games' || item.id === 'tools' || item.id === 'deskPet'),
-  );
-  const mobileNavIds: CommunitySystemId[] = ['home', 'community', 'messages', 'friends', 'profile'];
-  const mobileNav = mobileNavIds
-    .map((id) => COMMUNITY_SYSTEM_NAV.find((item) => item.id === id))
-    .filter((item): item is NonNullable<typeof item> => Boolean(item?.enabled));
   const displayName = user?.displayName ?? '游客同事';
   const profession = user?.battleProfession
     ? PROFESSION_LABELS[user.battleProfession] ?? '办公室新人'
     : '办公室新人';
   const developmentAllowed = navigation.developmentAllowed;
-  const developmentCurrent = location.pathname.startsWith('/development');
   const walletBalance = wallet.ownerId === user?.publicId ? wallet.officeCoins : null;
   const walletUnsynced = wallet.status === 'stale' || wallet.status === 'error';
   const walletLabel = walletBalance === null
@@ -158,24 +151,7 @@ function CommunitySiteLayoutContent(): JSX.Element {
           </Link>
 
           <CommunityDirectoryTrigger />
-          <nav className={styles.topNav} aria-label="快捷导航">
-            {primaryNav.map((item) => (
-              <Link
-                key={item.id}
-                to={item.path}
-                aria-label={item.id === 'messages' && directUnreadCount > 0
-                  ? `${item.label}，${directUnreadCount} 条未读`
-                  : undefined}
-                data-current={currentSystem?.id === item.id}
-                aria-current={currentSystem?.id === item.id ? 'page' : undefined}
-              >
-                {item.label}
-                {item.id === 'messages' && directUnreadCount > 0 ? (
-                  <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
-                ) : null}
-              </Link>
-            ))}
-          </nav>
+          <CommunityPrimaryNavigation unreadCount={directUnreadCount} />
 
           <div className={styles.accountActions}>
             <ThemeSwitch />
@@ -207,19 +183,6 @@ function CommunitySiteLayoutContent(): JSX.Element {
             )}
           </div>
         </div>
-        {/* 手机首页提供直达入口；会话页保持原页头高度，避免遮挡聊天输入区。 */}
-        {location.pathname === '/' ? (
-          <nav className={styles.mobileUtilities} aria-label="小游戏、工具与搭子快捷入口">
-            {utilityNav.map((item) => (
-              <Link key={item.id} to={item.path}
-                aria-current={currentSystem?.id === item.id ? 'page' : undefined}>
-                <span aria-hidden="true"><SystemIcon name={item.id} /></span>
-                <b>{item.label}</b>
-                <span aria-hidden="true">→</span>
-              </Link>
-            ))}
-          </nav>
-        ) : null}
       </header>
 
       <div className={workspaceRoute ? styles.workspace : styles.publicFrame} data-home={location.pathname === '/'}>
@@ -248,65 +211,9 @@ function CommunitySiteLayoutContent(): JSX.Element {
           <Outlet />
         </div>
 
-        {workspaceRoute && location.pathname === '/' ? (
-          <aside className={styles.rightRail} aria-label="快捷行动">
-            <section className={styles.actionWidget}>
-              <span>现在就玩</span>
-              <strong>工位防线</strong>
-              <p>首回合经营布阵，次回合迎战混合稽查与加班首领。</p>
-              <Link to="/tower-defense">开始守工位 <b>→</b></Link>
-            </section>
-            {COMMUNITY_FEATURE_FLAGS.farm ? (
-              <section className={styles.miniWidget}>
-                <div><span aria-hidden="true">☘</span><strong>工位绿植</strong></div>
-                <p>每天一次轻操作，离线也会成长。</p>
-                <Link to="/farm">去看看</Link>
-              </section>
-            ) : null}
-            <section className={styles.miniWidget}>
-              <div><span aria-hidden="true">⌁</span><strong>效率工具</strong></div>
-              <p>文本、时间和数据处理，打开即用。</p>
-              <Link to="/tools">打开工具箱</Link>
-            </section>
-            <section className={styles.tipWidget}>
-              <small>工位提示</small>
-              <p>{signedIn ? '通知、好友请求和成长进度都集中在左侧工作台。' : '登录后可以进入农场、工位塔防和社区；工具与小游戏无需登录。'}</p>
-            </section>
-          </aside>
-        ) : null}
       </div>
 
-      {workspaceRoute && mobileNav.length > 0 ? (
-        <nav className={styles.mobileDock} aria-label="移动端快捷导航">
-          {mobileNav.map((item) => (
-            <Link
-              key={item.id}
-              to={item.path}
-              data-current={currentSystem?.id === item.id}
-              aria-label={item.id === 'messages' && directUnreadCount > 0
-                ? `${item.label}，${directUnreadCount} 条未读`
-                : undefined}
-              aria-current={currentSystem?.id === item.id ? 'page' : undefined}
-            >
-              <span aria-hidden="true"><SystemIcon name={item.id} /></span>
-              <small>{item.id === 'profile' ? '我的' : item.label}</small>
-              {item.id === 'messages' && directUnreadCount > 0 ? (
-                <em className={styles.unreadBadge}>{Math.min(directUnreadCount, 99)}</em>
-              ) : null}
-            </Link>
-          ))}
-          {developmentAllowed ? (
-            <Link
-              to="/development"
-              data-current={developmentCurrent}
-              aria-current={developmentCurrent ? 'page' : undefined}
-            >
-              <span aria-hidden="true"><SystemIcon name="development" /></span>
-              <small>开发</small>
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
+      {workspaceRoute ? <CommunityPrimaryNavigation unreadCount={directUnreadCount} mobile /> : null}
     </div>
   );
 }
