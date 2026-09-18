@@ -160,6 +160,8 @@ grep -Fq 'zone=community_demon_tower_ip' "$ROOT_DIR/deploy/community.nginx.conf"
   fail "demon tower proxy needs its separate bounded request budget"
 grep -Fq 'zone=community_rail_ip' "$ROOT_DIR/deploy/community.nginx.conf" ||
   fail "rail proxy needs its separate bounded request budget"
+grep -Fq '^/api/v1/games/word-front/maps/admin' "$ROOT_DIR/deploy/community.nginx.conf" ||
+  fail "word-front map studio is missing its narrow deployment allowlist"
 AUTH_EMAIL_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/email-delivery.service.ts"
 AUTH_CRYPTO_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth-crypto.ts"
 AUTH_SERVICE_SOURCE="$ROOT_DIR/packages/backend/src/modules/auth/auth.service.ts"
