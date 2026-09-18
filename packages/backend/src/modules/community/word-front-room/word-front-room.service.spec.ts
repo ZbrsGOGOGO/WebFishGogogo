@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { WORD_FRONT_V2_CHAPTERS, WORD_FRONT_V2_UNITS, WORD_FRONT_V2_WIDTH, createWordFrontV2State, wordFrontV2Terrain } from '@stealth-reader/shared';
+import { WORD_FRONT_V4_MAPS, WORD_FRONT_V4_UNITS, WORD_FRONT_V4_WIDTH, createWordFrontV4State, wordFrontV4Terrain } from '@stealth-reader/shared';
 import type { DataSource } from 'typeorm';
 import { AuthRateLimitService } from '../../auth/auth-rate-limit.service';
 import { WordFrontRoomService } from './word-front-room.service';
@@ -21,7 +21,7 @@ describe('Word Front 1V1 authoritative short rooms', () => {
     jest.spyOn(AuthRateLimitService.prototype, 'consume').mockResolvedValue(undefined);
     service = new WordFrontRoomService(db);
   });
-  afterEach(() => { service.onModuleDestroy(); jest.restoreAllMocks(); });
+  afterEach(async () => { await service.onModuleDestroy(); jest.restoreAllMocks(); });
   afterAll(() => { process.env = old; });
 
   it('gates all room APIs behind explicit feature flag and community write gate', async () => {
@@ -62,14 +62,14 @@ describe('Word Front 1V1 authoritative short rooms', () => {
     await expect(service.act(a, room.id, { actionId: randomUUID(), action: { type: 'recruit', score: 5000 } })).rejects.toThrow();
     const actionId = randomUUID();
     const first = await service.act(a, room.id, { actionId, action: { type: 'recruit' } });
-    expect(first.board?.credits).toBe(8);
+    expect(first.board?.buns).toBe(10);
     const replay = await service.act(a, room.id, { actionId, action: { type: 'recruit' } });
-    expect(replay.board?.credits).toBe(8);
+    expect(replay.board?.buns).toBe(10);
     await expect(service.act(a, room.id, { actionId, action: { type: 'buy_boost', boost: 'attack' } })).rejects.toMatchObject({ response: { code: 'WORD_ROOM_ACTION_CONFLICT' } });
     const now = Date.now(); service.advance(now + 850);
     const red = await service.get(a, room.id), blue = await service.get(b, room.id);
     expect(red.board?.tick).toBe(blue.board?.tick); expect(red.board?.tick).toBeGreaterThan(0);
-    expect(red.board?.credits).toBe(8); expect(blue.board?.credits).toBe(20);
+    expect(red.board?.buns).toBe(10); expect(blue.board?.buns).toBe(22);
   });
   it('delivers bounded counterattacks and awards a forfeit only to the remaining human', async () => {
     const a = actor('甲'), b = actor('乙'), room = await service.create(a, create());
@@ -102,14 +102,14 @@ describe('Word Front 1V1 authoritative short rooms', () => {
     process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'false'; service.advance(now + 850);
     expect((await service.get(a, room.id)).board?.tick).toBe(0);
     await expect(service.act(a, room.id, { actionId: randomUUID(), action: { type: 'recruit' } })).rejects.toMatchObject({ response: { code: 'COMMUNITY_WRITES_DISABLED' } });
-    process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true'; service.advance(now + 15 * 60_000 + 2_000);
+    process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true'; service.advance(now + 20 * 60_000 + 2_000);
     const result = await service.get(a, room.id);
     expect(result.status).toBe('finished');
-    expect(result.expiresAt).toBeGreaterThan(now + 15 * 60_000 + 2_000);
+    expect(result.expiresAt).toBeGreaterThan(now + 20 * 60_000 + 2_000);
   });
   it('positions the guaranteed opening hero on a best-coverage legal tile that protects the first segment in every chapter', async () => {
     const a = actor('甲'), b = actor('乙');
-    for (const chapter of WORD_FRONT_V2_CHAPTERS) {
+    for (const chapter of WORD_FRONT_V4_MAPS) {
       // Chosen LCG seeds force each of the five guaranteed hero pairs, plus boundaries.
       for (const seed of [2_000_000_000, 0, 3_000_000_000, 1_000, 100_000, 0x7fffffff, 0xffffffff]) {
         const room = await service.create(a, { ...create(), chapter: chapter.id });
@@ -119,12 +119,12 @@ describe('Word Front 1V1 authoritative short rooms', () => {
         const begun = await service.start(a, room.id, {});
         const board = begun.board!;
         const unit = board.units[0]!;
-        const range = WORD_FRONT_V2_UNITS[unit.kind].range;
-        const reaches = (slot: number, cell: number) => Math.abs(slot % WORD_FRONT_V2_WIDTH - cell % WORD_FRONT_V2_WIDTH) +
-          Math.abs(Math.floor(slot / WORD_FRONT_V2_WIDTH) - Math.floor(cell / WORD_FRONT_V2_WIDTH)) <= range;
+        const range = WORD_FRONT_V4_UNITS[unit.kind].range;
+        const reaches = (slot: number, cell: number) => Math.abs(slot % WORD_FRONT_V4_WIDTH - cell % WORD_FRONT_V4_WIDTH) +
+          Math.abs(Math.floor(slot / WORD_FRONT_V4_WIDTH) - Math.floor(cell / WORD_FRONT_V4_WIDTH)) <= range;
         const coverage = (slot: number) => chapter.path.filter(cell => reaches(slot, cell)).length;
-        const terrainState = createWordFrontV2State('story', chapter.id, 1);
-        const legal = Array.from({ length: 48 }, (_, slot) => slot).filter(slot => ['open', 'buff'].includes(wordFrontV2Terrain(terrainState, slot)));
+        const terrainState = createWordFrontV4State('story', chapter.id, 1);
+        const legal = Array.from({ length: 80 }, (_, slot) => slot).filter(slot => ['open', 'buff'].includes(wordFrontV4Terrain(terrainState, slot)));
         expect(coverage(unit.slot)).toBe(Math.max(...legal.map(coverage)));
         expect(chapter.path.slice(0, 6).some(cell => reaches(unit.slot, cell))).toBe(true);
         expect((await service.get(b, room.id)).board?.units).toEqual(board.units);

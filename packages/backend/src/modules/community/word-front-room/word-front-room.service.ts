@@ -1,8 +1,8 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, OnApplicationBootstrap, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
-import { WORD_FRONT_V2_CHAPTERS, WORD_FRONT_V2_UNITS, WORD_FRONT_V2_WIDTH, applyWordFrontV2Action, createWordFrontV2State, stepWordFrontV2, wordFrontV2HeroForLetters, wordFrontV2Terrain, type WordFrontV2Action, type WordFrontV2State } from '@stealth-reader/shared';
-import { User, UserBlock } from '../../../database/entities';
+import { WORD_FRONT_V4_GEARS, WORD_FRONT_V4_MAPS, WORD_FRONT_V4_UNITS, WORD_FRONT_V4_WIDTH, applyWordFrontV4Action, createWordFrontV4State, stepWordFrontV4, wordFrontV4HeroForLetters, wordFrontV4Terrain, type WordFrontV4Action, type WordFrontV4Gear, type WordFrontV4State } from '@stealth-reader/shared';
+import { User, UserBlock, WordFrontRoomSnapshot } from '../../../database/entities';
 import { AuthRateLimitService } from '../../auth/auth-rate-limit.service';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { consumeRoomPasswordAttempt, hashRoomPassword, normalizeRoomPassword, roomPasswordFingerprint, verifyRoomPassword } from '../room-password';
@@ -10,13 +10,13 @@ import { consumeRoomPasswordAttempt, hashRoomPassword, normalizeRoomPassword, ro
 type Side = 'red' | 'blue';
 type Status = 'waiting' | 'running' | 'finished';
 type OmitTick<T> = T extends unknown ? Omit<T, 'tick'> : never;
-type Action = OmitTick<WordFrontV2Action>;
+type Action = OmitTick<WordFrontV4Action>;
 interface Member { userId: string; publicId: string; displayName: string; side: Side }
 interface Receipt { userId: string; hash: string }
 interface Room {
   id: string; name: string; chapter: number; creatorId: string; createRequestId: string; createHash: string;
   passwordHash: string | null; hostUserId: string; status: Status; members: Map<string, Member>;
-  red: WordFrontV2State; blue: WordFrontV2State; attackMeter: Record<Side, number>;
+  red: WordFrontV4State; blue: WordFrontV4State; attackMeter: Record<Side, number>;
   receipts: Map<string, Receipt>; lastActionAt: Map<string, number[]>;
   createdAt: number; startedAt: number | null; lastTickAt: number; expiresAt: number;
   winner: Side | 'draw' | null; sequence: number;
@@ -24,8 +24,8 @@ interface Room {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_ROOMS = 24;
 const TICK_MS = 850;
-const MAX_DURATION_MS = 15 * 60_000;
-const RULES = '1V1 双线对攻；双方同章节、同开局种子，服务端每 0.85 秒同步推进。每击败 5 名来客向对方路线投递 1 名支援来客（单次最多 2 名、每线最多 24 名在场）。先失去全部核心生命判负；双方守完时比较得分。同一局仅使用局内经费和金币，不计正式榜、办公币、成就或存档。房间为临时会话，重启后结束；最长 15 分钟。';
+const MAX_DURATION_MS = 20 * 60_000;
+const RULES = '1V1 双线对攻；双方使用 V4 十行同地图、同种子，服务端每 0.85 秒同步推进。每击败 5 名敌军向对方投递 1 名援军（单次最多 2 名、每线最多 32 名）。先失去阿斗全部生命判负；双方守完时比较得分。仅使用局内包子和金币，不计办公币或单机榜。房间快照会在 API 重启后恢复，最长 20 分钟。';
 
 function invalid(): never { throw new BadRequestException({ code: 'WORD_ROOM_INPUT_INVALID', message: '房间参数无效。' }); }
 function object(raw: unknown, keys: readonly string[]): Record<string, unknown> {
@@ -47,29 +47,32 @@ function action(raw: unknown): Action {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return invalid();
   const type = (raw as Record<string, unknown>).type;
   if (type === 'recruit') { object(raw, ['type']); return { type }; }
-  if (type === 'buy_boost') { const value = object(raw, ['type', 'boost']); if (value.boost !== 'attack' && value.boost !== 'heal') return invalid(); return { type, boost: value.boost }; }
+  if (type === 'buy_boost') { const value = object(raw, ['type', 'boost']); if (value.boost !== 'attack' && value.boost !== 'heal' && value.boost !== 'hero_rate') return invalid(); return { type, boost: value.boost }; }
+  if (type === 'equip_gear') { const value = object(raw, ['type', 'gear']); if (typeof value.gear !== 'string' || !Object.prototype.hasOwnProperty.call(WORD_FRONT_V4_GEARS, value.gear)) return invalid(); return { type, gear: value.gear as WordFrontV4Gear }; }
   if (type === 'unlock') { const value = object(raw, ['type', 'slot']); if (!Number.isSafeInteger(value.slot)) return invalid(); return { type, slot: value.slot as number }; }
   if (type === 'deploy_basic') { const value = object(raw, ['type', 'card', 'slot']); if (!Number.isSafeInteger(value.card) || !Number.isSafeInteger(value.slot)) return invalid(); return { type, card: value.card as number, slot: value.slot as number }; }
   if (type === 'deploy_hero') { const value = object(raw, ['type', 'first', 'second', 'slot']); if (![value.first, value.second, value.slot].every(Number.isSafeInteger)) return invalid(); return { type, first: value.first as number, second: value.second as number, slot: value.slot as number }; }
   if (type === 'merge') { const value = object(raw, ['type', 'from', 'to']); if (!Number.isSafeInteger(value.from) || !Number.isSafeInteger(value.to)) return invalid(); return { type, from: value.from as number, to: value.to as number }; }
   return invalid();
 }
-function preparedState(chapter: number, seed: number): WordFrontV2State {
-  let state = createWordFrontV2State('story', chapter, seed);
-  state = applyWordFrontV2Action(state, { tick: 0, type: 'recruit' })!;
-  const path = WORD_FRONT_V2_CHAPTERS[chapter - 1]!.path;
+function preparedState(chapter: number, seed: number): WordFrontV4State {
+  let state = createWordFrontV4State('story', chapter, seed);
+  state = applyWordFrontV4Action(state, { tick: 0, type: 'recruit' })!;
+  // Room players receive one additional setup draw after the automatic opening hero.
+  state = { ...state, buns: state.buns + 12 };
+  const path = WORD_FRONT_V4_MAPS[chapter - 1]!.path;
   let placed = false;
   for (let first = 0; first < state.hand.length && !placed; first += 1) {
     for (let second = first + 1; second < state.hand.length && !placed; second += 1) {
-      const hero = wordFrontV2HeroForLetters(state.hand[first]!, state.hand[second]!);
+      const hero = wordFrontV4HeroForLetters(state.hand[first]!, state.hand[second]!);
       if (!hero) continue;
-      const range = WORD_FRONT_V2_UNITS[hero].range;
+      const range = WORD_FRONT_V4_UNITS[hero].range;
       let best: { slot: number; covered: number; early: number; firstHit: number; buff: number } | null = null;
-      for (let slot = 0; slot < 48; slot += 1) {
-        const terrain = wordFrontV2Terrain(state, slot);
+      for (let slot = 0; slot < 80; slot += 1) {
+        const terrain = wordFrontV4Terrain(state, slot);
         if (terrain !== 'open' && terrain !== 'buff') continue;
-        const reaches = (cell: number) => Math.abs(slot % WORD_FRONT_V2_WIDTH - cell % WORD_FRONT_V2_WIDTH) +
-          Math.abs(Math.floor(slot / WORD_FRONT_V2_WIDTH) - Math.floor(cell / WORD_FRONT_V2_WIDTH)) <= range;
+        const reaches = (cell: number) => Math.abs(slot % WORD_FRONT_V4_WIDTH - cell % WORD_FRONT_V4_WIDTH) +
+          Math.abs(Math.floor(slot / WORD_FRONT_V4_WIDTH) - Math.floor(cell / WORD_FRONT_V4_WIDTH)) <= range;
         const covered = path.filter(reaches).length;
         const early = path.slice(0, 6).filter(reaches).length;
         const firstHit = path.findIndex(reaches);
@@ -78,12 +81,12 @@ function preparedState(chapter: number, seed: number): WordFrontV2State {
           (firstHit < best.firstHit || firstHit === best.firstHit && candidate.buff > best.buff))) best = candidate;
       }
       if (!best || best.early === 0) throw new Error('Word Front opening hero cannot protect the first lane segment');
-      state = applyWordFrontV2Action(state, { tick: 0, type: 'deploy_hero', first, second, slot: best.slot })!;
+      state = applyWordFrontV4Action(state, { tick: 0, type: 'deploy_hero', first, second, slot: best.slot })!;
       placed = true;
     }
   }
   if (!placed) throw new Error('Word Front opening hand did not contain guaranteed hero pair');
-  return applyWordFrontV2Action(state, { tick: 0, type: 'start' })!;
+  return applyWordFrontV4Action(state, { tick: 0, type: 'start' })!;
 }
 
 /** Authoritative, bounded short-lived rooms. No database writes to scores or wallets. */
@@ -92,13 +95,54 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
   private readonly rooms = new Map<string, Room>();
   private readonly current = new Map<string, string>();
   private readonly pending = new Set<string>();
+  private readonly lastPersistAt = new Map<string, number>();
+  private readonly persistChains = new Map<string, Promise<void>>();
   private timer: NodeJS.Timeout | null = null;
   constructor(private readonly db: DataSource) {}
-  onApplicationBootstrap(): void {
+  async onApplicationBootstrap(): Promise<void> {
     if (!this.featureEnabled()) return;
+    await this.restoreSnapshots();
     this.timer = setInterval(() => this.advance(), TICK_MS); this.timer.unref?.();
   }
-  onModuleDestroy(): void { if (this.timer) clearInterval(this.timer); this.timer = null; this.rooms.clear(); this.current.clear(); }
+  async onModuleDestroy(): Promise<void> { if (this.timer) clearInterval(this.timer); this.timer = null; await Promise.allSettled([...this.rooms.values()].map(room => this.persist(room))); this.rooms.clear(); this.current.clear(); }
+  private storageReady(): boolean { try { return this.db.hasMetadata(WordFrontRoomSnapshot); } catch { return false; } }
+  private snapshot(room: Room): Record<string, unknown> {
+    return { ...room, members:[...room.members.entries()], receipts:[...room.receipts.entries()], lastActionAt:[...room.lastActionAt.entries()] };
+  }
+  private hydrate(raw: Record<string, unknown>): Room | null {
+    try {
+      const room = raw as unknown as Omit<Room,'members'|'receipts'|'lastActionAt'> & { members:Array<[string,Member]>; receipts:Array<[string,Receipt]>; lastActionAt:Array<[string,number[]]> };
+      const state = (value: WordFrontV4State) => value?.version === 4 && value.mapId === room.chapter && value.chapter === room.chapter &&
+        ['ready','running','won','lost'].includes(value.status) && [value.tick,value.coreHp,value.wave,value.seed,value.nextEnemyId].every(Number.isSafeInteger) &&
+        Array.isArray(value.hand) && Array.isArray(value.units) && Array.isArray(value.enemies) && Array.isArray(value.unlocked) && Array.isArray(value.gear);
+      if (!UUID.test(room.id) || !UUID.test(room.creatorId) || !UUID.test(room.hostUserId) || !UUID.test(room.createRequestId) ||
+        !Number.isSafeInteger(room.chapter) || room.chapter < 1 || room.chapter > WORD_FRONT_V4_MAPS.length || !['waiting','running','finished'].includes(room.status) ||
+        !state(room.red) || !state(room.blue) || !Array.isArray(room.members) || room.members.length < 1 || room.members.length > 2 ||
+        !room.members.every(([id,member]) => UUID.test(id) && member?.userId === id && ['red','blue'].includes(member.side) && typeof member.publicId === 'string' && typeof member.displayName === 'string') ||
+        new Set(room.members.map(([id]) => id)).size !== room.members.length || new Set(room.members.map(([,member]) => member.side)).size !== room.members.length ||
+        !room.members.some(([id]) => id === room.hostUserId) || !Array.isArray(room.receipts) || !Array.isArray(room.lastActionAt) ||
+        !room.attackMeter || !Number.isSafeInteger(room.attackMeter.red) || !Number.isSafeInteger(room.attackMeter.blue) ||
+        ![room.createdAt,room.lastTickAt,room.expiresAt,room.sequence].every(Number.isSafeInteger) || room.expiresAt <= Date.now()) return null;
+      return { ...room, members:new Map(room.members), receipts:new Map(room.receipts), lastActionAt:new Map(room.lastActionAt) };
+    } catch { return null; }
+  }
+  private async restoreSnapshots(): Promise<void> {
+    if (!this.storageReady()) return;
+    const repo=this.db.getRepository(WordFrontRoomSnapshot),rows=await repo.createQueryBuilder('room').addSelect('room.state').where('room.expires_at > :now',{now:new Date()}).getMany();
+    for(const row of rows){const room=this.hydrate(row.state);if(!room)continue;this.rooms.set(room.id,room);for(const id of room.members.keys())this.current.set(id,room.id);}
+    await repo.createQueryBuilder().delete().where('expires_at <= :now',{now:new Date()}).execute();
+  }
+  private enqueuePersistence(id: string, work: () => Promise<void>): Promise<void> {
+    const previous = this.persistChains.get(id) ?? Promise.resolve();
+    const current = previous.catch(() => undefined).then(work);
+    this.persistChains.set(id, current);
+    return current.finally(() => { if (this.persistChains.get(id) === current) this.persistChains.delete(id); });
+  }
+  private persist(room: Room): Promise<void> {
+    if (!this.storageReady()) return Promise.resolve(); const now=new Date(), state=this.snapshot(room), expiresAt=new Date(room.expiresAt); this.lastPersistAt.set(room.id,now.getTime());
+    return this.enqueuePersistence(room.id, async () => { await this.db.getRepository(WordFrontRoomSnapshot).upsert({id:room.id,state:state as never,expiresAt,updatedAt:now},{conflictPaths:['id']}); });
+  }
+  private removeSnapshot(id:string):Promise<void>{if(!this.storageReady())return Promise.resolve();this.lastPersistAt.delete(id);return this.enqueuePersistence(id,async()=>{await this.db.getRepository(WordFrontRoomSnapshot).delete(id);});}
   private featureEnabled(): boolean { return process.env.FEATURE_WORD_FRONT_ROOMS_ENABLED === 'true'; }
   private enabled(write = false): void {
     if (!this.featureEnabled()) throw new NotFoundException({ code: 'WORD_ROOM_DISABLED', message: '文字战线房间暂未开放。' });
@@ -139,7 +183,7 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
     if (!member) throw new NotFoundException({ code: 'WORD_ROOM_NOT_FOUND' });
     const opponent = [...room.members.values()].find(value => value.userId !== userId) ?? null;
     const own = room[member.side], other = room[member.side === 'red' ? 'blue' : 'red'];
-    return { ...this.summary(room), protocolVersion: 1, rulesVersion: 2, sequence: room.sequence, serverNow: Date.now(), rules: RULES,
+    return { ...this.summary(room), protocolVersion: 2, rulesVersion: 4, sequence: room.sequence, serverNow: Date.now(), rules: RULES,
       isHost: room.hostUserId === userId, mySide: member.side, me: { publicId: member.publicId, displayName: member.displayName },
       opponent: opponent ? { publicId: opponent.publicId, displayName: opponent.displayName } : null,
       board: room.status === 'waiting' ? null : { ...own, seed: undefined },
@@ -157,7 +201,7 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
     this.enabled(true);
     const value = object(raw, ['requestId', 'name', 'chapter', 'password']);
     const requestId = uuid(value.requestId), title = name(value.name), password = secret(value.password), chapter = value.chapter;
-    if (!Number.isSafeInteger(chapter) || (chapter as number) < 1 || (chapter as number) > 6) return invalid();
+    if (!Number.isSafeInteger(chapter) || (chapter as number) < 1 || (chapter as number) > WORD_FRONT_V4_MAPS.length) return invalid();
     const requestHash = createHash('sha256').update(JSON.stringify([title, chapter, roomPasswordFingerprint(password)])).digest('hex');
     return this.exclusive(userId, async () => {
       const user = await this.active(userId);
@@ -174,11 +218,11 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
       if (this.rooms.size >= MAX_ROOMS || this.current.has(userId)) throw new ConflictException({ code: 'WORD_ROOM_CAPACITY' });
       const now = Date.now(), id = randomUUID(), seed = randomBytes(4).readUInt32LE();
       const room: Room = { id, name: title, chapter: chapter as number, creatorId: userId, createRequestId: requestId, createHash: requestHash,
-        passwordHash, hostUserId: userId, status: 'waiting', members: new Map(), red: createWordFrontV2State('story', chapter as number, seed),
-        blue: createWordFrontV2State('story', chapter as number, seed), attackMeter: { red: 0, blue: 0 }, receipts: new Map(), lastActionAt: new Map(),
+        passwordHash, hostUserId: userId, status: 'waiting', members: new Map(), red: createWordFrontV4State('story', chapter as number, seed),
+        blue: createWordFrontV4State('story', chapter as number, seed), attackMeter: { red: 0, blue: 0 }, receipts: new Map(), lastActionAt: new Map(),
         createdAt: now, startedAt: null, lastTickAt: now, expiresAt: now + 30 * 60_000, winner: null, sequence: 0 };
       room.members.set(userId, { userId, publicId: user.publicId, displayName: user.displayName || '同事', side: 'red' });
-      this.rooms.set(id, room); this.current.set(userId, id); return this.view(userId, room);
+      this.rooms.set(id, room); this.current.set(userId, id); await this.persist(room); return this.view(userId, room);
     });
   }
   async join(userId: string, raw: unknown) {
@@ -197,7 +241,7 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
       if (room.status !== 'waiting' || room.members.size !== 1 || this.current.has(userId)) throw new ConflictException({ code: 'WORD_ROOM_FULL' });
       const occupiedSide = room.members.values().next().value!.side;
       room.members.set(userId, { userId, publicId: user.publicId, displayName: user.displayName || '同事', side: occupiedSide === 'red' ? 'blue' : 'red' });
-      this.current.set(userId, id); room.sequence += 1; return this.view(userId, room);
+      this.current.set(userId, id); room.sequence += 1; await this.persist(room); return this.view(userId, room);
     });
   }
   async start(userId: string, roomId: string, raw: unknown) {
@@ -210,7 +254,7 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
     room.status = 'running'; room.startedAt = room.lastTickAt = Date.now();
     // Keep a timed-out result readable for five minutes, even if the timer fires late.
     room.expiresAt = room.startedAt + MAX_DURATION_MS + 5 * 60_000;
-    room.sequence += 1; return this.view(userId, room);
+    room.sequence += 1; await this.persist(room); return this.view(userId, room);
   }
   async act(userId: string, roomId: string, raw: unknown) {
     const value = object(raw, ['actionId', 'action']), actionId = uuid(value.actionId), move = action(value.action);
@@ -226,32 +270,33 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
     const now = Date.now(), previous = (room.lastActionAt.get(userId) ?? []).filter(at => at > now - 1_000);
     if (previous.length >= 8) throw new ConflictException({ code: 'WORD_ROOM_ACTION_RATE' });
     const board = room[member.side];
-    const next = applyWordFrontV2Action(board, { ...move, tick: board.tick } as WordFrontV2Action);
+    const next = applyWordFrontV4Action(board, { ...move, tick: board.tick } as WordFrontV4Action);
     if (!next) throw new BadRequestException({ code: 'WORD_ROOM_ACTION_INVALID', message: '当前棋盘无法执行该操作，请刷新房间。' });
     room[member.side] = next; room.lastActionAt.set(userId, [...previous, now]); room.receipts.set(actionId, { userId, hash });
     if (room.receipts.size > 400) room.receipts.delete(room.receipts.keys().next().value!);
-    room.sequence += 1; return this.view(userId, room);
+    room.sequence += 1; await this.persist(room); return this.view(userId, room);
   }
   async leave(userId: string, roomId: string, raw: unknown) {
     object(raw, []); this.enabled(); await this.active(userId);
     const room = this.rooms.get(uuid(roomId));
     if (!room?.members.has(userId)) return { left: true };
     room.members.delete(userId); this.current.delete(userId); room.sequence += 1;
-    if (room.members.size === 0) this.rooms.delete(room.id);
+    if (room.members.size === 0) { this.rooms.delete(room.id); await this.removeSnapshot(room.id); }
     else if (room.hostUserId === userId) room.hostUserId = room.members.keys().next().value!;
     if (room.status === 'running' && room.members.size === 1) { room.status = 'finished'; room.winner = room.members.values().next().value!.side; room.expiresAt = Date.now() + 5 * 60_000; }
+    if(room.members.size) await this.persist(room);
     return { left: true };
   }
   /** Both lanes advance before either side's new attacks enter, preventing tick-order advantage. */
   advance(now = Date.now()): void {
     if (!this.featureEnabled() || !communityWritesEnabled()) { for (const room of this.rooms.values()) room.lastTickAt = now; return; }
     for (const room of this.rooms.values()) {
-      if (room.expiresAt <= now) { for (const id of room.members.keys()) this.current.delete(id); this.rooms.delete(room.id); continue; }
+      if (room.expiresAt <= now) { for (const id of room.members.keys()) this.current.delete(id); this.rooms.delete(room.id); void this.removeSnapshot(room.id).catch(() => undefined); continue; }
       if (room.status !== 'running') continue;
       for (let count = 0; count < 32 && room.lastTickAt + TICK_MS <= now && room.status === 'running'; count += 1) {
         room.lastTickAt += TICK_MS;
         const oldRed = room.red.kills, oldBlue = room.blue.kills;
-        room.red = stepWordFrontV2(room.red); room.blue = stepWordFrontV2(room.blue);
+        room.red = stepWordFrontV4(room.red); room.blue = stepWordFrontV4(room.blue);
         this.sendAttack(room, 'red', Math.max(0, room.red.kills - oldRed));
         this.sendAttack(room, 'blue', Math.max(0, room.blue.kills - oldBlue));
         room.sequence += 1;
@@ -260,6 +305,7 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
         }
       }
       if (room.status === 'running' && room.startedAt !== null && now - room.startedAt >= MAX_DURATION_MS) this.finish(room, now);
+      if (room.sequence > 0 && now - (this.lastPersistAt.get(room.id) ?? 0) >= 5_000) void this.persist(room).catch(() => undefined);
     }
   }
   private sendAttack(room: Room, side: Side, kills: number): void {
@@ -267,12 +313,12 @@ export class WordFrontRoomService implements OnApplicationBootstrap, OnModuleDes
     const opposite: Side = side === 'red' ? 'blue' : 'red';
     const board = room[opposite];
     if (board.status !== 'running') return;
-    const count = Math.min(2, Math.floor(room.attackMeter[side] / 5), Math.max(0, 24 - board.enemies.length));
+    const count = Math.min(2, Math.floor(room.attackMeter[side] / 5), Math.max(0, 32 - board.enemies.length));
     if (count <= 0) return;
     room.attackMeter[side] -= count * 5;
-    const hp = 12 + Math.min(30, board.wave) * 3;
+    const hp = 18 + Math.min(40, board.wave) * 3;
     board.enemies = [...board.enemies, ...Array.from({ length: count }, (_, index) => ({ id: board.nextEnemyId + index,
-      kind: 'routine' as const, pathIndex: 0, hp, maxHp: hp, moveEvery: 3 }))];
+      kind: 'bandit' as const, pathIndex: 0, hp, maxHp: hp, moveEvery: 3, damage: 1 }))];
     board.nextEnemyId += count;
   }
   private finish(room: Room, now: number): void {

@@ -17,9 +17,11 @@ import {
   replayWordFront,
   replayWordFrontV2,
   replayWordFrontV3,
+  replayWordFrontV4,
   type WordFrontAction,
   type WordFrontV2Action,
   type WordFrontV3Action,
+  type WordFrontV4Action,
 } from '@stealth-reader/shared';
 import { assertCommunityWritesEnabled } from '../community-write-gate';
 
@@ -33,11 +35,14 @@ const RUN_TTL_MS: Record<ArcadeGameKey, number> = {
   word_endless_v2: 2 * 60 * 60 * 1_000,
   word_story_v3: 2 * 60 * 60 * 1_000,
   word_endless_v3: 2 * 60 * 60 * 1_000,
+  word_story_v4: 2 * 60 * 60 * 1_000,
+  word_endless_v4: 2 * 60 * 60 * 1_000,
 };
-const isWordFrontGame = (key: ArcadeGameKey) => key === 'word_story' || key === 'word_endless' || key === 'word_story_v2' || key === 'word_endless_v2' || key === 'word_story_v3' || key === 'word_endless_v3';
+const isWordFrontGame = (key: ArcadeGameKey) => key.startsWith('word_story') || key.startsWith('word_endless');
 const isWordFrontV2Game = (key: ArcadeGameKey) => key === 'word_story_v2' || key === 'word_endless_v2';
 const isWordFrontV3Game = (key: ArcadeGameKey) => key === 'word_story_v3' || key === 'word_endless_v3';
-const isVersionedWordFrontGame = (key: ArcadeGameKey) => isWordFrontV2Game(key) || isWordFrontV3Game(key);
+const isWordFrontV4Game = (key: ArcadeGameKey) => key === 'word_story_v4' || key === 'word_endless_v4';
+const isVersionedWordFrontGame = (key: ArcadeGameKey) => isWordFrontV2Game(key) || isWordFrontV3Game(key) || isWordFrontV4Game(key);
 
 const ZHESI_MAX_AGE = 120_000;
 const ZHESI_BOOLEAN_METRICS = [
@@ -65,7 +70,7 @@ export function validateArcadeResult(
   input: FinishRunInput,
   elapsedSeconds: number,
   runSeed?: number,
-  runRulesVersion: 1 | 2 | 3 = 1,
+  runRulesVersion: 1 | 2 | 3 | 4 = 1,
   runChapter?: number,
 ): Record<string, unknown> {
   if (!Number.isSafeInteger(input.score) || input.score < 0) {
@@ -113,7 +118,7 @@ export function validateArcadeResult(
   }
 
   if (isWordFrontGame(gameKey)) {
-    return validateWordFrontResult(gameKey, input, metrics, elapsedSeconds, runSeed, runRulesVersion, runChapter);
+    return validateWordFrontResult(gameKey as Exclude<ArcadeGameKey, 'tetris' | 'tank' | 'zhesi'>, input, metrics, elapsedSeconds, runSeed, runRulesVersion, runChapter);
   }
 
   if (gameKey === 'zhesi') return validateZhesiResult(input, metrics, elapsedSeconds);
@@ -121,23 +126,24 @@ export function validateArcadeResult(
 }
 
 function validateWordFrontResult(
-  gameKey: 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3',
+  gameKey: 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3' | 'word_story_v4' | 'word_endless_v4',
   input: FinishRunInput,
   metrics: Record<string, unknown>,
   elapsedSeconds: number,
   runSeed: number | undefined,
-  runRulesVersion: 1 | 2 | 3,
+  runRulesVersion: 1 | 2 | 3 | 4,
   runChapter: number | undefined,
 ): Record<string, unknown> {
-  const expectedMode = gameKey === 'word_story' || gameKey === 'word_story_v2' || gameKey === 'word_story_v3' ? 'story' : 'endless';
+  const expectedMode = gameKey.startsWith('word_story') ? 'story' : 'endless';
   const { mode, chapter, wave, kills, coreHp, drawCount, outcome, finishTick, actions } = metrics;
   if (
     mode !== expectedMode || (isWordFrontV2Game(gameKey) !== (runRulesVersion === 2)) ||
     (isWordFrontV3Game(gameKey) !== (runRulesVersion === 3)) ||
+    (isWordFrontV4Game(gameKey) !== (runRulesVersion === 4)) ||
     (runRulesVersion !== 1 && chapter !== runChapter) ||
     !Number.isSafeInteger(runSeed) || Number(runSeed) < 0 || Number(runSeed) > 0xffffffff ||
-    !Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (runRulesVersion === 1 ? 3 : 6) ||
-    !Number.isSafeInteger(finishTick) || Number(finishTick) < 1 || Number(finishTick) > 3_000 ||
+    !Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (runRulesVersion === 4 ? 3 : runRulesVersion === 1 ? 3 : 6) ||
+    !Number.isSafeInteger(finishTick) || Number(finishTick) < 1 || Number(finishTick) > (runRulesVersion === 4 ? 5_000 : 3_000) ||
     !Array.isArray(actions) || actions.length < 2 || actions.length > 400 ||
     actions.some((action) => !action || typeof action !== 'object' || Array.isArray(action)) ||
     Number(finishTick) * 850 > (elapsedSeconds + 3) * 1_000
@@ -145,7 +151,9 @@ function validateWordFrontResult(
     throw new BadRequestException({ code: 'ARCADE_RESULT_IMPLAUSIBLE' });
   }
 
-  const state = runRulesVersion === 3
+  const state = runRulesVersion === 4
+    ? replayWordFrontV4(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontV4Action[], Number(finishTick))
+    : runRulesVersion === 3
     ? replayWordFrontV3(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontV3Action[], Number(finishTick))
     : runRulesVersion === 2
       ? replayWordFrontV2(expectedMode, Number(chapter), Number(runSeed), actions as WordFrontV2Action[], Number(finishTick))
@@ -311,12 +319,12 @@ function zhesiCombatPower(metrics: {
 export class ArcadeService {
   constructor(private readonly dataSource: DataSource) {}
 
-  async startRun(userId: string, gameKey: ArcadeGameKey, rulesVersion: 1 | 2 | 3 = 1, chapter?: number) {
+  async startRun(userId: string, gameKey: ArcadeGameKey, rulesVersion: 1 | 2 | 3 | 4 = 1, chapter?: number) {
     if (isWordFrontGame(gameKey) &&
-      (isWordFrontV2Game(gameKey) !== (rulesVersion === 2) || isWordFrontV3Game(gameKey) !== (rulesVersion === 3))) {
+      (isWordFrontV2Game(gameKey) !== (rulesVersion === 2) || isWordFrontV3Game(gameKey) !== (rulesVersion === 3) || isWordFrontV4Game(gameKey) !== (rulesVersion === 4))) {
       throw new BadRequestException({ code: 'ARCADE_RULES_VERSION_INVALID' });
     }
-    if (isVersionedWordFrontGame(gameKey) && (!Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (gameKey === 'word_endless_v2' || gameKey === 'word_endless_v3' ? 1 : 6))) {
+    if (isVersionedWordFrontGame(gameKey) && (!Number.isSafeInteger(chapter) || Number(chapter) < 1 || Number(chapter) > (gameKey.startsWith('word_endless_') ? 1 : isWordFrontV4Game(gameKey) ? 3 : 6))) {
       throw new BadRequestException({ code: 'ARCADE_CHAPTER_INVALID' });
     }
     this.assertWritesEnabled();
@@ -400,7 +408,7 @@ export class ArcadeService {
         throw new BadRequestException({ code: 'ARCADE_RUN_EXPIRED' });
       }
       const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - run.startedAt.getTime()) / 1_000));
-      const rulesVersion = run.metrics.rulesVersion === 3 ? 3 : run.metrics.rulesVersion === 2 ? 2 : 1;
+      const rulesVersion = run.metrics.rulesVersion === 4 ? 4 : run.metrics.rulesVersion === 3 ? 3 : run.metrics.rulesVersion === 2 ? 2 : 1;
       const metrics = validateArcadeResult(run.gameKey, input, elapsedSeconds, Number(run.metrics.seed), rulesVersion, Number(run.metrics.chapter));
       const wordFront = isWordFrontGame(run.gameKey);
       const actions = wordFront ? (input.metrics as Record<string, unknown>).actions : undefined;
@@ -457,7 +465,7 @@ export class ArcadeService {
       .getMany();
     return {
       gameKey,
-      formulaVersion: isWordFrontV3Game(gameKey) ? 'word-front-v3' : isWordFrontV2Game(gameKey) ? 'word-front-v2' : 'arcade-score-v1',
+      formulaVersion: isWordFrontV4Game(gameKey) ? 'word-front-v4' : isWordFrontV3Game(gameKey) ? 'word-front-v3' : isWordFrontV2Game(gameKey) ? 'word-front-v2' : 'arcade-score-v1',
       items: rows.map((row, index) => ({
         rank: index + 1,
         publicId: row.user.publicId,

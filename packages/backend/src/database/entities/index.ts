@@ -133,8 +133,11 @@ import { WalletBalance } from './wallet-balance.entity';
 import { WalletLedger } from './wallet-ledger.entity';
 import { UserFarm } from './user-farm.entity';
 import { UserBlock } from './user-block.entity';
+import { WordFrontMapDraft, WordFrontRoomSnapshot } from './word-front.entity';
 
 export {
+  WordFrontMapDraft,
+  WordFrontRoomSnapshot,
   DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
@@ -258,6 +261,8 @@ export {
 
 /** 所有实体的集合，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const entities = [
+  WordFrontMapDraft,
+  WordFrontRoomSnapshot,
   DemonTowerSquad,
   DemonTowerAutoRun,
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,

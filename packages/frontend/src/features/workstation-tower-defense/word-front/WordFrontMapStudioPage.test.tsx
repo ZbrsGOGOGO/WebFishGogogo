@@ -1,0 +1,11 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { wordFrontMapsApi, type WordFrontMapDraftList } from '../../../api/word-front-maps';
+import { WordFrontMapStudioPage } from './WordFrontMapStudioPage';
+
+vi.mock('../../../api/word-front-maps',()=>({wordFrontMapsApi:{list:vi.fn(),save:vi.fn()}}));
+const data:WordFrontMapDraftList={rulesVersion:4,width:8,height:10,symbols:{A:'阿斗',S:'出兵口',p:'己方兵道',P:'对方兵道','.':'可部署',o:'对方空地','#':'草障',w:'备用空地'},items:[{key:'changban',name:'长坂坡回廊',cells:['A######S','P##ooo#P','P##ooo#P','P##PPPPP','PPPPpppp','ppppp##p','ppppp##p','p#...##p','p#...##p','S######A'],version:1,updatedAt:'2026-09-18T00:00:00.000Z'}]};
+describe('WordFrontMapStudioPage',()=>{beforeEach(()=>{vi.resetAllMocks();vi.mocked(wordFrontMapsApi.list).mockResolvedValue(data);});
+  it('loads an 8 by 10 draft and saves an optimistic version after painting',async()=>{vi.mocked(wordFrontMapsApi.save).mockImplementation(async(_key,input)=>({...data.items[0]!,...input,version:2,updatedAt:'2026-09-18T01:00:00.000Z'}));render(<MemoryRouter><WordFrontMapStudioPage/></MemoryRouter>);await screen.findByText('长坂坡回廊');expect(screen.getAllByRole('gridcell')).toHaveLength(80);fireEvent.click(screen.getByRole('button',{name:/备用空地/}));fireEvent.click(screen.getByRole('gridcell',{name:'1行1列，阿斗'}));fireEvent.click(screen.getByRole('button',{name:'保存草稿'}));await waitFor(()=>expect(wordFrontMapsApi.save).toHaveBeenCalledWith('changban',expect.objectContaining({expectedVersion:1,cells:expect.arrayContaining([expect.stringMatching(/^w/)] )})));expect(await screen.findByText(/草稿已保存为 v2/)).toBeInTheDocument();});
+  it('does not imitate an empty editor when the admin API refuses access',async()=>{vi.mocked(wordFrontMapsApi.list).mockRejectedValue(new Error('forbidden'));render(<MemoryRouter><WordFrontMapStudioPage/></MemoryRouter>);expect(await screen.findByRole('alert')).toHaveTextContent('只有站长账号可打开地图设计台');expect(screen.queryByRole('grid')).not.toBeInTheDocument();});});

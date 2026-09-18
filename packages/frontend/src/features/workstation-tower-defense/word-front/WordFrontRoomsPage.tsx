@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type JSX } from 'react';
 import { Link } from 'react-router-dom';
-import { WORD_FRONT_V2_CHAPTERS, WORD_FRONT_V2_UNITS, wordFrontV2DrawCost, wordFrontV2HeroForLetters, wordFrontV2Terrain, wordFrontV2UnitForLetter, type WordFrontV2State } from '@stealth-reader/shared';
+import { WORD_FRONT_V4_MAPS, WORD_FRONT_V4_UNITS, wordFrontV4DrawCost, wordFrontV4HeroForLetters, wordFrontV4Terrain, wordFrontV4UnitForLetter, type WordFrontV4State } from '@stealth-reader/shared';
 import { getCommunitySessionGeneration } from '../../../api/community-http';
 import { wordFrontRoomError, wordFrontRoomsApi, type WordFrontRoomList, type WordFrontRoomMove, type WordFrontRoomView } from '../../../api/word-front-rooms';
 import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
 import styles from './WordFrontRoomsPage.module.css';
 
-const ENEMY: Record<string, string> = { routine: '需', mail: '催', approval: '审', bug: '错', boss: '考' };
-type VisibleBoard = Omit<WordFrontV2State, 'seed'>;
-function terrain(board: VisibleBoard, slot: number): ReturnType<typeof wordFrontV2Terrain> {
+const ENEMY: Record<string, string> = { bandit: '贼', blade: '刀', spear: '枪', bow: '弓', cavalry: '骑', shield: '盾', elite: '精', boss: '将' };
+type VisibleBoard = Omit<WordFrontV4State, 'seed'>;
+function terrain(board: VisibleBoard, slot: number): ReturnType<typeof wordFrontV4Terrain> {
   // Terrain uses only chapter, routes, and unlocked cells; the server intentionally omits the RNG seed.
-  return wordFrontV2Terrain(board as WordFrontV2State, slot);
+  return wordFrontV4Terrain(board as WordFrontV4State, slot);
 }
 function eligibleResponse(userId: string | undefined, generation: number): boolean {
   return generation === getCommunitySessionGeneration() && useCommunityAuthStore.getState().user?.publicId === userId;
@@ -101,8 +101,8 @@ export function WordFrontRoomsPage(): JSX.Element {
   }
   function chooseCell(board: VisibleBoard, slot: number): void {
     const cellTerrain = terrain(board, slot);
-    if (cellTerrain === 'waste') { if (board.shovels > 0) act({ type: 'unlock', slot }); else setError('需要铲子才能解封荒地。'); return; }
-    if (cellTerrain === 'path' || cellTerrain === 'slow' || cellTerrain === 'obstacle') return;
+    if (cellTerrain === 'grass') { if (board.shovels > 0) act({ type: 'unlock', slot }); else setError('需要铲子才能开垦草障。'); return; }
+    if (cellTerrain === 'path' || cellTerrain === 'obstacle') return;
     const occupied = board.units.find(unit => unit.slot === slot);
     if (selectedCards.length && !occupied) {
       const action: WordFrontRoomMove = selectedCards.length === 2
@@ -114,19 +114,19 @@ export function WordFrontRoomsPage(): JSX.Element {
     setSelectedUnit(occupied ? slot : null);
   }
   const board = room?.board;
-  const map = board ? WORD_FRONT_V2_CHAPTERS[board.chapter - 1]! : null;
-  const selectedName = board && selectedCards.length === 2 ? wordFrontV2HeroForLetters(board.hand[selectedCards[0]!] ?? '', board.hand[selectedCards[1]!] ?? '')
-    : board && selectedCards.length === 1 ? wordFrontV2UnitForLetter(board.hand[selectedCards[0]!] ?? '') : null;
+  const map = board ? WORD_FRONT_V4_MAPS[board.mapId - 1]! : null;
+  const selectedName = board && selectedCards.length === 2 ? wordFrontV4HeroForLetters(board.hand[selectedCards[0]!] ?? '', board.hand[selectedCards[1]!] ?? '')
+    : board && selectedCards.length === 1 ? wordFrontV4UnitForLetter(board.hand[selectedCards[0]!] ?? '') : null;
   const outcome = room?.winner === 'draw' ? '平局' : room?.winner ? room.winner === room.mySide ? '我方胜利' : '对方胜利' : null;
   return <main className={styles.page}>
-    <header className={styles.header}><div><span className={styles.kicker}>WORD FRONT / TWO LANES</span><h1>文字战线 · 玩家房间</h1><p>两位真人，红蓝双线对攻。服务端实时推进，每次击败五名来客会向对方投递一名援军。</p></div><nav><Link to="/tower-defense/word-front">新版单机</Link><Link to="/tower-defense/word-front/v2">V2 六章</Link><Link to="/tower-defense">原工位塔防</Link></nav></header>
-    <p className={styles.notice}>房间采用 V2 对战规则，不是 V3 单机规则；只使用局内资源，不计正式排行榜、办公币、成就或存档。房间为临时会话，服务重启后会结束。</p>
+    <header className={styles.header}><div><span className={styles.kicker}>CHANGBAN / TWO LANES</span><h1>赵云救阿斗 · 玩家房间</h1><p>两位真人，红蓝双线对攻。服务端实时推进，每击败五名敌军会向对面投递援军。</p></div><nav><Link to="/tower-defense/word-front">V4 单机</Link><Link to="/tower-defense/word-front/v3">V3 旧版</Link><Link to="/tower-defense">工位塔防</Link></nav></header>
+    <p className={styles.notice}>房间与新版单机共用 V4 十行地图、卡池和十二武将。只使用局内资源，不计单机榜、办公币或成就；有时限的服务端快照可在 API 重启后恢复。</p>
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {refreshing ? <p role="status">正在同步房间…</p> : null}
     {!room ? <div className={styles.lobby}>
       <section className={styles.panel}><h2>建立双线房间</h2><form onSubmit={create} className={styles.form}>
         <label>房间名称<input value={name} maxLength={32} required onChange={event => { setName(event.target.value); createRequest.current = null; }} /></label>
-        <label>章节<select value={chapter} onChange={event => { setChapter(Number(event.target.value)); createRequest.current = null; }}>{WORD_FRONT_V2_CHAPTERS.map(item => <option key={item.id} value={item.id}>{item.id}. {item.name}</option>)}</select></label>
+        <label>地图<select value={chapter} onChange={event => { setChapter(Number(event.target.value)); createRequest.current = null; }}>{WORD_FRONT_V4_MAPS.map(item => <option key={item.id} value={item.id}>{item.id}. {item.name}</option>)}</select></label>
         <label>可选密码<input type="password" autoComplete="new-password" value={password} minLength={password ? 4 : undefined} maxLength={64} placeholder="留空则公开" onChange={event => { setPassword(event.target.value); createRequest.current = null; }} /></label>
         <button type="submit" disabled={busy || !name.trim()}>创建房间</button>
       </form></section>
@@ -134,17 +134,17 @@ export function WordFrontRoomsPage(): JSX.Element {
         <button type="button" disabled={busy} onClick={() => void refresh()}>刷新列表</button></section>
     </div> : <div className={styles.playLayout}>
       <section className={styles.panel}><div className={styles.roomHeading}><div><span className={styles.kicker}>#{room.id.slice(0, 8)} · {room.mySide === 'red' ? '红方' : '蓝方'}</span><h2>{room.name}</h2><p>第 {room.chapter} 章 · {room.status === 'waiting' ? '等待对手' : room.status === 'running' ? '对局中' : outcome ?? '已结束'}</p></div><button type="button" disabled={busy} onClick={() => void mutate(() => wordFrontRoomsApi.leave(room.id))}>退出房间</button></div>
-        <div className={styles.score}><span>我方 <b>{board?.coreHp ?? 5}/5</b> 核心 · {board?.score ?? 0} 分</span><span>对方 <b>{room.opposingBoard?.coreHp ?? 5}/5</b> 核心 · {room.opposingBoard?.score ?? 0} 分</span></div>
+        <div className={styles.score}><span>我方阿斗 <b>{board?.coreHp ?? 20}/20</b> · {board?.score ?? 0} 分</span><span>对方阿斗 <b>{room.opposingBoard?.coreHp ?? 20}/20</b> · {room.opposingBoard?.score ?? 0} 分</span></div>
         {room.status === 'waiting' ? <div className={styles.waiting}><p>{room.opponent ? `${room.opponent.displayName}已加入，可以开始。` : '等待一位同事加入。'} 房间容量 2 人，不使用邀请码。</p>{room.isHost ? <button type="button" disabled={busy || !room.opponent} onClick={() => void mutate(() => wordFrontRoomsApi.start(room.id))}>开始双线对攻</button> : <p>房主开始后会自动进入棋盘。</p>}</div> : null}
-        {board && map ? <><div className={styles.metrics}><span>波次 <b>{board.wave}</b></span><span>击败 <b>{board.kills}</b></span><span>经费 <b>{board.credits}/40</b></span><span>局内金币 <b>{board.gold}</b></span><span>铲子 <b>{board.shovels}</b></span><span>当前拍 <b>{board.tick}</b></span></div><div className={styles.boardViewport}><div className={styles.board} role="group" aria-label="我方 V2 对战棋盘">{Array.from({ length: 48 }, (_, slot) => {
-          const terrain = wordFrontV2Terrain(board as WordFrontV2State, slot), unit = board.units.find(item => item.slot === slot);
+        {board && map ? <><div className={styles.metrics}><span>波次 <b>{board.wave}</b></span><span>击败 <b>{board.kills}</b></span><span>包子 <b>{board.buns}/80</b></span><span>局内金币 <b>{board.gold}</b></span><span>铲子 <b>{board.shovels}</b></span><span>当前拍 <b>{board.tick}</b></span></div><div className={styles.boardViewport}><div className={styles.board} role="group" aria-label="我方 V4 对战棋盘">{Array.from({ length: 80 }, (_, slot) => {
+          const terrain = wordFrontV4Terrain(board as WordFrontV4State, slot), unit = board.units.find(item => item.slot === slot);
           const pathIndex = (map.path as readonly number[]).indexOf(slot), enemies = pathIndex < 0 ? [] : board.enemies.filter(item => item.pathIndex === pathIndex);
-          const label = `${Math.floor(slot / 8) + 1}行${slot % 8 + 1}列，${unit ? WORD_FRONT_V2_UNITS[unit.kind].name : terrain === 'waste' ? '荒地' : terrain === 'path' ? '路线' : terrain === 'obstacle' ? '障碍' : terrain === 'buff' ? '增益工位' : '工位'}${enemies.length ? `，${enemies.length}名来客` : ''}`;
-          return <button key={slot} type="button" className={styles.cell} data-terrain={terrain} data-selected={selectedUnit === slot} aria-pressed={unit ? selectedUnit === slot : undefined} aria-label={label} disabled={busy || room.status !== 'running' || terrain === 'path' || terrain === 'slow' || terrain === 'obstacle'} onClick={() => chooseCell(board, slot)}>{unit ? <b>{WORD_FRONT_V2_UNITS[unit.kind].glyph}<small>{unit.level}阶</small></b> : terrain === 'waste' ? '锁' : terrain === 'obstacle' ? '柜' : terrain === 'buff' ? '充' : pathIndex === 0 ? '入' : pathIndex === map.path.length - 1 ? '鱼' : terrain === 'path' || terrain === 'slow' ? '·' : '+'}{enemies.length ? <span className={styles.enemy}>{enemies.length > 1 ? enemies.length : ENEMY[enemies[0]!.kind]}</span> : null}</button>;
+          const label = `${Math.floor(slot / 8) + 1}行${slot % 8 + 1}列，${unit ? WORD_FRONT_V4_UNITS[unit.kind].name : terrain === 'grass' ? '草障' : terrain === 'path' ? '兵道' : terrain === 'obstacle' ? '障碍' : terrain === 'buff' ? '军旗位' : '空地'}${enemies.length ? `，敌军${enemies.length}` : ''}`;
+          return <button key={slot} type="button" className={styles.cell} data-terrain={terrain} data-selected={selectedUnit === slot} aria-pressed={unit ? selectedUnit === slot : undefined} aria-label={label} disabled={busy || room.status !== 'running' || terrain === 'path' || terrain === 'obstacle'} onClick={() => chooseCell(board, slot)}>{unit ? <b>{WORD_FRONT_V4_UNITS[unit.kind].glyph}<small>Lv.{unit.level}</small></b> : terrain === 'grass' ? '草' : terrain === 'obstacle' ? '障' : terrain === 'buff' ? '旗' : pathIndex === 0 ? '兵' : pathIndex === map.path.length - 1 ? '斗' : terrain === 'path' ? '·' : '+'}{enemies.length ? <span className={styles.enemy}>{enemies.length > 1 ? enemies.length : ENEMY[enemies[0]!.kind]}</span> : null}</button>;
         })}</div></div><p className={styles.hint}>选字后点击空工位部署；点击两名同角色同阶成员合并；荒地用铲子解封。窄屏可横向滚动棋盘。对手棋盘只展示概况，不泄露手牌。</p><p role="status">{board.message}</p></> : null}
       </section>
       <aside className={styles.panel}><h2>双线信息</h2><p>{room.me.displayName} 对阵 {room.opponent?.displayName ?? '等待加入…'}</p><p>对方波次 {room.opposingBoard?.wave ?? '—'} · 击败 {room.opposingBoard?.kills ?? '—'} · 场上来客 {room.opposingBoard?.enemies.length ?? '—'}</p>{outcome ? <p className={styles.outcome}>{outcome}</p> : null}
-        {board && room.status === 'running' ? <><h3>字卡工作台</h3><button type="button" disabled={busy || board.credits < wordFrontV2DrawCost(board.drawCount)} onClick={() => act({ type: 'recruit' })}>招募五张 · {wordFrontV2DrawCost(board.drawCount)} 经费</button><div className={styles.hand} role="group" aria-label="房间手牌">{board.hand.map((letter, index) => <button type="button" key={`${index}-${letter}`} data-selected={selectedCards.includes(index)} aria-pressed={selectedCards.includes(index)} aria-label={`第 ${index + 1} 张：${letter}`} disabled={busy} onClick={() => chooseCard(index)}>{letter}</button>)}</div><p>{selectedName ? `已选 ${WORD_FRONT_V2_UNITS[selectedName].name}，点击工位部署。` : selectedCards.length ? '双字需配成完整职业。' : '首抽已保底一组完整双字。'}</p><h3>局内商人</h3><div className={styles.actions}><button type="button" disabled={busy || board.gold < 12 || board.attackBoost >= 3} onClick={() => act({ type: 'buy_boost', boost: 'attack' })}>输出 +15% · 12 金</button><button type="button" disabled={busy || board.gold < 12 || board.coreHp >= 5} onClick={() => act({ type: 'buy_boost', boost: 'heal' })}>核心 +1 · 12 金</button></div></> : null}
+        {board && room.status === 'running' ? <><h3>字卡工作台</h3><button type="button" disabled={busy || board.buns < wordFrontV4DrawCost(board.drawCount)} onClick={() => act({ type: 'recruit' })}>征兵五张 · {wordFrontV4DrawCost(board.drawCount)} 包子</button><div className={styles.hand} role="group" aria-label="房间手牌">{board.hand.map((letter, index) => <button type="button" key={`${index}-${letter}`} data-selected={selectedCards.includes(index)} aria-pressed={selectedCards.includes(index)} aria-label={`第 ${index + 1} 张：${letter}`} disabled={busy} onClick={() => chooseCard(index)}>{letter}</button>)}</div><p>{selectedName ? `已选 ${WORD_FRONT_V4_UNITS[selectedName].name}，点击空地部署。` : selectedCards.length ? '双字需配成完整武将。' : '首抽保底赵云双字。'}</p><h3>局内商人</h3><div className={styles.actions}><button type="button" disabled={busy || board.gold < 12 || board.attackBoost >= 3} onClick={() => act({ type: 'buy_boost', boost: 'attack' })}>输出 +15% · 12 金</button><button type="button" disabled={busy || board.gold < 12 || board.coreHp >= 20} onClick={() => act({ type: 'buy_boost', boost: 'heal' })}>阿斗 +5 · 12 金</button><button type="button" disabled={busy || board.gold < 18 || board.heroRateBoost} onClick={() => act({ type: 'buy_boost', boost: 'hero_rate' })}>招贤榜 · 18 金</button></div></> : null}
         <p className={styles.rules}>{room.rules}</p>
       </aside>
     </div>}

@@ -1,4 +1,4 @@
-import { DEMON_TOWER_CATALOG, DEMON_TOWER_FLOORS, DEMON_TOWER_SKILLS, DEMON_TOWER_WEAPONS, demonTowerUpgradeCost } from '@stealth-reader/shared';
+import { DEMON_TOWER_CATALOG, DEMON_TOWER_FLOORS, DEMON_TOWER_SKILLS, DEMON_TOWER_WEAPONS, DEMON_TOWER_SOUL_BEADS, demonTowerUpgradeCost } from '@stealth-reader/shared';
 import type { DemonTowerAction, DemonTowerAttribute, DemonTowerSkillId, DemonTowerWeaponId, DemonTowerWorldView } from '@stealth-reader/shared';
 import {
   actDemonTower, advanceDemonTowerState, createDemonTowerState, demonTowerEffectiveAttributes,
@@ -92,6 +92,13 @@ function expectCode(run: () => unknown, code: string): void {
   try { run(); throw new Error(`Expected ${code}`); }
   catch (error) { expect(error).toBeInstanceOf(DemonTowerEngineError); expect((error as DemonTowerEngineError).code).toBe(code); }
 }
+
+describe('Free two-slot soul bead cultivation',()=>{
+  const beadAction=(state:DemonTowerEngineState,value:DemonTowerAction)=>actDemonTower(state,value,{now:NOW,serviceDate:DATE,world:world(),expansionEnabled:true});
+  it('grants one deterministic weekly bead, equips it and applies its real attribute bonus',()=>{const initial=fresh('soul-bead-weekly-seed-0001'),claimed=beadAction(initial,{kind:'soul_bead_claim',payload:{}}).state,view=demonTowerProfileView(claimed,NOW,1,0,true);expect(view.soulBeads?.inventory).toHaveLength(1);const bead=view.soulBeads!.inventory[0]!,before=demonTowerEffectiveAttributes(claimed)[DEMON_TOWER_SOUL_BEADS[bead.id].attribute];const equipped=beadAction(claimed,{kind:'soul_bead_equip',payload:{beadId:bead.id,slot:0}}).state;expect(demonTowerEffectiveAttributes(equipped)[DEMON_TOWER_SOUL_BEADS[bead.id].attribute]).toBe(before+2);expectCode(()=>beadAction(claimed,{kind:'soul_bead_claim',payload:{}}),'SOUL_BEAD_WEEKLY_CLAIMED');});
+  it('uses bound soul only and enforces distinct slots',()=>{let state=fresh('soul-bead-craft-seed-0001');state.materials.soul=2_000;for(let index=0;index<30;index++)state=beadAction(state,{kind:'soul_bead_craft',payload:{}}).state;expect(state.materials.soul).toBe(800);const view=demonTowerProfileView(state,NOW,1,0,true).soulBeads!,owned=view.inventory[0]!;state=beadAction(state,{kind:'soul_bead_equip',payload:{beadId:owned.id,slot:0}}).state;expectCode(()=>beadAction(state,{kind:'soul_bead_equip',payload:{beadId:owned.id,slot:1}}),'SOUL_BEAD_DUPLICATE_SLOT');});
+  it('keeps two independent slots for every owned main-hand weapon',()=>{let state=equipped('w1',null,'soul-bead-per-weapon-0001');state=beadAction(state,{kind:'soul_bead_claim',payload:{}}).state;const bead=demonTowerProfileView(state,NOW,1,0,true).soulBeads!.inventory[0]!;state=beadAction(state,{kind:'soul_bead_equip',payload:{beadId:bead.id,slot:0}}).state;const attribute=DEMON_TOWER_SOUL_BEADS[bead.id].attribute,onW1=demonTowerEffectiveAttributes(state)[attribute];state.loadout.mainHand='w2';expect(demonTowerProfileView(state,NOW,1,0,true).soulBeads).toMatchObject({weaponId:'w2',slots:[null,null]});const withoutActiveBead=structuredClone(state);withoutActiveBead.soulBeads!.weaponSlots={};expect(demonTowerEffectiveAttributes(state)[attribute]).toBe(demonTowerEffectiveAttributes(withoutActiveBead)[attribute]);state.loadout.mainHand='w1';expect(demonTowerEffectiveAttributes(state)[attribute]).toBe(onW1);});
+});
 
 describe('Server automatic exploration policy', () => {
   it('is pure and can only choose ordinary explore, equipped ready skill, or normal attack', () => {

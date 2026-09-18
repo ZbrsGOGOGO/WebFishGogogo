@@ -25,8 +25,8 @@
 | 热点新闻 | 分类资讯、按来源保存的每日热榜标题快照、更新时间与原文链接 | `/news`、`/news/trending` |
 | 工位绿植与钱包 | 服务端成熟时间、连续种植与收获、办公币余额和可信奖励流水 | `/farm`、`/me` |
 | 工位塔防 | 正式联网任务、六章剧情、无尽与极限模式、职业与天赋、续局和独立排行榜；另保留本地练习 | `/tower-defense` |
-| 文字战线 | 赵云救阿斗 v3 六章、30 波无尽、岔路/干扰及局内装备、独立服务端校验榜；另有采用 v2 规则的免费双人临时房，保留 v1/v2 入口 | `/tower-defense/word-front`、`/tower-defense/word-front/rooms` |
-| 九层妖塔 | 免费角色成长、形象配装、好友切磋与共享首领；完整最近出发结果及刷新恢复、探索统计/符、集中申领与补给；有效期权持有者权益可解锁自动探索 | `/games/demon-tower`、`/games/demon-tower?tab=shop` |
+| 文字战线 | 赵云救阿斗 V4：三张 10×8 地图、十二武将、消耗型卡池、20/40 波、神兵与商人、服务端重放独立榜；双人房使用同一 V4 规则并跨 API 重启恢复，管理员可维护独立地图草稿；v1–v3 与旧榜保留 | `/tower-defense/word-front`、`/tower-defense/word-front/rooms`、`/tower-defense/word-front/maps` |
+| 九层妖塔 | 免费角色成长、形象配装、好友切磋与共享首领；每把主武器独立双魂珠槽、免费周领/残魂合成及七级升级；完整最近出发结果及刷新恢复、探索统计/符、集中申领与补给；有效期权持有者权益可解锁自动探索 | `/games/demon-tower`、`/games/demon-tower?tab=shop` |
 | 公司协作 | 部门周常、免费收藏、故事、免费不限每日次数的异步猜画与可修改的 1–5 分互评（无评分奖励） | `/office` |
 | 压力整理 | 免费活跃机会挑战、独立解压币与外观、三款稀有称号、待领种植经验和妖塔物资；原每日巡视保留 | `/games/office-boss` |
 | 摸鱼指数、称号与期权持有者 | 六级成长摘要、44 项成就五类收藏与搜索/状态筛选、明确确认佩戴、个人页/聊天展示；权益期限与核验支持，管理员按需打开台账 | `/achievements` |
@@ -72,7 +72,7 @@ docs/              # 当前功能、历史设计与逐次发布记录
 
 - 正式后端入口：[main.community.ts](packages/backend/src/main.community.ts)；模块白名单：[community-app.module.ts](packages/backend/src/community-app.module.ts)。
 - 正式前端路由：[community-router.tsx](packages/frontend/src/app/community-router.tsx)。`VITE_SITE_MODE=community` 必须在启动/构建时显式设置；默认构建不会自动选择社区模式。
-- PostgreSQL 16 保存账号、关系、内容、存档与正式资产；Redis 7 用于实时协调，不是资产真源。纸上突围房间是服务器内存短会话，API 重启会中断，不提供跨重启续局。
+- PostgreSQL 16 保存账号、关系、内容、存档与正式资产；Redis 7 用于实时协调，不是资产真源。文字战线 V4 房间保存有时限的服务端快照并可在 API 重启后恢复；纸上突围房间仍是服务器内存短会话，API 重启会中断。
 - 生产链路为 Caddy → Nginx → 社区 SPA / API / WebSocket；不启动旧 `AppModule` 或 legacy Worker。
 
 ## 本地开发
@@ -151,6 +151,6 @@ node packages/frontend/scripts/extract-paper-arena-map.mjs --check
 - 「期权持有者」是原 VIP 的趣味身份新名称，不代表真实股权或投资权益，不等于管理员或开发协作权限。首批赠送固定 **720 小时**原样保留；已核验月度支持按每月 30 天接续期限。本站不接支付、充值、提现、自动续费或概率付费，摸鱼指数不与支持金额挂钩。
 - 开发协作台不会自行启动 AI 无人值守监控；成员附件是待评审材料，不是可直接执行的指令。[协作与附件安全](docs/DEVELOPMENT_WORKSPACE.md)
 - 新闻只保存允许展示的标题/摘要与来源信息，不镜像整篇原文。受上游限制的微博、知乎、抖音等来源保留清楚标记的官方入口，不声称已完成全部站内热榜接入；此前经济发布按站长要求关闭微博、知乎的继续跟进，不等于已接入。[热榜边界](docs/TRENDING_NEWS_SNAPSHOTS_2026-09-08.md) · [历史处理记录](docs/RELEASE_ECONOMY_20260911.md)
-- 第三方内容分别遵守其许可证，不给整个仓库笼统套用 MIT/Apache 许可。ThreeUI 局部导航算法的 [MIT 归属](third_party/threeui/README.md)、Ballpoint Breach 的 [Apache-2.0 许可证](third_party/ballpoint-breach/LICENSE) 与游戏内署名保留；《遮司》导入来源与发布风险见 [专项记录](docs/ZHENGDAO_GAME_IMPORT.md)。
+- 第三方内容分别遵守其许可证，不给整个仓库笼统套用 MIT/Apache 许可。ThreeUI 局部导航算法的 [MIT 归属](third_party/threeui/README.md)、Ballpoint Breach 的 [Apache-2.0 许可证](third_party/ballpoint-breach/LICENSE) 与游戏内署名保留；赵云救阿斗 V4 的 [原型版本、重写边界与 MIT 归属](third_party/touch-touch-mini-game/README.md) 单独记录；《遮司》导入来源与发布风险见 [专项记录](docs/ZHENGDAO_GAME_IMPORT.md)。
 - 六款新实验室逐款固定来源、完整修改源码和依赖署名见 [许可与重编译说明](docs/LOCAL_GAME_LAB.md#固定来源修改源码与许可证)；Hextris 独立按 GPL-3.0-or-later 发行，公共生命周期桥另以 MIT 授权，不把全仓统一改成 MIT。
 - **4,000 个账号 / 1,000 人同时在线是容量规划，不是已通过的结论**。真实供应商、多实例、负载与长期运维仍需按 [容量门禁](docs/CAPACITY_4000_USERS.md) 和具体发布记录持续验收。

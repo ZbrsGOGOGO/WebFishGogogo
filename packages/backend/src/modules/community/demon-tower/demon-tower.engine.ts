@@ -7,6 +7,7 @@ import {
   DEMON_TOWER_APPEARANCE_OPTIONS, DEMON_TOWER_APPEARANCE_SLOTS, DEMON_TOWER_DEFAULT_APPEARANCE,
   DEMON_TOWER_COMBAT_POWER_WEIGHTS, demonTowerExperienceRequirement,
   DEMON_TOWER_PROVISIONS_RULES,
+  DEMON_TOWER_SOUL_BEADS,
 } from '@stealth-reader/shared';
 import type {
   DemonTowerAction, DemonTowerActionKind, DemonTowerAttribute, DemonTowerAttributes, DemonTowerBattleReport,
@@ -17,6 +18,7 @@ import type {
   DemonTowerArenaSkillId, DemonTowerEconomyView, DemonTowerShopOffer, DemonTowerShopOfferId, DemonTowerEconomyLedgerEntry,
   DemonTowerAppearance, DemonTowerCombatPower,
   DemonTowerProvisionsView, DemonTowerOfficeOffer, DemonTowerOfficeOfferView, DemonTowerExplorationResult,
+  DemonTowerSoulBeadId, DemonTowerSoulBeadView,
 } from '@stealth-reader/shared';
 import { demonTowerArenaRank, simulateDemonTowerDuel, type DemonTowerSocialBuild } from './demon-tower-social.engine';
 
@@ -48,6 +50,7 @@ export interface DemonTowerEngineState {
   provisions?: DemonTowerProvisionsState;
   economy?: DemonTowerEconomyState;
   expansion?: DemonTowerExpansionView;
+  soulBeads?: DemonTowerSoulBeadState;
   arenaOpponentsToday?: string[]; arenaBestRank?: number;
   growth?: { rulesVersion: 2; chosenAttribute: DemonTowerAttribute | null; innates: DemonTowerInnateId[]; misses: { ling: number; xian: number };
     /** Absent on older saves. A missed level-up item makes the next level-up certain. */
@@ -62,6 +65,7 @@ export interface DemonTowerEngineState {
   lootPity: { stepsSinceGuarantee: number; nextKind: 'weapon' | 'skill' };
   daily: { serviceDate: string; activity: number; bossAttempts: number; rewardClaimed: boolean; exploreVictories?: number };
 }
+interface DemonTowerSoulBeadState { version:1; week:string; weeklyClaimed:boolean; weaponSlots:Partial<Record<DemonTowerWeaponId,[DemonTowerSoulBeadId|null,DemonTowerSoulBeadId|null]>>; inventory:Partial<Record<DemonTowerSoulBeadId,{level:number;copies:number}>> }
 export interface DemonTowerEconomyState {
   version: 1; balance: number; serviceDate: string; week: string; dailyEarned: number; bossEarned: number;
   dailyPurchases: Partial<Record<DemonTowerShopOfferId, number>>; weeklyPurchases: Partial<Record<DemonTowerShopOfferId, number>>;
@@ -179,6 +183,7 @@ export function demonTowerEffectiveAttributes(state: DemonTowerEngineState, incl
   if (hasPassive(state, 's11')) result.SPD += Math.round(8 * skillScale(state, 's11'));
   for (const innate of DEMON_TOWER_INNATES) if (innate.attribute && state.growth?.innates.includes(innate.id)) result[innate.attribute] += 8;
   for (const key of DEMON_TOWER_ATTRIBUTE_KEYS) result[key] += (state.economy?.permanent[key] ?? 0) + (includeTemporary ? state.economy?.buffs[key] ?? 0 : 0);
+  for (const id of state.soulBeads?.weaponSlots[state.loadout.mainHand] ?? []) if (id) result[DEMON_TOWER_SOUL_BEADS[id].attribute] += DEMON_TOWER_SOUL_BEADS[id].perLevel * (state.soulBeads?.inventory[id]?.level ?? 0);
   return result;
 }
 export function demonTowerMaxHp(state: DemonTowerEngineState, includeTemporary = true): number {
@@ -228,6 +233,27 @@ function gainMaterials(state: DemonTowerEngineState, materials: Partial<DemonTow
   return granted;
 }
 function activity(state: DemonTowerEngineState): void { state.daily.activity = Math.min(10_000, state.daily.activity + 1); }
+const SOUL_BEAD_IDS = Object.keys(DEMON_TOWER_SOUL_BEADS) as DemonTowerSoulBeadId[];
+const SOUL_BEAD_WEAPON_IDS = new Set(DEMON_TOWER_WEAPONS.map(item=>item.id));
+function initialSoulBeads(serviceDate:string):DemonTowerSoulBeadState { return { version:1,week:expansionWeek(serviceDate),weeklyClaimed:false,weaponSlots:{},inventory:{} }; }
+function validateSoulBeads(value:DemonTowerSoulBeadState,serviceDate:string):void{
+  if(value.version!==1||typeof value.week!=='string'||value.week>expansionWeek(serviceDate)||typeof value.weeklyClaimed!=='boolean'||!value.weaponSlots||typeof value.weaponSlots!=='object'||Array.isArray(value.weaponSlots)||!value.inventory||typeof value.inventory!=='object')fail('INVALID_SOUL_BEAD_STATE');
+  for(const [id,item] of Object.entries(value.inventory)){if(!SOUL_BEAD_IDS.includes(id as DemonTowerSoulBeadId)||!item||!integer(item.level,1,7)||!integer(item.copies,0,99))fail('INVALID_SOUL_BEAD_STATE');}
+  for(const [weaponId,slots] of Object.entries(value.weaponSlots)){if(!SOUL_BEAD_WEAPON_IDS.has(weaponId as DemonTowerWeaponId)||!Array.isArray(slots)||slots.length!==2||slots.some(id=>id!==null&&!SOUL_BEAD_IDS.includes(id))||slots[0]!==null&&slots[0]===slots[1])fail('INVALID_SOUL_BEAD_STATE');for(const id of slots)if(id&&!value.inventory[id])fail('INVALID_SOUL_BEAD_STATE');}
+}
+function soulBeadView(state:DemonTowerEngineState):DemonTowerSoulBeadView{
+  const value=state.soulBeads??initialSoulBeads(state.daily.serviceDate);validateSoulBeads(value,state.daily.serviceDate);
+  return {version:1,week:value.week,weeklyClaimed:value.weeklyClaimed,craftSoulCost:40,weaponId:state.loadout.mainHand,slots:[...(value.weaponSlots[state.loadout.mainHand]??[null,null])],inventory:SOUL_BEAD_IDS.flatMap(id=>{const item=value.inventory[id];if(!item)return[];const def=DEMON_TOWER_SOUL_BEADS[id];return [{id,name:def.name,level:item.level,copies:item.copies,nextCopies:item.level>=7?null:item.level,effect:`${DEMON_TOWER_CATALOG.attributes[def.attribute]} +${def.perLevel*item.level}`}];})};
+}
+function grantSoulBead(state:DemonTowerEngineState,id:DemonTowerSoulBeadId,events:string[]):void{
+  const beads=state.soulBeads!,item=beads.inventory[id];if(item)item.copies=Math.min(99,item.copies+1);else beads.inventory[id]={level:1,copies:0};events.push(`获得${DEMON_TOWER_SOUL_BEADS[id].name}${item?'碎片×1':' Lv.1'}。`);
+}
+function soulBeadAction(state:DemonTowerEngineState,kind:'soul_bead_claim'|'soul_bead_craft'|'soul_bead_equip'|'soul_bead_upgrade',raw:unknown,events:string[]):void{
+  state.soulBeads??=initialSoulBeads(state.daily.serviceDate);const beads=state.soulBeads;
+  if(kind==='soul_bead_claim'||kind==='soul_bead_craft'){exact(raw,[]);if(kind==='soul_bead_claim'){if(beads.weeklyClaimed)fail('SOUL_BEAD_WEEKLY_CLAIMED');beads.weeklyClaimed=true;}else{if(state.materials.soul<40)fail('NOT_ENOUGH_MATERIALS');state.materials.soul-=40;}const id=SOUL_BEAD_IDS[Math.floor(random(state)*SOUL_BEAD_IDS.length)]!;grantSoulBead(state,id,events);return;}
+  if(kind==='soul_bead_equip'){const value=exact(raw,['beadId','slot']);if(value.beadId!==null&&(typeof value.beadId!=='string'||!SOUL_BEAD_IDS.includes(value.beadId as DemonTowerSoulBeadId)))fail('INVALID_SOUL_BEAD');if(value.slot!==0&&value.slot!==1)fail('INVALID_SOUL_BEAD_SLOT');const id=value.beadId as DemonTowerSoulBeadId|null,slots=beads.weaponSlots[state.loadout.mainHand]??[null,null];if(id&&!beads.inventory[id])fail('SOUL_BEAD_NOT_OWNED');if(id&&slots[1-value.slot as 0|1]===id)fail('SOUL_BEAD_DUPLICATE_SLOT');slots[value.slot as 0|1]=id;beads.weaponSlots[state.loadout.mainHand]=slots;events.push(id?`${DEMON_TOWER_SOUL_BEADS[id].name}已装入${weaponDefinition(state.loadout.mainHand).name}第${Number(value.slot)+1}槽。`:`${weaponDefinition(state.loadout.mainHand).name}第${Number(value.slot)+1}魂珠槽已卸下。`);return;}
+  const value=exact(raw,['beadId']);if(typeof value.beadId!=='string'||!SOUL_BEAD_IDS.includes(value.beadId as DemonTowerSoulBeadId))fail('INVALID_SOUL_BEAD');const id=value.beadId as DemonTowerSoulBeadId,item=beads.inventory[id];if(!item)fail('SOUL_BEAD_NOT_OWNED');if(item.level>=7)fail('SOUL_BEAD_MAX_LEVEL');if(item.copies<item.level)fail('SOUL_BEAD_COPIES_REQUIRED');item.copies-=item.level;item.level++;events.push(`${DEMON_TOWER_SOUL_BEADS[id].name}升至 Lv.${item.level}。`);
+}
 export function createDemonTowerState(now: number, serviceDate: string, seed: string): DemonTowerEngineState {
   clock(now, serviceDate);
   if (typeof seed !== 'string' || seed.length < 16 || seed.length > 512) fail('INVALID_SEED');
@@ -262,9 +288,11 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
   if (input.economy) validateEconomyState(input.economy, input.daily.serviceDate);
   if (input.appearance !== undefined) validateAppearance(input.appearance);
   if (input.provisions) validateProvisions(input.provisions, input.daily.serviceDate);
+  if (input.soulBeads) validateSoulBeads(input.soulBeads, input.daily.serviceDate);
   const state = clone(input);
   if (state.economy) advanceEconomy(state.economy, serviceDate);
   if (state.provisions) advanceProvisions(state.provisions, serviceDate);
+  if (state.soulBeads && state.soulBeads.week !== expansionWeek(serviceDate)) { state.soulBeads.week = expansionWeek(serviceDate); state.soulBeads.weeklyClaimed = false; }
   const elapsed = Math.max(0, now - state.staminaAt);
   const restored = Math.floor(elapsed / RULES.staminaRestoreMs);
   if (state.stamina >= RULES.staminaCap) state.staminaAt = now;
@@ -1491,7 +1519,7 @@ export function demonTowerAutomaticAction(state: DemonTowerEngineState): DemonTo
 export function actDemonTower(input: DemonTowerEngineState, raw: unknown, context: DemonTowerEngineContext): DemonTowerEngineResult {
   const root = exact(raw, ['kind', 'payload']);
   if (typeof root.kind !== 'string') fail('INVALID_ACTION');
-  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'shop_purchase', 'use_rune', 'set_appearance', 'office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
+  const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'shop_purchase', 'use_rune', 'soul_bead_claim', 'soul_bead_craft', 'soul_bead_equip', 'soul_bead_upgrade', 'set_appearance', 'office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
   if (!allowed.includes(root.kind as DemonTowerActionKind)) fail('INVALID_ACTION');
   validateWorld(context.world);
   const state = advanceDemonTowerState(input, context.now, context.serviceDate), events: string[] = [];
@@ -1695,6 +1723,8 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
     }
     case 'shop_purchase': case 'use_rune':
       economyAction(state, root.kind as 'shop_purchase' | 'use_rune', root.payload, context, events); break;
+    case 'soul_bead_claim': case 'soul_bead_craft': case 'soul_bead_equip': case 'soul_bead_upgrade':
+      if(!context.expansionEnabled)fail('EXPANSION_DISABLED');soulBeadAction(state,root.kind as 'soul_bead_claim'|'soul_bead_craft'|'soul_bead_equip'|'soul_bead_upgrade',root.payload,events);break;
     case 'office_purchase': case 'progressive_chest': case 'fragment_select':
       provisionsAction(state, root.kind, root.payload, context, result); break;
     case 'expedition': case 'market': case 'star_up': case 'breakthrough': case 'select_skin': case 'claim_boss_loot':
@@ -1756,6 +1786,7 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
   if (!state.battle && !state.growth?.chosenAttribute) availableActions.push('choose_innate');
   if (expansionEnabled && !state.battle) availableActions.push(...EXPANSION_ACTIONS, ...SQUAD_ACTIONS);
   if (expansionEnabled && !state.battle) availableActions.push('shop_purchase', 'use_rune');
+  if (expansionEnabled && !state.battle) availableActions.push('soul_bead_claim','soul_bead_craft','soul_bead_equip','soul_bead_upgrade');
   if (expansionEnabled && !state.battle) availableActions.push('office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select');
   if (!state.battle) availableActions.push('set_appearance');
   return {
@@ -1764,6 +1795,7 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
     ...(expansionEnabled ? { economy: economyView(state, now) } : {}),
     ...(expansionEnabled ? { provisions: provisionsView(state, now) } : {}),
     ...(expansionEnabled ? { expansion: expansionView(state) } : {}),
+    ...(expansionEnabled ? { soulBeads: soulBeadView(state) } : {}),
     growth: { rulesVersion: 2, pendingLegacyBattle: Boolean(state.battle && state.battle.rulesVersion !== 2),
       chosenAttribute: state.growth?.chosenAttribute ?? null, innates: [...(state.growth?.innates ?? [])],
       unlockedCount: Math.min(8, 1 + Math.floor((state.level - 1) / 15)), nextInnateLevel: state.level >= 106 ? null : (Math.floor((state.level - 1) / 15) + 1) * 15 + 1,

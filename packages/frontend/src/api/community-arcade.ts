@@ -1,6 +1,6 @@
 import { communityHttp } from './community-http';
 
-export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3' | 'word_story_v4' | 'word_endless_v4';
 
 export interface ArcadeRun {
   runId: string;
@@ -8,7 +8,7 @@ export interface ArcadeRun {
   startedAt: string;
   expiresAt: string;
   seed?: number;
-  rulesVersion?: 1 | 2 | 3;
+  rulesVersion?: 1 | 2 | 3 | 4;
   chapter?: number;
 }
 
@@ -32,7 +32,7 @@ export interface ArcadeLeaderboard {
   }>;
 }
 
-export function startArcadeRun(gameKey: ArcadeGameKey, rulesVersion?: 1 | 2 | 3, chapter?: number): Promise<ArcadeRun> {
+export function startArcadeRun(gameKey: ArcadeGameKey, rulesVersion?: 1 | 2 | 3 | 4, chapter?: number): Promise<ArcadeRun> {
   return communityHttp.post('/v1/games/arcade/runs', { gameKey, ...(rulesVersion === undefined ? {} : { rulesVersion }),
     ...(chapter === undefined ? {} : { chapter }) }, { retryAfterRefresh: false });
 }

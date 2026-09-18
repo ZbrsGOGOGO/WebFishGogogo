@@ -1,19 +1,19 @@
-import type { WordFrontV2Action, WordFrontV2State } from '@stealth-reader/shared';
+import type { WordFrontV4Action, WordFrontV4State } from '@stealth-reader/shared';
 import { CommunityApiError, communityHttp } from './community-http';
 
-export type WordFrontRoomMove = WordFrontV2Action extends infer A ? A extends { tick: number } ? Omit<A, 'tick'> : never : never;
+export type WordFrontRoomMove = WordFrontV4Action extends infer A ? A extends { tick: number } ? Omit<A, 'tick'> : never : never;
 export interface WordFrontRoomSummary {
   id: string; name: string; chapter: number; status: 'waiting' | 'running' | 'finished';
   requiresPassword: boolean; players: number; capacity: 2; expiresAt: number;
 }
 export interface WordFrontRoomView extends WordFrontRoomSummary {
-  protocolVersion: 1; rulesVersion: 2; sequence: number; serverNow: number; rules: string;
+  protocolVersion: 2; rulesVersion: 4; sequence: number; serverNow: number; rules: string;
   isHost: boolean; mySide: 'red' | 'blue';
   me: { publicId: string; displayName: string };
   opponent: { publicId: string; displayName: string } | null;
   /** The authoritative board omits its hidden RNG seed before serialization. */
-  board: Omit<WordFrontV2State, 'seed'> | null;
-  opposingBoard: Pick<WordFrontV2State, 'status' | 'coreHp' | 'wave' | 'completedWaves' | 'kills' | 'score' | 'units' | 'enemies' | 'pendingSpawns' | 'tick'> | null;
+  board: Omit<WordFrontV4State, 'seed'> | null;
+  opposingBoard: Pick<WordFrontV4State, 'status' | 'coreHp' | 'wave' | 'completedWaves' | 'kills' | 'score' | 'units' | 'enemies' | 'pendingSpawns' | 'tick'> | null;
   winner: 'red' | 'blue' | 'draw' | null;
 }
 export interface WordFrontRoomList { currentRoomId: string | null; rooms: WordFrontRoomSummary[] }

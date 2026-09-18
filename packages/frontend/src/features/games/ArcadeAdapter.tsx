@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 
-export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3';
+export type ArcadeGameKey = 'tetris' | 'tank' | 'zhesi' | 'word_story' | 'word_endless' | 'word_story_v2' | 'word_endless_v2' | 'word_story_v3' | 'word_endless_v3' | 'word_story_v4' | 'word_endless_v4';
 
 export interface ArcadeRun {
   runId: string;
@@ -15,7 +15,7 @@ export interface ArcadeRun {
   expiresAt: string;
   /** Present only for server-replayable games such as Word Front. */
   seed?: number;
-  rulesVersion?: 1 | 2 | 3;
+  rulesVersion?: 1 | 2 | 3 | 4;
   chapter?: number;
 }
 

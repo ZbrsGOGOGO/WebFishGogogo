@@ -41,7 +41,7 @@ describe('redesigned community games directory', () => {
     expect(screen.getAllByRole('button', { name: '开始挑战' })).toHaveLength(6);
     expect(screen.getAllByRole('link', { name: '日榜' })).toHaveLength(6);
     const paths = new Set(Array.from(view.container.querySelectorAll('a[href]')).map(link => link.getAttribute('href')));
-    for (const path of ['/games/rooms', '/games/ballpoint-breach/arena', '/games/ballpoint-breach', '/office', '/games/office-boss', '/games/office-boss?mode=daily', '/tower-defense', '/tower-defense/practice', '/tower-defense/leaderboard', '/tower-defense/word-front', '/tower-defense/word-front/v2', '/tower-defense/word-front/legacy', '/tower-defense/word-front/rooms', '/games/demon-tower', '/games/demon-tower/leaderboard', '/games/rail', '/games/rail/leaderboard', '/games/office-2048', '/games/underrun', '/games/snake', '/games/tetris', '/games/tank', '/games/zhesi']) expect(paths.has(path), path).toBe(true);
+    for (const path of ['/games/rooms', '/games/ballpoint-breach/arena', '/games/ballpoint-breach', '/office', '/games/office-boss', '/games/office-boss?mode=daily', '/tower-defense', '/tower-defense/practice', '/tower-defense/leaderboard', '/tower-defense/word-front', '/tower-defense/word-front/v3', '/tower-defense/word-front/v2', '/tower-defense/word-front/legacy', '/tower-defense/word-front/rooms', '/games/demon-tower', '/games/demon-tower/leaderboard', '/games/rail', '/games/rail/leaderboard', '/games/office-2048', '/games/underrun', '/games/snake', '/games/tetris', '/games/tank', '/games/zhesi']) expect(paths.has(path), path).toBe(true);
     expect(view.container.querySelector('iframe, img')).not.toBeInTheDocument();
     expect(screen.getByText(/共享日榜测试规则/)).toBeInTheDocument();
     expect(screen.getByText(/冠军奖励测试规则/)).toHaveTextContent('00:05');
@@ -64,10 +64,10 @@ describe('redesigned community games directory', () => {
     expect(screen.getByRole('article', { name: '轨道难题' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '开始挑战' })).not.toBeInTheDocument();
     const wordRoom = within(screen.getByRole('article', { name: '文字战线 · 赵云救阿斗' }));
-    expect(wordRoom.getByText('对战最多 15 分钟')).toBeInTheDocument();
-    expect(wordRoom.getByText('临时会话 · 不存档')).toBeInTheDocument();
+    expect(wordRoom.getByText('对战最多 20 分钟')).toBeInTheDocument();
+    expect(wordRoom.getByText('限时服务端快照')).toBeInTheDocument();
     expect(wordRoom.getByText('不计正式榜、成就或办公币')).toBeInTheDocument();
-    expect(wordRoom.queryByText('V3 独立榜 · 不发办公币')).not.toBeInTheDocument();
+    expect(wordRoom.queryByText('V4 独立榜 · 不发办公币')).not.toBeInTheDocument();
     expect(wordRoom.queryByText('本机草稿')).not.toBeInTheDocument();
     expect(wordRoom.getByRole('link', { name: '双人房间' })).toHaveAttribute('href', '/tower-defense/word-front/rooms');
     expect(wordRoom.queryByRole('link', { name: '进入文字战线' })).not.toBeInTheDocument();

@@ -1,0 +1,6 @@
+import type { QueryRunner } from 'typeorm';
+import { AddWordFrontV4ArcadeGames1700000000040 } from './1700000000040-AddWordFrontV4ArcadeGames';
+describe('AddWordFrontV4ArcadeGames1700000000040',()=>{
+  it('adds isolated ranking keys, durable room snapshots and versioned map drafts without unsupported JSON functions',async()=>{const query=jest.fn().mockResolvedValue([]),runner={query} as unknown as QueryRunner,migration=new AddWordFrontV4ArcadeGames1700000000040();await migration.up(runner);expect(query).toHaveBeenCalledTimes(6);const sql=query.mock.calls.map(call=>call[0]).join('\n');expect(sql).toContain('word_story_v4');expect(sql).toContain('word_front_room_snapshots');expect(sql).toContain('word_front_map_drafts');expect(sql).toContain('chk_word_front_map_drafts_version');expect(sql).not.toContain('jsonb_array_length');});
+  it('refuses rollback with scores or edited map drafts',async()=>{const query=jest.fn().mockResolvedValueOnce([{count:1}]),runner={query} as unknown as QueryRunner,migration=new AddWordFrontV4ArcadeGames1700000000040();await expect(migration.down(runner)).rejects.toThrow('contains results');query.mockReset().mockResolvedValueOnce([{count:0}]).mockResolvedValueOnce([{count:0}]).mockResolvedValueOnce([{count:1}]);await expect(migration.down(runner)).rejects.toThrow('edited drafts');});
+});

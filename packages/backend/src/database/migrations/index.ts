@@ -38,6 +38,7 @@ import { AddFishGrowthAndSupport1700000000036 } from './1700000000036-AddFishGro
 import { AddWordFrontArcadeGames1700000000037 } from './1700000000037-AddWordFrontArcadeGames';
 import { AddWordFrontV2ArcadeGames1700000000038 } from './1700000000038-AddWordFrontV2ArcadeGames';
 import { AddWordFrontV3ArcadeGames1700000000039 } from './1700000000039-AddWordFrontV3ArcadeGames';
+import { AddWordFrontV4ArcadeGames1700000000040 } from './1700000000040-AddWordFrontV4ArcadeGames';
 
 /** 迁移清单，供 TypeORM DataSource / NestJS TypeOrmModule 使用 */
 export const migrations = [
@@ -81,4 +82,5 @@ export const migrations = [
   AddWordFrontArcadeGames1700000000037,
   AddWordFrontV2ArcadeGames1700000000038,
   AddWordFrontV3ArcadeGames1700000000039,
+  AddWordFrontV4ArcadeGames1700000000040,
 ];

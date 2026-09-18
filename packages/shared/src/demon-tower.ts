@@ -194,6 +194,7 @@ export interface DemonTowerProfileView {
   economy?: DemonTowerEconomyView;
   expansion?: DemonTowerExpansionView;
   growth?: DemonTowerGrowthView;
+  soulBeads?: DemonTowerSoulBeadView;
   version: number; level: number; experience: number; experienceToNext: number; totalExperience: number;
   attributes: DemonTowerAttributes; effectiveAttributes: DemonTowerAttributes; unspentPoints: number;
   /** Only spent free points are refundable; null means a first reset has no cooldown. */
@@ -204,6 +205,18 @@ export interface DemonTowerProfileView {
   daily: DemonTowerDailyView; battle: DemonTowerBattleView | null; lastReport: DemonTowerBattleReport | null;
   availableActions: DemonTowerActionKind[]; createdAt: number;
 }
+export type DemonTowerSoulBeadId = 'power' | 'swift' | 'guard' | 'fortune' | 'vital';
+export interface DemonTowerSoulBeadView {
+  version: 1; week: string; weeklyClaimed: boolean; craftSoulCost: number;
+  weaponId: DemonTowerWeaponId;
+  slots: [DemonTowerSoulBeadId | null, DemonTowerSoulBeadId | null];
+  inventory: Array<{ id: DemonTowerSoulBeadId; name: string; level: number; copies: number; nextCopies: number | null; effect: string }>;
+}
+export const DEMON_TOWER_SOUL_BEADS: Record<DemonTowerSoulBeadId, { name: string; attribute: DemonTowerAttribute; perLevel: number }> = {
+  power: { name: '破军魂珠', attribute: 'STR', perLevel: 2 }, swift: { name: '流光魂珠', attribute: 'SPD', perLevel: 2 },
+  guard: { name: '玄甲魂珠', attribute: 'DEF', perLevel: 2 }, fortune: { name: '天机魂珠', attribute: 'LUCK', perLevel: 2 },
+  vital: { name: '灵动魂珠', attribute: 'AGI', perLevel: 2 },
+};
 export interface DemonTowerWorldView {
   version: number; unlockedFloor: number; currentFloor: number; phase: 'boss' | 'passage' | 'complete';
   boss: { name: string; hp: number; maxHp: number }; passage: { current: number; required: number };
@@ -252,6 +265,9 @@ export type DemonTowerAction =
   | { kind: 'fragment_select'; payload: { skillId: DemonTowerSkillId } }
   | { kind: 'shop_purchase'; payload: { offerId: DemonTowerShopOfferId; quantity: number } }
   | { kind: 'use_rune'; payload: { rune: DemonTowerAffix; itemId: DemonTowerWeaponId; replace?: DemonTowerAffix } }
+  | { kind: 'soul_bead_claim' | 'soul_bead_craft'; payload: Record<string, never> }
+  | { kind: 'soul_bead_equip'; payload: { beadId: DemonTowerSoulBeadId | null; slot: 0 | 1 } }
+  | { kind: 'soul_bead_upgrade'; payload: { beadId: DemonTowerSoulBeadId } }
   | { kind: 'enroll'; payload: Record<string, never> }
   | { kind: 'explore'; payload: Record<string, never> }
   | { kind: 'attack'; payload: { targetId: string } }

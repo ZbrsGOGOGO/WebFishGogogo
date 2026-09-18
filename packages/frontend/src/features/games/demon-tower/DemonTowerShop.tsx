@@ -14,7 +14,7 @@ import styles from './DemonTower.module.css';
 
 const SECTIONS = [
   { id: 'supplies', label: '物资库' }, { id: 'market', label: '残魂秘市' }, { id: 'office', label: '办公币补给' },
-  { id: 'effects', label: '增益与符文' }, { id: 'ledger', label: '收支记录' },
+  { id: 'beads', label: '魂珠工坊' }, { id: 'effects', label: '增益与符文' }, { id: 'ledger', label: '收支记录' },
 ] as const;
 type ShopSection = typeof SECTIONS[number]['id'];
 type Props = {
@@ -90,6 +90,13 @@ export function DemonTowerShop({ profile, catalog, disabled, now, balance, balan
       <nav className={styles.supplyNav} aria-label="物资申领分类">{SECTIONS.map(item => <button type="button" key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => changeSection(item.id)}>{item.label}</button>)}</nav>
     </TowerPanel>
     {section === 'office' ? <DemonTowerOfficeSupplies profile={profile} disabled={disabled || submitting} balance={balance} balanceStale={balanceStale} now={now} onAction={onAction} /> : null}
+    {section === 'beads' ? <TowerPanel title="主手魂珠 · 两槽免费养成">
+      <p className={styles.muted}>每件主手武器独立拥有两个魂珠槽，同名不能重复；切换主手会切换对应槽位。魂珠最高 Lv.7，升级需要与当前等级相同数量的重复碎片；每周可免费领一颗，也可用 40 残魂锻造，不接真实付费或办公币。</p>
+      {profile.soulBeads ? <><div className={styles.supplyBalances}><div><small>本周免费补给</small><strong>{profile.soulBeads.weeklyClaimed?'已领取':'可领取'}</strong></div><div><small>残魂锻造</small><strong>{profile.soulBeads.craftSoulCost} 残魂</strong></div><div><small>当前主手</small><strong>{catalog.weapons.find(item=>item.id===profile.loadout.mainHand)?.name??profile.loadout.mainHand}</strong></div></div>
+        <div className={styles.actions}><button type="button" className={styles.button} disabled={!can('soul_bead_claim')||profile.soulBeads.weeklyClaimed} onClick={()=>void submit({kind:'soul_bead_claim',payload:{}})}>领取本周魂珠</button><button type="button" className={styles.button} disabled={!can('soul_bead_craft')||profile.materials.soul<profile.soulBeads.craftSoulCost} onClick={()=>void submit({kind:'soul_bead_craft',payload:{}})}>锻造随机魂珠</button></div>
+        <div className={styles.supplyTable} role="table" aria-label="魂珠库存"><div className={styles.supplyTableHead} role="row"><span role="columnheader">魂珠 / 效果</span><span role="columnheader">等级 / 碎片</span><span role="columnheader">装配与升级</span></div>{profile.soulBeads.inventory.map(item=><div key={item.id} className={styles.supplyTableRow} role="row"><div role="cell"><strong>{item.name}</strong><p>{item.effect}</p></div><div role="cell"><strong>Lv.{item.level}/7</strong><small>{item.nextCopies===null?'已满级':`碎片 ${item.copies}/${item.nextCopies}`}</small></div><div role="cell" className={styles.actions}>{([0,1] as const).map(slot=><button type="button" key={slot} className={styles.button} disabled={!can('soul_bead_equip')||profile.soulBeads?.slots[slot]===item.id||profile.soulBeads?.slots[1-slot]===item.id} onClick={()=>void submit({kind:'soul_bead_equip',payload:{beadId:item.id,slot}})}>{profile.soulBeads?.slots[slot]===item.id?`${slot+1}槽已装`:`装入${slot+1}槽`}</button>)}<button type="button" className={styles.button} disabled={!can('soul_bead_upgrade')||item.nextCopies===null||item.copies<(item.nextCopies??0)} onClick={()=>void submit({kind:'soul_bead_upgrade',payload:{beadId:item.id}})}>升级</button></div></div>)}</div>
+        <p className={styles.muted}>当前槽位：{profile.soulBeads.slots.map((id,index)=>`${index+1}槽 ${id?profile.soulBeads!.inventory.find(item=>item.id===id)?.name:'空'}`).join(' · ')}。属性加成已计入人物有效五维与战斗快照。</p></>:<p className={styles.notice}>魂珠状态等待服务器同步。</p>}
+    </TowerPanel> : null}
     {section === 'supplies' || section === 'market' ? <>
       {economy ? <TowerPanel title={section === 'supplies' ? '物资库 · 灵石申领' : '残魂秘市 · 定额申领'}>
         <p className={styles.muted}>{section === 'supplies' ? '补充体力、恢复生命或准备下一场探索。临时药丸每项每日最多 3 份，单项加成最高 +15；北京时间当日结束失效。' : '永久属性丹单维累计最多 +5，单独计入成长，不受自由点洗点影响。精级箱与传统武器箱的物品池、限额及保底分别计算。'}</p>
