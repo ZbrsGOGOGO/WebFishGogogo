@@ -119,7 +119,7 @@ export function WordFrontRoomsPage(): JSX.Element {
     : board && selectedCards.length === 1 ? wordFrontV4UnitForLetter(board.hand[selectedCards[0]!] ?? '') : null;
   const outcome = room?.winner === 'draw' ? '平局' : room?.winner ? room.winner === room.mySide ? '我方胜利' : '对方胜利' : null;
   return <main className={styles.page}>
-    <header className={styles.header}><div><span className={styles.kicker}>CHANGBAN / TWO LANES</span><h1>赵云救阿斗 · 玩家房间</h1><p>两位真人，红蓝双线对攻。服务端实时推进，每击败五名敌军会向对面投递援军。</p></div><nav><Link to="/tower-defense/word-front">V4 单机</Link><Link to="/tower-defense/word-front/v3">V3 旧版</Link><Link to="/tower-defense">工位塔防</Link></nav></header>
+    <header className={styles.header}><div><span className={styles.kicker}>CHANGBAN / TWO LANES</span><h1>赵云救阿斗 · 玩家房间</h1><p>两位真人，红蓝双线对攻。服务端实时推进，每击败五名敌军会向对面投递援军。</p></div><nav><Link to="/tower-defense/word-front">源码单机</Link><Link to="/tower-defense/word-front/v4">V4 赛季</Link><Link to="/tower-defense/word-front/v3">V3 旧版</Link><Link to="/tower-defense">工位塔防</Link></nav></header>
     <p className={styles.notice}>房间与新版单机共用 V4 十行地图、卡池和十二武将。只使用局内资源，不计单机榜、办公币或成就；有时限的服务端快照可在 API 重启后恢复。</p>
     {error ? <p role="alert" className={styles.error}>{error}</p> : null}
     {refreshing ? <p role="status">正在同步房间…</p> : null}

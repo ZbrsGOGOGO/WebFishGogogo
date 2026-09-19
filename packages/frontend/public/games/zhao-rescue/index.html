@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>赵云救阿斗</title>
+  <link rel="stylesheet" href="./css/zyjad.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 首页大厅 -->
+  <div id="home" class="screen on">
+    <h1 class="title">赵云救阿斗</h1>
+    <div class="menu">
+      <button id="btnMain">闯关<small>主线模式 · 一期</small></button>
+      <button id="btnEndless">无尽<small>自动出兵 · 冲榜</small></button>
+      <button id="btnPvp">PVP<small>本站房间 · 建/进房间</small></button>
+      <button id="btnCodex">图鉴<small>收集解锁</small></button>
+      <button type="button" disabled title="源码中的三期预留入口">商店<small>皮肤 · 三期预留</small></button>
+      <button id="btnRank">排行榜<small>本站 V4 验真赛季</small></button>
+    </div>
+    <p class="hint" style="max-width:560px;margin:14px auto;text-align:center">
+      地图 8×10·中心对称 · 亮路=己方 / 暗路=对面 · 每方 6 格可放置 · 敌军自左下出兵口沿亮路蛇形扑向右下「斗」·
+      全自动出兵战斗 · 征兵 10 包子/次 · 同名同阶拖拽合成。
+    </p>
+  </div>
+
+  <!-- 章节选择 -->
+  <div id="chapter" class="screen">
+    <span class="back" id="backHome">← 大厅</span>
+    <h1 class="title" style="font-size:22px">章节选择</h1>
+    <div class="chapters" id="chapList"></div>
+  </div>
+
+  <!-- 战斗 -->
+  <div id="battle" class="screen">
+    <div class="top">
+      <button class="iconBtn" id="btnPause">⏸</button>
+      <span class="res"><span class="ic">🥟</span><span id="rBaozi">0</span><small>包子</small></span>
+      <span id="modeName">主线</span>
+      <span class="res"><span class="ic">❤</span><span id="rAdou">100</span><small>阿斗血</small></span>
+      <span class="res" id="oppRes" style="display:none"><span class="ic">🛡</span><span id="rOpp">100</span><small>敌阿斗</small></span>
+      <span class="res"><span class="ic">🌊</span><span id="rWave">0</span><small>波次</small></span>
+      <span class="res"><span class="ic">⚔</span><span id="rUnit">0</span><small>单位</small></span>
+      <button class="iconBtn" id="btnMenu" title="退出">✕</button>
+    </div>
+    <div id="stage">
+      <div class="boardWrap">
+        <canvas id="cv" width="384" height="480"></canvas>
+        <div class="legend">
+          <span><i style="background:#1a1a1a;border:1px dashed #888"></i>空地·可放置(6格)</span>
+          <span><i style="background:#2b2b2b;border:1px solid #5a5a5a"></i>亮路·己方兵道</span>
+          <span><i style="background:#0e0e0e;border:1px dashed #4a4a4a"></i>暗路·对面兵道</span>
+          <span><i style="background:#262626"></i>草·障碍</span>
+          <span><i style="background:#333;border:1px solid #555"></i>「斗」·阿斗核心</span>
+        </div>
+      </div>
+
+      <!-- 操作台：营 + 备战席 → 征兵 → 道具/包子 -->
+      <aside id="side">
+        <div class="campBar">
+          <div class="camp" id="camp" title="营（查看本局剩余字牌）">营</div>
+          <div id="hand" class="cardRow"></div>
+        </div>
+
+        <button class="conscriptBtn" id="btnConscript"></button>
+
+        <div class="barRow">
+          <div id="items" class="itemRow"></div>
+          <div class="baoziBox"><span>🥟</span> <span id="rBaozi2">0</span><br><small>剩余包子</small></div>
+        </div>
+
+        <!-- 营：本局剩余字牌牌库 -->
+        <div id="deckPanel" class="deckPanel" style="display:none"></div>
+
+        <details class="panel report"><summary>战报</summary><div id="log"></div></details>
+        <div class="hint" style="text-align:center">
+          <b>自动出兵</b>（无需点击「出兵」）。同名同阶武器：手牌互拖合成、或拖到棋盘同名单位上升级。<br>
+          武器（枪/刀/马/弓）直接落子即部署；<b>武将须两字按序落子激活</b>（如先放「赵」再放「云」→ 赵云）。把卡拖到<b>金色虚框空地</b>放置。
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- 图鉴 -->
+  <div id="codex" class="screen">
+    <span class="back" id="backHome2">← 大厅</span>
+    <h1 class="title" style="font-size:22px">图鉴</h1>
+    <div class="codexGrid" id="codexGrid"></div>
+  </div>
+
+  <!-- 联机对战：房间 -->
+  <div id="room" class="screen">
+    <span class="back" id="roomBack">← 大厅</span>
+    <h1 class="title" style="font-size:22px">联机对战 · 房间</h1>
+    <div class="roomBox">
+      <div class="roomHint">两人进同一房间，面对<b>完全相同、同步出兵</b>的同一波敌人，各自守自己底部的阿斗；谁阿斗先破谁输，都撑住则比剩余血量。</div>
+      <div class="roomRow"><input id="roomName" class="roomInput" placeholder="你的昵称（默认随机）" maxlength="8"></div>
+      <button id="btnCreateRoom" class="conscriptBtn">创建房间</button>
+      <div class="roomLine">—— 或输入房间号加入 ——</div>
+      <div class="roomRow">
+        <input id="roomCode" class="roomInput" placeholder="房间号" maxlength="8" style="text-transform:uppercase">
+        <button id="btnJoinRoom" class="conscriptBtn" style="width:auto;margin:0">加入</button>
+      </div>
+      <div id="roomCodeBig" class="roomCodeBig" style="display:none"></div>
+      <div id="roomStatus" class="roomStatus"></div>
+      <button id="btnReady" class="conscriptBtn" style="display:none">我准备好了</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+  <div id="merchant" class="merchant"></div>
+  <div id="overlay"><div class="box"><h1 id="ovTitle"></h1><div id="ovText"></div>
+    <button id="ovBtn">返回大厅</button></div></div>
+</div>
+
+<!-- 模块化脚本（顺序：配置 → 核心 → 渲染 → 接口 → 交互 → 启动） -->
+<script src="./js/bootstrap.js"></script>
+<script src="./js/config.js"></script>
+<script src="./js/core.js"></script>
+<script src="./js/render.js"></script>
+<script src="./js/api.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/net.js"></script>
+<script src="./js/main.js"></script>
+</body>
+</html>

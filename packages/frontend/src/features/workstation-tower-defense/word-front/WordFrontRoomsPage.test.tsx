@@ -42,7 +42,8 @@ describe('WordFrontRoomsPage', () => {
 
   it('explains the shared V4 rules and creates an optional-password room', async () => {
     page();
-    expect(screen.getByRole('link', { name: 'V4 单机' })).toHaveAttribute('href', '/tower-defense/word-front');
+    expect(screen.getByRole('link', { name: '源码单机' })).toHaveAttribute('href', '/tower-defense/word-front');
+    expect(screen.getByRole('link', { name: 'V4 赛季' })).toHaveAttribute('href', '/tower-defense/word-front/v4');
     expect(screen.getByText(/共用 V4 十行地图、卡池和十二武将/)).toBeInTheDocument();
     expect(screen.getByText(/不计单机榜、办公币或成就/)).toBeInTheDocument();
     await screen.findByRole('button', { name: '创建房间' });

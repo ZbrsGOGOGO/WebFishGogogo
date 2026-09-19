@@ -81,6 +81,7 @@ const CommunityGamesPage = lazy(() => import('../features/games/rooms/CommunityG
 const WorkstationCampaignPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationCampaignPage })));
 const WorkstationLeaderboardPage = lazy(() => import('../features/workstation-tower-defense/WorkstationCampaignPage').then(module => ({ default: module.WorkstationLeaderboardPage })));
 const WordFrontPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV4Page').then(module => ({ default: module.WordFrontV4Page })));
+const ZhaoRescueSourcePage = lazy(() => import('../features/workstation-tower-defense/word-front/ZhaoRescueSourcePage').then(module => ({ default: module.ZhaoRescueSourcePage })));
 const WordFrontV3Page = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV3Page').then(module => ({ default: module.WordFrontV3Page })));
 const WordFrontV2Page = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontV2Page').then(module => ({ default: module.WordFrontV2Page })));
 const WordFrontLegacyPage = lazy(() => import('../features/workstation-tower-defense/word-front/WordFrontPage').then(module => ({ default: module.WordFrontPage })));
@@ -201,7 +202,8 @@ export function CommunityModeRouter(): JSX.Element {
             }
           />
           <Route path="/tower-defense/practice" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<CommunityWorkstationTowerDefensePage />) : <CommunityUnavailablePage system="towerDefense" />} />
-          <Route path="/tower-defense/word-front" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontPage />) : <CommunityUnavailablePage system="towerDefense" />} />
+          <Route path="/tower-defense/word-front" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<ZhaoRescueSourcePage />) : <CommunityUnavailablePage system="towerDefense" />} />
+          <Route path="/tower-defense/word-front/v4" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontPage />) : <CommunityUnavailablePage system="towerDefense" />} />
           <Route path="/tower-defense/word-front/v3" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontV3Page />) : <CommunityUnavailablePage system="towerDefense" />} />
           <Route path="/tower-defense/word-front/v2" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontV2Page />) : <CommunityUnavailablePage system="towerDefense" />} />
           <Route path="/tower-defense/word-front/legacy" element={COMMUNITY_FEATURE_FLAGS.towerDefense ? loading(<WordFrontLegacyPage />) : <CommunityUnavailablePage system="towerDefense" />} />
