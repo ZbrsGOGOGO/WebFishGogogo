@@ -38,7 +38,7 @@
 
 ### 生产路由补丁
 
-首次公网核验发现管理员地图接口被 Nginx 静态白名单挡成 404。补丁只开放精确的 `/api/community/tower-defense/word-front/maps` 及受限子路径，仍由 API 返回未登录 401、非管理员 403；相邻未列入路径继续 404。
+首次公网核验发现管理员地图接口被 Nginx 静态白名单挡成 404。补丁只开放精确的 `/api/v1/games/word-front/maps/admin` 及受限草稿子路径，仍由 API 返回未登录 401、非管理员 403；相邻的 `/api/v1/games/word-front/maps/unlisted` 继续 404。
 
 `fbc8410` 的候选 Nginx 镜像因未引用的量词正则无法启动，只在隔离候选阶段失败，**未部署生产**。`3e32257` 引用该表达式后通过真实 Nginx 启动与代理测试，再做 Web-only 切换；API 和游戏房间没有因这次 Web 修复重启。
 
