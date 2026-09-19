@@ -18,7 +18,12 @@ export interface ArcadeFinishResult {
   bestScore: number;
   isPersonalBest: boolean;
   rank: number;
+  progression?: { merit: number; earned: number; wins: number; losses: number; unlocks: string[] };
 }
+
+export interface WordFrontProgress { merit:number; wins:number; losses:number; dailyEarned:number; dailyCap:number; unlocks:string[]; shop:Array<{id:string;name:string;cost:number;description:string;owned:boolean}> }
+export const getWordFrontProgress = ():Promise<WordFrontProgress> => communityHttp.get('/v1/games/word-front/progress');
+export const buyWordFrontCosmetic = (itemId:string):Promise<WordFrontProgress> => communityHttp.post('/v1/games/word-front/progress/shop',{itemId},{retryAfterRefresh:false});
 
 export interface ArcadeLeaderboard {
   gameKey: ArcadeGameKey;

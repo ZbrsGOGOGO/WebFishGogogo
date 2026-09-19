@@ -22,3 +22,17 @@ export class WordFrontMapDraft {
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true }) @JoinColumn({ name: 'author_id' }) author!: User | null;
   @Column({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
 }
+
+/** Bound progression for the rebuilt tower-defense rules. It never touches the site wallet. */
+@Entity({ name: 'word_front_progress' })
+export class WordFrontProgress {
+  @PrimaryColumn({ name: 'user_id', type: 'uuid' }) userId!: string;
+  @ManyToOne(() => User, { onDelete: 'CASCADE' }) @JoinColumn({ name: 'user_id' }) user!: User;
+  @Column({ type: 'integer', default: 0 }) merit!: number;
+  @Column({ type: 'integer', default: 0 }) wins!: number;
+  @Column({ type: 'integer', default: 0 }) losses!: number;
+  @Column({ name: 'daily_date', type: 'date' }) dailyDate!: string;
+  @Column({ name: 'daily_earned', type: 'integer', default: 0 }) dailyEarned!: number;
+  @Column({ type: 'jsonb', default: () => "'[]'" }) unlocks!: string[];
+  @Column({ name: 'updated_at', type: 'timestamptz' }) updatedAt!: Date;
+}

@@ -158,4 +158,21 @@ describe('Demon tower expansion workbench', () => {
     fireEvent.click(screen.getByRole('button', { name: '第2层核验首杀贡献' }));
     expect(onAction).toHaveBeenCalledExactlyOnceWith({ kind: 'claim_boss_loot', payload: { floor: 2 } });
   });
+  it('keeps sign-in, rotating bound-soul supplies and golden star-up in one compact workbench', async () => {
+    const current = profile(), onAction = vi.fn().mockResolvedValue(true);
+    current.availableActions.push('daily_sign_in', 'seasonal_purchase', 'golden_star_up');
+    current.expansion!.seasonal = {
+      serviceDate: '2026-09-08', week: '2026-09-07', signedIn: false, goldenScrolls: 3, starFestival: true,
+      blessing: {}, dailyPurchases: {}, weeklyPurchases: {},
+      offers: [{ id: 'xp_small', name: '小经验药', cost: 4, limit: 3, period: 'daily', purchased: 0, available: true, description: '绑定经验+8' }],
+    };
+    render(<DemonTowerExpansion profile={current} disabled={false} onAction={onAction} selectedItem="w1" />);
+    fireEvent.click(screen.getByRole('button', { name: /今日签到/ }));
+    expect(onAction).toHaveBeenCalledWith({ kind: 'daily_sign_in', payload: {} });
+    fireEvent.click(screen.getByRole('button', { name: '黄金卷轴升星 · 1张' }));
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认消耗黄金卷轴升星' }));
+    await waitFor(() => expect(onAction).toHaveBeenCalledWith({ kind: 'golden_star_up', payload: { itemType: 'weapon', itemId: 'w1' } }));
+    fireEvent.click(screen.getByRole('button', { name: '4残魂兑换' }));
+    expect(within(screen.getByRole('dialog')).getByText(/不扣办公币/)).toBeVisible();
+  });
 });

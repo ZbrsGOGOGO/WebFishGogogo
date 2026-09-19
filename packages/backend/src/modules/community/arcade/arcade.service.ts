@@ -11,7 +11,9 @@ import {
   ArcadeBestScore,
   ArcadeGameRun,
   User,
+  WordFrontProgress,
 } from '../../../database/entities';
+import { WORD_FRONT_DAILY_MERIT_CAP, WORD_FRONT_PROGRESS_CAP, wordFrontServiceDate } from '../word-front-room/word-front-progress.service';
 import type { ArcadeGameKey } from '../../../database/entities/arcade-score.entity';
 import {
   replayWordFront,
@@ -441,12 +443,31 @@ export class ArcadeService {
       }
 
       const rank = await this.rankFor(manager, best!, user.publicId);
+      let progression: { merit: number; earned: number; wins: number; losses: number; unlocks: string[] } | undefined;
+      if (isWordFrontV4Game(run.gameKey)) {
+        const repo = manager.getRepository(WordFrontProgress);
+        let progress = await repo.findOne({ where: { userId }, lock: { mode: 'pessimistic_write' } });
+        const date = wordFrontServiceDate(now);
+        progress ??= repo.create({ userId, merit: 0, wins: 0, losses: 0, dailyDate: date, dailyEarned: 0, unlocks: [], updatedAt: now });
+        if (progress.dailyDate !== date) { progress.dailyDate = date; progress.dailyEarned = 0; }
+        const won = metrics.outcome === 'won';
+        const proposed = won ? 18 + Math.min(12, Number(metrics.wave ?? 0)) : 6;
+        const earned = Math.min(proposed, Math.max(0, WORD_FRONT_DAILY_MERIT_CAP - progress.dailyEarned), Math.max(0, WORD_FRONT_PROGRESS_CAP - progress.merit));
+        progress.merit += earned;
+        progress.dailyEarned += earned;
+        progress.wins = Math.min(WORD_FRONT_PROGRESS_CAP, progress.wins + (won ? 1 : 0));
+        progress.losses = Math.min(WORD_FRONT_PROGRESS_CAP, progress.losses + (won ? 0 : 1));
+        progress.updatedAt = now;
+        progress = await repo.save(progress);
+        progression = { merit: progress.merit, earned, wins: progress.wins, losses: progress.losses, unlocks: [...progress.unlocks] };
+      }
       return {
         gameKey: run.gameKey,
         score: input.score,
         bestScore: best!.bestScore,
         isPersonalBest,
         rank,
+        ...(progression ? { progression } : {}),
       };
     });
   }

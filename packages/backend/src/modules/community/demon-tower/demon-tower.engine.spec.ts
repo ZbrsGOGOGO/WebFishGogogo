@@ -171,9 +171,9 @@ describe('DemonTower engine contracts and authority', () => {
   test('all nine floors, twenty weapons, twenty skills are reachable before the level cap', () => {
     expect(DEMON_TOWER_FLOORS).toHaveLength(9);
     expect(DEMON_TOWER_WEAPONS).toHaveLength(20);
-    expect(DEMON_TOWER_SKILLS).toHaveLength(20);
+    expect(DEMON_TOWER_SKILLS).toHaveLength(26);
     expect(new Set(DEMON_TOWER_WEAPONS.map((item) => item.id)).size).toBe(20);
-    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(20);
+    expect(new Set(DEMON_TOWER_SKILLS.map((item) => item.id)).size).toBe(26);
     expect(DEMON_TOWER_FLOORS.map((floor) => floor.requiredLevel)).toEqual([1, 5, 12, 22, 36, 52, 72, 94, 110]);
     expect(demonTowerPersonalUnlockedFloor(120)).toBe(9);
     expect(DEMON_TOWER_CATALOG.rules.dailyOfficeCoinCap).toBe(200);
@@ -436,14 +436,14 @@ describe('DemonTower progression, time and inventory', () => {
     expect(state.skills.length).toBeGreaterThan(originalSkills);
     expect(state.lootPity.stepsSinceGuarantee).toBeLessThan(4);
   });
-  test('weighted pools retain a free seeded path to all forty items without paid boxes', () => {
+  test('weighted pools retain a free seeded path to every item without paid boxes', () => {
     let state = fresh('finite-free-collection-synthetic'); state.level = 60;
     state.attributes = { STR: 1000, SPD: 1000, AGI: 1000, DEF: 1000, LUCK: 10 };
     state.hp = demonTowerMaxHp(state);
     let eligibleResults = 0;
     // v2 guarantees an item every four settlements, not a globally unowned rarity every fourth draw.
     // Missing-item preference is now within the weighted rarity. The resource-conserving campaign is below.
-    while (state.weapons.length + state.skills.length < 40 && eligibleResults < 1000) {
+    while (state.weapons.length + state.skills.length < DEMON_TOWER_WEAPONS.length + DEMON_TOWER_SKILLS.length && eligibleResults < 1000) {
       state.stamina = 100;
       state = action(state, { kind: 'explore', payload: {} }).state;
       while (state.battle) state = attack(state);
@@ -1093,5 +1093,44 @@ describe('DemonTower low-health tactical experiments', () => {
       expect(defensive.healingCasts).toBeGreaterThan(0); expect(defensive.shieldCasts).toBeGreaterThan(0);
     }
     if (process.env.DEMON_TOWER_BALANCE_REPORT === '1') console.info('DEMON_TOWER_TACTICAL', JSON.stringify(results));
+  });
+});
+
+describe('DemonTower v0.11 seasonal economy', () => {
+  const run = (state: DemonTowerEngineState, value: DemonTowerAction, now = NOW, serviceDate = DATE) =>
+    actDemonTower(state, value, { now, serviceDate, world: world(), expansionEnabled: true });
+  const enabled = () => run(fresh('seasonal-economy-seed-0001'), { kind: 'train', payload: {} }).state;
+
+  it('grants one free daily sign-in and resets daily state without resetting weekly stock', () => {
+    let state = enabled();
+    const soulBefore = state.materials.soul;
+    state = run(state, { kind: 'daily_sign_in', payload: {} }).state;
+    expect(state.expansion!.seasonal).toMatchObject({ signedIn: true, goldenScrolls: 2 });
+    expect(state.materials.soul).toBe(soulBefore + 5);
+    expectCode(() => run(state, { kind: 'daily_sign_in', payload: {} }), 'DAILY_SIGN_IN_CLAIMED');
+    state.materials.soul = 100;
+    state = run(state, { kind: 'seasonal_purchase', payload: { offerId: 'relationship_skill' } }).state;
+    const nextDay = advanceDemonTowerState(state, NOW + 86_400_000, '2026-09-09');
+    expect(nextDay.expansion!.seasonal).toMatchObject({ signedIn: false, weeklyPurchases: { relationship_skill: 1 }, dailyPurchases: {} });
+  });
+
+  it('uses golden scrolls with no downgrade and a festival guarantee', () => {
+    let state = enabled();
+    state.expansion!.seasonal!.goldenScrolls = 4;
+    state.expansion!.seasonal!.starFestival = true;
+    const before = state.weapons[0].star ?? 1;
+    state = run(state, { kind: 'golden_star_up', payload: { itemType: 'weapon', itemId: state.weapons[0].id } }).state;
+    expect(state.weapons[0].star).toBe(before + 1);
+    expect(state.expansion!.seasonal!.goldenScrolls).toBe(4 - before);
+    expect(demonTowerProfileView(state, NOW, 2, 0, true).expansion!.seasonal!.offers).toHaveLength(6);
+  });
+
+  it('rejects overflowing stamina before charging bound souls', () => {
+    const state = enabled();
+    state.materials.soul = 100;
+    state.stamina = DEMON_TOWER_CATALOG.rules.staminaCap;
+    const before = structuredClone(state);
+    expectCode(() => run(state, { kind: 'seasonal_purchase', payload: { offerId: 'stamina_small' } }), 'STAMINA_WOULD_OVERFLOW');
+    expect(state).toEqual(before);
   });
 });

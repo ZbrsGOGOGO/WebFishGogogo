@@ -81,6 +81,12 @@ function skillEffect(definition: DemonTowerSkillDefinition, quality: number, sta
     case 's18': return `普通攻击命中后${percent(Math.min(0.45, 0.2 * scale))}概率追击，伤害${number(0.5 * scale)}倍敏捷`;
     case 's19': return `造成${number(1.2 * scale)}倍敏捷伤害，按实际生命伤害恢复25%（护盾吸收不计）`;
     case 's20': return `造成${number(1.2 * scale)}倍速度伤害；非首领命中后震慑下一次行动`;
+    case 's21': return `受到直接攻击后反震${number(0.65 * scale)}倍防御（受本次损血上限限制）`;
+    case 's22': return `${number(0.95 * scale)}倍（力量+幸运）伤害；非首领追加当前生命12%${star >= 5 ? '，神技为18%' : ''}`;
+    case 's23': return `15+等级×1.5+${number((star >= 5 ? 0.85 : 0.6) * scale)}倍速度的稳定伤害`;
+    case 's24': return `最大生命与护盾效果+${percent(Math.min(0.35, 0.12 * scale))}`;
+    case 's25': return `${number(1.25 * scale)}倍防御护盾，力量+${Math.round(8 * scale)}，持${star >= 5 ? 3 : 2}回合`;
+    case 's26': return `胜利/讨伐结束恢复最大生命${percent((star >= 5 ? 0.18 : 0.12) * scale)}`;
   }
 }
 

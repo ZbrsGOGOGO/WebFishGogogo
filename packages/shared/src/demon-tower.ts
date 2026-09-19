@@ -7,7 +7,7 @@ export type DemonTowerAttribute = typeof DEMON_TOWER_ATTRIBUTE_KEYS[number];
 export type DemonTowerAttributes = Record<DemonTowerAttribute, number>;
 export type DemonTowerRarity = '凡' | '精' | '灵' | '仙' | '神';
 export type DemonTowerWeaponId = 'w1' | 'w2' | 'w3' | 'w4' | 'w5' | 'w6' | 'w7' | 'w8' | 'w9' | 'w10' | 'w11' | 'w12' | 'w13' | 'w14' | 'w15' | 'w16' | 'w17' | 'w18' | 'w19' | 'w20';
-export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16' | 's17' | 's18' | 's19' | 's20';
+export type DemonTowerSkillId = 's1' | 's2' | 's3' | 's4' | 's5' | 's6' | 's7' | 's8' | 's9' | 's10' | 's11' | 's12' | 's13' | 's14' | 's15' | 's16' | 's17' | 's18' | 's19' | 's20' | 's21' | 's22' | 's23' | 's24' | 's25' | 's26';
 export type DemonTowerMaterial = 'ore' | 'herb' | 'soul' | 'clue';
 export type DemonTowerMaterials = Record<DemonTowerMaterial, number>;
 export type DemonTowerTerrain = 'plain' | 'lake' | 'mountain' | 'sea';
@@ -55,6 +55,28 @@ export interface DemonTowerExpansionView {
   unlockedSkins: DemonTowerSkin[];
   arena?: DemonTowerArenaView;
   squadId?: string | null; squadReadyToday?: number;
+  seasonal?: DemonTowerSeasonalView;
+}
+export type DemonTowerSeasonOfferId = 'xp_small' | 'xp_large' | 'stamina_small' | 'stamina_large' | 'stamina_true' | 'relationship_skill';
+export interface DemonTowerSeasonalView {
+  serviceDate: string;
+  week: string;
+  signedIn: boolean;
+  goldenScrolls: number;
+  starFestival: boolean;
+  blessing: Record<string, number>;
+  dailyPurchases: Partial<Record<DemonTowerSeasonOfferId, number>>;
+  weeklyPurchases: Partial<Record<DemonTowerSeasonOfferId, number>>;
+  offers: Array<{
+    id: DemonTowerSeasonOfferId;
+    name: string;
+    cost: number;
+    limit: number;
+    period: 'daily' | 'weekly';
+    purchased: number;
+    available: boolean;
+    description: string;
+  }>;
 }
 export type DemonTowerArenaSkillId = `${'str' | 'spd' | 'agi' | 'def' | 'luck'}${1 | 2 | 3}`;
 export interface DemonTowerArenaSkillDefinition { id: DemonTowerArenaSkillId; name: string; attribute: DemonTowerAttribute; kind: 'active' | 'passive' | 'ultimate'; cost: number; requiredLevel: number; description: string }
@@ -283,6 +305,9 @@ export type DemonTowerAction =
   | { kind: 'expedition'; payload: { mode: 'rift' | 'meditate' | 'weekly_boss' } }
   | { kind: 'market'; payload: { offer: 'weapon_box' | 'skill_box' | 'enlightenment' | 'skill_selection' | 'recycle_quality'; itemId?: DemonTowerWeaponId | DemonTowerSkillId } }
   | { kind: 'star_up'; payload: { itemType: 'weapon' | 'skill'; itemId: DemonTowerWeaponId | DemonTowerSkillId } }
+  | { kind: 'golden_star_up'; payload: { itemType: 'weapon' | 'skill'; itemId: DemonTowerWeaponId | DemonTowerSkillId } }
+  | { kind: 'daily_sign_in'; payload: Record<string, never> }
+  | { kind: 'seasonal_purchase'; payload: { offerId: DemonTowerSeasonOfferId } }
   | { kind: 'breakthrough'; payload: { itemId: DemonTowerWeaponId } }
   | { kind: 'select_skin'; payload: { skin: DemonTowerSkin } }
   | { kind: 'claim_boss_loot'; payload: { floor: number } }
@@ -382,6 +407,12 @@ export const DEMON_TOWER_SKILLS: readonly DemonTowerSkillDefinition[] = [
   skill('s18', '无影手', '伤害', 'passive', '灵', 18, 0, '普通攻击命中且目标仍存活时，20%概率追加一击0.5倍敏捷伤害；每次行动最多触发一次。'),
   skill('s19', '嗜血', '回复', 'active', '灵', 18, 3, '造成1.2倍敏捷直接伤害，按实际失去的生命恢复自身25%；被护盾吸收的伤害不计入治疗。'),
   skill('s20', '镇魂喝', '伤害', 'active', '仙', 36, 4, '造成1.2倍速度直接伤害；命中仍存活的非首领目标后震慑其下一次行动，首领免疫震慑。'),
+  skill('s21', '大海无量', '伤害', 'passive', '灵', 18, 0, '受到直接攻击后以防御反震；每次敌方行动只触发一次，不递归。'),
+  skill('s22', '如来神掌', '伤害', 'active', '仙', 36, 5, '造成力量与幸运合击；非首领额外损失当前生命的12%，首领只结算常规伤害。'),
+  skill('s23', '晴天霹雳', '伤害', 'active', '精', 6, 3, '造成固定伤害与速度伤害，稳定命中，不附带付费增益。'),
+  skill('s24', '情比金坚', '维度', 'passive', '灵', 18, 0, '关系主题收藏技：最大生命与护盾效果提高，不读取或推断现实关系。'),
+  skill('s25', '师傅驾到', '维度', 'active', '仙', 36, 4, '关系主题收藏技：获得防御护盾并提升力量，持续两回合。'),
+  skill('s26', '义结金兰', '回复', 'passive', '仙', 36, 0, '关系主题收藏技：战斗结束后生命恢复效果加强，不读取好友身份。'),
 ];
 /** Conditional on receiving this item kind. Level filtering and guarantees are applied before normalization. */
 export const DEMON_TOWER_SOURCE_WEIGHTS: Record<DemonTowerLootSource, { weapon: Record<DemonTowerRarity, number>; skill: Record<DemonTowerRarity, number> }> = {

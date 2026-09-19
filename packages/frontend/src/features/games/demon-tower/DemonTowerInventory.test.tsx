@@ -21,10 +21,10 @@ describe('compact demon tower inventory and dedicated cultivation navigation',()
       if(page<3)click('下一页');
     }
     expect(weapons).toEqual(catalog.weapons.map(item=>item.name));expect(new Set(weapons).size).toBe(20);expect(screen.getByRole('button',{name:'下一页'})).toBeDisabled();
-    click('技能');expect(screen.getByLabelText('物品分页进度')).toHaveTextContent('第 1 / 4 页');const skills:string[]=[];
-    for(let page=0;page<4;page++){skills.push(...screen.getAllByRole('article').map(item=>item.getAttribute('aria-label')!));if(page<3)click('下一页');}
+    click('技能');expect(screen.getByLabelText('物品分页进度')).toHaveTextContent('第 1 / 5 页');const skills:string[]=[];
+    for(let page=0;page<5;page++){skills.push(...screen.getAllByRole('article').map(item=>item.getAttribute('aria-label')!));if(page<4)click('下一页');}
     expect(skills).toEqual(catalog.skills.map(item=>item.name));expect(p.onAction).not.toHaveBeenCalled();expect(p.onWorkshop).not.toHaveBeenCalled();
-    expect(skills.slice(-2)).toEqual(['嗜血', '镇魂喝']);
+    expect(skills.slice(-2)).toEqual(['师傅驾到', '义结金兰']);
   });
   it('resets the page on ownership filtering and clamps a shrinking server inventory to a real page',()=>{
     const p=props(allOwned()),view=render(<DemonTowerInventory {...p}/>);click('下一页');click('下一页');click('下一页');
