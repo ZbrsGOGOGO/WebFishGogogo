@@ -18,6 +18,7 @@ import {
   DevelopmentController,
 } from './development.controller';
 import { DevelopmentService } from './development.service';
+import { DevelopmentAiService } from './development-ai.service';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { DevelopmentService } from './development.service';
   controllers: [DevelopmentAccessController, DevelopmentController],
   providers: [
     DevelopmentService,
+    DevelopmentAiService,
     DevelopmentAccessGuard,
     DevelopmentAttachmentAuthorGuard,
   ],

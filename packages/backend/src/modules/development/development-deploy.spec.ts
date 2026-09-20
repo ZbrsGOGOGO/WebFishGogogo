@@ -18,6 +18,12 @@ describe('private development deployment boundaries', () => {
       'FEATURE_DEVELOPMENT_WORKSPACE_ENABLED: ${FEATURE_DEVELOPMENT_WORKSPACE_ENABLED:-false}',
     );
     expect(source('deploy/.env.community.example')).toContain('FEATURE_DEVELOPMENT_WORKSPACE_ENABLED=false');
+    expect(source('deploy/docker-compose.community.yml')).toContain(
+      'FEATURE_DEVELOPMENT_AI_ENABLED: ${FEATURE_DEVELOPMENT_AI_ENABLED:-false}',
+    );
+    expect(source('deploy/.env.community.example')).toContain('FEATURE_DEVELOPMENT_AI_ENABLED=false');
+    expect(source('deploy/.env.community.example')).toContain('GROQ_API_KEY=');
+    expect(source('deploy/community-preflight.sh')).toContain('check_secret GROQ_API_KEY 24 200');
   });
 
   it('raises the body limit only on the bounded attachment upload route', () => {

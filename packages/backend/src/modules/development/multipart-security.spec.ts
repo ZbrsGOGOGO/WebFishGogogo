@@ -13,6 +13,7 @@ import { DocumentsService } from '../documents/documents.service';
 import { DevelopmentAccessGuard } from './development-access.guard';
 import { DevelopmentAttachmentAuthorGuard } from './development-attachment-author.guard';
 import { DevelopmentController } from './development.controller';
+import { DevelopmentAiService } from './development-ai.service';
 import { DevelopmentService } from './development.service';
 
 const USER = '11111111-1111-4111-8111-111111111111';
@@ -103,7 +104,11 @@ describe('actual attachment/document controllers with patched flat multipart lim
     } };
     const module = await Test.createTestingModule({
       controllers: [DevelopmentController, DocumentsController],
-      providers: [{ provide: DevelopmentService, useValue: service }, { provide: DocumentsService, useValue: service }],
+      providers: [
+        { provide: DevelopmentService, useValue: service },
+        { provide: DevelopmentAiService, useValue: { chat: jest.fn() } },
+        { provide: DocumentsService, useValue: service },
+      ],
     }).overrideGuard(JwtAuthGuard).useValue(guard)
       .overrideGuard(DevelopmentAccessGuard).useValue(guard)
       .overrideGuard(DevelopmentAttachmentAuthorGuard).useValue(guard).compile();

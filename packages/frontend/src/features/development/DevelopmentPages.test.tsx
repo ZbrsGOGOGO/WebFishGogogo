@@ -38,12 +38,20 @@ function authUser(publicId = person.publicId): CommunityAuthUser {
   };
 }
 
-function accessValue(role: DevelopmentRole, subjectPublicId = person.publicId): DevelopmentAccessState {
+function accessValue(role: DevelopmentRole, subjectPublicId = person.publicId, aiEnabled = false): DevelopmentAccessState {
   const access: DevelopmentAccess & { role: DevelopmentRole } = {
     enabled: true,
     role,
     reviewMode: 'manual',
     limits: DEVELOPMENT_LIMITS,
+    ai: {
+      enabled: aiEnabled,
+      provider: 'groq-free',
+      model: 'openai/gpt-oss-20b',
+      userDailyLimit: 20,
+      siteDailyLimit: 200,
+      sendsAttachments: false,
+    },
   };
   return { status: 'allowed', access, subjectPublicId, reload: vi.fn() };
 }
@@ -126,6 +134,16 @@ function renderDetail(role: DevelopmentRole, requestId = 'request-1', subjectPub
   );
 }
 
+function renderDetailWithAi(role: DevelopmentRole) {
+  return render(
+    <MemoryRouter initialEntries={['/development/requests/request-1']}>
+      <DevelopmentAccessProvider value={accessValue(role, person.publicId, true)}>
+        <Routes><Route path="/development/requests/:id" element={<DevelopmentRequestDetailPage />} /></Routes>
+      </DevelopmentAccessProvider>
+    </MemoryRouter>,
+  );
+}
+
 describe('development pages', () => {
   beforeEach(() => {
     cleanup();
@@ -175,6 +193,31 @@ describe('development pages', () => {
       actorSource: 'user',
       actor: { kind: 'system', publicId: null, username: null, displayName: '站点运维（站长授权）' },
     })).toBe('未知操作人');
+  });
+
+  it('requires disclosure consent before sending a temporary AI discussion', async () => {
+    vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(detail());
+    const chat = vi.spyOn(communityDevelopmentApi, 'chatWithAi').mockResolvedValue({
+      message: '建议先补充三条验收标准。',
+      provider: 'groq-free',
+      model: 'openai/gpt-oss-20b',
+      remainingToday: 19,
+      notice: '仅为建议',
+    });
+    renderDetailWithAi('contributor');
+    expect(await screen.findByRole('heading', { name: '免费 AI 讨论（试运行）' })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('想和 AI 讨论什么'), { target: { value: '如何验收？' } });
+    fireEvent.click(screen.getByRole('button', { name: '发送给免费 AI' }));
+    expect(await screen.findByText(/请先确认本轮/)).toBeInTheDocument();
+    expect(chat).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: '发送给免费 AI' }));
+    expect(await screen.findByText('建议先补充三条验收标准。')).toBeInTheDocument();
+    expect(chat).toHaveBeenCalledWith('request-1', {
+      prompt: '如何验收？', history: [], consent: true,
+    });
+    expect(screen.getByText(/今日还可使用 19 次/)).toBeInTheDocument();
   });
 
   it('keeps owner management/export controls away from contributors', async () => {

@@ -10,6 +10,7 @@ import {
   type DevelopmentStatus,
   type DevelopmentProgressInput,
   type DevelopmentCheckState,
+  type DevelopmentAiChatInput,
 } from '@stealth-reader/shared';
 
 import { normalizeUsername } from '../auth/dto/auth-validation';
@@ -49,6 +50,25 @@ export function developmentCommentInput(body: unknown): {
   return {
     body: text(value.body, 'body', DEVELOPMENT_LIMITS.commentChars),
     expectedVersion: developmentVersion(value.expectedVersion),
+  };
+}
+
+export function developmentAiChatInput(body: unknown): DevelopmentAiChatInput {
+  const value = strictObject(body, ['prompt', 'history', 'consent']);
+  if (value.consent !== true || !Array.isArray(value.history)) throw invalid('consent');
+  if (value.history.length > DEVELOPMENT_LIMITS.aiHistoryMessages) throw invalid('history');
+  const history = value.history.map((raw) => {
+    const message = strictObject(raw, ['role', 'content']);
+    if (message.role !== 'user' && message.role !== 'assistant') throw invalid('history.role');
+    return {
+      role: message.role as 'user' | 'assistant',
+      content: text(message.content, 'history.content', DEVELOPMENT_LIMITS.aiMessageChars),
+    };
+  });
+  return {
+    prompt: text(value.prompt, 'prompt', DEVELOPMENT_LIMITS.aiPromptChars),
+    history,
+    consent: true,
   };
 }
 

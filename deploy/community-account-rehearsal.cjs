@@ -49,6 +49,7 @@ const { PasswordResetService } = load('modules/auth/password-reset.service');
 const { AccountLifecycleService } = load('modules/auth/account-lifecycle.service');
 const { AuthSensitiveDataService } = load('modules/auth/auth-sensitive-data.service');
 const { DevelopmentService } = load('modules/development/development.service');
+const { DevelopmentAiService } = load('modules/development/development-ai.service');
 const { DevelopmentController, DevelopmentAccessController } = load('modules/development/development.controller');
 const { DevelopmentAccessGuard } = load('modules/development/development-access.guard');
 const { DevelopmentAttachmentAuthorGuard } = load('modules/development/development-attachment-author.guard');
@@ -122,6 +123,7 @@ async function setup() {
   Module({ controllers: [AuthController, DevelopmentController, DevelopmentAccessController, CommunityHealthController], providers: [
     { provide: DataSource, useValue: db }, { provide: JwtService, useValue: jwt },
     { provide: AuthService, useValue: auth }, { provide: DevelopmentService, useValue: development },
+    { provide: DevelopmentAiService, useValue: { chat: async () => { throw new Error('AI disabled in rehearsal'); } } },
     JwtAuthGuard, DevelopmentAccessGuard, DevelopmentAttachmentAuthorGuard,
   ] })(AcceptanceModule);
   app = await NestFactory.create(AcceptanceModule, { logger: false });

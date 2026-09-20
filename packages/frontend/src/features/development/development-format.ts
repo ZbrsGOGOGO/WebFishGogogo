@@ -66,6 +66,12 @@ export function developmentError(error: unknown, fallback: string): string {
     if (code === 'DECISION_LIMIT') return '这条提案的决策记录已达上限。';
     if (code === 'ATTACHMENTS_FROZEN') return '当前状态已冻结附件，无法继续上传。';
     if (code === 'DEVELOPMENT_EXPORT_LIMIT') return '当前筛选超过 200 条，请按状态分别导出；没有生成不完整文件。';
+    if (code === 'DEVELOPMENT_AI_DAILY_LIMIT') return '今天的站内免费 AI 次数已经用完，请明天再试。';
+    if (code === 'DEVELOPMENT_AI_FREE_LIMIT') return 'Groq 免费额度暂时已满，请稍后再试；本站不会切换到付费模型。';
+    if (code === 'DEVELOPMENT_AI_NOT_CONFIGURED') return '免费 AI 尚未启用，请联系站长完成免费密钥配置。';
+    if (code === 'DEVELOPMENT_AI_PROVIDER_UNAVAILABLE' || code === 'DEVELOPMENT_AI_INVALID_RESPONSE') {
+      return 'Groq 免费服务暂时不可用，请稍后再试。';
+    }
     if (error.status === 409) {
       return error.message && error.message !== 'Conflict'
         ? error.message

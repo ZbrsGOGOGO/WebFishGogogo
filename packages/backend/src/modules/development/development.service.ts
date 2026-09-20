@@ -43,7 +43,7 @@ import {
 import { requestHash } from '../community/community-validation';
 import { NotificationService } from '../community/notification.service';
 import { inspectDevelopmentAttachment } from './development-attachment-policy';
-import { assertDevelopmentWorkspaceEnabled, developmentWorkspaceEnabled } from './development-gates';
+import { assertDevelopmentWorkspaceEnabled, developmentAiAccess, developmentWorkspaceEnabled } from './development-gates';
 import { buildDevelopmentPrecheck } from './development-precheck';
 import { offlineCompletionEvent, offlineProgressEvent } from './development-operations';
 import { DEVELOPMENT_PROGRESS_ACTION, DEVELOPMENT_REVIEW_ACTIONS, developmentProgressView } from './development-progress';
@@ -79,6 +79,7 @@ export class DevelopmentService {
         role: null,
         reviewMode: 'manual',
         limits: DEVELOPMENT_LIMITS,
+        ai: developmentAiAccess(),
       };
     }
     return {
@@ -86,6 +87,7 @@ export class DevelopmentService {
       role: await this.role(this.dataSource.manager, userId),
       reviewMode: 'manual',
       limits: DEVELOPMENT_LIMITS,
+      ai: developmentAiAccess(),
     };
   }
 

@@ -7,6 +7,8 @@ import type {
   DevelopmentReviewExport,
   DevelopmentStatus,
   DevelopmentProgressInput,
+  DevelopmentAiChatInput,
+  DevelopmentAiChatResult,
 } from '@stealth-reader/shared';
 
 import { communityHttp } from './community-http';
@@ -32,6 +34,13 @@ export const communityDevelopmentApi = {
 
   getRequest: (requestId: string) =>
     communityHttp.get<DevelopmentRequestDetail>(requestPath(requestId)),
+
+  chatWithAi: (requestId: string, input: DevelopmentAiChatInput) =>
+    communityHttp.post<DevelopmentAiChatResult>(
+      `${requestPath(requestId)}/ai-chat`,
+      input,
+      { retryAfterRefresh: false },
+    ),
 
   saveProgress: (requestId: string, input: DevelopmentProgressInput) =>
     communityHttp.post<DevelopmentRequestDetail>(`${requestPath(requestId)}/progress`, input, { retryAfterRefresh: false }),

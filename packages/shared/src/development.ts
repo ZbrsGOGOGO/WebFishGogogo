@@ -21,7 +21,38 @@ export const DEVELOPMENT_LIMITS = Object.freeze({
   descriptionChars: 12000,
   commentChars: 4000,
   pageSize: 20,
+  aiPromptChars: 2000,
+  aiMessageChars: 4000,
+  aiHistoryMessages: 8,
 });
+
+export interface DevelopmentAiAccess {
+  enabled: boolean;
+  provider: 'groq-free';
+  model: 'openai/gpt-oss-20b';
+  userDailyLimit: 20;
+  siteDailyLimit: 200;
+  sendsAttachments: false;
+}
+
+export interface DevelopmentAiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface DevelopmentAiChatInput {
+  prompt: string;
+  history: DevelopmentAiMessage[];
+  consent: true;
+}
+
+export interface DevelopmentAiChatResult {
+  message: string;
+  provider: 'groq-free';
+  model: 'openai/gpt-oss-20b';
+  remainingToday: number;
+  notice: string;
+}
 
 export interface DevelopmentPerson {
   publicId: string;
@@ -34,6 +65,7 @@ export interface DevelopmentAccess {
   role: DevelopmentRole | null;
   reviewMode: 'manual';
   limits: typeof DEVELOPMENT_LIMITS;
+  ai?: DevelopmentAiAccess;
 }
 
 export interface DevelopmentAttachment {

@@ -754,6 +754,14 @@ check_boolean FEATURE_NEWS_ADMIN_ENABLED
 if grep -q '^FEATURE_DEVELOPMENT_WORKSPACE_ENABLED=' "$ENV_FILE"; then
   check_boolean FEATURE_DEVELOPMENT_WORKSPACE_ENABLED
 fi
+if grep -q '^FEATURE_DEVELOPMENT_AI_ENABLED=' "$ENV_FILE"; then
+  check_boolean FEATURE_DEVELOPMENT_AI_ENABLED
+fi
+if [ "$(env_value FEATURE_DEVELOPMENT_AI_ENABLED)" = true ]; then
+  [ "$(env_value FEATURE_DEVELOPMENT_WORKSPACE_ENABLED)" = true ] ||
+    fail "development AI requires the development workspace"
+  check_secret GROQ_API_KEY 24 200
+fi
 if grep -q '^FEATURE_COMMUNITY_DEMON_TOWER_ENABLED=' "$ENV_FILE"; then
   check_boolean FEATURE_COMMUNITY_DEMON_TOWER_ENABLED
 fi

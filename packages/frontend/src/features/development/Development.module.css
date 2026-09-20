@@ -13,6 +13,19 @@
 .notice { color: #28653d; background: #ecf8ef; border: 1px solid #c8e8d0; }
 .scopeNote { color: var(--color-text-secondary); background: var(--color-surface-2); border: 1px solid var(--color-border); }
 
+.aiIntro { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.aiIntro strong { font-size: 14px; }
+.aiIntro span { color: var(--color-text-secondary); font-size: 12px; }
+.aiConsent { padding: 12px; display: flex; align-items: flex-start; gap: 9px; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-2); color: var(--color-text-secondary); font-size: 12px; line-height: 1.6; cursor: pointer; }
+.aiConsent input { margin-top: 3px; accent-color: var(--color-brand); }
+.aiMessages { max-height: 440px; padding: 10px; display: grid; gap: 10px; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--radius-lg); background: var(--color-surface-2); }
+.aiMessages article { width: min(90%, 680px); padding: 10px 12px; display: grid; gap: 6px; border: 1px solid var(--color-border); border-radius: 12px; }
+.aiMessages article > strong { font-size: 12px; }
+.aiMessages article > p { margin: 0; color: var(--color-text); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aiUser { justify-self: end; background: var(--color-surface); }
+.aiAssistant { justify-self: start; background: var(--color-surface); }
+.aiActions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+
 .manualBanner {
   margin-bottom: 18px;
   padding: 14px 18px;

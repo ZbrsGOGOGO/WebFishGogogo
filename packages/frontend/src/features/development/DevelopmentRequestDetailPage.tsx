@@ -13,6 +13,7 @@ import {
   type DevelopmentAttachment,
   type DevelopmentRequestDetail,
   type DevelopmentStatus,
+  type DevelopmentAiAccess,
 } from '@stealth-reader/shared';
 
 import { CommunityApiError } from '../../api/community-http';
@@ -21,6 +22,7 @@ import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Card, EmptyState, PageHeader, Tag, Textarea } from '../../components/ui';
 import { useDevelopmentAccess } from './development-access';
 import { DevelopmentProgressCard } from './DevelopmentProgressCard';
+import { DevelopmentAiCard } from './DevelopmentAiCard';
 import {
   DEVELOPMENT_CATEGORY_LABELS,
   DEVELOPMENT_STATUS_LABELS,
@@ -65,10 +67,12 @@ function DevelopmentRequestDetailContent({
   requestId,
   subjectPublicId,
   role,
+  aiAccess,
 }: {
   requestId: string;
   subjectPublicId: string;
   role: 'owner' | 'contributor';
+  aiAccess?: DevelopmentAiAccess;
 }): JSX.Element {
   const [detail, setDetailState] = useState<DevelopmentRequestDetail | null>(null);
   const detailRef = useRef<DevelopmentRequestDetail | null>(null);
@@ -389,6 +393,17 @@ function DevelopmentRequestDetailContent({
             ) : null}
           </Card>
 
+          {aiAccess ? (
+            <DevelopmentAiCard
+              requestId={visibleDetail.id}
+              access={aiAccess}
+              onUseAsComment={(message) => {
+                setComment(message);
+                setCommentError(undefined);
+              }}
+            />
+          ) : null}
+
           <Card title={`附件（${visibleDetail.attachments.length}/${DEVELOPMENT_LIMITS.attachmentsPerRequest}）`} bodyClassName={styles.cardBody}>
             <p className={styles.muted}>允许 txt / md / csv / json / log / pdf / docx / zip / 常见图片。单个 5 MB，每条总计 20 MB。ZIP 只生成目录信息、不分析正文，PDF 和图片不做 OCR。</p>
             {downloadError ? <p className={styles.error} role="alert">{downloadError}</p> : null}
@@ -516,6 +531,7 @@ export function DevelopmentRequestDetailPage(): JSX.Element {
       requestId={id}
       subjectPublicId={accessState.subjectPublicId}
       role={accessState.access.role}
+      aiAccess={accessState.access.ai}
     />
   );
 }

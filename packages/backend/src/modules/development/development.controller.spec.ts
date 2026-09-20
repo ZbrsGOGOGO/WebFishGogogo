@@ -13,6 +13,7 @@ import { DevelopmentAccessGuard } from './development-access.guard';
 import { DevelopmentAttachmentAuthorGuard } from './development-attachment-author.guard';
 import { DevelopmentController } from './development.controller';
 import { DevelopmentService } from './development.service';
+import { DevelopmentAiService } from './development-ai.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const REQUEST_ID = '22222222-2222-4222-8222-222222222222';
@@ -23,6 +24,7 @@ describe('DevelopmentController HTTP attachment boundary', () => {
   let origin: string;
   let accessAllowed: boolean;
   let authorAllowed: boolean;
+  let ai: { chat: jest.Mock };
   let service: {
     addAttachment: jest.Mock;
     attachmentContent: jest.Mock;
@@ -42,6 +44,7 @@ describe('DevelopmentController HTTP attachment boundary', () => {
         content: Buffer.from([0, 1, 2, 255]),
       }),
     };
+    ai = { chat: jest.fn().mockResolvedValue({ message: '建议', remainingToday: 19 }) };
 
     const jwtGuard: CanActivate = {
       canActivate(context: ExecutionContext): boolean {
@@ -65,7 +68,10 @@ describe('DevelopmentController HTTP attachment boundary', () => {
 
     const module = await Test.createTestingModule({
       controllers: [DevelopmentController],
-      providers: [{ provide: DevelopmentService, useValue: service }],
+      providers: [
+        { provide: DevelopmentService, useValue: service },
+        { provide: DevelopmentAiService, useValue: ai },
+      ],
     })
       .overrideGuard(JwtAuthGuard)
       .useValue(jwtGuard)
@@ -179,6 +185,21 @@ describe('DevelopmentController HTTP attachment boundary', () => {
     accessAllowed = false;
     expect((await post(input)).status).toBe(403);
     expect(service.saveProgress).toHaveBeenCalledTimes(1);
+  });
+
+  it('requires explicit AI disclosure consent and validates history before provider work', async () => {
+    const post = (body: unknown) => fetch(`${origin}/v1/development/requests/${REQUEST_ID}/ai-chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    expect((await post({ prompt: '梳理验收点', history: [], consent: false })).status).toBe(400);
+    expect(ai.chat).not.toHaveBeenCalled();
+    expect((await post({ prompt: '梳理验收点', history: [], consent: true })).status).toBe(201);
+    expect(ai.chat).toHaveBeenCalledWith(USER_ID, REQUEST_ID, {
+      prompt: '梳理验收点', history: [], consent: true,
+    });
+    accessAllowed = false;
+    expect((await post({ prompt: '测试', history: [], consent: true })).status).toBe(403);
+    expect(ai.chat).toHaveBeenCalledTimes(1);
   });
 
   async function upload(

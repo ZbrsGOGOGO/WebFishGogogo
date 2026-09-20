@@ -41,6 +41,9 @@ describe('communityDevelopmentApi', () => {
     await communityDevelopmentApi.uploadAttachment('request-1', file, 6);
     const progress = { expectedVersion: 7, summary: '范围', items: [{ id: 'item', label: '验收项', status: 'done' as const }] };
     await communityDevelopmentApi.saveProgress('request / 1', progress);
+    await communityDevelopmentApi.chatWithAi('request / 1', {
+      prompt: '帮我梳理验收点', history: [], consent: true,
+    });
 
     expect(post).toHaveBeenNthCalledWith(
       1,
@@ -60,5 +63,11 @@ describe('communityDevelopmentApi', () => {
     expect((form as FormData).get('expectedVersion')).toBe('6');
     expect(post.mock.calls[2]?.[2]).toEqual({ retryAfterRefresh: false });
     expect(post).toHaveBeenNthCalledWith(4, '/v1/development/requests/request%20%2F%201/progress', progress, { retryAfterRefresh: false });
+    expect(post).toHaveBeenNthCalledWith(
+      5,
+      '/v1/development/requests/request%20%2F%201/ai-chat',
+      { prompt: '帮我梳理验收点', history: [], consent: true },
+      { retryAfterRefresh: false },
+    );
   });
 });

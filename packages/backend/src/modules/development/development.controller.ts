@@ -21,6 +21,7 @@ import { CurrentUserId } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { DevelopmentAccessGuard } from './development-access.guard';
 import { DevelopmentAttachmentAuthorGuard } from './development-attachment-author.guard';
+import { DevelopmentAiService } from './development-ai.service';
 import {
   DevelopmentService,
   type DevelopmentUploadFile,
@@ -34,6 +35,7 @@ import {
   developmentPage,
   developmentVersion,
   developmentProgressInput,
+  developmentAiChatInput,
   optionalDevelopmentStatus,
 } from './development-validation';
 
@@ -72,7 +74,10 @@ export class DevelopmentAccessController {
 @Controller('v1/development')
 @UseGuards(JwtAuthGuard, DevelopmentAccessGuard)
 export class DevelopmentController {
-  constructor(private readonly development: DevelopmentService) {}
+  constructor(
+    private readonly development: DevelopmentService,
+    private readonly developmentAi: DevelopmentAiService,
+  ) {}
 
   @Get('requests')
   requests(
@@ -144,6 +149,19 @@ export class DevelopmentController {
     @Param('id') rawId: string,
   ) {
     return this.development.detail(userId, developmentId(rawId));
+  }
+
+  @Post('requests/:id/ai-chat')
+  aiChat(
+    @CurrentUserId() userId: string,
+    @Param('id') rawId: string,
+    @Body() body: unknown,
+  ) {
+    return this.developmentAi.chat(
+      userId,
+      developmentId(rawId),
+      developmentAiChatInput(body),
+    );
   }
 
   @Post('requests/:id/comments')
