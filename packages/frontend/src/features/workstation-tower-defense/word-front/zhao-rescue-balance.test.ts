@@ -134,4 +134,54 @@ describe('Zhao rescue canonical balance', () => {
     expect(core.applyItem({ kind: 'item', item: '包子' })).toBe(true);
     expect(core.G.adouHp).toBe(10);
   });
+
+  it('rolls one to three lucky hero glyphs and exposes the five live bond groups', () => {
+    const { core } = boot();
+    core.reset('main', 0, 0);
+    const lucky = Object.keys(core.G.lucky);
+    expect(lucky.length).toBeGreaterThanOrEqual(1);
+    expect(lucky.length).toBeLessThanOrEqual(3);
+    for (const entry of core.charProbs().filter((item: { lucky: boolean }) => item.lucky)) expect(lucky).toContain(entry.ch);
+
+    core.G.units.push(
+      { kind: 'hero', hero: '赵云' },
+      { kind: 'hero', hero: '张飞' },
+      { kind: 'hero', hero: '马超' },
+    );
+    const bonds = core.bondStatus();
+    expect(bonds.map((bond: { name: string }) => bond.name)).toEqual(['桃园结义', '当阳桥', '神射手', '骑手', '五虎将']);
+    expect(bonds.find((bond: { name: string }) => bond.name === '当阳桥')?.eff).toMatchObject({ atk: 1.25, aspd: 0.85 });
+    expect(bonds.find((bond: { name: string }) => bond.name === '骑手')?.eff).toMatchObject({ atk: 1.2, aspd: 0.85 });
+    expect(bonds.find((bond: { name: string }) => bond.name === '五虎将')?.eff).toMatchObject({ name: '五虎·锋锐', need: 3 });
+  });
+
+  it('moves a hero across two empty cells and splits one glyph when the target is occupied', () => {
+    const { core } = boot();
+    core.reset('main', 0, 0);
+    expect(core.applyToCell(7, 2, { kind: 'char', ch: '赵', level: 1 })).toBe('consumed');
+    expect(core.applyToCell(7, 3, { kind: 'char', ch: '云', level: 1 })).toBe('consumed');
+    expect(core.board[7][2].unit).toBe(core.board[7][3].unit);
+
+    expect(core.moveHeroFromCell(7, 2, 8, 2)).toBe(true);
+    expect(core.board[8][2].unit.hero).toBe('赵云');
+    core.board[7][2].type = 'green';
+    const blocker = core.placeChar(7, 2, '刀', 1);
+    expect(core.moveOneHeroChar(8, 2, 7, 2)).toBe(true);
+    expect(core.board[7][2].unit).toBe(blocker);
+    expect(core.board[8][2].unit).toMatchObject({ kind: 'char', ch: '赵' });
+    expect(core.board[8][3].unit).toMatchObject({ kind: 'char', ch: '云' });
+    expect(core.G.units.some((unit: { hero?: string }) => unit.hero === '赵云')).toBe(false);
+  });
+
+  it('fully detaches both hero cells when a replacement lands on either glyph', () => {
+    const { core } = boot();
+    core.reset('main', 0, 0);
+    core.applyToCell(7, 2, { kind: 'char', ch: '赵', level: 1 });
+    core.applyToCell(7, 3, { kind: 'char', ch: '云', level: 1 });
+    expect(core.applyToCell(7, 3, { kind: 'char', ch: '刀', level: 1 })).toBe('consumed');
+    expect(core.board[7][2].unit).toBeNull();
+    expect(core.board[7][3].unit).toMatchObject({ kind: 'unit', card: { ch: '刀', level: 1 } });
+    expect(core.G.units.some((unit: { hero?: string }) => unit.hero === '赵云')).toBe(false);
+    expect(core.hand.slice(-2).map((card: { ch: string }) => card.ch)).toEqual(['赵', '云']);
+  });
 });

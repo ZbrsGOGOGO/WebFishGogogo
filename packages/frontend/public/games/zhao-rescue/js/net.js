@@ -167,7 +167,7 @@ ZYJ.net = (function () {
           for (const e of localEnemies) { const d = Math.hypot(e.x - u.x, e.y - u.y); if (d < bd) { bd = d; best = e; } }
           if (best) {
             const ty = ROWS * CELL - best.y;   // 把敌人也镜像到上半场，使箭头方向自然
-            fx.push({ type: 'arrow', x: u.x, y: u.y, tx: best.x, ty: ty, t: 0, dur: 0.18 });
+            fx.push({ type: 'arrow', x: u.x, y: u.y, tx: best.x, ty: ty, t: -Math.random() * 0.25, dur: 0.28 });
           }
         }
       }
@@ -193,9 +193,20 @@ ZYJ.net = (function () {
     }
     function drawFx(c, f) {
       if (f.type === 'arrow') {
-        c.save(); c.strokeStyle = 'rgba(220,90,70,0.9)'; c.lineWidth = 2;
-        const p = Math.min(1, f.t / f.dur), x = f.x + (f.tx - f.x) * p, y = f.y + (f.ty - f.y) * p;
-        c.beginPath(); c.moveTo(f.x, f.y); c.lineTo(x, y); c.stroke(); c.restore();
+        const p = f.t / f.dur;
+        if (p < 0) return;                                       // 随机发射延迟未到
+        const q = Math.min(1, p);
+        const x = f.x + (f.tx - f.x) * q, y = f.y + (f.ty - f.y) * q;
+        const ang = Math.atan2(f.ty - f.y, f.tx - f.x);
+        c.save(); c.translate(x, y); c.rotate(ang);
+        const g = c.createLinearGradient(-12, 0, 2, 0);          // 渐隐尾迹（代替粗红线）
+        g.addColorStop(0, 'rgba(214,116,96,0)');
+        g.addColorStop(1, 'rgba(214,116,96,0.45)');
+        c.strokeStyle = g; c.lineWidth = 1.5;
+        c.beginPath(); c.moveTo(-12, 0); c.lineTo(2, 0); c.stroke();
+        c.fillStyle = 'rgba(202,96,80,0.85)';                    // 小箭尖
+        c.beginPath(); c.moveTo(4.5, 0); c.lineTo(-0.5, -2.4); c.lineTo(-0.5, 2.4); c.closePath(); c.fill();
+        c.restore();
       } else if (f.type === 'aoe') {
         c.save(); const p = Math.min(1, f.t / f.dur);
         c.strokeStyle = 'rgba(255,150,40,' + (1 - p).toFixed(3) + ')'; c.lineWidth = 3;

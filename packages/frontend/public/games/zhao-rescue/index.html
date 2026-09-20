@@ -21,8 +21,7 @@
       <button id="btnRank">排行榜<small>本站 V4 验真赛季</small></button>
     </div>
     <p class="hint" style="max-width:560px;margin:14px auto;text-align:center">
-      地图 8×10·中心对称 · 亮路=己方 / 暗路=对面 · 每方 6 格可放置 · 敌军自左下出兵口沿亮路蛇形扑向右下「斗」·
-      全自动出兵战斗 · 征兵 10 包子/次 · 同名同阶拖拽合成。
+      小兵每 3 秒推进一格 · 全自动出兵战斗 · 同名同阶武器拖拽合成。每局随机 1–3 个幸运字，营面板可查看实时概率与阵容羁绊。
     </p>
   </div>
 
@@ -37,6 +36,7 @@
   <div id="battle" class="screen">
     <div class="top">
       <button class="iconBtn" id="btnPause">⏸</button>
+      <button class="iconBtn" id="btnSnd" title="音效开关" aria-label="音效开关">🔊</button>
       <span class="res"><span class="ic">🥟</span><span id="rBaozi">0</span><small>包子</small></span>
       <span id="modeName">主线</span>
       <span class="res"><span class="ic">❤</span><span id="rAdou">100</span><small>阿斗血</small></span>
@@ -49,18 +49,18 @@
       <div class="boardWrap">
         <canvas id="cv" width="384" height="480"></canvas>
         <div class="legend">
-          <span><i style="background:#1a1a1a;border:1px dashed #888"></i>空地·可放置(6格)</span>
-          <span><i style="background:#2b2b2b;border:1px solid #5a5a5a"></i>亮路·己方兵道</span>
-          <span><i style="background:#0e0e0e;border:1px dashed #4a4a4a"></i>暗路·对面兵道</span>
-          <span><i style="background:#262626"></i>草·障碍</span>
-          <span><i style="background:#333;border:1px solid #555"></i>「斗」·阿斗核心</span>
+          <span><i class="legendPlace"></i>空地·可放置</span>
+          <span><i class="legendOwn"></i>己方兵道</span>
+          <span><i class="legendOpp"></i>对面兵道</span>
+          <span><i class="legendStone"></i>草·障碍</span>
+          <span><i class="legendCore"></i>「主」·阿斗核心</span>
         </div>
       </div>
 
       <!-- 操作台：营 + 备战席 → 征兵 → 道具/包子 -->
       <aside id="side">
         <div class="campBar">
-          <div class="camp" id="camp" title="营（查看本局剩余字牌）">营</div>
+          <button type="button" class="camp" id="camp" title="查看本局抽字概率与羁绊">营</button>
           <div id="hand" class="cardRow"></div>
         </div>
 
@@ -76,8 +76,8 @@
 
         <details class="panel report"><summary>战报</summary><div id="log"></div></details>
         <div class="hint" style="text-align:center">
-          <b>自动出兵</b>（无需点击「出兵」）。同名同阶武器：手牌互拖合成、或拖到棋盘同名单位上升级。<br>
-          武器（枪/刀/马/弓）直接落子即部署；<b>武将须两字按序落子激活</b>（如先放「赵」再放「云」→ 赵云）。把卡拖到<b>金色虚框空地</b>放置。
+          <b>自动出兵</b>（无需点击「出兵」）。同名同阶武器可互拖，或拖到棋盘同名同阶单位上升级。<br>
+          武将两字左右相邻即可激活。拖动武将到连续两格空地会整体平移；目标不足两格、被占用或拖到其他武将上时，会拆开并只移动抓住的一个字。
         </div>
       </aside>
     </div>

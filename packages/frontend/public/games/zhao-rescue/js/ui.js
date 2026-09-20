@@ -457,11 +457,15 @@ ZYJ.ui = (function () {
         return;
       }
       const [c, r] = core.cellFromEvent(e);
-      if (!core.inBoard(c, r)) return;
+      if (!core.inBoard(c, r)) {                 // 松手在棋盘外（侧栏/手牌/道具区）：武将拆分，其余单位撤回
+        if (su.kind === 'hero') core.splitHeroToHand(src.r, src.c);
+        else core.removeUnitToHand(src.r, src.c);
+        renderAll(); return;
+      }
       if (r === src.r && c === src.c) return;
       const from = core.board[src.r][src.c], to = core.board[r][c];
-      if (su.kind === 'hero') {                       // 武将整体平移（保持左右字序）
-        if (!core.moveHeroFromCell(src.r, src.c, r, c)) log('武将无法移动到该处');
+      if (su.kind === 'hero') {                       // 空两格位→整将平移；否则拆解只移一字（含拖到武将上也拆）
+        if (!core.moveHeroFromCell(src.r, src.c, r, c)) core.moveOneHeroChar(src.r, src.c, r, c);
         renderAll(); return;
       }
       if (!to.unit) {
@@ -506,6 +510,11 @@ ZYJ.ui = (function () {
     const btnConscript = $('btnConscript'); if (btnConscript) btnConscript.onclick = () => { if (core.G) core.conscript(); };
     const btnPause = $('btnPause'); if (btnPause) btnPause.onclick = togglePause;
     const btnMenu = $('btnMenu'); if (btnMenu) btnMenu.onclick = () => { stopRoomTimers(); show('home'); };
+    const btnSnd = $('btnSnd');
+    if (btnSnd) {
+      btnSnd.textContent = core.sfx.isOn() ? '🔊' : '🔇';
+      btnSnd.onclick = () => { btnSnd.textContent = core.sfx.toggle() ? '🔊' : '🔇'; };
+    }
     const btnPvp2 = $('btnPvp'); if (btnPvp2) btnPvp2.onclick = startPVP;
     const ovBtn = $('ovBtn'); if (ovBtn) ovBtn.onclick = () => { stopRoomTimers(); show('home'); };
     const camp = $('camp'); if (camp) camp.onclick = toggleDeckPanel;   // 营：本局剩余字牌
@@ -527,18 +536,33 @@ ZYJ.ui = (function () {
   function renderDeckPanel() {
     const el = $('deckPanel'); if (!el || !deckOpen) return;
     const G = core.G; if (!G) return;
-    const heroCh = cfg.HERO_CHARS, weaponCh = cfg.WEAPON_CHARS;
-    let hero = [], mob = [];
-    for (const ch in G.deck) {
-      const n = G.deck[ch] || 0;
-      (heroCh.has(ch) ? hero : mob).push({ ch, n });
-    }
-    if (!hero.length && !mob.length) { el.innerHTML = '<div class="empty">字库已空</div>'; return; }
-    const chip = (o, isHero) => '<span class="chip' + (isHero ? ' hero' : '') + '">' + o.ch + (o.n > 0 ? ' <b>×' + o.n + '</b>' : ' <b style="color:#c55">0</b>') + '</span>';
+    const list = core.charProbs();   // [{ch, remain, weight, prob, lucky}]
+    if (!list.length) { el.innerHTML = '<div class="empty">字库已空</div>'; return; }
+    const isHero = ch => cfg.HERO_CHARS.has(ch);
+    const sorted = list.slice().sort((a, b) => b.prob - a.prob);
+    const chip = o => '<span class="chip' + (isHero(o.ch) ? ' hero' : '') + (o.lucky ? ' lucky' : '') + '">'
+      + o.ch + ' <b>' + o.prob.toFixed(0) + '%</b>'
+      + (o.lucky ? ' <i class="lk">幸运×2</i>' : '')
+      + ' <span class="rm">剩' + o.remain + '</span></span>';
+    // 羁绊状态区块
+    const bonds = core.bondStatus();
+    const onField = new Set();
+    for (const u of core.G.units) if (u.kind === 'hero' && u.side !== 'enemy') onField.add(u.hero);
+    const bondRow = b => {
+      const active = !!b.eff;
+      const m = b.members.map(n => '<span class="bit' + (onField.has(n) ? ' on' : '') + '">' + n + '</span>').join('');
+      return '<div class="bond' + (active ? ' act' : '') + '" style="--bc:' + b.color + '">' +
+        '<div class="bhead"><span class="bname">' + b.name + '</span>' +
+        '<span class="bprog">' + b.on + '/' + b.total + '</span></div>' +
+        '<div class="bmems">' + m + '</div>' +
+        '<div class="bdesc">' + (active ? (b.eff.name + '：' + b.eff.desc) : '需同时上场 ' + b.members.join('、')) + '</div>' +
+        '</div>';
+    };
     el.innerHTML =
-      '<h4>本局剩余字牌（抽走即减，不回池）</h4>' +
-      (hero.length ? '<div class="grp"><div class="row">' + hero.sort((a, b) => b.n - a.n).map(o => chip(o, true)).join('') + '</div></div>' : '') +
-      (mob.length ? '<div class="grp"><div class="row">' + mob.sort((a, b) => b.n - a.n).map(o => chip(o, false)).join('') + '</div></div>' : '');
+      '<h4>本局抽字概率' + (list.some(o => o.lucky) ? '（标「幸运×2」的字本局刷新概率翻倍）' : '') + '</h4>'
+      + '<div class="grp"><div class="row">' + sorted.map(chip).join('') + '</div></div>'
+      + '<h4>羁绊（同场武将触发阵容联动）</h4>'
+      + '<div class="bonds">' + bonds.map(bondRow).join('') + '</div>';
   }
 
   function init() { bindDrag(); bindMenus(); }

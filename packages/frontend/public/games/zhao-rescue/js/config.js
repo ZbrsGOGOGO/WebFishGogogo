@@ -13,7 +13,8 @@
 window.ZYJ = window.ZYJ || {};
 ZYJ.config = (function () {
   // 棋盘 8 列 × 10 行；格子由 54 缩至 48，画布整体适配（384 × 480）
-  const COLS = 8, ROWS = 10, CELL = 48;
+  let COLS = 8, ROWS = 10;
+  const CELL = 48;
 
   // —— 地图（10 行 × 8 列；上下镜像对称）——
   //  A=阿斗核心  S=出兵口  p=己方兵道(绿)  P=对面兵道(黄)
@@ -32,6 +33,7 @@ ZYJ.config = (function () {
     "p#...##p",
     "S######A"
   ];
+  ROWS = MAP.length; COLS = MAP[0].length;
   const TYP = { A: 'core', S: 'spawn', p: 'path', P: 'pathOpp', '.': 'green', o: 'greenOpp', '#': 'stone', w: 'white' };
 
   // —— 敌方兵道路径（BFS 自动生成：从左下出兵口到右下阿斗核心，只走 path 格）——
@@ -106,54 +108,84 @@ ZYJ.config = (function () {
       1: { atk: 1.6, cd: 1.25, range: 6 }, 2: { atk: 2.8, cd: 2.10, range: 6 }, 3: { atk: 4.2, cd: 3.94, range: 6 },
       4: { atk: 6.5, cd: 5.40, range: 6 }, 5: { atk: 8.4, cd: 6.20, range: 6 } } }
   };
-  // —— 武将定义（共 12 名，分级数值与 zyjad_hero 一致）——
+  // —— 武将定义（共 12 名，金6/紫6，重做版）——
   // 合成规则：左放首字 + 右放次字（如 赵 左 + 云 右 = 赵云），详见 core.findHeroPair。
-  const HERO_DEF = {
-    赵云: { name: '赵云', grade: '金', maxLevel: 5, atkType: 'pierce', skill: '七进七出：来回突进直线群伤；专武龙胆亮银枪，10%概率全屏飞枪', levels: {
-      1: { atk: 2.00, cd: 1.25, range: 4 }, 2: { atk: 7.60, cd: 1.38, range: 4 }, 3: { atk: 15.30, cd: 1.56, range: 4 },
-      4: { atk: 24.80, cd: 1.82, range: 4 }, 5: { atk: 36.20, cd: 2.10, range: 4 } } },
-    张飞: { name: '张飞', grade: '金', maxLevel: 5, atkType: 'aoe', skill: '咆哮，大范围眩晕敌人2秒；专武丈八蛇矛召唤灵蛇持续伤害控怪', levels: {
-      1: { atk: 2.40, cd: 1.20, range: 3 }, 2: { atk: 8.80, cd: 1.32, range: 3 }, 3: { atk: 31.50, cd: 1.56, range: 3 },
-      4: { atk: 42.60, cd: 1.78, range: 3 }, 5: { atk: 54.00, cd: 2.00, range: 3 } } },
-    关羽: { name: '关羽', grade: '金', maxLevel: 5, atkType: 'splash', skill: '跳劈，击退敌人+高额溅射；青龙偃月刀击杀释放全屏刀气', levels: {
-      1: { atk: 3.00, cd: 1.15, range: 3 }, 2: { atk: 9.40, cd: 1.28, range: 3 }, 3: { atk: 18.60, cd: 1.44, range: 3 },
-      4: { atk: 29.70, cd: 1.65, range: 3 }, 5: { atk: 44.50, cd: 1.90, range: 3 } } },
-    黄忠: { name: '黄忠', grade: '金', maxLevel: 5, atkType: 'aoe', skill: '全屏箭雨大招；落日弓增大射程，大范围远程输出', levels: {
-      1: { atk: 1.80, cd: 1.30, range: 7 }, 2: { atk: 6.20, cd: 1.45, range: 7 }, 3: { atk: 12.50, cd: 1.62, range: 7 },
-      4: { atk: 20.40, cd: 1.88, range: 7 }, 5: { atk: 30.60, cd: 2.15, range: 7 } } },
-    马超: { name: '马超', grade: '金', maxLevel: 5, atkType: 'pierce', skill: '贯穿伤害，攻击附带击退；可装备龙胆亮银枪触发飞枪效果', levels: {
-      1: { atk: 2.20, cd: 1.28, range: 4 }, 2: { atk: 7.90, cd: 1.42, range: 4 }, 3: { atk: 16.10, cd: 1.60, range: 4 },
-      4: { atk: 25.30, cd: 1.85, range: 4 }, 5: { atk: 37.40, cd: 2.12, range: 4 } } },
-    刘备: { name: '刘备', grade: '金', maxLevel: 5, atkType: 'single', skill: '全队回血、群体控制羁绊，和阿斗组队全队大幅增伤；轩辕剑触发君子剑效果', levels: {
-      1: { atk: 1.60, cd: 1.10, range: 4 }, 2: { atk: 5.10, cd: 1.22, range: 4 }, 3: { atk: 10.20, cd: 1.38, range: 4 },
-      4: { atk: 16.70, cd: 1.55, range: 4 }, 5: { atk: 24.50, cd: 1.76, range: 4 } } },
-    关平: { name: '关平', grade: '紫', maxLevel: 3, atkType: 'aoe', skill: '小范围眩晕，张飞下位，紫武器全队加攻速', levels: {
-      1: { atk: 1.50, cd: 1.18, range: 3 }, 2: { atk: 10.50, cd: 1.30, range: 3 }, 3: { atk: 19.20, cd: 1.45, range: 3 } } },
-    关兴: { name: '关兴', grade: '紫', maxLevel: 3, atkType: 'splash', skill: '小幅击退，关羽下位', levels: {
-      1: { atk: 1.70, cd: 1.22, range: 3 }, 2: { atk: 7.30, cd: 1.35, range: 3 }, 3: { atk: 14.60, cd: 1.50, range: 3 } } },
-    张苞: { name: '张苞', grade: '紫', maxLevel: 3, atkType: 'pierce', skill: '赵云下位，直线穿透', levels: {
-      1: { atk: 1.60, cd: 1.30, range: 4 }, 2: { atk: 6.80, cd: 1.44, range: 4 }, 3: { atk: 13.80, cd: 1.60, range: 4 } } },
-    张翼: { name: '张翼', grade: '紫', maxLevel: 3, atkType: 'aoe', skill: '小范围群体伤害，过渡坦', levels: {
-      1: { atk: 1.40, cd: 1.16, range: 3 }, 2: { atk: 5.90, cd: 1.30, range: 3 }, 3: { atk: 11.70, cd: 1.45, range: 3 } } },
-    黄祖: { name: '黄祖', grade: '蓝', maxLevel: 2, atkType: 'single', skill: '低级远程过渡卡', levels: {
-      1: { atk: 1.20, cd: 1.12, range: 5 }, 2: { atk: 4.30, cd: 1.25, range: 5 } } },
-    黄盖: { name: '黄盖', grade: '蓝', maxLevel: 2, atkType: 'aoe', skill: '低级前排过渡卡', levels: {
-      1: { atk: 1.30, cd: 1.10, range: 3 }, 2: { atk: 4.60, cd: 1.23, range: 3 } } }
+  // 分级倍率 HERO_MUL：金(Lv1~Lv5：1/1.25/1.5/1.75/2.0)；紫(Lv1~Lv3：1/1.25/1.5)。
+  // 规则：Lv1 技能锁定仅普攻；Lv2 解锁主动技能；Lv3/4/5 逐级强化；攻速与攻击范围同乘倍率；
+  //       能量上限 / 技能CD 全等级固定。属性 = Lv1基础 × 该级倍率。
+  const HERO_MUL = { 1: 1.0, 2: 1.25, 3: 1.5, 4: 1.75, 5: 2.0 };
+  const HERO_RAW = {
+    赵云: { grade: '金', maxLevel: 5, atkType: 'pierce', weaponType: '枪', basicFeature: '直线贯穿伤害，高攻速', energyMax: 8, skillCd: 12, skillName: '七进七出',
+      base: { atk: 32, cd: 1.4, range: 2 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁七进七出', 3: '幻象伤害+30%，突进判定宽度+0.3格', 4: '突进次数7→9次，贯穿伤害额外+15%', 5: '幻象附带20%减速，命中回少量能量' } },
+    关羽: { grade: '金', maxLevel: 5, atkType: 'splash', weaponType: '刀', basicFeature: '普攻附带50%溅射伤害', energyMax: 7, skillCd: 10, skillName: '跳斩',
+      base: { atk: 40, cd: 1.0, range: 1.8 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁跳斩', 3: '跳斩撞击范围扩大；后续3次普攻溅射提升至100%', 4: '跳斩落地附带短暂减速0.5s，增益普攻持续4次', 5: '跳斩可击飞小怪，释放后自身获得15%免伤持续5秒' } },
+    张飞: { grade: '金', maxLevel: 5, atkType: 'aoe', weaponType: '刀', basicFeature: '普攻小范围群体伤害', energyMax: 9, skillCd: 14, skillName: '大喝',
+      base: { atk: 36, cd: 0.9, range: 2.2 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁大喝', 3: '眩晕时长2s→2.6s；咆哮范围+0.4格', 4: '眩晕2.6s→3.2s；咆哮附带降低敌方防御20%', 5: '大喝后5秒内普攻范围扩大，自带击退' } },
+    黄忠: { grade: '金', maxLevel: 5, atkType: 'single', weaponType: '弓', basicFeature: '远程单体，普攻可引燃（每秒5点持续火伤，持续2s）', energyMax: 8, skillCd: 11, skillName: '火箭烈',
+      base: { atk: 44, cd: 0.8, range: 4.5 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁火箭烈', 3: '火箭连锁目标数量+2；灼烧每秒伤害+40%', 4: '灼烧持续4秒，连锁范围扩大', 5: '火箭命中后给目标附加易伤，受到所有伤害+20%' } },
+    马超: { grade: '金', maxLevel: 5, atkType: 'single', weaponType: '枪', basicFeature: '中距离单体攻击', energyMax: 7, skillCd: 10, skillName: '惊雷刺',
+      base: { atk: 34, cd: 1.0, range: 3.2 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁惊雷刺', 3: '命中25%眩晕→30%，技能期间眩晕概率40%→48%', 4: '技能持续时间+2秒，攻击范围+0.3格', 5: '惊雷刺触发时，普攻附带小范围溅射伤害' } },
+    刘备: { grade: '金', maxLevel: 5, atkType: 'splash', weaponType: '剑', basicFeature: '近战小幅溅射伤害', energyMax: 6, skillCd: 9, skillName: '圣剑',
+      base: { atk: 26, cd: 1.1, range: 1.5 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁圣剑', 3: '眩晕时长1.2s→1.8s；圣剑落地范围扩大', 4: '圣剑落地后生成光环，范围内友军攻击+10%持续4s', 5: '圣剑命中后，给全队增加一层护盾，吸收少量伤害' } },
+    张苞: { grade: '紫', maxLevel: 3, atkType: 'pierce', weaponType: '枪', basicFeature: '直线贯穿（赵云下位）', energyMax: 7, skillCd: 10, skillName: '破阵刺',
+      base: { atk: 28, cd: 1.2, range: 2 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁破阵刺', 3: '命中眩晕概率20%→28%；技能增伤30%→40%' } },
+    关平: { grade: '紫', maxLevel: 3, atkType: 'aoe', weaponType: '刀', basicFeature: '近战小范围群体普攻', energyMax: 8, skillCd: 12, skillName: '小喝',
+      base: { atk: 30, cd: 0.9, range: 1.8 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁小喝', 3: '眩晕1s→1.4s，咆哮范围+0.2格' } },
+    关兴: { grade: '紫', maxLevel: 3, atkType: 'splash', weaponType: '刀', basicFeature: '近战溅射伤害', energyMax: 6, skillCd: 9, skillName: '猛击',
+      base: { atk: 33, cd: 1.1, range: 1.6 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁猛击', 3: '眩晕概率20%→28%；技能攻击增益25%→35%' } },
+    张翼: { grade: '紫', maxLevel: 3, atkType: 'splash', weaponType: '刀', basicFeature: '近战溅射伤害', energyMax: 6, skillCd: 9, skillName: '小跳斩',
+      base: { atk: 31, cd: 1.0, range: 1.7 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁小跳斩', 3: '撞击范围扩大，击退力度提升' } },
+    黄祖: { grade: '紫', maxLevel: 3, atkType: 'single', weaponType: '弓', basicFeature: '远程单体攻击', energyMax: 7, skillCd: 10, skillName: '箭雨',
+      base: { atk: 36, cd: 0.8, range: 4 },
+      skillDesc: { 1: '技能锁定，仅普攻生效', 2: '解锁箭雨', 3: '箭雨目标数量+2，伤害提升25%' } },
+    黄盖: { grade: '紫', maxLevel: 3, atkType: 'single', weaponType: '铁鞭', basicFeature: '普攻自带20%破甲（未合成卡也生效）', energyMax: 8, skillCd: 13, skillName: '苦肉焚营',
+      base: { atk: 42, cd: 0.85, range: 1.6 },
+      skillDesc: { 1: '技能锁定，仅普攻生效（破甲被动已生效）', 2: '解锁苦肉焚营', 3: '技能期间普攻破甲60%→70%；灼烧伤害+30%，冲击波范围增大' } }
   };
+  const HERO_DEF = {};
+  for (const k of Object.keys(HERO_RAW)) {
+    const r = HERO_RAW[k];
+    const def = { name: k, grade: r.grade, maxLevel: r.maxLevel, atkType: r.atkType,
+      weaponType: r.weaponType, basicFeature: r.basicFeature, skillName: r.skillName,
+      energyMax: r.energyMax, skillCd: r.skillCd, skill: r.skillName, levels: {} };
+    for (let lv = 1; lv <= r.maxLevel; lv++) {
+      const m = HERO_MUL[lv];
+      def.levels[lv] = {
+        atk: +(r.base.atk * m).toFixed(2),
+        cd: +(r.base.cd * m).toFixed(2),
+        range: +(r.base.range * m).toFixed(2),
+        skillDesc: r.skillDesc[lv]
+      };
+    }
+    HERO_DEF[k] = def;
+  }
 
   // —— 武将两字配对表（先放首字再放次字）——
   // 由 HERO_DEF 自动推导，支持「一字多配」：如 黄→忠/盖/祖、张→飞/苞/翼、关→羽/平/兴。
   // 结构为一对多（首字 → 次字数组），避免手工维护写死一对一而漏配。
   const HERO_FIRST = {};    // 首字 → [次字...]
   const HERO_SECOND = {};   // 次字 → [首字...]
-  (function buildHeroPairIndex() {
+  function buildHeroPairIndex() {
+    for (const k in HERO_FIRST) delete HERO_FIRST[k];
+    for (const k in HERO_SECOND) delete HERO_SECOND[k];
     for (const name of Object.keys(HERO_DEF)) {
       if (name.length !== 2) continue;
       const a = name[0], b = name[1];
       (HERO_FIRST[a] || (HERO_FIRST[a] = [])).push(b);
       (HERO_SECOND[b] || (HERO_SECOND[b] = [])).push(a);
     }
-  })();
+  }
+  buildHeroPairIndex();
 
   const WEAPON_CHARS = new Set(['枪', '刀', '骑', '弓']);
   // 武将字（12 名武将的两字；首字在左、次字在右合成，见 core.findHeroPair）
@@ -232,7 +264,12 @@ ZYJ.config = (function () {
     ITEM_DRAW_RATE: 0.05,   // 征兵出道具(铲子)概率（运行以 zyjad_setting.ITEM_DRAW_RATE 为准）
     ADOU_MAX: 20,           // 阿斗爱心上限（敌人撞阿斗按 dmg 扣爱心）
     HP_GROWTH: 1.12,        // 野怪血量每波指数倍率：baseHp×HP_GROWTH^(波次-1)；1.12=原版，1.10平缓，1.15硬核
-    HP_CAP_MUL: 50          // 野怪血量封顶倍数（基础血量×此值），防止无尽数值爆炸
+    HP_CAP_MUL: 50,         // 野怪血量封顶倍数（基础血量×此值），防止无尽数值爆炸
+    EXP_MOB: 1,             // 武将击杀小怪获得经验（助攻不加经验）
+    EXP_BOSS: 10,           // 武将击杀 BOSS 获得经验
+    EXP_TO_REACH: { 2:35, 3:75, 4:110, 5:130 }, // 升到下一级所需「累计经验」（金将到5级，紫将到3级）
+    ENERGY_PER_HIT: 1,      // 武将每次普攻命中回复能量
+    ENERGY_REGEN: 0.12      // 武将每秒被动回复能量（独立于普攻）
   };
 
   // —— 野怪 / BOSS 定义（与 zyjad_enemy 一致）——
@@ -326,10 +363,15 @@ ZYJ.config = (function () {
     if (Array.isArray(server.heroes)) {
       for (const h of server.heroes) {
         const key = h.heroKey;
-        const def = HERO_DEF[key] || (HERO_DEF[key] = { name: h.name, grade: h.grade, skill: h.skill, maxLevel: h.maxLevel, atkType: h.atkType, levels: {} });
-        def.name = h.name; def.grade = h.grade; def.skill = h.skill; def.maxLevel = h.maxLevel; def.atkType = h.atkType;
-        def.levels[h.level] = { atk: +h.atk, cd: +h.cd, range: +h.range, atkType: h.atkType };
+        const def = HERO_DEF[key] || (HERO_DEF[key] = { name: h.name, grade: h.grade, skill: h.skillName, maxLevel: h.maxLevel, atkType: h.atkType, levels: {} });
+        def.name = h.name; def.grade = h.grade; def.skill = h.skillName; def.maxLevel = h.maxLevel; def.atkType = h.atkType;
+        // 重做版新增字段：武器类型 / 普攻特性 / 技能名 / 技能描述 / 能量上限 / 技能CD（全等级固定）
+        def.weaponType = h.weaponType; def.basicFeature = h.basicFeature;
+        def.skillName = h.skillName; def.skillDesc = h.skillDesc;
+        def.energyMax = +h.energyMax || 0; def.skillCd = +h.skillCd || 0;
+        def.levels[h.level] = { atk: +h.atk, cd: +h.cd, range: +h.range, atkType: h.atkType, skillDesc: h.skillDesc };
       }
+      buildHeroPairIndex();   // 服务端武将可能与内置不一致，重建配对索引
     }
     if (Array.isArray(server.weapons)) {
       for (const w of server.weapons) WEAPON_DEF[w.weaponName] = { fitHero: w.fitHero, effect: w.effect };
@@ -371,18 +413,22 @@ ZYJ.config = (function () {
     // 地图覆盖：后台地图编辑器保存的整图（每行字符串）。校验行列整齐且字符合法后才采用，
     // 并清空路径缓存（否则仍按旧地图算出的兵道）。
     if (Array.isArray(server.map) && server.map.length) {
-      const rows = server.map.filter(s => typeof s === 'string' && s.length > 0);
+      const rows = server.map.filter(s => typeof s === 'string' && s.length > 0).map(s => s.slice(0, 8)).slice(0, 10);
       const w = rows.length ? rows[0].length : 0;
       const ok = rows.length > 0 && w > 0 && rows.every(s => s.length === w && /^[ASpP.o#w]+$/.test(s));
       if (ok) {
         MAP = rows.slice();
+        ROWS = MAP.length; COLS = MAP[0].length;
         _laneCache = null;
       }
     }
   }
 
   return {
-    COLS, ROWS, CELL, MAP, TYP,
+    CELL, TYP,
+    get COLS() { return COLS; },
+    get ROWS() { return ROWS; },
+    get MAP() { return MAP; },
     get LANE() { return getLane(MAP, TYP); },
     get LANE_ALLY() { return getLaneAlly(MAP, TYP); },
     UNIT_DEF, HERO_DEF, HERO_FIRST, HERO_SECOND, WEAPON_DEF,
