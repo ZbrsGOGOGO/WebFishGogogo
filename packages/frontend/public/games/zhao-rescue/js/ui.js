@@ -50,10 +50,10 @@ ZYJ.ui = (function () {
         const isW = WEAPON_CHARS.has(c.ch);
         d.className = 'card' + (isW ? ' wp' : ' heroch');
         if (isW) {
-          const def = UNIT_DEF[c.ch], L = def.levels[1];
+          const def = UNIT_DEF[c.ch], L = def.levels[c.level] || def.levels[1];
           d.innerHTML = '<div class="gly">' + c.ch + '</div>'
             + '<div class="cap">' + def.role + '</div>'
-            + '<div class="stat">射' + L.range + '·攻' + L.atk + '<br>频' + L.cd + 's</div>'
+            + '<div class="stat">射' + L.range + '·攻' + L.atk + '<br>速' + L.cd + '/s</div>'
             + (c.level > 1 ? '<div class="lv">' + c.level + '</div>' : '');
         } else {
           d.innerHTML = '<div class="gly">' + c.ch + '</div><div class="cap">武将字</div>';
@@ -386,7 +386,7 @@ ZYJ.ui = (function () {
       const got = codexSet.has('unit:' + u);
       const def = UNIT_DEF[u], L = def.levels[1];
       add(got ? '武器·' + def.name + '（已解锁）' : '武器（未解锁）',
-        got ? (def.role + '｜射' + L.range + ' 攻' + L.atk + ' 频' + L.cd + 's（满级Lv' + Object.keys(def.levels).length + '）') : '—');
+        got ? (def.role + '｜射' + L.range + ' 攻' + L.atk + ' 速' + L.cd + '/s（满级Lv' + Object.keys(def.levels).length + '）') : '—');
     });
     Object.keys(HERO_DEF).forEach(h => {
       const got = codexSet.has('hero:' + h);
@@ -473,7 +473,7 @@ ZYJ.ui = (function () {
       } else {
         if (to.unit.kind === 'hero') { log('武将已就位，无法覆盖'); return; }
         if (to.unit.kind === 'unit' && su.kind === 'unit' && core.canMerge(su.card, to.unit.card)) {
-          to.unit.card.level++; to.unit.atk = core.unitAtk(to.unit); from.unit = null;
+          core.upgradeUnit(to.unit); from.unit = null;
           const gi = core.G.units.indexOf(su); if (gi >= 0) core.G.units.splice(gi, 1);
           log('合成 ' + to.unit.card.level + '级'); renderAll();
         } else {                                   // 不同兵种/等级 → 替换位置（交换两格单位）

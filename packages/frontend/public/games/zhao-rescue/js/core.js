@@ -13,6 +13,7 @@ ZYJ.core = (function () {
   // 合成武将统一按「相邻两字拼名 + HERO_DEF 查表」判定，故无需 HERO_FIRST/SECOND
   const WEAPON_CHARS = cfg.WEAPON_CHARS, HERO_CHARS = cfg.HERO_CHARS, ITEM_DEF = cfg.ITEM_DEF;
   const POOL = cfg.POOL, CFG = cfg.CFG, WAVE_DEF = cfg.WAVE_DEF, MAIN = cfg.MAIN, MERCHANT_ITEMS = cfg.MERCHANT_ITEMS, WAVES = cfg.WAVES;
+  const WEAPON_ATKSPEED_MUL = cfg.WEAPON_ATKSPEED_MUL || 1;
 
   const cv = document.getElementById('cv');
   const ctx = cv ? cv.getContext('2d') : null;
@@ -24,10 +25,29 @@ ZYJ.core = (function () {
   let screen = 'home', paused = false, selHand = null, dragState = null;
 
   /* ============ 当日商店（localStorage 按日期，今天一整天生效） ============ */
+  const DAY_BALANCE_VERSION = 2;
   function todayKey() { const d = new Date(), m = d.getMonth() + 1, day = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day); }
+  function emptyDayState() {
+    return { date: todayKey(), balanceVersion: DAY_BALANCE_VERSION,
+      buffs: { meteor: false, mud: false, goldShovel: false, zhaoxian: false, shengzhi: false,
+        peasantLevel: 0, lifeBonus: 0, opponentLifeBonus: 0 }, stash: {} };
+  }
   function loadDayState() {
     let o = null; try { o = JSON.parse(localStorage.getItem('momo_zyjad_day_' + window.ZYJ_PLAYER_KEY) || 'null'); } catch (_) {}
-    if (!o || o.date !== todayKey()) o = { date: todayKey(), buffs: { meteor: false, mud: false, goldShovel: false, zhaoxian: false, shengzhi: false, peasantLevel: 0, lifeBonus: 0 }, stash: {} };
+    if (!o || o.date !== todayKey()) return emptyDayState();
+    if (!o.buffs || typeof o.buffs !== 'object') o.buffs = {};
+    if (!o.stash || typeof o.stash !== 'object') o.stash = {};
+    // 旧版每次购买把“+5/+3 条命”误写成我方 +100，且没有持久化对方增益；按购买次数等比迁移。
+    if (o.balanceVersion !== DAY_BALANCE_VERSION) {
+      const legacyBonus = Math.max(0, Number(o.buffs.lifeBonus) || 0);
+      const purchases = legacyBonus > 0 ? Math.max(1, Math.round(legacyBonus / 100)) : 0;
+      o.buffs.lifeBonus = purchases * 5;
+      o.buffs.opponentLifeBonus = purchases * 3;
+    } else {
+      o.buffs.lifeBonus = Math.max(0, Number(o.buffs.lifeBonus) || 0);
+      o.buffs.opponentLifeBonus = Math.max(0, Number(o.buffs.opponentLifeBonus) || 0);
+    }
+    o.balanceVersion = DAY_BALANCE_VERSION;
     return o;
   }
   function saveDayState() { try { localStorage.setItem('momo_zyjad_day_' + window.ZYJ_PLAYER_KEY, JSON.stringify(dayState)); } catch (_) {} }
@@ -93,7 +113,8 @@ ZYJ.core = (function () {
     G.buffs = { meteor: !!db.meteor, mud: !!db.mud, goldShovel: !!db.goldShovel, zhaoxian: !!db.zhaoxian, shengzhi: !!db.shengzhi, peasantLevel: db.peasantLevel || 0, peasantTimer: 0 };
     const lb = db.lifeBonus || 0;
     G.adouMax += lb; G.adouHp = Math.min(G.adouMax, G.adouHp + lb);
-    if (G.mode === 'pvp') { G.oppAdouMax += lb; G.oppAdouHp = Math.min(G.oppAdouMax, G.oppAdouHp + lb); }
+    const oppLb = db.opponentLifeBonus || 0;
+    if (G.mode === 'pvp') { G.oppAdouMax += oppLb; G.oppAdouHp = Math.min(G.oppAdouMax, G.oppAdouHp + oppLb); }
     for (const name in dayState.stash) { const n = dayState.stash[name] | 0; for (let k = 0; k < n; k++) items.push({ kind: 'item', item: name }); }
   }
   function reset(mode, ci, li) {
@@ -181,11 +202,44 @@ ZYJ.core = (function () {
     const L = UNIT_DEF[u.card.ch].levels[u.card.level];
     return L ? L.atk : 0;
   }
+  function attackIntervalSeconds(rate, multiplier) {
+    const attacksPerSecond = Number(rate) * (Number(multiplier) || 1);
+    return attacksPerSecond > 0 ? 1 / attacksPerSecond : 1;
+  }
+  function refreshUnitStats(u) {
+    if (!u) return false;
+    const isHero = u.kind === 'hero';
+    const def = isHero ? HERO_DEF[u.hero] : (u.card && UNIT_DEF[u.card.ch]);
+    const level = isHero ? u.level : (u.card && u.card.level);
+    const L = def && def.levels && def.levels[level];
+    if (!L) return false;
+    u.atk = Number(L.atk);
+    u.attackSpeed = Number(L.cd);
+    u.cd0 = attackIntervalSeconds(u.attackSpeed, isHero ? 1 : WEAPON_ATKSPEED_MUL);
+    u.range = Number(L.range);
+    u.atkType = L.atkType || def.atkType;
+    if (!Number.isFinite(u.cd) || u.cd < 0) u.cd = 0;
+    else u.cd = Math.min(u.cd, u.cd0);
+    return true;
+  }
+  function upgradeUnit(u) {
+    if (!u || (u.kind !== 'unit' && u.kind !== 'hero')) return false;
+    const isHero = u.kind === 'hero';
+    const def = isHero ? HERO_DEF[u.hero] : UNIT_DEF[u.card.ch];
+    const max = isHero ? (def.maxLevel || 5) : Math.max(...Object.keys(def.levels).map(Number));
+    const level = isHero ? u.level : u.card.level;
+    if (!Number.isInteger(level) || level >= max) return false;
+    if (isHero) u.level++;
+    else u.card.level++;
+    return refreshUnitStats(u);
+  }
   function placeChar(r, c, ch, level) {
     const def = UNIT_DEF[ch];
-    const lv = (level != null) ? level : ((G.buffs.shengzhi && Math.random() < 0.05) ? 2 : 1);  // 升职令：5% 刷出即 2 级
-    const L = def.levels[lv] || def.levels[1];
-    const u = { kind: 'unit', card: { ch: ch, level: lv }, r: r, c: c, cd: 0, cd0: Math.round(L.cd * 60), atk: L.atk, range: L.range, atkType: L.atkType, x: 0, y: 0 };
+    const max = Math.max(...Object.keys(def.levels).map(Number));
+    const requested = (level != null) ? Number(level) : ((G.buffs.shengzhi && Math.random() < 0.05) ? 2 : 1);  // 升职令：5% 刷出即 2 级
+    const lv = Number.isInteger(requested) ? Math.max(1, Math.min(max, requested)) : 1;
+    const u = { kind: 'unit', card: { ch: ch, level: lv }, r: r, c: c, cd: 0, cd0: 1, atk: 0, range: 0, atkType: def.atkType, x: 0, y: 0 };
+    refreshUnitStats(u);
     const [x, y] = cellPx(c, r); u.x = x; u.y = y;
     board[r][c].unit = u; G.units.push(u);
     // 【PVP】武器落子（含合成/替换/顶替武将）都走这里，统一广播 place
@@ -205,7 +259,7 @@ ZYJ.core = (function () {
     }
     if (b.unit.kind === 'unit') {
       if (b.unit.card.ch === card.ch && b.unit.card.level === card.level && card.level < 5) {
-        b.unit.card.level++; b.unit.atk = unitAtk(b.unit); hand.splice(i, 1);
+        upgradeUnit(b.unit); hand.splice(i, 1);
         ZYJ.ui && ZYJ.ui.log('合成 ' + b.unit.card.ch + ' ' + b.unit.card.level + '级'); return true;
       }
       const back = { kind: 'char', ch: b.unit.card.ch, level: b.unit.card.level };
@@ -238,8 +292,8 @@ ZYJ.core = (function () {
       const u = board[rr][cc].unit;
       if (u) { const i = G.units.indexOf(u); if (i >= 0) G.units.splice(i, 1); board[rr][cc].unit = null; }
     }
-    const L = d.levels[1] || d.levels[d.maxLevel];
-    const hero = { kind: 'hero', hero: p.name, level: 1, r: p.fr, c: p.fc, r2: p.sr, c2: p.sc, cd: 0, cd0: Math.round(L.cd * 60), atk: L.atk, range: L.range, atkType: L.atkType, x: 0, y: 0 };
+    const hero = { kind: 'hero', hero: p.name, level: 1, r: p.fr, c: p.fc, r2: p.sr, c2: p.sc, cd: 0, cd0: 1, atk: 0, range: 0, atkType: d.atkType, x: 0, y: 0 };
+    refreshUnitStats(hero);
     const [x1, y1] = cellPx(p.fc, p.fr), [x2, y2] = cellPx(p.sc, p.sr);
     hero.x = (x1 + x2) / 2; hero.y = (y1 + y2) / 2;
     board[p.fr][p.fc].unit = hero; board[p.sr][p.sc].unit = hero; G.units.push(hero);
@@ -322,7 +376,7 @@ ZYJ.core = (function () {
       }
       if (card.item === '神兵符') {                 // 神兵符：拖到武器单位/武将上升 1 级
         if (b.unit && b.unit.kind === 'unit') {
-          b.unit.card.level++; b.unit.atk = unitAtk(b.unit);
+          if (!upgradeUnit(b.unit)) { ZYJ.ui && ZYJ.ui.toast('该单位已达满级'); return null; }
           // 【PVP】神兵符升级武器，广播 item 让对方同步等级
           if (ZYJ.net && ZYJ.net.isActive && ZYJ.net.isActive()) ZYJ.net.op('item', { item: '神兵符', r: r, c: c });
           const i = items.indexOf(card); if (i >= 0) items.splice(i, 1); consumeStash('神兵符');
@@ -331,8 +385,7 @@ ZYJ.core = (function () {
         if (b.unit && b.unit.kind === 'hero') {
           const def = HERO_DEF[b.unit.hero], max = def.maxLevel || 5;
           if (b.unit.level >= max) { ZYJ.ui && ZYJ.ui.toast(b.unit.hero + ' 已达满级 ' + max); return null; }
-          b.unit.level++; const L = def.levels[b.unit.level];
-          b.unit.atk = L.atk; b.unit.cd0 = Math.round(L.cd * 60); b.unit.range = L.range; b.unit.atkType = L.atkType;
+          upgradeUnit(b.unit);
           // 【PVP】神兵符升级武将，广播 item 让对方同步等级
           if (ZYJ.net && ZYJ.net.isActive && ZYJ.net.isActive()) ZYJ.net.op('item', { item: '神兵符', r: r, c: c });
           const i = items.indexOf(card); if (i >= 0) items.splice(i, 1); consumeStash('神兵符');
@@ -382,22 +435,22 @@ ZYJ.core = (function () {
     if (b.unit) {
       // 已占格（满格）→ 允许替换：原单位退回备战席（含武将则拆回两枚将字）
       if (b.unit.kind === 'unit') {
-        if (b.unit.card.ch === ch && b.unit.card.level < 5) {   // 同武器同等级 → 合成升级
-          b.unit.card.level++; b.unit.atk = unitAtk(b.unit);
+        if (b.unit.card.ch === ch && b.unit.card.level === (card.level || 1) && b.unit.card.level < 5) {   // 同武器同等级 → 合成升级
+          upgradeUnit(b.unit);
           // 【PVP】神兵符升级武器，广播 item 让对方同步等级
           if (ZYJ.net && ZYJ.net.isActive && ZYJ.net.isActive()) ZYJ.net.op('item', { item: '神兵符', r: r, c: c });
           return 'consumed';
         }
         const back = { kind: 'char', ch: b.unit.card.ch, level: b.unit.card.level };
         const gi = G.units.indexOf(b.unit); if (gi >= 0) G.units.splice(gi, 1);
-        b.unit = null; placeChar(r, c, ch); codexSet.add('unit:' + ch);
+        b.unit = null; placeChar(r, c, ch, card.level); codexSet.add('unit:' + ch);
         hand.push(back);
         ZYJ.ui && ZYJ.ui.log('替换：' + ch + ' ↔ ' + back.ch + '（原单位已回备战席）');
         return 'consumed';
       }
       if (b.unit.kind === 'char') {                          // 待激活将字 → 替换为武器，将字退回备战席
         const back = { kind: 'char', ch: b.unit.ch, level: 1 };
-        b.unit = null; placeChar(r, c, ch); codexSet.add('unit:' + ch);
+        b.unit = null; placeChar(r, c, ch, card.level); codexSet.add('unit:' + ch);
         hand.push(back);
         ZYJ.ui && ZYJ.ui.log('替换：' + ch + ' ↔ 将字' + back.ch + '（将字已回备战席）');
         return 'consumed';
@@ -406,21 +459,21 @@ ZYJ.core = (function () {
         const hero = b.unit, hName = hero.hero;
         const gi = G.units.indexOf(hero); if (gi >= 0) G.units.splice(gi, 1);
         if (board[hero.r2] && board[hero.r2][hero.c2] && board[hero.r2][hero.c2].unit === hero) board[hero.r2][hero.c2].unit = null;
-        b.unit = null; placeChar(r, c, ch); codexSet.add('unit:' + ch);
+        b.unit = null; placeChar(r, c, ch, card.level); codexSet.add('unit:' + ch);
         hand.push({ kind: 'char', ch: hName[0], level: 1 });
         hand.push({ kind: 'char', ch: hName[1], level: 1 });
         ZYJ.ui && ZYJ.ui.log('替换：' + ch + ' 顶替武将 ' + hName + '（两枚将字已回备战席）');
         return 'consumed';
       }
     }
-    placeChar(r, c, ch); codexSet.add('unit:' + ch);
+    placeChar(r, c, ch, card.level); codexSet.add('unit:' + ch);
     return 'consumed';
   }
   function applyItem(c) {
     if (c.item === '神兵符') { ZYJ.ui && ZYJ.ui.toast('神兵符请拖到武器单位上升级'); return false; }
     if (c.item === '包子') {                       // 包子：主动，55% 续 1 命 / 45% 减 1 命
-      if (Math.random() < 0.55) { G.adouHp = Math.min(G.adouMax, G.adouHp + 20); ZYJ.ui && ZYJ.ui.log('包子：阿斗续 1 命 (+20)'); }
-      else { G.adouHp = Math.max(0, G.adouHp - 20); ZYJ.ui && ZYJ.ui.log('包子：阿斗 -1 命 (-20)'); }
+      if (Math.random() < 0.55) { G.adouHp = Math.min(G.adouMax, G.adouHp + 1); ZYJ.ui && ZYJ.ui.log('包子：阿斗续 1 命 (+1)'); }
+      else { G.adouHp = Math.max(0, G.adouHp - 1); ZYJ.ui && ZYJ.ui.log('包子：阿斗 -1 命 (-1)'); }
       const i = items.indexOf(c); if (i >= 0) items.splice(i, 1); consumeStash('包子');
       // 【PVP】包子（阿斗血量随机增减）广播 item；对方血量为权威结算项，重放侧仅作事件标记
       if (ZYJ.net && ZYJ.net.isActive && ZYJ.net.isActive()) ZYJ.net.op('item', { item: '包子' });
@@ -493,7 +546,7 @@ ZYJ.core = (function () {
   function attack(u, t) {
     const range = u.range * CELL;
     if (Math.hypot(u.x - t.x, u.y - t.y) > range) return;
-    let dmg = u.atk * (G.atkSpeedMul || 1);
+    let dmg = u.atk;
     // 武将专属增益（叠加在总伤害上）
     if (u.kind === 'hero') {
       if (u.hero === '赵云') dmg *= 1.3;
@@ -601,8 +654,11 @@ ZYJ.core = (function () {
     const slowFactor = 1 + 0.1 * slowStacks;
     for (const u of G.units) {
       if (u.kind === 'char') continue;   // 待激活将字（赵/云…碎片）：静默，不参战、不触发攻击
-      u.cd--;
-      if (u.cd <= 0) { const t = nearestEnemy(u.x, u.y); if (t) { u.cd = u.cd0 * slowFactor; attack(u, t); } }
+      u.cd -= dt;
+      if (u.cd <= 0) {
+        const t = nearestEnemy(u.x, u.y);
+        if (t) { u.cd = u.cd0 * slowFactor / Math.max(0.1, G.atkSpeedMul || 1); attack(u, t); }
+      }
     }
     // 敌人移动（严格沿 LANE 路径格子行走，不穿墙）
     const sp = CFG.SPEED_MUL;
@@ -696,8 +752,7 @@ ZYJ.core = (function () {
     G.pvpEnded = false;
     G.pvpSchedule = buildPvpSchedule();
     G.totalWaves = G.pvpSchedule.length;     // 仅用于 HUD 波次计数显示
-    G.oppAdouMax = G.adouMax;
-    G.oppAdouHp = G.adouMax;
+    G.oppAdouHp = G.oppAdouMax;
     G.startDelay = Math.max(0, (G.pvpStartAt - Date.now()) / 1000);
     ZYJ.ui && ZYJ.ui.log('房间就绪：' + opts.code + '｜对手【' + G.pvpOppName + '】｜倒计时后统一开战');
     // 【PVP】对局开始即把开局手牌作为 draw 结果广播（含随机，必须发结果）
@@ -724,9 +779,10 @@ ZYJ.core = (function () {
     const db = dayState.buffs;
     switch (it.id) {
       case 'xumingdan':                          // 续命丹：今日每场 +5 命
-        db.lifeBonus = (db.lifeBonus || 0) + 100;
-        G.adouMax += 100; G.adouHp = Math.min(G.adouMax, G.adouHp + 100);
-        if (G.mode === 'pvp') { G.oppAdouMax += 60; G.oppAdouHp = Math.min(G.oppAdouMax, G.oppAdouHp + 60); }
+        db.lifeBonus = (db.lifeBonus || 0) + 5;
+        db.opponentLifeBonus = (db.opponentLifeBonus || 0) + 3;
+        G.adouMax += 5; G.adouHp = Math.min(G.adouMax, G.adouHp + 5);
+        if (G.mode === 'pvp') { G.oppAdouMax += 3; G.oppAdouHp = Math.min(G.oppAdouMax, G.oppAdouHp + 3); }
         ZYJ.ui && ZYJ.ui.log('续命丹：今日每场我方阿斗 +5 命' + (G.mode === 'pvp' ? '，对方 +3 命' : ''));
         break;
       case 'yanshi': db.meteor = true; G.buffs.meteor = true; ZYJ.ui && ZYJ.ui.log('陨石：今日敌人近斗即被轰碎'); break;
@@ -779,7 +835,7 @@ ZYJ.core = (function () {
     // 方法
     initBoard, cellPx, cellFromEvent, inBoard, freeCells, countUnits,
     splitHeroToHand, moveHeroFromCell, removeUnitToHand,
-    reset, conscript, canMerge, mergeHand, applyToCell, unitAtk, placeChar, tryPlaceWeapon,
+    reset, conscript, canMerge, mergeHand, applyToCell, unitAtk, refreshUnitStats, upgradeUnit, attackIntervalSeconds, placeChar, tryPlaceWeapon,
     startWave, queueWave,
     shuffle, spawnEnemy, update, applyItem, buyMerchant, closeMerchant, getDayState, getOfficeCoin, grantOfficeCoin,
     WEAPON_CHARS, buildPvpSchedule, startPvp, pvpEnd,

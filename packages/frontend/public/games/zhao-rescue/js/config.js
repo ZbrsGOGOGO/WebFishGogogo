@@ -85,12 +85,12 @@ ZYJ.config = (function () {
     return ally;
   }
 
-  // —— 武器（单位）定义：cd 单位秒，range 单位格 ——
+  // —— 武器（单位）定义：cd 表示每秒攻击次数，range 单位格 ——
   // 说明：数值按等级分级（levels[1..5]），与数据库 zyjad_unit 一致；
   //       applyServerConfig() 会用后端数据就地覆盖/补全。atkType:
   //       single=单体  pierce=贯穿  aoe=范围群伤  splash=单体+溅射
-  // 攻击速率统一倍率：1.3 = 攻速上调为基准的 1.3 倍（生效时 cd 会除以该值）。
-  // 这里存「基准 cd」，倍率在 WEAPON_ATKSPEED_MUL 一处调整，前后端数据源都自动生效。
+  // 攻击速率统一倍率：1.3 = 基础兵种每秒攻击次数再乘 1.3。
+  // 数值表始终保留原始攻速，战斗层统一换算攻击间隔，避免展示值和实战值互相污染。
   const WEAPON_ATKSPEED_MUL = 1.3;
   const UNIT_DEF = {
     枪: { name: '枪兵', role: '近战直线贯穿', atkType: 'pierce', feature: '攻速成长最高，穿透一条线上所有敌人', levels: {
@@ -106,17 +106,6 @@ ZYJ.config = (function () {
       1: { atk: 1.6, cd: 1.25, range: 6 }, 2: { atk: 2.8, cd: 2.10, range: 6 }, 3: { atk: 4.2, cd: 3.94, range: 6 },
       4: { atk: 6.5, cd: 5.40, range: 6 }, 5: { atk: 8.4, cd: 6.20, range: 6 } } }
   };
-  // 对武器等级数值套用攻速倍率：仅改 cd（攻击间隔），其余（atk/range）不变
-  (function applyWeaponAtkSpeed() {
-    if (!WEAPON_ATKSPEED_MUL || WEAPON_ATKSPEED_MUL === 1) return;
-    for (const k of Object.keys(UNIT_DEF)) {
-      const lv = UNIT_DEF[k].levels || {};
-      for (const n of Object.keys(lv)) {
-        if (lv[n] && typeof lv[n].cd === 'number') lv[n].cd = +(lv[n].cd / WEAPON_ATKSPEED_MUL).toFixed(2);
-      }
-    }
-  })();
-
   // —— 武将定义（共 12 名，分级数值与 zyjad_hero 一致）——
   // 合成规则：左放首字 + 右放次字（如 赵 左 + 云 右 = 赵云），详见 core.findHeroPair。
   const HERO_DEF = {
@@ -185,7 +174,7 @@ ZYJ.config = (function () {
   };
 
   /* ===== 神秘商人（每场战斗结束出现，道具当天有效） =====
-     说明：货币统一用「办公币💰」结算（独立于游戏内包子，钱包跨天/会话持久）。
+     说明：只使用本玩法「战利券」结算（独立于游戏内包子和本站办公币，钱包跨天/会话持久）。
      每次商店出现只能购买 1 件；价格可在此调整。 */
   const MERCHANT_ITEMS = [
     { id: 'xumingdan', name: '续命丹', rarity: '稀有', price: 50, type: 'passive',
@@ -250,7 +239,7 @@ ZYJ.config = (function () {
   // atk 语义 = 撞阿斗扣除的爱心数；敌人不主动攻击我方棋子，只冲向阿斗。
   // glyph 为战场显示单字；boss 决定是否画大写 + 击杀高额奖励。
   const WAVE_DEF = {
-    山贼:     { gly: '贼', hp: 18,  speed: 0.8,  dmg: 1, boss: false, feature: '基础小怪，撞阿斗扣 1 爱心' },
+    山贼:     { gly: '贼', hp: 18,  speed: 0.40, dmg: 1, boss: false, feature: '基础小怪，撞阿斗扣 1 爱心' },
     曹军刀兵: { gly: '刀', hp: 32,  speed: 0.70, dmg: 1, boss: false, feature: '血量更高，需要更多输出击杀' },
     曹军枪兵: { gly: '枪', hp: 26,  speed: 0.90, dmg: 1, boss: false, feature: '移动快，容易偷跑' },
     曹军弓手: { gly: '弓', hp: 20,  speed: 0.60, dmg: 1, boss: false, feature: '移速慢，血量低' },
@@ -331,9 +320,7 @@ ZYJ.config = (function () {
         const key = u.unitKey;
         const def = UNIT_DEF[key] || (UNIT_DEF[key] = { name: u.name, role: u.role, atkType: u.atkType, feature: u.feature, levels: {} });
         def.name = u.name; def.role = u.role; def.atkType = u.atkType; def.feature = u.feature;
-        // 数据库存「基准 cd」，此处同样套用攻速倍率，保证前后端数据源行为一致
-        const cd = +u.cd / (WEAPON_ATKSPEED_MUL || 1);
-        def.levels[u.level] = { atk: +u.atk, cd: +cd.toFixed(2), range: +u.range, atkType: u.atkType };
+        def.levels[u.level] = { atk: +u.atk, cd: +u.cd, range: +u.range, atkType: u.atkType };
       }
     }
     if (Array.isArray(server.heroes)) {
@@ -368,7 +355,7 @@ ZYJ.config = (function () {
         for (let k = 0; k < n; k++) tmp[i].push(r.enemyName);
       }
       WAVES.length = 0; for (let i = 0; i < tmp.length; i++) WAVES.push(tmp[i] || []);
-      scaleNonBossWaves(WAVES);   // 数据库波次同样套用「非 BOSS 波翻倍」，两侧效果一致
+      // zyjad_wave.sql 的 cnt 已是最终数量，不在读取后再次翻倍。
     }
     // 全局配置（CFG）全部以数据库 zyjad_setting 表为准，覆盖前端兜底默认值
     if (Array.isArray(server.settings)) {
@@ -400,6 +387,7 @@ ZYJ.config = (function () {
     get LANE_ALLY() { return getLaneAlly(MAP, TYP); },
     UNIT_DEF, HERO_DEF, HERO_FIRST, HERO_SECOND, WEAPON_DEF,
     WEAPON_CHARS, HERO_CHARS, ITEM_DEF, MERCHANT_ITEMS, POOL, CFG, WAVE_DEF, MAIN, WAVES,
+    WEAPON_ATKSPEED_MUL,
     applyServerConfig,
     // 暴露路径构建工具（core.init 调用）
     buildLane, getLane, getLaneAlly
