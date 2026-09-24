@@ -23,6 +23,7 @@ export function developmentProgressView(version: number, rows: AdminAuditLog[]):
   let reviewedAt: string | null = null;
   let summary: string | null = null;
   let progress: DevelopmentProgress | null = null;
+  let closure: DevelopmentReviewSummary['closure'];
   for (const row of rows.filter(trusted).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))) {
     const rowVersion = row.nextState.version;
     if (!Number.isSafeInteger(rowVersion) || Number(rowVersion) < 1 || Number(rowVersion) > version) continue;
@@ -37,10 +38,13 @@ export function developmentProgressView(version: number, rows: AdminAuditLog[]):
     }
     if (Number(rowVersion) >= reviewedVersion) {
       reviewedVersion = Number(rowVersion); reviewedAt = row.createdAt.toISOString();
-      if (row.action === 'development.request.offline_completed') summary = (row.reason ?? '已核验上线').slice(0, 1200);
+      if (row.action === 'development.request.offline_completed') {
+        summary = (row.reason ?? '已核验上线').slice(0, 1200);
+        closure = row.nextState.completionMode === 'owner_closed' ? 'owner_closed' : 'verified_release';
+      }
     }
   }
   return { progress, review: { reviewedVersion, reviewedAt, hasUnreviewedChanges: version > reviewedVersion,
     completedItems: progress?.items.filter((item) => item.status === 'done').length ?? 0,
-    totalItems: progress?.items.length ?? 0, summary } };
+    totalItems: progress?.items.length ?? 0, summary, ...(closure ? { closure } : {}) } };
 }

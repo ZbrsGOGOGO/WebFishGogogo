@@ -2,6 +2,7 @@ import type {
   DevelopmentCategory,
   DevelopmentEvent,
   DevelopmentPerson,
+  DevelopmentReviewSummary,
   DevelopmentStatus,
 } from '@stealth-reader/shared';
 import type { TagColor } from '../../components/ui';
@@ -25,11 +26,18 @@ export const DEVELOPMENT_STATUS_LABELS: Record<DevelopmentStatus, string> = {
   done: '已完成',
 };
 
-export function developmentStatusColor(status: DevelopmentStatus): TagColor {
+export function developmentStatusColor(status: DevelopmentStatus, review?: DevelopmentReviewSummary): TagColor {
+  if (status === 'done' && review?.closure === 'owner_closed') return 'neutral';
   if (status === 'done' || status === 'accepted') return 'success';
   if (status === 'rejected') return 'danger';
   if (status === 'submitted' || status === 'needs_info') return 'brand';
   return 'neutral';
+}
+
+export function developmentStatusLabel(status: DevelopmentStatus, review?: DevelopmentReviewSummary): string {
+  if (status === 'done' && review?.closure === 'owner_closed') return '已归档';
+  if (status === 'done' && review?.closure === 'verified_release') return '已验收上线';
+  return DEVELOPMENT_STATUS_LABELS[status];
 }
 
 export function developmentPersonName(person: DevelopmentPerson): string {

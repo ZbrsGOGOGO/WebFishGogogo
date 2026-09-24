@@ -138,6 +138,8 @@ export interface DevelopmentReviewSummary {
   completedItems: number;
   totalItems: number;
   summary: string | null;
+  /** Only an allowlisted, audited offline operation may set this; done alone does not imply deployment. */
+  closure?: 'owner_closed' | 'verified_release';
 }
 
 export interface DevelopmentRequestDetail extends DevelopmentRequestSummary {

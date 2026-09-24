@@ -58,7 +58,7 @@ describe('community mode routes', () => {
     expect(screen.getByRole('link', { name: '登录' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: '注册工位' })).toHaveAttribute('href', '/register');
     const footer = screen.getByRole('contentinfo', { name: '站点信息' });
-    expect(footer).toHaveTextContent('摸鱼成长社区');
+    expect(footer).toHaveTextContent('轻量工作台 · 休闲社区');
     expect(footer).not.toHaveTextContent('社区版');
     expect(within(footer).getByLabelText('备案信息')).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: '隐私政策' })).toHaveAttribute('href', '/privacy-policy');

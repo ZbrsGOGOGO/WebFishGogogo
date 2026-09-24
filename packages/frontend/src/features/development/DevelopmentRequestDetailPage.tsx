@@ -30,6 +30,7 @@ import {
   developmentEventActorName,
   developmentPersonName,
   developmentStatusColor,
+  developmentStatusLabel,
   developmentTime,
   downloadPrivateBlob,
   fileSize,
@@ -352,7 +353,7 @@ function DevelopmentRequestDetailContent({
         subtitle={`${DEVELOPMENT_CATEGORY_LABELS[visibleDetail.category]} · ${developmentPersonName(visibleDetail.author)} · 更新于 ${developmentTime(visibleDetail.updatedAt)}`}
         actions={(
           <div className={styles.headerActions}>
-            <Tag color={developmentStatusColor(visibleDetail.status)}>{DEVELOPMENT_STATUS_LABELS[visibleDetail.status]}</Tag>
+            <Tag color={developmentStatusColor(visibleDetail.status, visibleDetail.review)}>{developmentStatusLabel(visibleDetail.status, visibleDetail.review)}</Tag>
             <Tag color="neutral">v{visibleDetail.version}</Tag>
             <Link className={styles.backLink} to="/development">返回列表</Link>
           </div>
@@ -480,7 +481,7 @@ function DevelopmentRequestDetailContent({
         <aside className={styles.stack}>
           <Card title="提案信息" bodyClassName={styles.cardBody}>
             <dl className={styles.metadata}>
-              <div><dt>状态</dt><dd>{DEVELOPMENT_STATUS_LABELS[visibleDetail.status]}</dd></div>
+              <div><dt>状态</dt><dd>{developmentStatusLabel(visibleDetail.status, visibleDetail.review)}</dd></div>
               <div><dt>分类</dt><dd>{DEVELOPMENT_CATEGORY_LABELS[visibleDetail.category]}</dd></div>
               <div><dt>版本</dt><dd>v{visibleDetail.version}</dd></div>
               <div><dt>创建人</dt><dd>{developmentPersonName(visibleDetail.author)}</dd></div>

@@ -162,6 +162,22 @@ describe('development pages', () => {
     resetCommunityAuthStoreForTests();
   });
 
+  it('shows archived requests separately from verified releases in list and detail', async () => {
+    const archived = detail({ status: 'done', version: 2, review: { reviewedVersion: 2,
+      reviewedAt: '2026-09-24T01:00:00.000Z', hasUnreviewedChanges: false,
+      completedItems: 0, totalItems: 0, summary: '站长结束跟进', closure: 'owner_closed' } });
+    vi.spyOn(communityDevelopmentApi, 'listRequests').mockResolvedValue(page([archived]));
+    vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(archived);
+    renderDashboard('contributor');
+    expect(await screen.findByText('已归档')).toBeInTheDocument();
+    cleanup();
+    renderDetail('contributor');
+    expect((await screen.findAllByText('已归档')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/“已归档”不代表正文/)).toBeInTheDocument();
+    expect(developmentFormat.developmentStatusLabel('done', { ...archived.review!, closure: 'verified_release' })).toBe('已验收上线');
+    expect(developmentFormat.developmentStatusLabel('done')).toBe('已完成');
+  });
+
   it('labels audited operations honestly without adding owner controls or executing timeline text', async () => {
     vi.spyOn(communityDevelopmentApi, 'getRequest').mockResolvedValue(detail({
       status: 'done',

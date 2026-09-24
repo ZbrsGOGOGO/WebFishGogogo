@@ -14,6 +14,14 @@ describe('development progress projection', () => {
       progress: { reviewedVersion: 3, items }, review: { reviewedVersion: 3, hasUnreviewedChanges: true, completedItems: 1, totalItems: 2 },
     });
   });
+  it('distinguishes owner archive from verified release using trusted completion audits', () => {
+    const completed = audit({ action: 'development.request.offline_completed',
+      nextState: { version: 4, status: 'done', completionMode: 'owner_closed', deployedCommit: 'b'.repeat(40) } });
+    expect(developmentProgressView(4, [completed]).review.closure).toBe('owner_closed');
+    expect(developmentProgressView(4, [audit({ ...completed,
+      nextState: { ...completed.nextState, completionMode: 'offline_operator' } })]).review.closure).toBe('verified_release');
+    expect(developmentProgressView(4, [audit({ ...completed, actorRole: 'user' })]).review.closure).toBeUndefined();
+  });
   it.each([
     { actorRole: 'user' }, { actorId: 'impersonated' }, { action: 'arbitrary.action' },
     { targetType: 'user' }, { nextState: { version: 5, deployedCommit: 'a'.repeat(40), summary: 'future', items } },

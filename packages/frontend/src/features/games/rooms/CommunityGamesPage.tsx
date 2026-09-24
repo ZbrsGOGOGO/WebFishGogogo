@@ -61,6 +61,7 @@ function GameCard({ card }: { card: GameCardDefinition }): JSX.Element {
 
 export function CommunityGamesPage(): JSX.Element {
   const ballpoint = useBallpointWindow();
+  const directoryRef = useRef<HTMLDivElement>(null);
   const { catalog, error: catalogError, retry } = usePlayCatalog();
   const active = useCommunityAuthStore((state) => state.phase === 'active');
   const userId = useCommunityAuthStore((state) => state.user?.publicId);
@@ -130,12 +131,18 @@ export function CommunityGamesPage(): JSX.Element {
   }
   const query = search.trim().toLocaleLowerCase();
   const visibleCards = cards.filter(card => (filter === 'all' || card.categories.includes(filter)) && (!query || `${card.title} ${card.subtitle} ${card.description}`.toLocaleLowerCase().includes(query)));
+  const jumpToCategory = (category: GameCategory): void => {
+    setFilter(category);
+    setSearch('');
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    directoryRef.current?.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  };
   return <section className={styles.gallery} aria-label="小游戏专区">
     <header className={styles.hero}>
-      <div className={styles.heroCopy}><span className={styles.eyebrow}><span />工作台 / 游戏大厅</span><h1>留一点时间，<br /><span>给好玩的事。</span></h1><p>短局挑战、同事组队与长期养成，都在这里。<br />选一个适合现在的节奏，随时返回工作台。</p><div className={styles.heroActions}><button type="button" className={styles.primaryButton} onClick={() => { setFilter('solo'); setSearch(''); }}>来一局短挑战 <span aria-hidden="true">↗</span></button><button type="button" className={styles.secondaryButton} onClick={() => { setFilter('new'); setSearch(''); }}>试试六款新玩法</button><Link className={styles.secondaryButton} to="/games/rooms">玩家建房</Link></div><div className={styles.heroHints}><span>◌ 默认静音</span><span>◇ 本地练习与账号日榜独立</span></div></div>
-      <aside className={styles.heroGuide} aria-label="收起与计时说明"><span className={styles.guideIcon} aria-hidden="true">⌘</span><span className={styles.eyebrow}>工作稿模式</span><h2>好玩，也能随时收起。</h2><p>支持小窗的游戏可以收起或切换便签，界面保持低调。</p><dl><div><dt>本地练习</dt><dd>收起画面可暂停本轮</dd></div><div><dt>实时赛局</dt><dd>联机与账号赛局仍正常计时</dd></div></dl><small>存档、暂停和参榜条件，以各游戏说明为准。</small></aside>
+      <div className={styles.heroCopy}><span className={styles.eyebrow}><span />工作台 / 游戏大厅</span><h1>留一点时间，<br /><span>给好玩的事。</span></h1><p>短局挑战、同事组队与长期养成，都在这里。<br />选一个适合现在的节奏，随时返回工作台。</p><div className={styles.heroActions}><button type="button" className={styles.primaryButton} onClick={() => jumpToCategory('solo')}>来一局短挑战 <span aria-hidden="true">↗</span></button><button type="button" className={styles.secondaryButton} onClick={() => jumpToCategory('new')}>试试六款新玩法</button><Link className={styles.secondaryButton} to="/games/rooms">玩家建房</Link></div><div className={styles.heroHints}><span>◌ 默认静音</span><span>◇ 本地练习与账号日榜独立</span></div></div>
+      <details className={styles.heroGuide}><summary>工作稿模式 · 收起与计时说明</summary><div><p>支持小窗的游戏可以收起或切换便签，界面保持低调。</p><dl><div><dt>本地练习</dt><dd>收起画面可暂停本轮</dd></div><div><dt>实时赛局</dt><dd>联机与账号赛局仍正常计时</dd></div></dl><small>存档、暂停和参榜条件，以各游戏说明为准。</small></div></details>
     </header>
-    <div className={styles.directoryToolbar}><div><span className={styles.eyebrow}>挑选你的下一局</span><h2>游戏目录</h2></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>搜索游戏</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索名称或玩法" /></label></div>
+    <div ref={directoryRef} id="game-directory" className={styles.directoryToolbar}><div><span className={styles.eyebrow}>挑选你的下一局</span><h2>游戏目录</h2></div><label className={styles.search}><span aria-hidden="true">⌕</span><span className={styles.srOnly}>搜索游戏</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="搜索名称或玩法" /></label></div>
     <div className={styles.filters} role="group" aria-label="筛选游戏类型">{FILTERS.map(item => <button key={item.key} type="button" aria-pressed={filter === item.key} onClick={() => setFilter(item.key)}>{item.label}<span>{cards.filter(card => item.key === 'all' || card.categories.includes(item.key)).length}</span></button>)}</div>
     <p className={styles.directoryStatus} aria-live="polite">显示 {visibleCards.length} 个入口 <span>本地收起可暂停；联机房间与账号赛局仍正常计时。</span></p>
     {error ? <div className={styles.error} role="alert">{error} <Link to="/games/rooms">查看进行中的房间</Link></div> : null}

@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type JSX } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
-import { COMMUNITY_FEATURE_FLAGS } from '../../app/community-nav';
 import { useCommunityAuthStore } from '../../app/store/community-auth-store';
 import { Button, Input } from '../../components/ui';
 import { CommunityAuthShell } from './CommunityAuthShell';
@@ -95,7 +94,7 @@ export function CommunityLoginPage(): JSX.Element {
             <input type="checkbox" checked={showPassword} onChange={(event) => setShowPassword(event.target.checked)} />
             显示密码
           </label>
-          {COMMUNITY_FEATURE_FLAGS.passwordReset ? <Link to="/password/forgot">忘记密码？</Link> : null}
+          <Link to="/password/forgot">忘记密码？</Link>
         </div>
         {error ? <p className="auth-form__error" role="alert">{error}</p> : null}
         <Button type="submit" loading={loading} fullWidth>

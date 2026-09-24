@@ -15,7 +15,7 @@ export function PublicSiteLayout(): JSX.Element {
           <span className={styles.brandMark} aria-hidden="true">摸</span>
           <span>
             <strong>{SITE_NAME}</strong>
-            <small>摸鱼成长社区</small>
+            <small>轻量工作台 · 休闲社区</small>
           </span>
         </Link>
         <div className={styles.utilityLinks}>

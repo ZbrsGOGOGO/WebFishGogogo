@@ -13,6 +13,7 @@ import {
 } from '../../database/entities';
 import { createLocalDevDataSource } from '../../database/local-dev-datasource';
 import { NotificationService } from '../community/notification.service';
+import { completeDevelopmentRequest } from '../../scripts/complete-development-request';
 import { DevelopmentService } from './development.service';
 
 describe('DevelopmentService', () => {
@@ -274,6 +275,25 @@ describe('DevelopmentService', () => {
     await service.addComment(author.id, created.id, '新的补充不能被旧审阅掩盖', 2);
     expect((await service.detail(owner.id, created.id)).review).toMatchObject({ reviewedVersion: 2, hasUnreviewedChanges: true });
     expect((await service.listRequests(owner.id, undefined, 1)).items[0].review).toMatchObject({ reviewedVersion: 2, hasUnreviewedChanges: true });
+  });
+
+  it('projects an owner-closed request as archived in both list and detail', async () => {
+    const owner = await activeUser('archive_owner', 'admin');
+    const author = await activeUser('archive_author');
+    await grantDirectly(author.id, owner.id);
+    const created = await service.createRequest(author.id, createInput('archive-test'));
+    const deployedCommit = 'b'.repeat(40);
+    await completeDevelopmentRequest(dataSource, {
+      requestId: created.id, expectedVersion: 1, deployedCommit,
+      confirmation: `CLOSE:${created.id}:1:${deployedCommit}`,
+      mode: 'owner_closed', reason: '站长决定结束跟进；本次并非功能发布。',
+    });
+    expect((await service.listRequests(author.id, 'done', 1)).items[0]).toMatchObject({
+      status: 'done', review: { closure: 'owner_closed' },
+    });
+    expect(await service.detail(author.id, created.id)).toMatchObject({
+      status: 'done', review: { closure: 'owner_closed' },
+    });
   });
 
   it('exports all statuses beyond one page and refuses overflow instead of silently truncating', async () => {

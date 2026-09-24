@@ -105,6 +105,16 @@ describe('redesigned community games directory', () => {
     expect(screen.getAllByRole('article')).toHaveLength(21 + LOCAL_LAB_GAMES.length);
   });
 
+  it('keeps mobile discovery controls close to the directory and collapses optional guidance', async () => {
+    const view = renderGallery();
+    await screen.findByText('贪食蛇服务端单机说明');
+    expect(view.container.querySelector('#game-directory')).toContainElement(screen.getByRole('searchbox', { name: '搜索游戏' }));
+    const guide = screen.getByText('工作稿模式 · 收起与计时说明').closest('details');
+    expect(guide).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('button', { name: /来一局短挑战/ }));
+    expect(category('单机挑战')).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('offers six new local games to guests as an explicit collection, with no score/reward creation or runtime preload', async () => {
     useCommunityAuthStore.setState({ phase: 'guest', user: null });
     const create = vi.spyOn(communityGameRoomsApi, 'create'); const rendered = renderGallery();

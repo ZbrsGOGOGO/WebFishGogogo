@@ -40,5 +40,6 @@ describe('CommunityLoginPage', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       '密码已更新，请使用新密码重新登录。',
     );
+    expect(screen.getByRole('link', { name: '忘记密码？' })).toHaveAttribute('href', '/password/forgot');
   });
 });

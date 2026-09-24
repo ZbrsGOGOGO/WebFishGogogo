@@ -154,7 +154,7 @@ export function PublicLandingPage(): JSX.Element {
     <main className={styles.page}>
       <section className={styles.hero} aria-labelledby="public-title">
         <div className={styles.heroCopy}>
-          <span className={styles.eyebrow}>摸摸公司 · 摸鱼成长社区</span>
+          <span className={styles.eyebrow}>摸摸公司 · 轻量工作台</span>
           <h1 id="public-title">把工作里的角色，带进一个更有意思的办公室世界</h1>
           <p>
             {SITE_NAME}正在从工具站升级为办公室主题社区。

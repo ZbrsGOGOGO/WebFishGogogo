@@ -44,7 +44,8 @@ export function DevelopmentProgressCard({ detail, owner, onSaved, onConflict }: 
     {detail.review?.hasUnreviewedChanges ? <p className={styles.scopeNote}>
       {detail.review.reviewedVersion > 0 ? `审阅后有新补充，需跟进（上次审阅至 v${detail.review.reviewedVersion}）。` : '尚未记录逐项审阅结果。'}
     </p> : detail.review?.reviewedAt ? <p className={styles.muted}>已审阅至 v{detail.review.reviewedVersion} · {developmentTime(detail.review.reviewedAt)}</p> : null}
-    {detail.status === 'done' && hasRemaining ? <p className={styles.scopeNote}>本条仍有未完成子项；“已完成”保留的是旧批次结果，不代表整篇需求已实现。</p> : null}
+    {detail.status === 'done' && detail.review?.closure === 'owner_closed' ? <p className={styles.scopeNote}>本条按站长决定结束跟进；“已归档”不代表正文、附件和未完成子项已经实现。需要续做时请另提反馈。</p>
+      : detail.status === 'done' && hasRemaining ? <p className={styles.scopeNote}>本条仍有未完成子项；“已完成”保留的是旧批次结果，不代表整篇需求已实现。</p> : null}
     {detail.progress ? <>
       <p className={styles.plainText}>{detail.progress.summary}</p>
       <p className={styles.muted}>已验收 {detail.progress.items.filter((item) => item.status === 'done').length} / {detail.progress.items.length} 项</p>

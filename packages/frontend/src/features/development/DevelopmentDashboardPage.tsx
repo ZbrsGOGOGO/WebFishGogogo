@@ -29,6 +29,7 @@ import {
   developmentError,
   developmentPersonName,
   developmentStatusColor,
+  developmentStatusLabel,
   developmentTime,
   downloadPrivateBlob,
 } from './development-format';
@@ -351,7 +352,7 @@ function DevelopmentDashboardContent({
                 >
                   <option value="all">全部状态</option>
                   {DEVELOPMENT_STATUSES.map((item) => (
-                    <option key={item} value={item}>{DEVELOPMENT_STATUS_LABELS[item]}</option>
+                    <option key={item} value={item}>{item === 'done' ? '已完成 / 已归档' : DEVELOPMENT_STATUS_LABELS[item]}</option>
                   ))}
                 </select>
               </label>
@@ -368,7 +369,7 @@ function DevelopmentDashboardContent({
                 {page.items.map((item) => (
                   <Link className={styles.requestRow} to={`/development/requests/${encodeURIComponent(item.id)}`} key={item.id}>
                     <span className={styles.requestTopline}>
-                      <Tag color={developmentStatusColor(item.status)}>{DEVELOPMENT_STATUS_LABELS[item.status]}</Tag>
+                      <Tag color={developmentStatusColor(item.status, item.review)}>{developmentStatusLabel(item.status, item.review)}</Tag>
                       <small>{DEVELOPMENT_CATEGORY_LABELS[item.category]}</small>
                       <small>v{item.version}</small>
                     </span>

@@ -53,7 +53,7 @@ describe('Footer', () => {
     expect(
       screen.getByText(/工位塔防、轻量工具和经典小游戏/),
     ).toBeInTheDocument();
-    expect(screen.getByText('摸鱼成长社区')).toBeInTheDocument();
+    expect(screen.getByText('轻量工作台 · 休闲社区')).toBeInTheDocument();
     expect(screen.queryByText(/审核/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('备案信息')).toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe('Footer', () => {
       </MemoryRouter>,
     );
     const footer = screen.getByRole('contentinfo', { name: '站点信息' });
-    expect(footer).toHaveTextContent('摸鱼成长社区');
+    expect(footer).toHaveTextContent('轻量工作台 · 休闲社区');
     expect(footer).not.toHaveTextContent('社区版');
     expect(within(footer).getByRole('link', { name: '社区规范' })).toHaveAttribute(
       'href',

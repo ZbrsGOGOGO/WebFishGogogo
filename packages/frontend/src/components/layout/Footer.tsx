@@ -62,9 +62,9 @@ export function Footer({
           <strong>{SITE_NAME}</strong>
           <span>
             {publicMode
-              ? '摸鱼成长社区'
+              ? '轻量工作台 · 休闲社区'
               : communityMode
-                ? '摸鱼成长社区'
+                ? '轻量工作台 · 休闲社区'
               : reviewMode
                 ? '个人效率工作台 · 简单、清晰、可控'
                 : '本机版 · 数据由您的本地服务保存'}
