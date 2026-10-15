@@ -106,6 +106,9 @@ describe('Real-wallet purchase intents and bound tower provisions', () => {
       expect(result.officeCoinCost).toBeUndefined(); expect(state.stamina).toBe(0); expect(state.provisions!.passStarted).toBe(index + 1);
     }
     expect(state.provisions!.ordinaryStarted).toBe(0); expect(state.provisions!.passes).toBe(0);
+    expect(() => act(state, { kind: 'explore_with_pass', payload: {} })).toThrow('NOT_ENOUGH_EXPLORATION_PASSES');
+    state.provisions!.passes = 4;
+    for (let i = 0; i < 3; i++) state = leaveBattle(act(state, { kind: 'explore_with_pass', payload: {} }).state);
     expect(() => act(state, { kind: 'explore_with_pass', payload: {} })).toThrow('PASS_DAILY_LIMIT');
     const empty = fresh(); expect(() => act(empty, { kind: 'explore_with_pass', payload: {} })).toThrow('NOT_ENOUGH_EXPLORATION_PASSES');
     empty.provisions!.passes = 99; expect(() => act(empty, { kind: 'office_purchase', payload: { offer: 'pass' } })).toThrow('PASS_STORAGE_FULL');
@@ -230,7 +233,7 @@ describe('Real-wallet purchase intents and bound tower provisions', () => {
     expect(state.provisions!.history).toHaveLength(30); expect(state.provisions!.historySequence).toBe(35);
     const view = demonTowerProfileView(state, NOW + 6 * 86400000, 1, 0, true).provisions!;
     expect(view.history[0].id).toBe('35'); expect(JSON.stringify(view)).not.toContain(state.rngSeed); expect(view).not.toHaveProperty('balance');
-    for (const patch of [{ passes: 100 }, { fragments: -1 }, { passStarted: 3 }, { version: 2 }, { serviceDate: '2026-02-30' }, { history: [{ id: 'x' }] }]) {
+    for (const patch of [{ passes: 100 }, { fragments: -1 }, { passStarted: 6 }, { version: 2 }, { serviceDate: '2026-02-30' }, { history: [{ id: 'x' }] }]) {
       const corrupt = fresh(); Object.assign(corrupt.provisions!, patch); expect(() => advanceDemonTowerState(corrupt, NOW, DATE)).toThrow('INVALID_PROVISIONS_STATE');
     }
   });

@@ -33,6 +33,17 @@ describe('Demon tower office-coin purchase service', () => {
   async function act(user: User, action: DemonTowerAction) { now = new Date(now.getTime() + 1001); return service.action(user.id, input(action, (await raw(user)).version)); }
   const debitRows = (user: User) => db.getRepository(WalletLedger).find({ where: { userId: user.id, sourceType: 'demon_tower_shop' } });
 
+  it('purchases September workshop materials from the real wallet exactly once', async () => {
+    const user = await actor(), before = await raw(user);
+    const request = input({ kind: 'workshop_purchase', payload: { material: 'ht', quantity: 2 } }, before.version);
+    const result = await service.action(user.id, request);
+    expect(result).toMatchObject({ officeCoinsSpent: 16, overview: { wallet: { officeCoinBalance: 484 }, profile: { workshop: { materials: { ht: 2 }, dailyBought: { ht: 2 } } } } });
+    expect(await service.action(user.id, request)).toMatchObject({ replayed: true, officeCoinsSpent: 16 });
+    expect(await debitRows(user)).toHaveLength(1);
+    const other = await actor();
+    expect((await service.overview(other.id)).profile?.workshop?.materials.ht).toBeUndefined();
+  });
+
   it('debits the authoritative wallet once and replays the immutable spent amount with current balance', async () => {
     const user = await actor(), before = await raw(user), request = input(pass, before.version);
     const result = await service.action(user.id, request), saved = await raw(user);

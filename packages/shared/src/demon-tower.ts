@@ -210,6 +210,7 @@ export interface DemonTowerDailyView {
   bossAttempts: number; bossAttemptsMax: number; officeCoinsEarned: number; officeCoinCap: number;
 }
 export interface DemonTowerProfileView {
+  workshop?: import('./demon-tower-workshop').TowerWorkshopState;
   appearance?: DemonTowerAppearance;
   combatPower?: DemonTowerCombatPower;
   provisions?: DemonTowerProvisionsView;
@@ -279,7 +280,7 @@ export interface DemonTowerAutoRunView {
   steps: number; maxSteps: number; officeCoinsGranted: number; createdAt: number; nextStepAt: number | null; expiresAt: number; stoppedAt: number | null;
 }
 export interface DemonTowerAutoResponse { enabled: boolean; replayed: boolean; run: DemonTowerAutoRunView | null; overview: DemonTowerOverview }
-export type DemonTowerAction =
+export type DemonTowerAction = import('./demon-tower-workshop').TowerWorkshopAction
   | { kind: 'set_appearance'; payload: { appearance: DemonTowerAppearance } }
   | { kind: 'office_purchase'; payload: { offer: 'stamina' | 'star' | 'pass' } | { offer: 'permanent'; attribute: DemonTowerAttribute } }
   | { kind: 'progressive_chest'; payload: Record<string, never> }

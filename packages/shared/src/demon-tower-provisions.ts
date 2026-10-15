@@ -18,7 +18,7 @@ export interface DemonTowerProvisionsView {
 export const DEMON_TOWER_PROVISIONS_RULES = {
   staminaPrice: 60, staminaAmount: 20, staminaDaily: 2,
   starPrice: 150, starWeekly: 1, permanentPrice: 300, permanentAmount: 1,
-  passPrice: 30, passBuyDaily: 2, passUseDaily: 2, passCap: 99,
+  passPrice: 30, passBuyDaily: 2, passUseDaily: 5, passCap: 99,
   fragmentCap: 1_000_000, chestBaseCost: 30, chestStepCost: 25, chestDaily: 5,
   chestWeights: { materials: 40, fragments: 35, weapon: 20, permanent: 5 },
   chestMaterials: 3, chestFragments: 1, historyLimit: 30,

@@ -20,3 +20,4 @@ export * from './word-front-engine-v4';
 export * from './office-hub';
 export * from './office-relief';
 export * from './paper-arena';
+export * from './demon-tower-workshop';

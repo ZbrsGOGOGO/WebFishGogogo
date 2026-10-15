@@ -108,6 +108,6 @@ describe('Office relief trusted tower grants preserve old progression', () => {
     const tomorrow = Date.UTC(2026, 8, 11, 16), date = '2026-09-12';
     const expected = advanceDemonTowerState(state, tomorrow, date); expected.materials.herb += 3; expected.lastActionAt = tomorrow;
     const next = gift(state, 'herb', tomorrow, date); expect(next).toEqual(expected); expect(state).toEqual(before);
-    expect(next.provisions).toMatchObject({ fragments: 5, passes: 3, ordinaryStarted: 0 }); expect(main(next).qualityExperience).toBe(15);
+    expect(next.provisions).toMatchObject({ fragments: 5, passes: 5, ordinaryStarted: 0 }); expect(main(next).qualityExperience).toBe(15);
   });
 });

@@ -133,7 +133,7 @@ export class DemonTowerService {
       if (!Number.isSafeInteger(result!.officeCoinIntent) || result!.officeCoinIntent < 0 || result!.officeCoinIntent > DEMON_TOWER_DAILY_COINS) throw new Error('Demon tower reward invariant failed');
       if ((result!.worldEffect?.kind === 'boss_damage') !== (input.kind === 'challenge_boss') || (result!.worldEffect?.kind === 'construction') !== (input.kind === 'donate')) throw new Error('Demon tower action effect invariant failed');
       const officeCoinsSpent = result!.officeCoinCost ?? 0;
-      const officePurchase = input.kind === 'office_purchase' || input.kind === 'progressive_chest';
+      const officePurchase = input.kind === 'office_purchase' || input.kind === 'progressive_chest' || input.kind === 'workshop_purchase';
       if (!Number.isSafeInteger(officeCoinsSpent) || officeCoinsSpent < 0 || officeCoinsSpent > 300 ||
         (officeCoinsSpent > 0) !== officePurchase || (officePurchase && (result!.officeCoinIntent !== 0 || result!.worldEffect !== null))) {
         throw new Error('Demon tower purchase cost invariant failed');

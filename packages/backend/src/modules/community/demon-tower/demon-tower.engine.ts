@@ -22,6 +22,9 @@ import type {
   DemonTowerSeasonOfferId, DemonTowerSeasonalView,
 } from '@stealth-reader/shared';
 import { demonTowerArenaRank, simulateDemonTowerDuel, type DemonTowerSocialBuild } from './demon-tower-social.engine';
+import { workshopAction, workshopState } from './demon-tower-workshop.engine';
+import { towerWorkshopBonuses, type TowerWorkshopState } from '@stealth-reader/shared';
+import { grantDemonTowerBossWorkshopDrops, grantDemonTowerExplorationWorkshopDrops } from './demon-tower-workshop-drops';
 
 const RULES = DEMON_TOWER_CATALOG.rules;
 const MAX_RESOURCE = 1_000_000;
@@ -35,6 +38,7 @@ interface Fighter {
   effects: Effect[]; elite: boolean; boss: boolean; mechanic?: EnemyMechanic;
 }
 interface Battle {
+  workshop?: Record<string, number>; workshopSurvived?: boolean; workshopDodge?: boolean; workshopTurnHits?: number; workshopKills?: number;
   /** Immutable for an in-flight battle, including after the daily shop reset. */
   economyVersion?: 1;
   expansionVersion?: 1; source?: 'rift' | 'weekly_boss'; ultimateUsed?: boolean; divineGuardUsed?: boolean;
@@ -47,6 +51,7 @@ interface Battle {
 }
 /** Private JSON only. Never spread state or battle into API responses. */
 export interface DemonTowerEngineState {
+  workshop?: TowerWorkshopState;
   appearance?: DemonTowerAppearance;
   provisions?: DemonTowerProvisionsState;
   economy?: DemonTowerEconomyState;
@@ -185,10 +190,13 @@ export function demonTowerEffectiveAttributes(state: DemonTowerEngineState, incl
   for (const innate of DEMON_TOWER_INNATES) if (innate.attribute && state.growth?.innates.includes(innate.id)) result[innate.attribute] += 8;
   for (const key of DEMON_TOWER_ATTRIBUTE_KEYS) result[key] += (state.economy?.permanent[key] ?? 0) + (includeTemporary ? state.economy?.buffs[key] ?? 0 : 0);
   for (const id of state.soulBeads?.weaponSlots[state.loadout.mainHand] ?? []) if (id) result[DEMON_TOWER_SOUL_BEADS[id].attribute] += DEMON_TOWER_SOUL_BEADS[id].perLevel * (state.soulBeads?.inventory[id]?.level ?? 0);
+  const forge = towerWorkshopBonuses(state.workshop);
+  const map = { STR: 'str', SPD: 'spd', AGI: 'agi', DEF: 'def', LUCK: 'luc' };
+  for (const key of DEMON_TOWER_ATTRIBUTE_KEYS) result[key] = Math.round((result[key] + (forge[`dim_${map[key]}`] ?? 0)) * (1 + (key === 'DEF' ? forge.defPct ?? 0 : 0)));
   return result;
 }
 export function demonTowerMaxHp(state: DemonTowerEngineState, includeTemporary = true): number {
-  const base = 80 + state.level * 5 + demonTowerEffectiveAttributes(state, includeTemporary).DEF * 4;
+  const base = 80 + state.level * 5 + demonTowerEffectiveAttributes(state, includeTemporary).DEF * 4 + (towerWorkshopBonuses(state.workshop).hp ?? 0);
   return Math.round(base * (hasPassive(state, 's24') ? 1 + Math.min(.3,.12 * skillScale(state,'s24')) : 1));
 }
 export function demonTowerExperienceToNext(level: number): number {
@@ -292,6 +300,7 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
   if (input.provisions) validateProvisions(input.provisions, input.daily.serviceDate);
   if (input.soulBeads) validateSoulBeads(input.soulBeads, input.daily.serviceDate);
   const state = clone(input);
+  if (state.workshop) state.workshop = workshopState(state.workshop, serviceDate, fail);
   if (state.economy) advanceEconomy(state.economy, serviceDate);
   if (state.provisions) advanceProvisions(state.provisions, serviceDate);
   if (state.soulBeads && state.soulBeads.week !== expansionWeek(serviceDate)) { state.soulBeads.week = expansionWeek(serviceDate); state.soulBeads.weeklyClaimed = false; }
@@ -310,6 +319,12 @@ export function advanceDemonTowerState(input: DemonTowerEngineState, now: number
     const points = Math.floor(Math.max(0, now - state.healingAt) / interval);
     state.hp = Math.min(maxHp, state.hp + points);
     state.healingAt = state.hp === maxHp ? now : state.healingAt + points * interval;
+  }
+  if (state.daily.serviceDate < serviceDate) {
+    state.stamina = RULES.staminaCap; state.staminaAt = now;
+    state.provisions ??= initialProvisions(now, serviceDate);
+    // Never discard purchased passes when topping up the daily allocation.
+    state.provisions.passes = Math.max(5, state.provisions.passes);
   }
   if (state.daily.serviceDate !== serviceDate) state.daily = { serviceDate, activity: 0, bossAttempts: 0, rewardClaimed: false };
   if (state.expansion) {
@@ -791,13 +806,15 @@ function shieldSkillScale(state: DemonTowerEngineState): number {
 function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter, target: Fighter, base: number, label: string, forcedCritical = false): number {
   if (source.hp <= 0 || target.hp <= 0) return 0;
   const playerSource = source.id === 'player', attributes = dimensions(source), defensive = dimensions(target);
+  const forge = battle.workshop ?? {};
   const illusion = effect(target, 'illusion')?.magnitude ?? 0;
   const confuse = hasWeapon(state, 'w17') ? 0.15 * weaponScale(state, 'w17') : 0;
-  const evade = bound(defensive.AGI * 0.0015 + illusion * 0.8 - (playerSource ? confuse : 0) + (!playerSource ? affixBonus(state, battle, 'dodge') : 0), 0, 0.6);
+  const evade = bound(defensive.AGI * 0.0015 + illusion * 0.8 - (playerSource ? confuse : 0) + (!playerSource ? affixBonus(state, battle, 'dodge') + (forge.dodge ?? 0) : 0), 0, battle.workshop && !playerSource ? .4 : .6);
   const accuracy = bound(0.96 + attributes.SPD * 0.0005 - (playerSource ? 0 : confuse), 0.55, 0.99);
   const guaranteed = playerSource && label === '镇魂钺' && divineWeapon(state, battle, 'w4') && !battle.ultimateUsed;
   if (!guaranteed && (!chance(state, accuracy) || chance(state, evade))) {
     log(battle, playerSource ? 'player' : 'enemy', 'dodge', `${target.name}避开了${label}。`, 0, target.id);
+    if (!playerSource) battle.workshopDodge = true;
     if (!playerSource && hasWeapon(state, 'w7') && target.hp > 0) damage(battle, source, defensive.AGI * weaponScale(state, 'w7'), 'player', '残影反击');
     return 0;
   }
@@ -817,9 +834,28 @@ function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter
   if (!playerSource && battleInnate(battle, 'defense')) value *= 0.9;
   if (!playerSource && hasPassive(state, 's17')) value *= 1 - Math.min(0.3, 0.12 * skillScale(state, 's17'));
   if (playerSource && target.boss) value *= 1 + affixBonus(state, battle, 'boss_damage');
+  if (playerSource) {
+    value *= (1 + (forge.atkPct ?? 0)) * (1 + (forge.atkStack ?? 0) * Math.min(3, 1 + (battle.workshopTurnHits ?? 0))) * (1 + (battle.workshopDodge ? forge.dodgeFollowup ?? 0 : 0)) * Math.pow(1 + (forge.killAtkUp ?? 0), battle.workshopKills ?? 0);
+    battle.workshopDodge = false;
+    if (critical) value *= 1 + (forge.critDmg ?? 0);
+    if (forge.fenjiProc && chance(state, forge.fenjiProc)) value += target.hp * (forge.fenjiMul ?? 0);
+    if (forge.daozheDmg) value += Object.values(attributes).reduce((a, b) => a + b, 0) * forge.daozheDmg;
+  } else {
+    value *= (1 - Math.min(.6, forge.redu ?? 0)) * (1 - Math.min(.6, forge.reduAll ?? 0)) * (1 - Math.min(.3, forge.enemyAtkDown ?? 0));
+    if (label === '毒雾侵袭') value *= 1 - Math.min(.6, forge.reduMagic ?? 0);
+    if (critical) value *= 1 - Math.min(.6, forge.critReduc ?? 0);
+    if (!battle.workshopSurvived && (forge.survive1 || forge.surviveThreshold) && value >= target.hp + target.shield) {
+      value = Math.max(0, target.hp + target.shield - Math.max(1, Math.round(target.maxHp * (forge.surviveThreshold ?? 0)))); battle.workshopSurvived = true;
+    }
+  }
   const actual = damage(battle, target, value, playerSource ? 'player' : 'enemy', `${label}${critical ? '·暴击' : ''}`);
   if (playerSource) battle.landedPlayerHits += 1;
   if (playerSource && actual > 0) {
+    battle.workshopTurnHits = (battle.workshopTurnHits ?? 0) + 1;
+    if (target.hp <= 0) battle.workshopKills = (battle.workshopKills ?? 0) + 1;
+    if (forge.lifesteal) heal(battle, source, actual * forge.lifesteal, '打造装备·吸血');
+    if (target.hp <= 0 && forge.killHeal) heal(battle, source, source.maxHp * forge.killHeal, '打造装备·吞元');
+    if (target.hp > 0 && forge.ignoreDefHit) putEffect(target, 'shred', Math.min(.5, 1 - (1 - (effect(target, 'shred')?.magnitude ?? 0)) * (1 - forge.ignoreDefHit)), 1);
     if (affixBonus(state, battle, 'leech')) heal(battle, source, actual * affixBonus(state, battle, 'leech'), '汲取词条');
     if (hasWeapon(state, 'w4')) heal(battle, source, actual * Math.min(0.6, 0.2 * weaponScale(state, 'w4')), '镇魂钺');
     if (hasWeapon(state, 'w2') && target.hp > 0 && chance(state, 0.2 * weaponScale(state, 'w2'))) {
@@ -828,6 +864,7 @@ function directHit(state: DemonTowerEngineState, battle: Battle, source: Fighter
     }
   }
   if (!playerSource && actual > 0 && hasWeapon(state, 'w14')) damage(battle, source, actual * Math.min(0.75, 0.25 * weaponScale(state, 'w14')), 'player', '反震');
+  if (!playerSource && actual > 0 && forge.reflect) damage(battle, source, actual * forge.reflect, 'player', '打造装备·反伤');
   if (!playerSource && actual > 0 && hasPassive(state, 's21') && source.hp > 0) {
     const reflected = Math.min(actual * (divineSkill(state, battle, 's21') ? 1.75 : 1.5), dimensions(target).DEF * 0.65 * skillScale(state, 's21'));
     damage(battle, source, reflected, 'player', divineSkill(state, battle, 's21') ? '真·大海无量' : '大海无量');
@@ -1027,8 +1064,9 @@ function enemyTurn(state: DemonTowerEngineState, battle: Battle, actor: Fighter)
       actor.effects = actor.effects.filter((item) => item.id !== 'venom_ready');
       const actual = directHit(state, battle, actor, battle.player, base * 0.75, '毒雾侵袭');
       if (actual > 0 && battle.player.hp > 0) {
-        putEffect(battle.player, 'poison', ready.magnitude, 2);
-        log(battle, 'enemy', 'effect', `毒雾穿透防护，每回合末${ready.magnitude}毒伤，持续2回合；不叠层，可由护盾吸收。`, ready.magnitude, 'player');
+        const turns = Math.max(1, Math.ceil(2 * (1 - (battle.workshop?.debuffHalf ?? 0))));
+        putEffect(battle.player, 'poison', ready.magnitude, turns);
+        log(battle, 'enemy', 'effect', `毒雾穿透防护，每回合末${ready.magnitude}毒伤，持续${turns}回合；不叠层，可由护盾吸收。`, ready.magnitude, 'player');
       }
       return;
     }
@@ -1045,6 +1083,7 @@ function resolveTurn(state: DemonTowerEngineState, battle: Battle, selected: { s
   if (selected.skillId && !usableSkill(state, battle, selected.skillId)) fail('SKILL_NOT_READY');
   const playerDamageTaken = battle.playerDamageTaken;
   battle.turn += 1;
+  if (battle.workshop) { battle.workshopTurnHits = 0; battle.workshopKills = 0; }
   const actors = [battle.player, ...battle.enemies.filter((enemy) => enemy.hp > 0)].sort((a, b) => {
     const initiative = (fighter: Fighter) => dimensions(fighter).SPD + (fighter.id === 'player' && hasWeapon(state, 'w9') ? 15 * weaponScale(state, 'w9') : 0);
     return initiative(b) - initiative(a) || (a.id === 'player' ? -1 : b.id === 'player' ? 1 : a.id.localeCompare(b.id));
@@ -1122,7 +1161,9 @@ function newBattle(state: DemonTowerEngineState, kind: Battle['kind'], floor: nu
     }
     enemies.push(enemy);
   }
-  return { id: identifier(state, 'battle'), kind, floor, turn: 0, roundLimit: kind === 'boss' ? RULES.bossRoundLimit : RULES.combatRoundLimit,
+  const workshop = state.workshop && Object.keys(state.workshop.equipped).length ? towerWorkshopBonuses(state.workshop) : undefined;
+  if (workshop?.shieldStart) player.shield += Math.round(player.maxHp * workshop.shieldStart);
+  return { ...(workshop ? { workshop } : {}), id: identifier(state, 'battle'), kind, floor, turn: 0, roundLimit: kind === 'boss' ? RULES.bossRoundLimit : RULES.combatRoundLimit,
     ...(economyEnabled && state.economy ? { economyVersion: 1 as const } : {}),
     ...(state.expansion ? { expansionVersion: 1 as const, ultimateUsed: false, divineGuardUsed: false } : {}),
     ...(state.growth ? { rulesVersion: 2 as const, innates: [...state.growth.innates], feignUsed: false } : {}),
@@ -1663,6 +1704,7 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
   const root = exact(raw, ['kind', 'payload']);
   if (typeof root.kind !== 'string') fail('INVALID_ACTION');
   const allowed: DemonTowerActionKind[] = ['enroll', 'explore', 'attack', 'skill', 'flee', 'train', 'rest', 'equip', 'allocate', 'reset_attributes', 'choose_innate', 'upgrade', 'select_floor', 'challenge_boss', 'donate', 'claim_reward', 'shop_purchase', 'use_rune', 'soul_bead_claim', 'soul_bead_craft', 'soul_bead_equip', 'soul_bead_upgrade', 'set_appearance', 'office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select', ...EXPANSION_ACTIONS, ...SQUAD_ACTIONS];
+  allowed.push('workshop_forge', 'workshop_refine', 'workshop_equip', 'workshop_recast', 'workshop_purchase');
   if (!allowed.includes(root.kind as DemonTowerActionKind)) fail('INVALID_ACTION');
   validateWorld(context.world);
   const state = advanceDemonTowerState(input, context.now, context.serviceDate), events: string[] = [];
@@ -1682,6 +1724,12 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
   if (!state.battle && ['attack', 'skill', 'flee'].includes(root.kind)) fail('NO_BATTLE');
   if (['explore', 'explore_with_pass', 'train', 'rest', 'flee', 'claim_reward', 'reset_attributes'].includes(root.kind)) exact(root.payload, []);
   switch (root.kind as DemonTowerAction['kind']) {
+    case 'workshop_forge': case 'workshop_refine': case 'workshop_equip': case 'workshop_recast': case 'workshop_purchase': {
+      if (!context.expansionEnabled) fail('EXPANSION_DISABLED');
+      state.workshop = workshopState(state.workshop, context.serviceDate, fail);
+      const applied = workshopAction(state.workshop, root.kind, root.payload, state.level, () => random(state), fail);
+      result.officeCoinCost = applied.cost; events.push(...applied.events); break;
+    }
     case 'explore': case 'explore_with_pass': {
       if (state.hp <= 0) fail('REST_REQUIRED');
       if (state.selectedFloor > context.world.unlockedFloor || state.selectedFloor > demonTowerPersonalUnlockedFloor(state.level)) fail('FLOOR_LOCKED');
@@ -1698,6 +1746,11 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
         state.provisions.ordinaryStarted = Math.min(MAX_RESOURCE, state.provisions.ordinaryStarted + 1);
       }
       const roll = random(state), floor = state.selectedFloor;
+      if (context.expansionEnabled) {
+        state.workshop = workshopState(state.workshop, context.serviceDate, fail);
+        const drops = grantDemonTowerExplorationWorkshopDrops(state.workshop, state.rngSeed, state.rngCounter, floor, state.level, roll >= .7);
+        events.push(`采集锻造材料：黑铁精×${drops.ht ?? 0}、木炭×${drops.mt ?? 0}，完整库存见锻造工作台。`);
+      }
       result.exploration = { outcome: roll < 0.7 ? 'battle' : roll < 0.85 ? 'treasure' : 'blessing', floor,
         staminaSpent: root.kind === 'explore' ? RULES.exploreCost : 0, passesSpent: root.kind === 'explore_with_pass' ? 1 : 0,
         experience: 0, materials: emptyMaterials(), spiritStones: 0 };
@@ -1835,6 +1888,12 @@ export function actDemonTower(input: DemonTowerEngineState, raw: unknown, contex
       }
       result.officeCoinIntent = finishBattle(state, battle, battle.player.hp <= 0 ? 'defeat' : 'contributed', context.now, events, context.expansionEnabled === true);
       result.worldEffect = { kind: 'boss_damage', floor, amount: Math.min(context.world.boss.hp, battle.bossDamage) };
+      if (context.expansionEnabled) {
+        state.workshop = workshopState(state.workshop, context.serviceDate, fail);
+        const drops = grantDemonTowerBossWorkshopDrops(state.workshop, state.rngSeed, context.serviceDate, state.daily.bossAttempts, floor);
+        const materials = Object.entries(drops).filter(([id]) => id !== 'mt').reduce((sum, [, amount]) => sum + amount, 0);
+        events.push(`讨伐所得锻造材料×${materials}、木炭×${drops.mt ?? 0}已入库。`);
+      }
       break;
     }
     case 'donate': {
@@ -1932,9 +1991,11 @@ export function demonTowerProfileView(state: DemonTowerEngineState, now: number,
   if (expansionEnabled && !state.battle) availableActions.push('shop_purchase', 'use_rune');
   if (expansionEnabled && !state.battle) availableActions.push('soul_bead_claim','soul_bead_craft','soul_bead_equip','soul_bead_upgrade');
   if (expansionEnabled && !state.battle) availableActions.push('office_purchase', 'progressive_chest', 'explore_with_pass', 'fragment_select');
+  if (expansionEnabled && !state.battle) availableActions.push('workshop_forge', 'workshop_refine', 'workshop_equip', 'workshop_recast', 'workshop_purchase');
   if (!state.battle) availableActions.push('set_appearance');
   return {
     appearance: state.appearance ? validateAppearance(state.appearance) : { ...DEMON_TOWER_DEFAULT_APPEARANCE },
+    ...(expansionEnabled ? { workshop: workshopState(state.workshop ? clone(state.workshop) : undefined, state.daily.serviceDate, fail) } : {}),
     combatPower: demonTowerCombatPower(state, now, expansionEnabled),
     ...(expansionEnabled ? { economy: economyView(state, now) } : {}),
     ...(expansionEnabled ? { provisions: provisionsView(state, now) } : {}),

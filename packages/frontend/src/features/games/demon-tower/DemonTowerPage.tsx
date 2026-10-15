@@ -12,6 +12,7 @@ import { DemonTowerAttributeReset } from './DemonTowerAttributeReset';
 import { DemonTowerAttributeAllocate } from './DemonTowerAttributeAllocate';
 import { DemonTowerInventory } from './DemonTowerInventory';
 import { DemonTowerGrowth } from './DemonTowerGrowth';
+import { DemonTowerWorkshop } from './DemonTowerWorkshop';
 import { DemonTowerExpansion, demonTowerExpansionUIEnabled } from './DemonTowerExpansion';
 import { DemonTowerExpeditions } from './DemonTowerExpeditions';
 import { DemonTowerExplorationStats } from './DemonTowerExplorationStats';
@@ -140,7 +141,7 @@ export function DemonTowerPage(): JSX.Element {
     document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
   };
   const openCultivation = (itemId?: string): void => {
-    const params = new URLSearchParams(searchParams); params.set('tab', 'expansion');
+    const params = new URLSearchParams(searchParams); params.set('tab', 'expansion'); params.delete('craft');
     if (itemId) params.set('item', itemId); setSearchParams(params);
     document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
   };
@@ -178,7 +179,11 @@ export function DemonTowerPage(): JSX.Element {
         {demonTowerExpansionUIEnabled ? <DemonTowerExpeditions profile={profile} disabled={disabled} onAction={state.act} onContinueBattle={() => { document.querySelector<HTMLElement>('[aria-label="当前探索战斗"]')?.scrollIntoView?.({ block: 'start', behavior: 'instant' }); }} /> : null}
       </div></div></div>
       <div role="tabpanel" id="tower-panel-loadout" aria-labelledby="tower-tab-loadout" hidden={tab !== 'loadout'}><DemonTowerInventory key={`inventory-${autoScope}`} profile={profile} catalog={catalog} disabled={disabled} onAction={state.act} onWorkshop={openCultivation} /></div>
-      <div role="tabpanel" id="tower-panel-expansion" aria-labelledby="tower-tab-expansion" hidden={tab !== 'expansion'}><DemonTowerExpansion key={`expansion-${autoScope}`} profile={profile} disabled={disabled} onAction={state.act} selectedItem={searchParams.get('item')} onSelectItem={selectCultivationItem} active={tab === 'expansion'} advancedEnabled={demonTowerExpansionUIEnabled} /></div>
+      <div role="tabpanel" id="tower-panel-expansion" aria-labelledby="tower-tab-expansion" hidden={tab !== 'expansion'}>
+        {demonTowerExpansionUIEnabled ? <nav className={styles.buttonRow} aria-label="养成分区">{[['growth', '武器与技能养成'], ['forge', '装备锻造与精炼']].map(([id, title]) => <button type="button" className={styles.button} key={id} aria-pressed={(searchParams.get('craft') === 'forge' ? 'forge' : 'growth') === id} onClick={() => { const params = new URLSearchParams(searchParams); params.set('craft', id); setSearchParams(params); }}>{title}</button>)}</nav> : null}
+        <div hidden={demonTowerExpansionUIEnabled && searchParams.get('craft') === 'forge'}><DemonTowerExpansion key={`expansion-${autoScope}`} profile={profile} disabled={disabled} onAction={state.act} selectedItem={searchParams.get('item')} onSelectItem={selectCultivationItem} active={tab === 'expansion' && searchParams.get('craft') !== 'forge'} advancedEnabled={demonTowerExpansionUIEnabled} /></div>
+        {demonTowerExpansionUIEnabled && tab === 'expansion' && searchParams.get('craft') === 'forge' ? <DemonTowerWorkshop key={autoScope} profile={profile} disabled={disabled} balance={balance} balanceStale={balanceStale} onAction={state.act} /> : null}
+      </div>
       {demonTowerExpansionUIEnabled ? <div role="tabpanel" id="tower-panel-shop" aria-labelledby="tower-tab-shop" hidden={tab !== 'shop'}>{tab === 'shop' ? <DemonTowerShop key={`shop-${autoScope}`} profile={profile} catalog={catalog} disabled={disabled} now={state.now} balance={balance} balanceStale={balanceStale} onAction={state.act} /> : null}</div> : null}
       <div role="tabpanel" id="tower-panel-world" aria-labelledby="tower-tab-world" hidden={tab !== 'world'}>{tab === 'world' ? <div key={`world-${autoScope}`} className={styles.stack}><DemonTowerWorldNavigation phase={overview.world.phase} expanded={demonTowerExpansionUIEnabled && Boolean(profile.expansion)} /><DemonTowerWorld world={overview.world} profile={profile} catalog={catalog} ownerId={state.ownerId} disabled={disabled} onAction={state.act} />{demonTowerExpansionUIEnabled ? <div className={styles.stack}><DemonTowerFirstClear profile={profile} world={overview.world} disabled={disabled} onAction={state.act} /><DemonTowerSocial key={`social-${state.ownerId}`} profile={profile} ownerId={state.ownerId} disabled={disabled} onAction={state.act} /></div> : null}<section id="tower-world-journal" tabIndex={-1} aria-label="行动战报" className={`${styles.stack} ${styles.sectionTarget}`}><TowerPanel title="最近行动档案" detail={<span className={styles.muted}>角色版本 {profile.version}</span>}><p className={styles.muted}>这里展示服务器保留的最近一场战报。每一条伤害、恢复与状态变化都来自实际结算；世界首领的有效贡献另见回执和贡献榜。</p>{profile.battle ? <p className={styles.notice}>你有一场探索仍在进行。<button type="button" className={styles.textButton} onClick={() => changeTab('explore')}>返回现场</button></p> : null}<Link to="/games/demon-tower/leaderboard" className={styles.button}>首领讨伐日榜<TowerIcon name="arrow" /></Link></TowerPanel>{profile.lastReport ? <DemonTowerReport report={profile.lastReport} catalog={catalog} /> : <p className={styles.empty}>档案还是空白。完成首次探索战斗或世界首领协作后，战报会保存在这里。</p>}</section></div> : null}</div>
     </> : null}
