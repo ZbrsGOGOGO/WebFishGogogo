@@ -22,7 +22,7 @@ export interface TowerWorkshopState {
 export type TowerWorkshopAction =
   | { kind: 'workshop_refine'; payload: { grade: TowerRefineGrade; material: string; batches: number } }
   | { kind: 'workshop_forge'; payload: { slot: TowerForgeSlot; quality: TowerForgeQuality; grade: TowerRefineGrade; set: string; weaponType: string; auxiliary?: string; auxiliaryCount?: number } }
-  | { kind: 'workshop_recast' | 'workshop_equip'; payload: { itemId: string } }
+  | { kind: 'workshop_recast' | 'workshop_equip' | 'workshop_discard'; payload: { itemId: string } }
   | { kind: 'workshop_purchase'; payload: { material: 'ht' | 'mt'; quantity: number } };
 
 export function emptyTowerWorkshop(serviceDate: string): TowerWorkshopState {

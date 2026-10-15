@@ -884,6 +884,7 @@ export const TOWER_WORKSHOP_SOURCE = {
       "slots": [
         "head",
         "wrist",
+        "pants",
         "shoes",
         "necklace"
       ],
@@ -910,7 +911,8 @@ export const TOWER_WORKSHOP_SOURCE = {
         "head",
         "chest",
         "pants",
-        "wrist"
+        "wrist",
+        "shoes"
       ],
       "t3": {
         "desc": "防御 +15%，受到所有伤害降低 8%",
@@ -933,6 +935,7 @@ export const TOWER_WORKSHOP_SOURCE = {
       "color": "#e8533a",
       "quality": "橙",
       "slots": [
+        "head",
         "chest",
         "wrist",
         "necklace",
@@ -945,7 +948,7 @@ export const TOWER_WORKSHOP_SOURCE = {
         }
       },
       "t5": {
-        "desc": "每次攻击 15% 概率触发【焚击】，附加目标当前生命值 10% 额外伤害",
+        "desc": "每次攻击 15% 概率触发【焚击】，对普通敌人附加其当前生命值 10% 额外伤害；世界首领不生效",
         "bonus": {
           "fenjiProc": 0.15,
           "fenjiMul": 0.1
@@ -960,6 +963,7 @@ export const TOWER_WORKSHOP_SOURCE = {
       "slots": [
         "head",
         "chest",
+        "wrist",
         "pants",
         "necklace"
       ],

@@ -27,6 +27,7 @@ const MESSAGES: Readonly<Record<string, string>> = {
   DEMON_TOWER_WORKSHOP_LEVEL_REQUIRED: '尚未达到该装备或主材的使用等级。',
   DEMON_TOWER_WORKSHOP_STORAGE_FULL: '打造装备档案已满，未消耗材料。',
   DEMON_TOWER_WORKSHOP_ITEM_REQUIRED: '装备不存在，请同步角色状态。',
+  DEMON_TOWER_WORKSHOP_ITEM_EQUIPPED: '请先卸下该装备，再确认丢弃。',
   DEMON_TOWER_INVALID_APPEARANCE: '形象选项无效，请重新选择本站提供的部件。',
   DEMON_TOWER_APPEARANCE_UNCHANGED: '形象与已保存档案相同，无需重复保存。',
   DEMON_TOWER_INVALID_OFFICE_OFFER: '补给内容无效，请重新打开本站补给清单。',

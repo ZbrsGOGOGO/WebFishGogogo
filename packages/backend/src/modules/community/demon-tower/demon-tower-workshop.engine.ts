@@ -4,6 +4,11 @@ const own = (value: object, key: unknown): key is string => typeof key === 'stri
 const count = (n: unknown, min = 0, max = 1_000_000): n is number => Number.isSafeInteger(n) && Number(n) >= min && Number(n) <= max;
 type Fail = (code: string) => never;
 type Affix = { id: string; name: string; stat: string; key?: string; val?: number; desc: string; wtype?: readonly string[] };
+function setAllowed(set: string, slot: TowerForgeSlot, quality: TowerForgeQuality): boolean {
+  if (!own(C.SETS, set)) return false;
+  const definition = C.SETS[set as keyof typeof C.SETS];
+  return (definition.slots as readonly string[]).includes(slot) && definition.quality.includes(quality);
+}
 export function workshopState(value: TowerWorkshopState | undefined, date: string, fail: Fail): TowerWorkshopState {
   const w = value ?? emptyTowerWorkshop(date);
   if (w.version !== 1 || !count(w.sequence) || !Array.isArray(w.items) || w.items.length > 200 || !w.materials || !w.refined || !w.dailyBought || !w.equipped || typeof w.serviceDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(w.serviceDate) || w.serviceDate > date) fail('INVALID_WORKSHOP_STATE');
@@ -14,7 +19,7 @@ export function workshopState(value: TowerWorkshopState | undefined, date: strin
   for (const item of w.items) {
     if (!item || typeof item.id !== 'string' || !/^[1-9]\d*$/.test(item.id) || Number(item.id) > w.sequence || ids.has(item.id) ||
       !C.SLOTS.some(s => s.key === item.slot) || !C.QUAL_ORDER.includes(item.quality) || item.requiredLevel !== C.QUAL[item.quality]?.req ||
-      typeof item.name !== 'string' || item.name.length > 80 || (item.set !== null && !own(C.SETS, item.set)) ||
+      typeof item.name !== 'string' || item.name.length > 80 || (item.set !== null && !setAllowed(item.set, item.slot, item.quality)) ||
       (item.slot === 'weapon' ? !own(C.WTYPES, item.weaponType) : item.weaponType !== null) ||
       !Array.isArray(item.affixes) || item.affixes.length !== C.QUAL_AFFIX_COUNT[item.quality]) fail('INVALID_WORKSHOP_STATE');
     ids.add(item.id);
@@ -74,13 +79,17 @@ export function workshopAction(w: TowerWorkshopState, kind: string, raw: unknown
     events.push(`精炼完成：${r.grade}材料×${r.yield * batches}，木炭消耗${r.rneed * batches}。`);
     return { cost: 0, events };
   }
-  if (kind === 'workshop_equip' || kind === 'workshop_recast') {
+  if (kind === 'workshop_equip' || kind === 'workshop_recast' || kind === 'workshop_discard') {
     const p = exact(raw, ['itemId'], fail), item = w.items.find(i => i.id === p.itemId);
     if (!item) fail('WORKSHOP_ITEM_REQUIRED');
     if (kind === 'workshop_equip') {
       if (level < item!.requiredLevel) fail('WORKSHOP_LEVEL_REQUIRED');
       if (w.equipped[item!.slot] === item!.id) delete w.equipped[item!.slot]; else w.equipped[item!.slot] = item!.id;
       events.push(`配装已更新：${item!.name}。`);
+    } else if (kind === 'workshop_discard') {
+      if (w.equipped[item!.slot] === item!.id) fail('WORKSHOP_ITEM_EQUIPPED');
+      w.items.splice(w.items.indexOf(item!), 1);
+      events.push(`已丢弃${item!.name}；未返还材料。`);
     } else {
       for (const [mat, amount] of Object.entries(C.RECAST_COST)) if ((w.materials[mat] ?? 0) < amount) fail('WORKSHOP_MATERIALS_REQUIRED');
       for (const [mat, amount] of Object.entries(C.RECAST_COST)) w.materials[mat] -= amount;
@@ -92,8 +101,9 @@ export function workshopAction(w: TowerWorkshopState, kind: string, raw: unknown
   const p = exact(raw, ['slot', 'quality', 'grade', 'set', 'weaponType', ...(withAux ? ['auxiliary', 'auxiliaryCount'] : [])], fail);
   if (kind !== 'workshop_forge' || !C.SLOTS.some(s => s.key === p.slot) || !C.QUAL_ORDER.includes(p.quality as TowerForgeQuality) || !own(C.MAT_GRADE, p.grade) ||
     (p.set !== '' && !own(C.SETS, p.set)) || !own(C.WTYPES, p.weaponType)) fail('INVALID_WORKSHOP_ACTION');
-  if (w.items.length >= 200 || w.sequence >= 1_000_000) fail('WORKSHOP_STORAGE_FULL');
   const slot = p.slot as TowerForgeSlot, quality = p.quality as TowerForgeQuality, grade = p.grade as TowerRefineGrade;
+  if (p.set !== '' && !setAllowed(p.set as string, slot, quality)) fail('INVALID_WORKSHOP_ACTION');
+  if (w.items.length >= 200 || w.sequence >= 1_000_000) fail('WORKSHOP_STORAGE_FULL');
   if (level < C.QUAL[quality].req) fail('WORKSHOP_LEVEL_REQUIRED');
   const g = C.MAT_GRADE[grade], cost: Record<string, number> = {};
   const auxId = withAux ? p.auxiliary : '', auxN = withAux ? p.auxiliaryCount : 0;
@@ -120,7 +130,8 @@ export function workshopAction(w: TowerWorkshopState, kind: string, raw: unknown
     let roll = rng() * weights.reduce((a, b) => a + b, 0);
     for (let i = 0; i <= cap; i++) { roll -= weights[i]; if (roll < 0) { output = C.QUAL_ORDER[i]; break; } }
   }
-  const set = ['蓝', '紫', '橙'].includes(output) ? (p.set || (slot !== 'weapon' ? C.SLOT_SET_DEFAULT[slot] : null)) as string | null : null;
+  const candidateSet = (p.set || (slot !== 'weapon' ? C.SLOT_SET_DEFAULT[slot] : null)) as string | null;
+  const set = candidateSet && setAllowed(candidateSet, slot, output) ? candidateSet : null;
   const item: TowerForgedItem = { id: String(++w.sequence), slot, quality: output,
     name: `${pick(C.NAME_PREFIX[output], rng)}${pick(C.NAME_SLOT[slot], rng)}`, requiredLevel: C.QUAL[output].req,
     weaponType: slot === 'weapon' ? p.weaponType as string : null, set, affixes: affixes(output, slot === 'weapon' ? p.weaponType as string : null, rng) };

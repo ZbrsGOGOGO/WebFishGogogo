@@ -83,6 +83,21 @@ if (testUrl) {
     expect(await snapshot(user)).toEqual(saved);
   }, 30_000);
 
+  it('commits a workshop material purchase with one wallet debit and replays it without duplication', async () => {
+    const user = await actor(100), before = await profile(user);
+    const request = command({ kind: 'workshop_purchase', payload: { material: 'ht', quantity: 2 } }, before.version);
+    const first = await service.action(user.id, request);
+    expect(first).toMatchObject({ replayed: false, officeCoinsSpent: 16, overview: { wallet: { officeCoinBalance: 84 }, profile: { workshop: { materials: { ht: 2 }, dailyBought: { ht: 2 } } } } });
+    const replay = await service.action(user.id, request);
+    expect(replay).toMatchObject({ replayed: true, officeCoinsSpent: 16, overview: { wallet: { officeCoinBalance: 84 } } });
+    const saved = await snapshot(user), debits = saved.ledger.filter(row => row.sourceType === 'demon_tower_shop');
+    expect(saved.profile.version).toBe(before.version + 1);
+    expect(saved.profile.state).toMatchObject({ workshop: { materials: { ht: 2 }, dailyBought: { ht: 2 } } });
+    expect(debits).toHaveLength(1);
+    expect(debits[0]).toMatchObject({ sourceId: request.requestId, delta: '-16', idempotencyKey: `demon-tower-shop:${user.id}:${request.requestId}` });
+    expect(saved.commands.filter(row => row.requestId === request.requestId)).toHaveLength(1);
+  });
+
   it('rolls back a missing-wallet insufficient purchase including the provisional zero balance row', async () => {
     const user = await actor(0), before = await snapshot(user);
     await expect(service.action(user.id, command(pass, before.profile.version))).rejects.toMatchObject({ response: { code: 'INSUFFICIENT_WALLET_BALANCE' } });
