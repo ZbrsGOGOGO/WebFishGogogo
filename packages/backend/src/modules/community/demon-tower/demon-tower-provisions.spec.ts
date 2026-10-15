@@ -20,6 +20,16 @@ function seededChest(min: number, max: number, source = 'chest'): DemonTowerEngi
 }
 
 describe('Real-wallet purchase intents and bound tower provisions', () => {
+  it('accepts five workshop-era pass starts and preserves unknown additive save data during rollback', () => {
+    const state = fresh();
+    state.provisions!.passStarted = 5;
+    const workshop = { version: 1, serviceDate: DATE, materials: { ht: 3 }, inventory: [], equipped: {}, dailyBought: {} };
+    (state as unknown as Record<string, unknown>).workshop = workshop;
+    const advanced = advanceDemonTowerState(state, NOW + 1, DATE);
+    expect(advanced.provisions!.passStarted).toBe(5);
+    expect((advanced as unknown as Record<string, unknown>).workshop).toEqual(workshop);
+  });
+
   it('projects zero inventory and unknown historical counts without mutating old saves', () => {
     const state = createDemonTowerState(NOW, DATE, 'legacy-provisions-fixture'), before = structuredClone(state);
     const view = demonTowerProfileView(state, NOW, 1, 0, true).provisions!;
@@ -230,7 +240,7 @@ describe('Real-wallet purchase intents and bound tower provisions', () => {
     expect(state.provisions!.history).toHaveLength(30); expect(state.provisions!.historySequence).toBe(35);
     const view = demonTowerProfileView(state, NOW + 6 * 86400000, 1, 0, true).provisions!;
     expect(view.history[0].id).toBe('35'); expect(JSON.stringify(view)).not.toContain(state.rngSeed); expect(view).not.toHaveProperty('balance');
-    for (const patch of [{ passes: 100 }, { fragments: -1 }, { passStarted: 3 }, { version: 2 }, { serviceDate: '2026-02-30' }, { history: [{ id: 'x' }] }]) {
+    for (const patch of [{ passes: 100 }, { fragments: -1 }, { passStarted: 6 }, { version: 2 }, { serviceDate: '2026-02-30' }, { history: [{ id: 'x' }] }]) {
       const corrupt = fresh(); Object.assign(corrupt.provisions!, patch); expect(() => advanceDemonTowerState(corrupt, NOW, DATE)).toThrow('INVALID_PROVISIONS_STATE');
     }
   });

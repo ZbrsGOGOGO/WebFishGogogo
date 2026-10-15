@@ -554,7 +554,9 @@ function validateProvisions(value: DemonTowerProvisionsState, serviceDate: strin
     !Number.isFinite(Date.parse(`${value.serviceDate}T00:00:00Z`)) || new Date(`${value.serviceDate}T00:00:00Z`).toISOString().slice(0, 10) !== value.serviceDate ||
     value.serviceDate > serviceDate || value.week !== expansionWeek(value.serviceDate) || !integer(value.createdAt, 0, 8_640_000_000_000_000) ||
     !integer(value.passes, 0, PROVISIONS.passCap) || !integer(value.fragments, 0, PROVISIONS.fragmentCap) ||
-    !integer(value.ordinaryStarted, 0, MAX_RESOURCE) || !integer(value.passStarted, 0, PROVISIONS.passUseDaily) ||
+    // Workshop-era saves can contain 3-5 starts. Keep the old two-use policy
+    // for new actions, but accept the newer persisted counter during rollback.
+    !integer(value.ordinaryStarted, 0, MAX_RESOURCE) || !integer(value.passStarted, 0, 5) ||
     !integer(value.staminaBought, 0, PROVISIONS.staminaDaily) || !integer(value.passesBought, 0, PROVISIONS.passBuyDaily) ||
     !integer(value.starsBought, 0, PROVISIONS.starWeekly) || !integer(value.chestsOpened, 0, PROVISIONS.chestDaily) ||
     !integer(value.historySequence, 0, Number.MAX_SAFE_INTEGER - 1) || !Array.isArray(value.history) || value.history.length > PROVISIONS.historyLimit) invalid();
