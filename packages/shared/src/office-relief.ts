@@ -3,7 +3,9 @@ export const OFFICE_RELIEF_RULES = {
   secondsPerChance: 1800, chanceCap: 10, activeSecondsPerDay: 14_400,
   tokenCap: 1_000_000_000, maxCoinReward: 10_000, pendingCap: 99, historyLimit: 30,
   titleDuplicateTokens: 500, farmExperiencePerGift: 30,
-  weights: { coin: 5000, loss: 4900, title: 50, tower_material: 20, farm_crop: 20, tower_book: 10 },
+  // The retired tower-drop share (30 / 10,000) is reassigned to bound relief coins.
+  // Legacy keys remain at zero so version-1 histories can still be decoded safely.
+  weights: { coin: 5030, loss: 4900, title: 50, tower_material: 0, farm_crop: 20, tower_book: 0 },
   weightTotal: 10_000, lossMin: 50, lossMax: 300,
   coinTiers: [
     { min: 100, max: 1000, weight: 32 }, { min: 1001, max: 2000, weight: 26 },
@@ -40,6 +42,7 @@ export const OFFICE_RELIEF_BOOKS = [
   { id: 'skill_fragments', name: '技能碎片册', quantity: 3 },
   { id: 'weapon_manual', name: '主手研习手册', quantity: 15 },
 ] as const;
+/** Legacy variants are read-only compatibility records and are never drawn or granted after 2026-10-16. */
 export type OfficeReliefDrop = { id: string; receivedAt: string } & (
   | { kind: 'tower_material'; itemId: typeof OFFICE_RELIEF_MATERIALS[number]['id']; quantity: 3 }
   | { kind: 'farm_crop'; itemId: typeof OFFICE_RELIEF_CROPS[number]['id']; quantity: 1 }

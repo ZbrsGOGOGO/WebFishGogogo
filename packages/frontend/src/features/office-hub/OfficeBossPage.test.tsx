@@ -272,21 +272,19 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
     expect(write).toHaveBeenCalledWith('boss_claim', {}, expect.any(String));
     expect(await screen.findByRole('button', { name: '今日奖励已领取' })).toBeDisabled();
   });
-  it('keeps a rejected cross-module drop and explains real destinations instead of showing fake delivery', async () => {
+  it('shows legacy tower drops as retained retired records and permits only farm claims', async () => {
     const view = overview(relief({ pending: [{ id: 'book-a', kind: 'tower_book', itemId: 'weapon_manual', quantity: 15, receivedAt: NOW }, { id: 'crop-a', kind: 'farm_crop', itemId: 'desk_mint', quantity: 1, receivedAt: NOW }] }));
-    const write = vi.spyOn(officeHubApi, 'action').mockRejectedValue(new CommunityApiError(409, '', { code: 'OFFICE_RELIEF_TOWER_BUSY' }));
+    const write = vi.spyOn(officeHubApi, 'action');
     page(view);
     const book = (await screen.findByText('主手研习手册')).closest('li')!;
-    expect(book).toHaveTextContent('领取时的妖塔主手武器增加 15 暂存品质经验');
-    expect(book).toHaveTextContent('不增加熟练度');
-    expect(screen.getByRole('link', { name: '去妖塔' })).toHaveAttribute('href', '/games/demon-tower?tab=profile');
+    expect(book).toHaveTextContent('旧版妖塔礼包已退役');
+    expect(book).toHaveTextContent('已退役 · 保留记录');
+    expect(within(book).queryByRole('button', { name: '领取物品' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '去妖塔' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '去农场' })).toHaveAttribute('href', '/farm');
     expect(screen.getByText(/领取 30 种植经验/)).toHaveTextContent('不发办公币；不会自动收获或更换作物');
     expect(screen.queryByText(/农场币/)).not.toBeInTheDocument();
-    fireEvent.click(within(book).getByRole('button', { name: '领取物品' })); fireEvent.click(screen.getByRole('button', { name: '确认领取' }));
-    expect(write).toHaveBeenCalledWith('relief_claim', { dropId: 'book-a', expectedVersion: 1 }, expect.any(String));
-    expect(await screen.findByRole('alert')).toHaveTextContent('物品仍然保留');
-    expect(screen.getByText('主手研习手册')).toBeVisible();
+    expect(write).not.toHaveBeenCalled();
   });
   it('removes a pending gift only after the matching successful server claim', async () => {
     const request = deferred<OfficeHubOverview>();
@@ -342,7 +340,7 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
   it.each([
     [relief({ chances: 0 }), '暂无机会'],
     [relief({ tokenBalance: 999990001 }), '接近容量上限'],
-    [relief({ pending: Array.from({ length: 99 }, (_, index) => ({ id: `drop-${index}`, kind: 'tower_material' as const, itemId: 'ore' as const, quantity: 3 as const, receivedAt: NOW })) }), '待领区已满'],
+    [relief({ pending: Array.from({ length: 99 }, (_, index) => ({ id: `drop-${index}`, kind: 'farm_crop' as const, itemId: 'desk_mint' as const, quantity: 1 as const, receivedAt: NOW })) }), '待领区已满'],
   ])('disables unavailable challenges using known service capacity boundaries', async (value, reason) => {
     page(overview(value));
     expect(await screen.findByText(new RegExp(reason))).toBeVisible();
@@ -354,6 +352,8 @@ describe('pressure workspace honest rewards, privacy and compatibility', () => {
     expect(screen.getByText(/池已满，暂停计入/)).toBeVisible();
     expect(screen.getByText(/游戏时间不重复加成/)).toBeVisible();
     expect(screen.getByText(/折合所有挑战的 4%/)).toBeInTheDocument();
+    expect(screen.getByText('50.3%')).toBeVisible();
+    expect(screen.getByText(/原妖塔掉落的 0.3% 已合并/)).toBeVisible();
     expect(screen.getByText('1,001–2,000 解压币')).toBeInTheDocument();
     expect(screen.getByText('3 款等概率，中奖礼包均领取 30 种植经验')).toBeVisible();
     expect(screen.queryByText(/农场币/)).not.toBeInTheDocument();

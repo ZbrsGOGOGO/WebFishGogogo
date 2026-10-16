@@ -15,7 +15,7 @@ describe('demon tower release and privacy boundaries', () => {
     for (const path of ['/api/v1/games/demon-tower-admin', '/api/v1/games/office-battle', '/api/v1/games/play', '/api/v1/admin']) {
       expect(pattern.test(path)).toBe(false);
     }
-    expect(route![2]).toContain('client_max_body_size 8k;');
+    expect(route![2]).toContain('client_max_body_size 20k;');
     expect(route![2]).toContain('limit_req zone=community_demon_tower_ip');
     expect(route![2]).toContain('Cache-Control "no-store" always');
     expect(route![2]).toContain('proxy_read_timeout 20s;');

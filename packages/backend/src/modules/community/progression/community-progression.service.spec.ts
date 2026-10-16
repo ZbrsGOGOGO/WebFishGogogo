@@ -50,7 +50,8 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     expect(titleBadge('<img onerror=alert(1)>')).toBeNull();
     for (const endpoint of ['me', 'refresh', 'title'] as const) expect(Reflect.getMetadata(GUARDS_METADATA, CommunityProgressionController.prototype[endpoint])).toContain(JwtAuthGuard);
     expect(Reflect.getMetadata(GUARDS_METADATA, CommunityProgressionController.prototype.catalog)).toBeUndefined();
-    expect(catalog.membership).toMatchObject({ giftDays: 30, paid: false, automaticRenewal: false, existingAccountsOnly: true });
+    expect(catalog.membership).toEqual({ giftDays: 30, paid: false, automaticRenewal: false, benefit: null, existingAccountsOnly: true });
+    expect(catalog.historicalDataNotice).toContain('旧版妖塔成就已冻结');
   });
   it('GET never grants membership, initializes a wallet, unlocks achievements or creates presentation state', async () => {
     const a = await user('reader'); await farm(a, 100);
@@ -62,7 +63,7 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
   it('keeps a gift exactly 720 hours, never extends it on reads or refresh and expires at the boundary', async () => {
     const a = await user('gifted'); const expiry = await gift(a); const saved = await db.getRepository(CommunityMembershipGrant).findOneByOrFail({ userId: a.id });
     expect(expiry.getTime() - now.getTime()).toBe(720 * 3_600_000);
-    expect(await membership.requireVip(db.manager, a.id, now)).toMatchObject({ active: true, benefits: ['demon_tower_auto_explore'] });
+    expect(await membership.requireVip(db.manager, a.id, now)).toMatchObject({ active: true, benefits: [] });
     now = new Date(expiry.getTime() - 1); expect((await service.me(a.id)).vip.active).toBe(true); await service.refresh(a.id, {});
     now = expiry; expect((await service.me(a.id)).vip).toMatchObject({ active: false, expiresAt: expiry.toISOString(), benefits: [] });
     await expect(membership.requireVip(db.manager, a.id, now)).rejects.toMatchObject({ response: { code: 'VIP_REQUIRED' } });
@@ -83,7 +84,7 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     for (const task of [() => service.me(a.id), () => service.refresh(a.id, {}), () => service.equip(a.id, titleInput()), () => membership.requireVip(db.manager, a.id, now)]) await expect(task()).rejects.toMatchObject({ response: { code: 'PROGRESSION_ACTIVE_ACCOUNT_REQUIRED' } });
     expect(await db.getRepository(CommunityUserPresentation).count()).toBe(0);
   });
-  it('backfills only authoritative retained counters and makes repeated refresh a no-op', async () => {
+  it('backfills authoritative non-tower counters, ignores retired tower state and makes repeated refresh a no-op', async () => {
     const a = await user('history'); await farm(a, 100);
     await db.getRepository(PlayerProgression).insert({ userId: a.id, level: 10, experience: '10000' });
     await db.getRepository(RailPlayerStats).insert({ userId: a.id, completedGames: 10, rankedGames: 0 });
@@ -91,19 +92,20 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     state.weapons.push({ ...state.weapons[0], id: 'w2' }, { ...state.weapons[0], id: 'w3' }, { ...state.weapons[0], id: 'w4' });
     await db.getRepository(DemonTowerProfile).save(db.getRepository(DemonTowerProfile).create({ userId: a.id, version: 1, state: state as unknown as Record<string, unknown>, createdAt: now, updatedAt: now }));
     const first = await service.refresh(a.id, {});
-    expect(first.newlyUnlocked).toEqual(expect.arrayContaining(['farm_first', 'farm_25', 'farm_100', 'community_10', 'rail_first', 'rail_10', 'tower_5', 'tower_20', 'tower_collection']));
-    expect(first.newlyUnlocked).toHaveLength(9); expect(first.overview.achievements.find((item) => item.key === 'daily_champion')?.eligible).toBe(false);
+    expect(first.newlyUnlocked).toEqual(expect.arrayContaining(['farm_first', 'farm_25', 'farm_100', 'community_10', 'rail_first', 'rail_10']));
+    expect(first.newlyUnlocked).toHaveLength(6); expect(first.overview.achievements.find((item) => item.key === 'daily_champion')?.eligible).toBe(false);
+    for (const key of ['tower_5', 'tower_20', 'tower_collection']) expect(first.overview.achievements.find((item) => item.key === key)).toMatchObject({ progress: 0, eligible: false, unlockedAt: null });
     expect(first.overview.achievements.filter((item) => item.unlockedAt).every((item) => item.unlockedAt === now.toISOString())).toBe(true);
     now = new Date(now.getTime() + 60_000); expect((await service.refresh(a.id, {})).newlyUnlocked).toEqual([]);
-    expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: a.id })).toBe(9);
+    expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: a.id })).toBe(6);
     expect(await db.getRepository(WalletBalance).count()).toBe(0);
     expect(JSON.stringify(first)).not.toMatch(/rngSeed|rngCounter|passwordHash|userId|synthetic-history|requestHash/);
   });
-  it('counts different collected IDs rather than item copies or repeated entries', async () => {
+  it('never projects retired tower inventory into new achievement progress', async () => {
     const a = await user('collector'); const state = createDemonTowerState(now.getTime(), '2099-09-09', 'collector-seed-long-enough');
     state.weapons[0].spareCopies = 9999; state.weapons.push({ ...state.weapons[0] });
     await db.getRepository(DemonTowerProfile).save(db.getRepository(DemonTowerProfile).create({ userId: a.id, version: 1, state: state as unknown as Record<string, unknown>, createdAt: now, updatedAt: now }));
-    expect((await service.me(a.id)).achievements.find((item) => item.key === 'tower_collection')).toMatchObject({ progress: 9, eligible: false });
+    expect((await service.me(a.id)).achievements.find((item) => item.key === 'tower_collection')).toMatchObject({ progress: 0, eligible: false });
   });
   it('projects new server-owned campaign, company and demon counters without creating assets or privileges', async () => {
     process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED = 'true'; process.env.FEATURE_OFFICE_HUB_ENABLED = 'true';
@@ -116,11 +118,14 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     state.weapons = [{ id: 'w1', star: 5 }];
     await db.getRepository(DemonTowerProfile).save(db.getRepository(DemonTowerProfile).create({ userId: a.id, version: 1, state, createdAt: now, updatedAt: now }));
     const before = await service.me(a.id);
-    for (const key of ['workstation_three', 'workstation_perfect', 'workstation_speed', 'workstation_overtime', 'workstation_ten_thousand', 'career_8', 'demon_first_boss', 'demon_nine_bosses', 'demon_honor_skin', 'demon_five_star', 'office_collector', 'office_storyteller', 'office_artist', 'office_detective', 'office_relief', 'office_guard']) {
+    for (const key of ['workstation_three', 'workstation_perfect', 'workstation_speed', 'workstation_overtime', 'workstation_ten_thousand', 'career_8', 'office_collector', 'office_storyteller', 'office_artist', 'office_detective', 'office_relief', 'office_guard']) {
       expect(before.achievements.find(item => item.key === key)).toMatchObject({ eligible: true, unlockedAt: null });
     }
+    for (const key of ['demon_first_boss', 'demon_nine_bosses', 'demon_honor_skin', 'demon_five_star']) {
+      expect(before.achievements.find(item => item.key === key)).toMatchObject({ progress: 0, eligible: false, unlockedAt: null });
+    }
     expect(before.achievements.find(item => item.key === 'office_collector')?.progress).toBe(8);
-    expect(before.achievements.find(item => item.key === 'demon_nine_bosses')?.progress).toBe(9);
+    expect(before.achievements.find(item => item.key === 'demon_nine_bosses')?.progress).toBe(0);
     expect((await service.me(stranger.id)).achievements.some(item => item.eligible)).toBe(false);
     expect(await db.getRepository(CommunityAchievementUnlock).count()).toBe(0);
     await service.refresh(a.id, {}); expect((await service.refresh(a.id, {})).newlyUnlocked).toEqual([]);
@@ -128,22 +133,24 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
     expect((await db.getRepository(User).findOneByOrFail({ id: a.id })).communityRole).toBe('user');
     expect(JSON.stringify(before)).not.toMatch(/expanded-private-seed|forged_admin|userId|rngSeed/);
   });
-  it('uses each module\'s settled paid champion record, not temporary rankings or another user\'s award', async () => {
+  it('uses active modules settled paid champion records but freezes retired tower awards', async () => {
     const a = await user('play_winner'); const b = await user('rail_winner'); const c = await user('tower_winner'); const other = await user('not_winner');
     await db.getRepository(PlayDailyAward).insert({ serviceDate: '2099-09-08', gameKey: 'snake', winnerUserId: a.id, score: 50, coins: 100, awardedAt: now });
     await db.getRepository(RailDailyAward).insert({ serviceDate: '2099-09-08', winnerUserId: b.id, rateBasisPoints: 10000, coins: 100, awardedAt: now });
     await db.getRepository(DemonTowerDailyAward).insert({ serviceDate: '2099-09-08', winnerUserId: c.id, bossDamage: 100, coins: 100, awardedAt: now });
-    for (const winner of [a, b, c]) expect((await service.me(winner.id)).achievements.find((item) => item.key === 'daily_champion')).toMatchObject({ progress: 1, eligible: true, unlockedAt: null });
+    for (const winner of [a, b]) expect((await service.me(winner.id)).achievements.find((item) => item.key === 'daily_champion')).toMatchObject({ progress: 1, eligible: true, unlockedAt: null });
+    expect((await service.me(c.id)).achievements.find((item) => item.key === 'daily_champion')).toMatchObject({ progress: 0, eligible: false, unlockedAt: null });
     expect((await service.me(other.id)).achievements.find((item) => item.key === 'daily_champion')?.eligible).toBe(false);
   });
-  it('uses actual clipped tower contribution and completed own development status without exposing proposal text', async () => {
+  it('ignores retired tower contribution and uses completed own development status without exposing proposal text', async () => {
     const a = await user('contributor'); const b = await user('different_author');
     await db.getRepository(DemonTowerWorldFloor).insert({ floor: 1, bossHp: 2400, bossMaxHp: 2400, passageProgress: 0, passageRequired: 50, version: 1, unlockedAt: now, defeatedAt: null, completedAt: null, updatedAt: now });
     await db.getRepository(DemonTowerContribution).insert({ floor: 1, userId: a.id, bossDamage: 980, passageContribution: 20, level: 1, updatedAt: now });
     const proposal = await db.getRepository(DevelopmentRequest).save(db.getRepository(DevelopmentRequest).create({ authorId: a.id, clientRequestId: randomUUID(), requestHash: 'a'.repeat(64), title: 'private synthetic title', description: 'private synthetic body must never project', category: 'feature', status: 'accepted', version: 1, attachmentCount: 0, attachmentBytes: 0 }));
     expect((await service.me(a.id)).achievements.find((item) => item.key === 'development_done')?.eligible).toBe(false);
     await db.getRepository(DevelopmentRequest).update(proposal.id, { status: 'done' });
-    const result = await service.refresh(a.id, {}); expect(result.newlyUnlocked).toEqual(['tower_contributor', 'development_done']);
+    const result = await service.refresh(a.id, {}); expect(result.newlyUnlocked).toEqual(['development_done']);
+    expect(result.overview.achievements.find(item => item.key === 'tower_contributor')).toMatchObject({ progress: 0, eligible: false, unlockedAt: null });
     expect(JSON.stringify(result)).not.toContain('private synthetic');
     const other = await service.me(b.id); expect(other.achievements.filter((item) => item.eligible)).toEqual([]);
   });
@@ -173,10 +180,19 @@ describe('Community progression: free gifts, cosmetic unlocks and title ownershi
   it('keeps achievements permanent without granting VIP or default public wear', async () => {
     const a = await user('permanent'); await farm(a, 1); await service.refresh(a.id, {});
     await db.getRepository(DeskPlant).delete({ userId: a.id });
-    expect((await service.me(a.id)).achievements.find((item) => item.key === 'farm_first')).toMatchObject({ progress: 0, eligible: true, unlockedAt: now.toISOString() });
+    expect((await service.me(a.id)).achievements.find((item) => item.key === 'farm_first')).toMatchObject({ progress: 1, eligible: true, unlockedAt: now.toISOString() });
     expect((await loadTitleBadges(db.manager, [a.id])).size).toBe(0);
     await service.equip(a.id, titleInput()); expect((await loadTitleBadges(db.manager, [a.id])).get(a.id)).toEqual({ key: 'farm_first', label: '工位园丁' });
     expect((await service.me(a.id)).vip.active).toBe(false);
+  });
+  it('keeps an already unlocked retired tower title wearable without reading retired tower data', async () => {
+    const a = await user('retired_tower_title');
+    await db.getRepository(CommunityAchievementUnlock).insert({ userId: a.id, achievementKey: 'tower_20', unlockedAt: now, sourceVersion: 1 });
+    const before = await service.me(a.id);
+    expect(before.achievements.find(item => item.key === 'tower_20')).toMatchObject({ progress: 20, target: 20, eligible: true, unlockedAt: now.toISOString() });
+    const equipped = await service.equip(a.id, titleInput('tower_20'));
+    expect(equipped.overview.presentation.equippedTitle).toEqual({ key: 'tower_20', label: '登楼客' });
+    expect((await service.refresh(a.id, {})).newlyUnlocked).toEqual([]);
   });
   it('public projection rejects unknown or unowned titles, inactive authors and disabled feature', async () => {
     const a = await user('project'); await farm(a, 1); await service.equip(a.id, titleInput());

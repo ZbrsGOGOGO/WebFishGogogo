@@ -103,7 +103,6 @@ const RailRoomPage = lazy(() => import('../features/games/rail/RailRoomPage').th
 const RailLeaderboardPage = lazy(() => import('../features/games/rail/RailLeaderboardPage').then((module) => ({ default: module.RailLeaderboardPage })));
 const DemonTowerPage = lazy(() => import('../features/games/demon-tower/DemonTowerPage').then((module) => ({ default: module.DemonTowerPage })));
 const CommunityAchievementsPage = lazy(() => import('../features/community-progression/CommunityAchievementsPage').then((module) => ({ default: module.CommunityAchievementsPage })));
-const DemonTowerLeaderboardPage = lazy(() => import('../features/games/demon-tower/DemonTowerLeaderboardPage').then((module) => ({ default: module.DemonTowerLeaderboardPage })));
 const TetrisGamePage = lazy(() =>
   import('../features/games/tetris/TetrisGamePage').then((module) => ({ default: module.TetrisGamePage })),
 );
@@ -377,7 +376,7 @@ export function CommunityModeRouter(): JSX.Element {
         <Route path="leaderboards/:gameKey" element={loading(<CommunityGameLeaderboardPage />)} />
         <Route path="rail/leaderboard" element={loading(<RailLeaderboardPage />)} />
         <Route path="demon-tower/leaderboard" element={COMMUNITY_FEATURE_FLAGS.demonTower
-          ? loading(<DemonTowerLeaderboardPage />)
+          ? <Navigate to="/games/demon-tower?tab=rank" replace />
           : <CommunityUnavailablePage system="demonTower" title="九层妖塔暂未开放" />} />
       </Route>
       <Route path="/games" element={<CommunityArcadeGameLayout />}>

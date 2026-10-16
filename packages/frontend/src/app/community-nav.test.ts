@@ -55,6 +55,7 @@ describe('community relationship and growth release gates', () => {
   it('keeps the new tower gated without replacing the existing local defense game', () => {
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'demonTower')).toMatchObject({
       path: '/games/demon-tower', label: '九层妖塔', enabled: false, requiresAccount: true,
+      description: '站长源码版养成、账号存档与好友协作，不发网站奖励',
     });
     expect(COMMUNITY_SYSTEM_NAV.find((item) => item.id === 'towerDefense')).toMatchObject({
       path: '/tower-defense', enabled: true,

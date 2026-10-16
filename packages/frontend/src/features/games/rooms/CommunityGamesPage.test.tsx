@@ -41,7 +41,7 @@ describe('redesigned community games directory', () => {
     expect(screen.getAllByRole('button', { name: '开始挑战' })).toHaveLength(6);
     expect(screen.getAllByRole('link', { name: '日榜' })).toHaveLength(6);
     const paths = new Set(Array.from(view.container.querySelectorAll('a[href]')).map(link => link.getAttribute('href')));
-    for (const path of ['/games/rooms', '/games/ballpoint-breach/arena', '/games/ballpoint-breach', '/office', '/games/office-boss', '/games/office-boss?mode=daily', '/tower-defense', '/tower-defense/practice', '/tower-defense/leaderboard', '/tower-defense/word-front', '/tower-defense/word-front/v3', '/tower-defense/word-front/v2', '/tower-defense/word-front/legacy', '/tower-defense/word-front/rooms', '/games/demon-tower', '/games/demon-tower/leaderboard', '/games/rail', '/games/rail/leaderboard', '/games/office-2048', '/games/underrun', '/games/snake', '/games/tetris', '/games/tank', '/games/zhesi']) expect(paths.has(path), path).toBe(true);
+    for (const path of ['/games/rooms', '/games/ballpoint-breach/arena', '/games/ballpoint-breach', '/office', '/games/office-boss', '/games/office-boss?mode=daily', '/tower-defense', '/tower-defense/practice', '/tower-defense/leaderboard', '/tower-defense/word-front', '/tower-defense/word-front/v3', '/tower-defense/word-front/v2', '/tower-defense/word-front/legacy', '/tower-defense/word-front/rooms', '/games/demon-tower', '/games/demon-tower?tab=rank', '/games/rail', '/games/rail/leaderboard', '/games/office-2048', '/games/underrun', '/games/snake', '/games/tetris', '/games/tank', '/games/zhesi']) expect(paths.has(path), path).toBe(true);
     expect(view.container.querySelector('iframe, img')).not.toBeInTheDocument();
     expect(screen.getByText(/共享日榜测试规则/)).toBeInTheDocument();
     expect(screen.getByText(/冠军奖励测试规则/)).toHaveTextContent('00:05');
@@ -76,11 +76,11 @@ describe('redesigned community games directory', () => {
       expect(gameRoom.queryByRole('button', { name: /开始挑战|登录挑战/ })).not.toBeInTheDocument();
       expect(gameRoom.getByRole('link', { name: '查看房间' })).toHaveAttribute('href', `/games/rooms?game=${game.gameKey}`);
     }
-    expect(screen.queryByRole('article', { name: '九层妖塔 · 角色养成' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('article', { name: '九层妖塔 · 源码版' })).not.toBeInTheDocument();
     expect(screen.queryByRole('article', { name: '纸上突围 · 本地单机' })).not.toBeInTheDocument();
     fireEvent.click(category('角色与养成'));
     expect(screen.getAllByRole('article')).toHaveLength(4);
-    expect(screen.getByRole('article', { name: '九层妖塔 · 角色养成' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { name: '九层妖塔 · 源码版' })).toBeInTheDocument();
     fireEvent.click(category('本机练习'));
     expect(screen.getAllByRole('article')).toHaveLength(8 + LOCAL_LAB_GAMES.length);
     expect(screen.queryByRole('button', { name: '开始挑战' })).not.toBeInTheDocument();

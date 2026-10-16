@@ -211,6 +211,7 @@ for path in \
   /tools \
   /games \
   /games/snake \
+  /games/demon-tower \
   /games/zhesi \
   /privacy-policy \
   /terms-of-service; do
@@ -309,6 +310,45 @@ forbid_regex "$SMOKE_TMP/game-zhengdao-data.js" \
   '<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<[Hh][Tt][Mm][Ll]' \
   'HTML fallback in zhengdao JavaScript module'
 
+# The owner-provided demon-tower source is a separate, opaque-origin iframe.
+# Missing files must stay 404 instead of receiving the React SPA shell.
+request GET '/games/demon-tower-source/index.html?bridge=smoke-only' 200 \
+  "$SMOKE_TMP/demon-source.html" "$SMOKE_TMP/demon-source.headers"
+request GET /games/demon-tower-source/js/api.js 200 \
+  "$SMOKE_TMP/demon-source-api.js" "$SMOKE_TMP/demon-source-api.headers"
+request GET /games/demon-tower-source/css/jiuceng.css 200 \
+  "$SMOKE_TMP/demon-source.css" "$SMOKE_TMP/demon-source-css.headers"
+request GET /games/demon-tower-source/not-present.js 404 \
+  "$SMOKE_TMP/demon-source-missing.body" "$SMOKE_TMP/demon-source-missing.headers"
+require_single_header "$SMOKE_TMP/demon-source.headers" \
+  'x-frame-options' 'demon source iframe X-Frame-Options'
+require_single_header "$SMOKE_TMP/demon-source.headers" \
+  'content-security-policy' 'demon source iframe CSP'
+require_header "$SMOKE_TMP/demon-source.headers" \
+  '^x-frame-options:[[:space:]]*sameorigin[[:space:]]*$' \
+  'demon source same-origin framing'
+require_header "$SMOKE_TMP/demon-source.headers" \
+  "^content-security-policy:.*frame-ancestors[[:space:]]+'self'([;[:space:]]|$)" \
+  'demon source same-origin frame ancestor'
+require_header "$SMOKE_TMP/demon-source.headers" \
+  "^content-security-policy:.*connect-src[[:space:]]+'none'([;[:space:]]|$)" \
+  'demon source direct-network denial'
+if grep -Eiq \
+  "^x-frame-options:.*deny|^content-security-policy:.*frame-ancestors[[:space:]]+'none'" \
+  "$SMOKE_TMP/demon-source.headers"; then
+  fail "demon source iframe response contains a conflicting frame denial"
+fi
+require_literal "$SMOKE_TMP/demon-source.html" \
+  '<title>九层妖塔 · 摸摸公司</title>' \
+  'demon source document title'
+require_literal "$SMOKE_TMP/demon-source-api.js" \
+  'webfish-demon-tower-source-v1' \
+  'demon source account bridge marker'
+forbid_regex "$SMOKE_TMP/demon-source-api.js" \
+  '<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]|<[Hh][Tt][Mm][Ll]' \
+  'HTML fallback in demon source JavaScript module'
+pass "demon source static assets, framing boundary and 404 fallback"
+
 grep -Fq '<title>摸摸公司</title>' "$SMOKE_TMP/spa-.html" ||
   fail "community homepage does not expose the 摸摸公司 brand"
 pass "community homepage exposes the 摸摸公司 brand"
@@ -325,6 +365,25 @@ case "$SMOKE_BASE_URL" in
   https://*) require_header "$SMOKE_TMP/spa-.headers" '^strict-transport-security:[[:space:]]*max-age=' 'HSTS' ;;
 esac
 require_header "$SMOKE_TMP/api-health.headers" '^cache-control:[[:space:]]*no-store' 'API no-store'
+
+# Source-edition reads require the current website account. The retired public
+# catalog is a deliberate 410 tombstone, never the old gameplay contract.
+request GET /api/v1/games/demon-tower/source/world 401 \
+  "$SMOKE_TMP/demon-source-world-guest.json" "$SMOKE_TMP/demon-source-world-guest.headers"
+request GET /api/v1/games/demon-tower/source/progress 401 \
+  "$SMOKE_TMP/demon-source-progress-guest.json" "$SMOKE_TMP/demon-source-progress-guest.headers"
+for source_write in damage channel clue; do
+  request POST "/api/v1/games/demon-tower/source/world/$source_write" 401 \
+    "$SMOKE_TMP/demon-source-$source_write-guest.json" "$SMOKE_TMP/demon-source-$source_write-guest.headers"
+done
+request GET /api/v1/games/demon-tower/catalog 410 \
+  "$SMOKE_TMP/demon-legacy-catalog.json" "$SMOKE_TMP/demon-legacy-catalog.headers"
+request GET /api/v1/games/demon-tower/overview 401 \
+  "$SMOKE_TMP/demon-legacy-overview-guest.json" "$SMOKE_TMP/demon-legacy-overview-guest.headers"
+require_header "$SMOKE_TMP/demon-source-world-guest.headers" '^cache-control:[[:space:]]*no-store' 'demon source API no-store'
+grep -Eq '"code"[[:space:]]*:[[:space:]]*"DEMON_TOWER_CLIENT_OUTDATED"' \
+  "$SMOKE_TMP/demon-legacy-catalog.json" || fail 'retired demon tower catalog is missing its 410 tombstone'
+pass "demon source authentication and retired API boundaries"
 
 # Leaderboards are intentionally public reads. This request has no cookie or
 # Authorization header and proves zhesi is accepted by both Nginx and the API.

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>九层妖塔 · 摸摸公司</title>
+  <link rel="stylesheet" href="./css/jiuceng.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 工作台抬头（协作档案风） -->
+  <header id="topbar">
+    <div class="tbLeft">
+      <div class="kicker">COOPERATIVE FIELD NOTES / VOL. 09</div>
+      <h1>九层妖塔</h1>
+      <div class="sub">摸摸公司协作工作台 · 一份缓慢借力成长的角色档案，随时收起画面</div>
+    </div>
+    <div class="topActions">
+      <button class="pillBtn" id="btnCloud" title="云端存档">&#x2601; 联网档案</button>
+      <button class="iconBtn" id="btnRefresh" title="刷新">&#x21bb;</button>
+      <button class="iconBtn" id="btnHelp" title="帮助">?</button>
+    </div>
+  </header>
+
+  <!-- 顶部状态条 -->
+  <div id="statusBar" class="statusBar"></div>
+
+  <!-- 一级导航（文件夹式标签页） -->
+  <nav id="nav" class="nav">
+    <button class="cap on" data-tab="grow"><span class="capIco">👤</span>成长</button>
+    <button class="cap" data-tab="explore"><span class="capIco">🧭</span>探索</button>
+    <button class="cap" data-tab="equip"><span class="capIco">⚒</span>装备</button>
+    <button class="cap" data-tab="raise"><span class="capIco">🌱</span>养成</button>
+    <button class="cap" data-tab="forge"><span class="capIco">🔨</span>锻造</button>
+    <button class="cap" data-tab="shop"><span class="capIco">🎒</span>物资</button>
+    <button class="cap" data-tab="coop"><span class="capIco">⛺</span>协作</button>
+    <button class="cap" data-tab="friend"><span class="capIco">🤝</span>好友论道</button>
+    <button class="cap" data-tab="sect"><span class="capIco">🏯</span>帮派</button>
+    <button class="cap" data-tab="gongfa"><span class="capIco">📜</span>功法</button>
+    <button class="cap" data-tab="bag"><span class="capIco">🧾</span>背包</button>
+    <button class="cap" data-tab="rank"><span class="capIco">🏆</span>榜单</button>
+  </nav>
+
+  <!-- 内容区 -->
+  <main id="main">
+    <section class="tab on" id="tab-grow"></section>
+    <section class="tab" id="tab-explore"></section>
+    <section class="tab" id="tab-equip"></section>
+    <section class="tab" id="tab-raise"></section>
+    <section class="tab" id="tab-forge"></section>
+    <section class="tab" id="tab-shop"></section>
+    <section class="tab" id="tab-coop"></section>
+    <section class="tab" id="tab-friend"></section>
+    <section class="tab" id="tab-sect"></section>
+    <section class="tab" id="tab-gongfa"></section>
+    <section class="tab" id="tab-bag"></section>
+    <section class="tab" id="tab-rank"></section>
+  </main>
+
+  <!-- 战斗 / 事件遮罩 -->
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="九层妖塔操作窗口"><div class="modalBox" id="modalBox"></div></div>
+
+  <!-- 捏脸浮层 -->
+  <div id="avatarModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="角色外观设置"><div class="modalBox" id="avatarBox"></div></div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+</div>
+
+<!-- 模块化脚本（顺序：配置 → 接口 → 状态 → 战斗 → 抽取 → 世界 → 商店 → 捏脸 → 交互 → 启动） -->
+<script src="./js/config.js"></script>
+<script src="./js/api.js"></script>
+<script src="./js/state.js"></script>
+<script src="./js/combat.js"></script>
+<script src="./js/gacha.js"></script>
+<script src="./js/world.js"></script>
+<script src="./js/shop.js"></script>
+<script src="./js/avatar.js"></script>
+<script src="./js/equip.js"></script>
+<script src="./js/ui.js"></script>
+<script src="./js/main.js"></script>
+</body>
+</html>

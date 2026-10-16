@@ -1,0 +1,106 @@
+.page {
+  --tower-surface: var(--color-surface);
+  --tower-soft: var(--color-surface-2);
+  --tower-border: var(--color-border);
+  --tower-text: var(--color-text);
+  --tower-muted: var(--color-text-secondary);
+  --tower-accent: var(--color-accent);
+  width: min(100%, 1220px);
+  margin-inline: auto;
+  padding: clamp(14px, 2.5vw, 30px);
+  color: var(--tower-text);
+}
+
+.heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 18px; }
+.heading h1 { margin: 6px 0; font-size: clamp(28px, 4vw, 42px); letter-spacing: -.035em; }
+.heading p { margin: 0; color: var(--tower-muted); line-height: 1.7; }
+.eyebrow { color: var(--tower-muted); font: 600 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .13em; }
+.headingActions { display: flex; gap: 8px; flex-wrap: wrap; }
+.headingActions a,
+.headingActions button,
+.error button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tower-border);
+  border-radius: 7px;
+  background: var(--tower-surface);
+  color: var(--tower-text);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.headingActions a:hover,
+.headingActions button:hover,
+.error button:hover { border-color: var(--tower-accent); color: var(--tower-accent); }
+.headingActions a:focus-visible,
+.headingActions button:focus-visible,
+.error button:focus-visible,
+.details summary:focus-visible,
+.details a:focus-visible { outline: 3px solid var(--tower-accent); outline-offset: 3px; }
+
+.boundary {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  border: 1px solid var(--tower-border);
+  border-radius: 9px;
+  background: var(--tower-soft);
+  padding: 10px 13px;
+  font-size: 12px;
+  color: var(--tower-muted);
+}
+.boundary strong { color: var(--tower-text); }
+.boundary span:nth-of-type(1) { color: #1a7f37; }
+[data-color-mode='dark'] .boundary span:nth-of-type(1) { color: #3fb950; }
+
+.error {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  border: 1px solid color-mix(in srgb, #cf222e 45%, var(--tower-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, #cf222e 8%, var(--tower-surface));
+  padding: 12px 14px;
+  color: var(--tower-text);
+  line-height: 1.6;
+}
+
+.frameShell { position: relative; overflow: hidden; border: 1px solid var(--tower-border); border-radius: 12px; background: var(--tower-soft); box-shadow: var(--shadow-sm); }
+.frameShell iframe { display: block; width: 100%; min-height: 780px; border: 0; background: var(--tower-soft); }
+.frameShell[data-phase='error'] iframe { visibility: hidden; max-height: 1px; min-height: 0; }
+.loading {
+  position: absolute;
+  inset: 0;
+  min-height: 420px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  background: var(--tower-soft);
+  color: var(--tower-text);
+}
+.loading small { color: var(--tower-muted); }
+.spinner { width: 30px; height: 30px; border: 3px solid var(--tower-border); border-top-color: var(--tower-accent); border-radius: 50%; animation: spin .85s linear infinite; }
+.details { margin-top: 18px; border-top: 1px solid var(--tower-border); padding-top: 10px; max-width: 920px; }
+.details summary { min-height: 44px; display: list-item; align-content: center; cursor: pointer; font-weight: 600; }
+.details p { margin: 8px 0; color: var(--tower-muted); font-size: 13px; line-height: 1.8; }
+.details a { color: var(--tower-accent); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+@media (max-width: 720px) {
+  .page { padding-inline: 8px; }
+  .heading { align-items: stretch; flex-direction: column; }
+  .headingActions > * { flex: 1 1 auto; }
+  .boundary { align-items: flex-start; flex-direction: column; }
+  .frameShell { border-radius: 8px; }
+  .error { align-items: stretch; flex-direction: column; }
+}

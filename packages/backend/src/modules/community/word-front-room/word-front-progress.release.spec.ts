@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { migrations } from '../../../database/migrations';
 
 describe('Word Front progression release surface', () => {
-  it('registers the additive progression migration last', () => {
-    expect(migrations.at(-1)?.name).toBe('AddWordFrontProgress1700000000041');
+  it('keeps the additive progression migration immediately before later additive releases', () => {
+    const names = migrations.map((migration) => migration.name);
+    expect(names.indexOf('AddWordFrontProgress1700000000041')).toBeGreaterThan(-1);
+    expect(names.indexOf('AddWordFrontProgress1700000000041')).toBeLessThan(names.indexOf('AddDemonTowerSource1700000000042'));
   });
 
   it('proxies only the two intended progression endpoints', () => {

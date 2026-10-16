@@ -13,6 +13,7 @@ import { CommunityAchievementUnlock, CommunityMembershipGrant, CommunityUserPres
 import { CommunityFishProgress, CommunitySupportEntry } from '../../database/entities/community-growth.entity';
 import { DemonTowerAutoRun } from '../../database/entities/demon-tower-auto-run.entity';
 import { DemonTowerCommand, DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, DemonTowerProfile, DemonTowerWorldFloor } from '../../database/entities/demon-tower.entity';
+import { DemonTowerSourceCommand, DemonTowerSourceContribution, DemonTowerSourceDailyAction, DemonTowerSourceProfile, DemonTowerSourceWorldFloor } from '../../database/entities/demon-tower-source.entity';
 import {
   DevelopmentAttachmentRecord,
   DevelopmentEvent,
@@ -243,6 +244,40 @@ describe('AccountLifecycleService', () => {
     expect(await awards.findOneByOrFail({ serviceDate: '2026-09-08' })).toMatchObject({
       winnerUserId: null, bossDamage: 50, coins: 100, awardedAt: now,
     });
+  });
+
+  it('clears ZIP-source saves, commands and ranking identity during soft account deletion', async () => {
+    const user = await seedUser(dataSource, 'source-tower-delete@example.com');
+    const peer = await seedUser(dataSource, 'source-tower-peer@example.com');
+    const session = await seedSession(dataSource, user.id, 's');
+    const now = new Date('2026-10-16T12:00:00.000Z');
+    const profiles = dataSource.getRepository(DemonTowerSourceProfile);
+    for (const owner of [user, peer]) {
+      await profiles.save(profiles.create({ userId: owner.id, version: 1, schemaVersion: 1,
+        saveData: { name: owner.displayName, log: [`${owner.id}:private`] }, displayName: owner.displayName || '同事',
+        level: 2, power: 200, createdAt: now, updatedAt: now }));
+      await dataSource.getRepository(DemonTowerSourceCommand).save(dataSource.getRepository(DemonTowerSourceCommand).create({
+        userId: owner.id, requestId: randomUUID(), kind: 'damage', requestHash: 'e'.repeat(64), receipt: { private: owner.id }, createdAt: now,
+      }));
+      await dataSource.getRepository(DemonTowerSourceContribution).save(dataSource.getRepository(DemonTowerSourceContribution).create({
+        layerId: 1, userId: owner.id, bossDamage: '20', materials: '0', clues: '0', updatedAt: now,
+      }));
+      await dataSource.getRepository(DemonTowerSourceDailyAction).save(dataSource.getRepository(DemonTowerSourceDailyAction).create({
+        serviceDate: '2026-10-16', userId: owner.id, bossAttempts: 1, donatedMaterials: 0, mutationCount: 1, updatedAt: now,
+      }));
+    }
+    const world = await dataSource.getRepository(DemonTowerSourceWorldFloor).findOneByOrFail({ layerId: 1 });
+
+    await service.requestDeletion(user.id, session.id, 'source-tower-delete-idempotency');
+    const request = await dataSource.getRepository(AccountDeletionRequest).findOneByOrFail({ userId: user.id });
+    await expect(service.processDueDeletions(10, new Date(request.scheduledFor.getTime() + 1000))).resolves.toBe(1);
+
+    expect(await profiles.countBy({ userId: user.id })).toBe(0);
+    expect(await dataSource.getRepository(DemonTowerSourceCommand).countBy({ userId: user.id })).toBe(0);
+    expect(await dataSource.getRepository(DemonTowerSourceContribution).countBy({ userId: user.id })).toBe(0);
+    expect(await dataSource.getRepository(DemonTowerSourceDailyAction).countBy({ userId: user.id })).toBe(0);
+    expect(await profiles.countBy({ userId: peer.id })).toBe(1);
+    expect(await dataSource.getRepository(DemonTowerSourceWorldFloor).findOneByOrFail({ layerId: 1 })).toEqual(world);
   });
 
   it('erases only the departing account’s VIP, titles, achievements and auto runs', async () => {

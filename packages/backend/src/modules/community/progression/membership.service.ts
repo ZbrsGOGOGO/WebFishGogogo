@@ -30,7 +30,7 @@ export class MembershipService {
     const current = merged.find(period => period.startsAt <= now && now < period.expiresAt);
     const visible = current ?? merged.at(-1)!;
     const active = communityProgressionEnabled() && Boolean(current);
-    return { active, startsAt: visible.startsAt.toISOString(), expiresAt: visible.expiresAt.toISOString(), source: visible.source, benefits: active ? ['demon_tower_auto_explore'] : [] };
+    return { active, startsAt: visible.startsAt.toISOString(), expiresAt: visible.expiresAt.toISOString(), source: visible.source, benefits: [] };
   }
   async requireVip(manager: EntityManager, userId: string, now: Date): Promise<CommunityMembershipView> {
     if (!communityProgressionEnabled()) throw new ServiceUnavailableException({ code: 'PROGRESSION_DISABLED' });

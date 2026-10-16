@@ -127,6 +127,22 @@ describe('DemonTowerRewardsService', () => {
     expect(await rewards.settleDay('2099-09-09')).toBe(false);
     for (const date of ['2099-02-30', '2099-09-10', null, ['2099-09-08']]) await expect(rewards.leaderboard(date as string)).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_DATE_INVALID' } });
   });
+  it('settles the current partial day exactly once only with a date-bound retirement confirmation', async () => {
+    const current = '2099-09-09';
+    const a = await user('retirement-leader');
+    await score(a, 321, current, '2099-09-09T03:00:00Z');
+    expect(await rewards.settleDay(current)).toBe(false);
+    await expect(rewards.settleRetirementDay(current, 'wrong')).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_RETIREMENT_CONFIRMATION_REQUIRED' } });
+    await expect(rewards.settleRetirementDay(yesterday, `RETIRE_OLD_DEMON_TOWER:${yesterday}`)).rejects.toMatchObject({ response: { code: 'DEMON_TOWER_RETIREMENT_DATE_INVALID' } });
+    expect(await rewards.settleRetirementDay(current, `RETIRE_OLD_DEMON_TOWER:${current}`)).toBe(true);
+    expect(await rewards.settleRetirementDay(current, `RETIRE_OLD_DEMON_TOWER:${current}`)).toBe(false);
+    expect(await db.getRepository(RewardGrant).count({ where: { sourceType: 'demon_tower_daily_champion', sourceId: current } })).toBe(1);
+    const ledger = await db.getRepository(WalletLedger).find({ where: { sourceType: 'demon_tower_daily_champion', sourceId: current } });
+    expect(ledger).toHaveLength(1); expect(Number(ledger[0].delta)).toBe(100);
+    const notice = await db.getRepository(CommunityNotification).findOneByOrFail({ eventType: 'demon_tower_daily_champion', dedupeKey: `demon_tower_daily_champion:${current}` });
+    expect(notice.payload).toMatchObject({ title: '旧版九层妖塔最终日榜', resourcePath: '/games/demon-tower' });
+    expect(String(notice.payload.summary)).toContain('截至源码版切换时');
+  });
   it('uses the same transaction manager for money and notices and propagates notice failure', async () => {
     const a = await user('alice'); await score(a);
     let grantManager: EntityManager | undefined; let noticeManager: EntityManager | undefined;

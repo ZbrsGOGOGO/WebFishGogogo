@@ -127,7 +127,7 @@ export function accrueOfficeRelief(input: OfficeReliefState, acceptedSeconds: nu
 
 export type OfficeReliefRng = (maxExclusive: number) => number;
 export type OfficeReliefDraw = { kind: 'coin'; amount: number } | { kind: 'loss'; amount: number } | { kind: 'title'; itemId: typeof OFFICE_RELIEF_TITLES[number]['id'] }
-  | Pick<OfficeReliefDrop, 'kind' | 'itemId' | 'quantity'>;
+  | Pick<Extract<OfficeReliefDrop, { kind: 'farm_crop' }>, 'kind' | 'itemId' | 'quantity'>;
 function random(rng: OfficeReliefRng, max: number): number {
   const value = rng(max);
   if (!integer(value, 0, max - 1)) invalid('RANDOM_INVALID');
@@ -143,11 +143,10 @@ export function drawOfficeRelief(rng: OfficeReliefRng): OfficeReliefDraw {
   }
   if (roll < weights.coin + weights.loss) return { kind: 'loss', amount: RULES.lossMin + random(rng, RULES.lossMax - RULES.lossMin + 1) };
   if (roll < weights.coin + weights.loss + weights.title) return { kind: 'title', itemId: OFFICE_RELIEF_TITLES[random(rng, OFFICE_RELIEF_TITLES.length)].id };
-  const materialEnd = weights.coin + weights.loss + weights.title + weights.tower_material;
-  const kind = roll < materialEnd ? 'tower_material' : roll < materialEnd + weights.farm_crop ? 'farm_crop' : 'tower_book';
-  const pool = kind === 'tower_material' ? OFFICE_RELIEF_MATERIALS : kind === 'farm_crop' ? OFFICE_RELIEF_CROPS : OFFICE_RELIEF_BOOKS;
-  const item = pool[random(rng, pool.length)];
-  return { kind, itemId: item.id, quantity: item.quantity };
+  // The remaining 20 integer points are the farm gift. Tower gifts are legacy
+  // records only and must never be generated for either tower implementation.
+  const item = OFFICE_RELIEF_CROPS[random(rng, OFFICE_RELIEF_CROPS.length)];
+  return { kind: 'farm_crop', itemId: item.id, quantity: item.quantity };
 }
 export interface OfficeReliefActionContext { now: number; requestId: string; rng: OfficeReliefRng }
 export interface OfficeReliefActionResult { state: OfficeReliefState; outcome: OfficeReliefOutcome; claimedDrop?: OfficeReliefDrop }
@@ -178,13 +177,7 @@ export function actOfficeRelief(input: OfficeReliefState, raw: OfficeReliefActio
       const drop = { id, receivedAt: at, ...draw } as OfficeReliefDrop;
       state.pending.push(drop); outcome.itemId = draw.itemId; outcome.dropId = id;
       const item = dropDefinition(draw.kind, draw.itemId)!;
-      outcome.message = draw.kind === 'farm_crop'
-        ? `获得${item.name}×${draw.quantity}，已存入待领礼包；每份领取后增加${RULES.farmExperiencePerGift}种植经验，不发办公币、不自动收获或更换作物。`
-        : draw.kind === 'tower_book'
-          ? draw.itemId === 'weapon_manual'
-            ? `获得${item.name}，已存入待领礼包；领取后为当时主手武器暂存${draw.quantity}品质经验，不直接升星或升品质。`
-            : `获得${item.name}，已存入待领礼包；领取后增加${draw.quantity}技能碎片。`
-          : `获得${item.name}×${draw.quantity}，已存入待领礼包；需显式领取，不自动改变农场或妖塔。`;
+      outcome.message = `获得${item.name}×${draw.quantity}，已存入待领礼包；每份领取后增加${RULES.farmExperiencePerGift}种植经验，不发办公币、不自动收获或更换作物。`;
     }
     state.tokenBalance += outcome.tokenDelta; state.chances--; state.totalPlays++;
   } else if (value.kind === 'buy') {
@@ -209,11 +202,7 @@ export function actOfficeRelief(input: OfficeReliefState, raw: OfficeReliefActio
     const item = dropDefinition(claimedDrop.kind, claimedDrop.itemId)!;
     const message = claimedDrop.kind === 'farm_crop'
       ? `已领取${item.name}×${claimedDrop.quantity}，增加${RULES.farmExperiencePerGift}种植经验并按既有曲线更新等级；不发办公币、不自动收获或更换作物。`
-      : claimedDrop.kind === 'tower_book'
-        ? claimedDrop.itemId === 'weapon_manual'
-          ? `已领取${item.name}，为当前主手武器暂存${claimedDrop.quantity}品质经验，不直接升星或升品质。`
-          : `已领取${item.name}，增加${claimedDrop.quantity}技能碎片。`
-        : `已领取${item.name}×${claimedDrop.quantity}，以对应模块的同事务授予结果为准。`;
+      : `这是旧版妖塔遗留礼包，相关领取通道已于 2026-10-16 退役；服务端会保留原记录，不向新旧妖塔写入。`;
     outcome = { id, at, kind: 'claim', tokenDelta: 0, itemId: claimedDrop.itemId, dropId: claimedDrop.id, message };
   } else invalid();
   state.version++; state.history.push(outcome); state.history = state.history.slice(-RULES.historyLimit); state.lastResult = copy(outcome);

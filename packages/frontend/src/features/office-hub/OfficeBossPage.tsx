@@ -19,13 +19,11 @@ type Confirmation = { title: string; description: string; button: string; action
 const SECTIONS: Array<[Section, string]> = [['pending', '待领物品'], ['collection', '外观与称号'], ['history', '最近记录'], ['rules', '规则说明']];
 const number = (value: number): string => value.toLocaleString('zh-CN');
 const date = (value: string): string => new Date(value).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-const kindLabel = (kind: OfficeReliefOutcome['kind']): string => ({ coin: '解压币入账', loss: '解压币扣减', title: '称号收藏', tower_material: '妖塔材料待领', farm_crop: '农场礼包待领', tower_book: '研习册待领', purchase: '外观购买', equip: '外观设置', claim: '物品已领取' })[kind];
+const kindLabel = (kind: OfficeReliefOutcome['kind']): string => ({ coin: '解压币入账', loss: '解压币扣减', title: '称号收藏', tower_material: '旧版妖塔物品（已退役）', farm_crop: '农场礼包待领', tower_book: '旧版妖塔物品（已退役）', purchase: '外观购买', equip: '外观设置', claim: '物品已领取' })[kind];
 const itemName = (drop: OfficeReliefDrop): string => [...OFFICE_RELIEF_MATERIALS, ...OFFICE_RELIEF_CROPS, ...OFFICE_RELIEF_BOOKS].find(item => item.id === drop.itemId)?.name ?? '待领物品';
 function dropDescription(drop: OfficeReliefDrop): string {
   if (drop.kind === 'farm_crop') return '领取 30 种植经验，不发办公币；不会自动收获或更换作物。';
-  if (drop.itemId === 'weapon_manual') return '给领取时的妖塔主手武器增加 15 暂存品质经验；按现有品质规则后续结算，不增加熟练度，也不直接升星或升品质。';
-  if (drop.itemId === 'skill_fragments') return '领取 3 个妖塔技能碎片，由自己选择后续用途。';
-  return `领取 ${drop.quantity} 份${itemName(drop)}到妖塔材料库。`;
+  return '旧版妖塔礼包已退役，记录会原样保留，但不会写入新源码版或旧版妖塔。';
 }
 
 export function OfficeBossPage() {
@@ -106,7 +104,7 @@ function OfficeBossWorkspace({ owner, generation }: { owner: string; generation:
       {relief && <dl className={styles.metrics} aria-label="机会与独立代币"><div className={styles.metric}><dt>机会池</dt><dd>{relief.chances} <span>/ {OFFICE_RELIEF_RULES.chanceCap} 次</span></dd><small>跨日保留，满池暂停积累</small></div><div className={styles.metric}><dt>解压币 · 仅本模块</dt><dd>{number(relief.tokenBalance)}</dd><small>不能充值、转赠或兑换办公币</small></div><div className={styles.metric}><dt>下次机会 · 服务器认可活跃</dt><dd>{Math.floor(relief.remainderSeconds / 60)} <span>/ 30 分钟</span></dd><progress aria-label="下一次机会进度" max={OFFICE_RELIEF_RULES.secondsPerChance} value={relief.remainderSeconds} /><small>{relief.chances >= OFFICE_RELIEF_RULES.chanceCap ? '池已满，暂停计入；用掉后再积累。' : '每日最多计 4 小时 / 8 次机会。'}</small></div></dl>}
       <section className={`${styles.panel} ${styles.stage}`} aria-label="纸片挑战"><div className={styles.stageTop}><div className={styles.heading}><h2>暴打小老板</h2><span className={styles.badge}>虚构纸片角色</span></div><p>每次 1 个机会，可能增减解压币或收获收藏。办公币不会被扣减。</p></div>
         <OfficeBossArt key={effect?.id ?? 'rest'} tool={tool} skin={relief?.equippedSkin ?? null} effect={covered ? null : effect?.kind} />
-        <div className={styles.stageBody}><div className={styles.actions}><label>演出工具<select value={tool} disabled={blocked || Boolean(confirmation)} onChange={e => setTool(e.target.value as OfficeReliefTool)}>{OFFICE_RELIEF_TOOLS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button className={styles.primary} disabled={blocked || Boolean(confirmation) || Boolean(playReason)} onClick={() => ask({ title: '确认消耗 1 次机会', description: '50% 获得解压币，49% 扣减 50–300 解压币（最多扣到 0），1% 获得收藏或待领物品。只影响本模块，不扣办公币。', button: '确认释放 · 1 次机会', action: 'relief_play', data: { tool } })}>消耗 1 次机会 · 释放压力</button></div>
+        <div className={styles.stageBody}><div className={styles.actions}><label>演出工具<select value={tool} disabled={blocked || Boolean(confirmation)} onChange={e => setTool(e.target.value as OfficeReliefTool)}>{OFFICE_RELIEF_TOOLS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><button className={styles.primary} disabled={blocked || Boolean(confirmation) || Boolean(playReason)} onClick={() => ask({ title: '确认消耗 1 次机会', description: '50.3% 获得解压币，49% 扣减 50–300 解压币（最多扣到 0），0.7% 获得称号或农场礼包。只影响本模块，不扣办公币。', button: '确认释放 · 1 次机会', action: 'relief_play', data: { tool } })}>消耗 1 次机会 · 释放压力</button></div>
           <p className={styles.muted}>{playReason ?? '工具和外观只改变演出，不改变概率。没有自动挑战或离线补算。'}</p>
           {relief?.lastResult && <Result outcome={relief.lastResult} />}
         </div>
@@ -114,7 +112,7 @@ function OfficeBossWorkspace({ owner, generation }: { owner: string; generation:
       {confirmation && <div ref={confirmationRef} tabIndex={-1} className={styles.confirmation} role="region" aria-label="操作二次确认"><h3>{confirmation.title}</h3><p>{confirmation.description}</p>{confirmation.version !== relief?.version && <p role="status">资料版本已更新；请取消后重新选择并核对，旧确认不会按新条件提交。</p>}<div className={styles.actions}><button className={styles.primary} disabled={blocked || confirmation.version !== relief?.version} onClick={confirm}>{confirmation.button}</button><button disabled={state.busy} onClick={cancel}>取消</button></div></div>}
       {relief && <><nav className={styles.subnav} aria-label="挑战资料"><Link to={path('chances', 'pending')} aria-current={section === 'pending' ? 'page' : undefined}>待领物品{relief.pending.length ? ` (${relief.pending.length})` : ''}</Link>{SECTIONS.filter(([id]) => id !== 'pending').map(([id, label]) => <Link key={id} to={path('chances', id)} aria-current={section === id ? 'page' : undefined}>{label}</Link>)}</nav>
         <section className={styles.panel} aria-label={SECTIONS.find(([id]) => id === section)?.[1]}>
-          {section === 'pending' && <><div className={styles.heading}><h2>待领物品</h2><span className={styles.badge}>{relief.pending.length} / {OFFICE_RELIEF_RULES.pendingCap}</span></div><p className={styles.muted}>领取后才进入对应模块。尚未建档、战斗中、自动探索中或容量不足时，物品留在这里，不会被吞掉。</p><ul className={styles.list}>{relief.pending.map(drop => <li key={drop.id}><div><strong>{itemName(drop)}</strong><p>{dropDescription(drop)}</p><small>{date(drop.receivedAt)} · 北京时间</small></div><div className={styles.actions}><Link to={drop.kind === 'farm_crop' ? '/farm' : '/games/demon-tower?tab=profile'}>{drop.kind === 'farm_crop' ? '去农场' : '去妖塔'}</Link><button disabled={blocked || Boolean(confirmation)} onClick={() => ask({ title: `领取${itemName(drop)}`, description: `${dropDescription(drop)} 领取失败会原样保留。`, button: '确认领取', action: 'relief_claim', data: { dropId: drop.id } })}>领取物品</button></div></li>)}</ul>{relief.pending.length === 0 && <p className={styles.empty}>还没有待领物品。联动奖励会先妥善保存在这里。</p>}</>}
+          {section === 'pending' && <><div className={styles.heading}><h2>待领物品</h2><span className={styles.badge}>{relief.pending.length} / {OFFICE_RELIEF_RULES.pendingCap}</span></div><p className={styles.muted}>当前只生成农场礼包。旧版妖塔礼包不再生成、领取或写入任何妖塔；若历史记录仍存在，会原样保留供站长核查。</p><ul className={styles.list}>{relief.pending.map(drop => <li key={drop.id}><div><strong>{itemName(drop)}</strong><p>{dropDescription(drop)}</p><small>{date(drop.receivedAt)} · 北京时间</small></div><div className={styles.actions}>{drop.kind === 'farm_crop' ? <><Link to="/farm">去农场</Link><button disabled={blocked || Boolean(confirmation)} onClick={() => ask({ title: `领取${itemName(drop)}`, description: `${dropDescription(drop)} 领取失败会原样保留。`, button: '确认领取', action: 'relief_claim', data: { dropId: drop.id } })}>领取物品</button></> : <span className={styles.badge}>已退役 · 保留记录</span>}</div></li>)}</ul>{relief.pending.length === 0 && <p className={styles.empty}>还没有待领物品。农场礼包会先妥善保存在这里。</p>}</>}
           {section === 'collection' && <Collection relief={relief} blocked={blocked || Boolean(confirmation)} ask={ask} />}
           {section === 'history' && <><h2>最近记录</h2><p className={styles.muted}>最近 {OFFICE_RELIEF_RULES.historyLimit} 笔服务端记录 · 时间为北京时间 · 仅解压币收支，不是全站钱包流水。</p><ul className={styles.list}>{relief.history.map(item => <li key={item.id}><div><strong>{kindLabel(item.kind)}</strong><p>{item.message}</p><small>{date(item.at)}</small></div><strong>{item.tokenDelta > 0 ? '+' : ''}{number(item.tokenDelta)} 解压币</strong></li>)}</ul>{!relief.history.length && <p className={styles.empty}>还没有挑战或外观操作记录。</p>}</>}
           {section === 'rules' && <Rules />}
@@ -138,12 +136,10 @@ function Rules() {
     <h2>规则说明</h2><p>免费、手动、服务端结算。解压币不能充值、交易、转赠或兑换全站办公币。</p>
     <ul><li>每 30 分钟服务器认可的活跃时间获得 1 次机会；每天最多计算 4 小时，最多新增 8 次。</li><li>机会池上限 10 次，满池暂停积累且不会事后补发；已有次数与零碎进度跨日保留。</li><li>后台、离线、失焦或长时间无操作不会增加机会；游戏时间不重复加成，也不会倒扣已获得的次数。</li><li>固定每日巡视独立保留：30 秒后领取 20 办公币 +5 经验，不用机会，也不影响本模块的概率。</li></ul>
     <table className={styles.ruleTable}><thead><tr><th>结果</th><th>单次概率</th><th>去向</th></tr></thead><tbody>
-      <tr><td>获得解压币</td><td>50%</td><td>100–10,000 解压币</td></tr>
+      <tr><td>获得解压币</td><td>50.3%</td><td>100–10,000 解压币；原妖塔掉落的 0.3% 已合并到这里</td></tr>
       <tr><td>扣减解压币</td><td>49%</td><td>50–300，最多扣到 0</td></tr>
       <tr><td>稀有称号</td><td>0.5%</td><td>3 款等概率；重复折为 500 解压币</td></tr>
-      <tr><td>妖塔材料</td><td>0.2%</td><td>玄铁砂 / 灵草 / 通道线索，各 3 份，待领</td></tr>
       <tr><td>农场礼包</td><td>0.2%</td><td>3 款等概率，中奖礼包均领取 30 种植经验</td></tr>
-      <tr><td>妖塔研习册</td><td>0.1%</td><td>3 技能碎片 / 主手 15 暂存品质经验，待领</td></tr>
     </tbody></table>
     <details><summary>赢币金额细分（仅在 50% 赢币结果内）</summary><table className={styles.ruleTable}><thead><tr><th>金额区间</th><th>赢币结果内占比</th></tr></thead><tbody>{OFFICE_RELIEF_RULES.coinTiers.map(tier => <tr key={tier.min}><td>{number(tier.min)}–{number(tier.max)} 解压币</td><td>{tier.weight}%</td></tr>)}</tbody></table><p>各区间内整数等概率；超过 5,000 的结果占赢币事件的 8%，折合所有挑战的 4%。工具与外观不改变任何概率。</p></details>
     <p className={styles.muted}>待领区最多 99 份，解压币最多 10 亿。容量不足以容纳任何可能结果时，服务端会拒绝开始，不扣机会。最近记录保留 30 笔。</p>

@@ -8,6 +8,7 @@ import { ArcadeBestScore, ArcadeGameRun } from './arcade-score.entity';
 import { PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward } from './play-room.entity';
 import { RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats } from './rail-room.entity';
 import { DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward } from './demon-tower.entity';
+import { DemonTowerSourceProfile, DemonTowerSourceWorldFloor, DemonTowerSourceContribution, DemonTowerSourceDailyAction, DemonTowerSourceCommand } from './demon-tower-source.entity';
 import { CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation } from './community-progression.entity';
 import { CommunityFishProgress, CommunitySupportEntry } from './community-growth.entity';
 import { DemonTowerAutoRun } from './demon-tower-auto-run.entity';
@@ -144,6 +145,7 @@ export {
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
   CommunityFishProgress, CommunitySupportEntry,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,
+  DemonTowerSourceProfile, DemonTowerSourceWorldFloor, DemonTowerSourceContribution, DemonTowerSourceDailyAction, DemonTowerSourceCommand,
   RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,
   TrendingNewsBoardRun, TrendingNewsItemRecord,
@@ -270,6 +272,7 @@ export const entities = [
   CommunityMembershipGrant, CommunityAchievementUnlock, CommunityUserPresentation,
   CommunityFishProgress, CommunitySupportEntry,
   DemonTowerProfile, DemonTowerWorldFloor, DemonTowerCommand, DemonTowerContribution, DemonTowerDailyProgress, DemonTowerDailyAward,
+  DemonTowerSourceProfile, DemonTowerSourceWorldFloor, DemonTowerSourceContribution, DemonTowerSourceDailyAction, DemonTowerSourceCommand,
   RailRoom, RailRoomMember, RailCommand, RailChatMessageRecord, RailDailyScore, RailDailyAward, RailPlayerStats,
   PlayRoom, PlayRoomMember, PlayCommand, PlayDailyScore, PlayDailyAward,
   TrendingNewsBoardRun, TrendingNewsItemRecord,

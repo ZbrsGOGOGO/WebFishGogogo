@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 const source = (file: string): string => readFileSync(resolve(__dirname, '../../..', file), 'utf8');
 describe('community progression release boundaries', () => {
   it('uses fail-closed flags shared between frontend and backend', () => {
-    for (const key of ['COMMUNITY_PROGRESSION', 'DEMON_TOWER_AUTO_EXPLORE']) {
+    for (const key of ['COMMUNITY_PROGRESSION']) {
       const compose = source('deploy/docker-compose.community.yml');
       expect(compose).toContain(`FEATURE_${key}_ENABLED: \${FEATURE_${key}_ENABLED:-false}`);
       expect(compose).toContain(`VITE_${key}_ENABLED: \${FEATURE_${key}_ENABLED:-false}`);
@@ -12,6 +12,9 @@ describe('community progression release boundaries', () => {
       expect(source('Dockerfile')).toContain(`VITE_${key}_ENABLED=\${VITE_${key}_ENABLED}`);
       expect(source('deploy/.env.community.example')).toContain(`FEATURE_${key}_ENABLED=false`);
     }
+    const compose = source('deploy/docker-compose.community.yml');
+    expect(compose).toContain('FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED: "false"');
+    expect(compose).toContain('VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED: "false"');
   });
   it('adds four dedicated tables without modifying roles or old data', () => {
     const growth = source('packages/backend/src/database/migrations/1700000000031-AddCommunityProgression.ts').split('async down')[0];

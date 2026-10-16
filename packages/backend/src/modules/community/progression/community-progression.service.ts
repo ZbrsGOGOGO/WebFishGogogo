@@ -7,7 +7,6 @@ import { DeskPlant } from '../../../database/entities/desk-plant.entity';
 import { PlayerProgression } from '../../../database/entities/player-progression.entity';
 import { RailDailyAward, RailPlayerStats } from '../../../database/entities/rail-room.entity';
 import { PlayDailyAward } from '../../../database/entities/play-room.entity';
-import { DemonTowerContribution, DemonTowerDailyAward, DemonTowerProfile } from '../../../database/entities/demon-tower.entity';
 import { DevelopmentRequest } from '../../../database/entities/development.entity';
 import { User } from '../../../database/entities/user.entity';
 import { COMMUNITY_CLOCK, type CommunityClock } from '../community-clock';
@@ -32,8 +31,8 @@ export class CommunityProgressionService {
 
   catalog(): CommunityProgressionCatalog {
     return { enabled: communityProgressionEnabled(), achievements: COMMUNITY_ACHIEVEMENTS,
-      membership: { giftDays: 30, automaticRenewal: false, paid: false, benefit: 'demon_tower_auto_explore', existingAccountsOnly: true },
-      historicalDataNotice: '成就依据服务器保留的真实记录回补；解锁时间是本次确认时间。已丢失或未记录的历史不会推测补造。称号仅装饰，不发币或增加管理权限。' };
+      membership: { giftDays: 30, automaticRenewal: false, paid: false, benefit: null, existingAccountsOnly: true },
+      historicalDataNotice: '成就依据服务器保留的真实记录回补；解锁时间是本次确认时间。旧版妖塔成就已冻结，只保留既有解锁，不读取新源码版存档补发。称号仅装饰，不发币或增加管理权限。' };
   }
   async me(userId: string): Promise<CommunityProgressionView> {
     return this.db.transaction(async (manager) => { await this.active(manager, userId, false); return this.view(manager, userId, this.clock.now()); });
@@ -100,20 +99,14 @@ export class CommunityProgressionService {
     const owned = new Map(unlocks.map((row) => [row.achievementKey, row]));
     return { serverNow: now.toISOString(), enabled: communityProgressionEnabled(), writesEnabled: communityProgressionEnabled() && communityWritesEnabled(), vip, fish, support,
       presentation: { version: presentation?.version ?? 0, equippedTitle: presentation?.equippedTitleKey && owned.has(presentation.equippedTitleKey) ? titleBadge(presentation.equippedTitleKey) : null },
-      achievements: COMMUNITY_ACHIEVEMENTS.map((item) => ({ key: item.key, progress: Math.min(item.target, metrics[item.metric]), target: item.target, eligible: owned.has(item.key) || metrics[item.metric] >= item.target, unlockedAt: owned.get(item.key)?.unlockedAt.toISOString() ?? null })) };
+      achievements: COMMUNITY_ACHIEVEMENTS.map((item) => ({ key: item.key, progress: owned.has(item.key) ? item.target : Math.min(item.target, metrics[item.metric]), target: item.target, eligible: owned.has(item.key) || metrics[item.metric] >= item.target, unlockedAt: owned.get(item.key)?.unlockedAt.toISOString() ?? null })) };
   }
   private async metrics(manager: EntityManager, userId: string): Promise<Metrics> {
-    const [farm, progression, rail, tower, contribution, playWins, railWins, towerWins, development] = await Promise.all([
+    const [farm, progression, rail, playWins, railWins, development] = await Promise.all([
       manager.getRepository(DeskPlant).findOneBy({ userId }), manager.getRepository(PlayerProgression).findOneBy({ userId }), manager.getRepository(RailPlayerStats).findOneBy({ userId }),
-      manager.getRepository(DemonTowerProfile).createQueryBuilder('profile').select(['profile.userId', 'profile.state']).where('profile.user_id = :userId', { userId }).getOne(),
-      manager.getRepository(DemonTowerContribution).findBy({ userId }),
-      manager.getRepository(PlayDailyAward).countBy({ winnerUserId: userId, coins: 100 }), manager.getRepository(RailDailyAward).countBy({ winnerUserId: userId, coins: 100 }), manager.getRepository(DemonTowerDailyAward).countBy({ winnerUserId: userId, coins: 100 }),
+      manager.getRepository(PlayDailyAward).countBy({ winnerUserId: userId, coins: 100 }), manager.getRepository(RailDailyAward).countBy({ winnerUserId: userId, coins: 100 }),
       manager.getRepository(DevelopmentRequest).countBy({ authorId: userId, status: 'done' }),
     ]);
-    const state = tower?.state;
-    const expansion = objectValue(state?.expansion);
-    const arena = objectValue(expansion.arena);
-    const bossFloors = new Set(Array.isArray(expansion.claimedBossFloors) ? expansion.claimedBossFloors.filter(floor => Number.isInteger(floor) && floor >= 1 && floor <= 9) : []);
     let workstation: Record<string, unknown> = {};
     let workstationWins = 0;
     if (process.env.FEATURE_WORKSTATION_CAMPAIGN_ENABLED === 'true') {
@@ -135,18 +128,15 @@ export class CommunityProgressionService {
     // A count, display label, another user's record or an unknown key cannot.
     const reliefTitles = new Set(relief.schemaVersion === 1 && Array.isArray(relief.titles)
       ? relief.titles.filter((key: unknown) => typeof key === 'string' && ['office_relief_fish', 'office_relief_rebel', 'office_relief_rest'].includes(key)) : []);
-    const ids = new Set<string>();
-    for (const [field, pattern] of [['weapons', /^w(?:[1-9]|1\d|20)$/], ['skills', /^s(?:[1-9]|1[0-6])$/]] as const) {
-      const values: unknown = state?.[field];
-      if (Array.isArray(values)) for (const value of values.slice(0, 36)) if (value && typeof value === 'object' && typeof value.id === 'string' && pattern.test(value.id)) ids.add(value.id);
-    }
-    return { farmHarvests: safeCount(farm?.totalHarvests), platformLevel: safeCount(progression?.level), railCompleted: safeCount(rail?.completedGames), towerLevel: safeCount(state?.level), towerCollection: ids.size,
-      towerContribution: contribution.reduce((sum, row) => sum + safeCount(row.bossDamage) + safeCount(row.passageContribution), 0), dailyChampionships: playWins + railWins + towerWins + safeCount(workstationWins), developmentCompleted: development,
+    return { farmHarvests: safeCount(farm?.totalHarvests), platformLevel: safeCount(progression?.level), railCompleted: safeCount(rail?.completedGames),
+      // The old tower catalog is retained only so already-unlocked titles remain wearable.
+      // New ZIP saves are opaque and intentionally cannot unlock all-site achievements.
+      towerLevel: 0, towerCollection: 0, towerContribution: 0,
+      dailyChampionships: playWins + railWins + safeCount(workstationWins), developmentCompleted: development,
       workstationFirstThree: Number(achievements.has('tower_first_three')), workstationPerfect: Number(achievements.has('tower_perfect')),
       workstationSpeed: Number(achievements.has('tower_speed')), workstationOvertime: Number(achievements.has('tower_overtime')),
       workstationTenThousand: Number(achievements.has('tower_score_10000')), workstationTier: Object.keys(workstation).length ? safeCount(workstation.promotion_tier, 7) + 1 : 0,
-      demonFirstBoss: Number(bossFloors.has(1)), demonBossFloors: bossFloors.size, demonHonorSkin: Number(arena.skinUnlocked === true),
-      demonFiveStar: Number(Array.isArray(state?.weapons) && state.weapons.some(weapon => /^w(?:[1-9]|1\d|20)$/.test(String(objectValue(weapon).id)) && safeCount(objectValue(weapon).star, 5) >= 5)),
+      demonFirstBoss: 0, demonBossFloors: 0, demonHonorSkin: 0, demonFiveStar: 0,
       officeCollection: OFFICE_COLLECTION.filter(item => safeCount(officeOwned[item.id]) > 0).length,
       officeStories: safeCount(officeStats.stories), officeDrawings: safeCount(officeStats.drawings), officeDepartmentWins: safeCount(officeStats.departmentWins),
       officeBossDays: safeCount(officeStats.bossDays), officeWeeklyWins: safeCount(officeStats.weeklyWins),

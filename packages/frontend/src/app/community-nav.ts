@@ -137,7 +137,7 @@ export const COMMUNITY_SYSTEM_NAV: readonly CommunitySystemNavItem[] = [
     path: '/games/demon-tower',
     enabled: COMMUNITY_FEATURE_FLAGS.demonTower,
     requiresAccount: true,
-    description: '免费角色养成、文字探索与异步协作攻坚',
+    description: '站长源码版养成、账号存档与好友协作，不发网站奖励',
   },
   {
     id: 'officeHub', label: '公司协作', path: '/office',

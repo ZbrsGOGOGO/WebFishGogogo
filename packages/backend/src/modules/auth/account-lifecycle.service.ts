@@ -59,6 +59,7 @@ import { assertFeatureEnabled } from './auth-security-validation';
 import { DUMMY_PASSWORD_HASH } from './password.util';
 import { cleanupOfficeHubUser } from '../community/office-hub/office-hub.cleanup';
 import { cleanupDemonTowerExpansionUser } from '../community/demon-tower/demon-tower-expansion-cleanup';
+import { cleanupDemonTowerSourceUser } from '../community/demon-tower/demon-tower-source-cleanup';
 
 const COOLING_OFF_MS = 7 * 24 * 60 * 60_000;
 const PUMP_INTERVAL_MS = 60_000;
@@ -587,6 +588,7 @@ export class AccountLifecycleService
         await this.anonymizeRail(manager, user, now);
         await cleanupOfficeHubUser(manager, user.id);
         await cleanupDemonTowerExpansionUser(manager, user.id, user.publicId);
+        await cleanupDemonTowerSourceUser(manager, user.id);
         await manager.query('DELETE FROM tower_defense_runs WHERE user_id=$1', [user.id]);
         await manager.query('DELETE FROM tower_defense_profiles WHERE user_id=$1', [user.id]);
         await manager.query('UPDATE tower_defense_daily_awards SET user_id=NULL WHERE user_id=$1', [user.id]);

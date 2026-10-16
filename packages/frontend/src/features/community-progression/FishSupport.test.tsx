@@ -16,7 +16,7 @@ vi.mock('../../app/community-nav', () => ({ COMMUNITY_FEATURE_FLAGS: { community
 const wrapper = ({ children }: { children: React.ReactNode }) => <MemoryRouter initialEntries={['/games/ballpoint-breach/arena']}>{children}</MemoryRouter>;
 const totals = { orders: 0, months: 0, amountFen: 0, currency: 'CNY' as const };
 const adminView: SupportAdminView = { totals, grossTotals: totals, activeHolders: 0, entries: [], hasMore: false };
-const member: CommunityMembershipView = { active: true, startsAt: '2099-09-01T00:00:00Z', expiresAt: '2099-10-01T00:00:00Z', source: 'afdian_support', benefits: ['demon_tower_auto_explore'] };
+const member: CommunityMembershipView = { active: true, startsAt: '2099-09-01T00:00:00Z', expiresAt: '2099-10-01T00:00:00Z', source: 'afdian_support', benefits: [] };
 const entry: SupportEntryView = { id: 'synthetic-ledger-1', username: 'growth_user', displayName: '很长的期权持有者昵称和称号测试', orderHint: '123456', amountFen: 1599, months: 1, startsAt: member.startsAt!, expiresAt: member.expiresAt!, createdAt: '2099-08-31T12:00:00Z', revokedAt: null };
 const filledAdmin: SupportAdminView = { totals: { ...totals, amountFen: 1599, months: 1, orders: 1 }, grossTotals: { ...totals, amountFen: 3198, months: 2, orders: 2 }, activeHolders: 1, entries: [entry], hasMore: true };
 function emitFish(progress: ReturnType<typeof fishProgressView>, generation = getCommunitySessionGeneration(), owner = TOWER_TEST_USER.publicId): void {
@@ -193,36 +193,36 @@ describe('fish activity and supporter management UI', () => {
   });
   it('shows supporter status and private aggregate amounts without a checkout or financial promise', () => {
     render(<CommunityVipSummary vip={member} support={{ ...totals, amountFen: 1599, months: 2, orders: 1 }} serverNow="2099-09-10T00:00:00Z" giftDays={30} />, { wrapper });
-    expect(screen.getByRole('heading', { name: '期权持有者' })).toBeVisible(); expect(screen.getByText('支持权益有效')).toBeVisible();
+    expect(screen.getByRole('heading', { name: '期权持有者' })).toBeVisible(); expect(screen.getByText('支持身份有效')).toBeVisible();
     const ledger = within(screen.getByRole('region', { name: '已核验累计支持' }));
     expect(ledger.getByText('¥15.99')).toBeVisible(); expect(ledger.getByText('登记月数')).toBeVisible(); expect(ledger.getByText('2')).toBeVisible(); expect(ledger.getByText('登记笔数')).toBeVisible();
     expect(screen.getByText(/不代表真实股权/)).not.toBeVisible();
-    fireEvent.click(screen.getByText('权益、赠送与支持说明'));
+    fireEvent.click(screen.getByText('身份、赠送与支持说明'));
     expect(screen.getByText(/不代表真实股权/)).toBeVisible(); expect(screen.getByRole('link', { name: /爱发电主页/ })).toHaveAttribute('rel', 'noopener noreferrer');
     expect(screen.getByText('2099/10/01 08:00:00').parentElement).toHaveTextContent('截止 2099/10/01 08:00:00（北京时间）');
   });
   it.each([
-    ['赠送有效期内', { ...member, source: 'launch_gift' as const }],
-    ['权益有效', { ...member, source: null }],
+    ['赠送身份有效', { ...member, source: 'launch_gift' as const }],
+    ['身份有效', { ...member, source: null }],
     ['当前未开通', { active: false, startsAt: null, expiresAt: null, source: null, benefits: [] }],
-    ['权益已到期', { ...member, expiresAt: '2099-09-09T23:59:59Z' }],
+    ['身份记录已到期', { ...member, expiresAt: '2099-09-09T23:59:59Z' }],
     ['等待生效', { ...member, startsAt: '2099-09-11T00:00:00Z' }],
     ['当前未生效', { ...member, active: false }],
-    ['权益状态待确认', { ...member, startsAt: 'invalid-date' }],
-    ['权益状态待确认', { ...member, expiresAt: null }],
+    ['身份状态待确认', { ...member, startsAt: 'invalid-date' }],
+    ['身份状态待确认', { ...member, expiresAt: null }],
   ] as [string, CommunityMembershipView][])('accurately presents %s without assigning eligibility', (label, vip) => {
     render(<CommunityVipSummary vip={vip} serverNow="2099-09-10T00:00:00Z" giftDays={30} />, { wrapper });
-    expect(screen.getByText(label)).toBeVisible(); expect(screen.queryByText('支持权益有效')).not.toBeInTheDocument();
+    expect(screen.getByText(label)).toBeVisible(); expect(screen.queryByText('支持身份有效')).not.toBeInTheDocument();
     expect(screen.getByText('支持总量暂未同步，不推算历史金额。')).toBeVisible(); expect(screen.queryByText('¥0.00')).not.toBeInTheDocument();
     if (label === '等待生效') { expect(screen.getByText('距记录截止时间 · 尚未生效')).toBeVisible(); expect(screen.getByText('2099/09/11 08:00:00').parentElement).toHaveTextContent('生效 2099/09/11 08:00:00（北京时间）'); }
   });
   it('updates expiry from the monotonic server clock, not a local client date', () => {
     vi.useFakeTimers(); let elapsed = 0; vi.spyOn(performance, 'now').mockImplementation(() => elapsed);
     render(<CommunityVipSummary vip={{ ...member, expiresAt: '2099-09-10T00:00:29Z' }} serverNow="2099-09-10T00:00:00Z" giftDays={30} support={totals} />, { wrapper });
-    expect(screen.getByText('支持权益有效')).toBeVisible(); expect(screen.getByText('¥0.00')).toBeVisible();
+    expect(screen.getByText('支持身份有效')).toBeVisible(); expect(screen.getByText('¥0.00')).toBeVisible();
     elapsed = 30_000; act(() => vi.advanceTimersByTime(30_000));
-    expect(screen.getByText('权益已到期')).toBeVisible(); expect(screen.getByText('已到期')).toBeVisible();
-    expect(screen.queryByText('支持权益有效')).not.toBeInTheDocument();
+    expect(screen.getByText('身份记录已到期')).toBeVisible(); expect(screen.getByText('已到期')).toBeVisible();
+    expect(screen.queryByText('支持身份有效')).not.toBeInTheDocument();
   });
   it('formats explicit Beijing timestamps and keeps countdown helper compatibility', () => {
     expect(beijingMembershipDate('2099-10-01T00:00:00Z')).toBe('2099/10/01 08:00:00');

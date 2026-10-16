@@ -6,8 +6,8 @@ import { PlatformAssetsService } from '../../platform';
 import { AdminAuditLog } from '../../../database/entities/admin-audit-log.entity';
 import { assertCommunityWritesEnabled, communityWritesEnabled } from '../community-write-gate';
 import { DRAW_WORDS, UNDERCOVER_WORDS } from '../play/engines/word-bank';
-import { accrueOffice, actOfficeSpy, creditOfficeWaves, drawOffice, newOfficeProfile, normalizedOfficeWord, officeDay, officeRateLimit, officeText, officeTheme, officeWeek, startOfficeSpy, type OfficeProfileState, type OfficeSpyState } from './office-hub.rules';
-import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome, type OfficeReliefDrop } from '@stealth-reader/shared';
+import { accrueOffice, actOfficeSpy, creditOfficeWaves, drawOffice, newOfficeProfile, normalizedOfficeWord, officeRateLimit, officeText, officeTheme, officeWeek, startOfficeSpy, type OfficeProfileState, type OfficeSpyState } from './office-hub.rules';
+import { OFFICE_RELIEF_TITLES, type OfficeReliefOutcome } from '@stealth-reader/shared';
 import { CommunityAchievementUnlock } from '../../../database/entities/community-progression.entity';
 import { actOfficeRelief, readOfficeRelief } from './office-relief.rules';
 import { grantOfficeReliefDrop } from './office-relief-grants';
@@ -242,7 +242,6 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             if (!action.startsWith('relief_')) officeRateLimit(p, action.startsWith('drawing_') ? 'all_drawing' : 'all', now, action.startsWith('drawing_') ? Number.MAX_SAFE_INTEGER : 1500, 100);
             let notice = '已保存';
             let reliefOutcome: OfficeReliefOutcome | undefined;
-            let claimedReliefDrop: OfficeReliefDrop | undefined;
             if (action.startsWith('relief_')) {
                 this.reliefGate();
                 if (!Number.isSafeInteger(input.expectedVersion) || Number(input.expectedVersion) < 1)
@@ -253,7 +252,6 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
                 const { requestId: _requestId, action: _action, expectedVersion: _version, ...payload } = input;
                 const result = actOfficeRelief(relief, { kind: action.slice('relief_'.length), ...payload }, { now, requestId, rng: max => randomInt(max) });
                 if (result.claimedDrop) await grantOfficeReliefDrop(m, userId, result.claimedDrop, now);
-                claimedReliefDrop = result.claimedDrop;
                 for (const title of result.state.titles.filter(title => !relief.titles.includes(title))) {
                     if (!OFFICE_RELIEF_TITLES.some(item => item.id === title)) throw new ConflictException({ code: 'OFFICE_RELIEF_STATE_INVALID' });
                     await m.getRepository(CommunityAchievementUnlock).createQueryBuilder().insert().values({ userId, achievementKey: title, unlockedAt: new Date(now), sourceVersion: 1 }).orIgnore().execute();
@@ -406,11 +404,6 @@ export class OfficeHubService implements OnModuleInit, OnModuleDestroy {
             const view = await this.view(m, userId, p, notice);
             if (reliefOutcome) {
                 this.reliefGate();
-                if (claimedReliefDrop && claimedReliefDrop.kind !== 'farm_crop') {
-                    if (process.env.FEATURE_COMMUNITY_DEMON_TOWER_ENABLED !== 'true' || process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED !== 'true')
-                        throw new ServiceUnavailableException({ code: 'OFFICE_RELIEF_TOWER_REQUIRED' });
-                    if (officeDay(Date.now()) !== officeDay(now)) throw new ConflictException({ code: 'OFFICE_RELIEF_DAY_CHANGED' });
-                }
                 view.reliefReceipt = { requestId, replayed: false, outcome: reliefOutcome };
             }
             if (action.startsWith('drawing_')) this.drawingGate();

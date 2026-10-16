@@ -1,192 +1,334 @@
-import { useEffect, useRef, useState, type JSX, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { DEMON_TOWER_ATTRIBUTE_KEYS, type DemonTowerAction, type DemonTowerCatalog, type DemonTowerProfileView } from '@stealth-reader/shared';
+import type { DemonTowerSourceProgress, DemonTowerSourceWorld } from '@stealth-reader/shared';
 
-import { useCommunityWalletStore } from '../../../app/store/community-wallet-store';
-import { COMMUNITY_FEATURE_FLAGS } from '../../../app/community-nav';
-import { getCommunitySessionGeneration } from '../../../api/community-http';
-import { DemonTowerAutoExplore } from './DemonTowerAutoExplore';
-import { TowerIcon, TowerPortrait, TowerTerrainArt, type TowerIconName } from './DemonTowerArt';
-import { DemonTowerBattle, DemonTowerDaily, DemonTowerReport } from './DemonTowerBattle';
-import { DemonTowerAttributeReset } from './DemonTowerAttributeReset';
-import { DemonTowerAttributeAllocate } from './DemonTowerAttributeAllocate';
-import { DemonTowerInventory } from './DemonTowerInventory';
-import { DemonTowerGrowth } from './DemonTowerGrowth';
-import { DemonTowerWorkshop } from './DemonTowerWorkshop';
-import { DemonTowerExpansion, demonTowerExpansionUIEnabled } from './DemonTowerExpansion';
-import { DemonTowerExpeditions } from './DemonTowerExpeditions';
-import { DemonTowerExplorationStats } from './DemonTowerExplorationStats';
-import { DemonTowerExplorationResult } from './DemonTowerExplorationResult';
-import { DemonTowerShop } from './DemonTowerShop';
-import { DemonTowerFirstClear } from './DemonTowerRecognition';
-import { DemonTowerAppearancePanel, DemonTowerPower } from './DemonTowerProfile';
-import { DemonTowerSocial } from './DemonTowerSocial';
-import { DemonTowerWorld, DemonTowerWorldNavigation } from './DemonTowerWorld';
-import { TowerMeter, TowerModal, TowerPanel, revealTowerControl, towerDuration } from './TowerElements';
-import { useDemonTower } from './useDemonTower';
-import styles from './DemonTower.module.css';
+import { communityDemonTowerSourceApi } from '../../../api/community-demon-tower-source';
+import { CommunityApiError, getCommunitySessionGeneration } from '../../../api/community-http';
+import { useCommunityAuthStore } from '../../../app/store/community-auth-store';
+import { useCommunityThemeStore } from '../../../app/store/community-theme-store';
+import { useGamePrivacy } from '../GamePrivacyContext';
+import styles from './DemonTowerSource.module.css';
 
-type TowerTab = 'profile' | 'explore' | 'loadout' | 'world' | 'expansion' | 'shop';
-const TABS: Array<{ id: TowerTab; label: string; icon: TowerIconName }> = [
-  { id: 'profile', label: '成长', icon: 'profile' }, { id: 'explore', label: '探索', icon: 'explore' },
-  { id: 'loadout', label: '装备', icon: 'loadout' },
-  { id: 'expansion', label: '养成', icon: 'loadout' },
-  ...(demonTowerExpansionUIEnabled ? [
-    { id: 'shop' as const, label: '物资', icon: 'material' as const },
-  ] : []),
-  { id: 'world', label: '协作', icon: 'world' },
-];
-const ATTRIBUTE_DETAILS = {
-  STR: '力量影响重兵与力量技能的伤害。', SPD: '速度影响先后手、命中、长兵和速度技能。', AGI: '敏捷影响轻兵伤害与闪避。',
-  DEF: '防御提高生存能力、盾兵伤害及相关护盾。', LUCK: '幸运影响法器、回复、暴击概率和部分探索收益。',
-};
+const BRIDGE_SOURCE = 'webfish-demon-tower-source-v1';
+const MIN_FRAME_HEIGHT = 780;
+const MAX_FRAME_HEIGHT = 16_000;
+const STARTUP_TIMEOUT_MS = 25_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function CharacterSummary({ name, profile, catalog, balance, balanceStale, now, expanded = false }: { name: string; profile: DemonTowerProfileView; catalog: DemonTowerCatalog; balance: number | null; balanceStale: boolean; now: number; expanded?: boolean }): JSX.Element {
-  return <section className={`${styles.panel} ${styles.characterCard}`} aria-label="寻道者状态"><div className={styles.panelBody}><TowerPortrait name={name} weaponId={profile.loadout.mainHand} appearance={profile.appearance} className={styles.portrait} injured={profile.hp < profile.maxHp * .25} /><div className={styles.characterName}><h2>{name}</h2><p>寻道者档案 · Lv{profile.level} / {catalog.rules.maxLevel}</p></div>{expanded ? <DemonTowerPower power={profile.combatPower} /> : null}<TowerMeter label="生命" value={profile.hp} max={profile.maxHp} /><TowerMeter label="体力" value={profile.stamina} max={profile.staminaMax} tone="blue" detail={profile.nextStaminaAt ? `下次恢复约 ${towerDuration(profile.nextStaminaAt - now)} · 以服务器同步为准` : '体力已充足'} /><TowerMeter label="妖塔经验" value={profile.experience} max={profile.experienceToNext} detail={profile.level >= catalog.rules.maxLevel ? '当前已达到等级上限' : '独立于平台账号等级'} /><div className={styles.resourceList}>{(Object.keys(catalog.materials) as Array<keyof typeof catalog.materials>).map((key) => <div className={styles.resource} key={key}><TowerIcon name={key === 'herb' ? 'heart' : key === 'clue' ? 'journal' : 'material'} /><strong>{profile.materials[key].toLocaleString('zh-CN')}</strong><small>{catalog.materials[key]}</small></div>)}</div><div className={styles.wallet}><div>统一办公币<small>{balanceStale ? '余额待同步，保留上次确认值' : '与农场、排行榜共用一个钱包'}</small></div><strong>{balance === null ? '待同步' : balance.toLocaleString('zh-CN')}</strong></div>{expanded ? <p className={styles.muted} style={{ marginTop: 13 }}>塔内材料绑定当前角色，只用于培养和建设，不是通用货币；本模块没有付费入口。</p> : null}</div></section>;
+type Phase = 'loading' | 'ready' | 'error';
+
+interface BridgeRequest {
+  source: typeof BRIDGE_SOURCE;
+  nonce: string;
+  kind: 'request';
+  id: string;
+  method: string;
+  args: unknown[];
 }
 
-function Attributes({ profile, catalog, disabled, now, onAction }: { profile: DemonTowerProfileView; catalog: DemonTowerCatalog; disabled: boolean; now: number; onAction: (action: DemonTowerAction) => Promise<boolean> }): JSX.Element {
-  const maximum = Math.max(30, ...Object.values(profile.effectiveAttributes));
-  return <TowerPanel title="五维成长" detail={<span className={styles.badge}>可分配 {profile.unspentPoints} 点</span>}><div className={styles.attributeList}>{DEMON_TOWER_ATTRIBUTE_KEYS.map((key) => <div key={key}><div className={styles.attribute}><span className={styles.attributeCode}>{key}</span><div><div className={styles.attributeLabel}><span>{catalog.attributes[key]}</span><small>基础 {profile.attributes[key]}</small></div><div className={styles.meterTrack} aria-hidden="true"><span style={{ width: `${profile.effectiveAttributes[key] / maximum * 100}%` }} /></div></div><strong className={styles.attributeValue}>{profile.effectiveAttributes[key]}</strong><button type="button" className={styles.button} disabled={disabled || profile.unspentPoints < 1 || !profile.availableActions.includes('allocate')} aria-label={`${catalog.attributes[key]}分配 1 点`} onClick={() => { void onAction({ kind: 'allocate', payload: { attribute: key, points: 1 } }); }}>+</button></div><p className={styles.attributeDescription} style={{ margin: '5px 0 0 42px' }}>{ATTRIBUTE_DETAILS[key]}</p></div>)}</div><p className={styles.muted} style={{ marginTop: 17 }}>右侧为当前有效属性，包含已保存装备、被动技能及物资申领加成。永久丹与临时药效在物资申领的「增益与符文」统一查看；自由点洗点不会清除永久丹。分配后由服务器保存。</p><DemonTowerAttributeAllocate profile={profile} catalog={catalog} disabled={disabled} onAction={onAction} /><DemonTowerAttributeReset profile={profile} catalog={catalog} now={now} disabled={disabled} onAction={onAction} /></TowerPanel>;
+function bridgeNonce(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  const bytes = new Uint8Array(24);
+  if (typeof globalThis.crypto?.getRandomValues === 'function') globalThis.crypto.getRandomValues(bytes);
+  else for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('请求参数无效');
+  return value as Record<string, unknown>;
+}
+
+function integer(value: unknown, minimum: number, maximum: number): number {
+  if (!Number.isInteger(value) || Number(value) < minimum || Number(value) > maximum) throw new Error('请求参数超出允许范围');
+  return Number(value);
+}
+
+function logicalRequestId(value: unknown): string {
+  if (typeof value !== 'string' || !UUID.test(value)) throw new Error('请求标识无效');
+  return value.toLowerCase();
+}
+
+function singleArgument(args: unknown[], keys: readonly string[]): Record<string, unknown> {
+  if (args.length !== 1) throw new Error('请求参数无效');
+  const result = objectValue(args[0]);
+  const actual = Object.keys(result);
+  if (actual.length !== keys.length || actual.some((key) => !keys.includes(key))) throw new Error('请求参数无效');
+  return result;
+}
+
+function safeBridgeError(error: unknown): { status: number; code: string; message: string } {
+  if (error instanceof CommunityApiError) {
+    const code = error.body && typeof error.body === 'object' && 'code' in error.body
+      ? String((error.body as { code?: unknown }).code ?? '')
+      : '';
+    if (error.status === 401) return { status: 401, code, message: '登录已失效，请重新登录后再试' };
+    if (error.status === 403) return { status: 403, code, message: '当前账号不能执行这项操作' };
+    if (error.status === 409) return { status: 409, code, message: '档案已在别处更新，请刷新联网档案' };
+    if (error.status === 429) return { status: 429, code, message: '操作较快，请稍候再试' };
+    if (error.status === 0 || error.status >= 500) return { status: error.status, code, message: '联网服务暂时不可用，请稍后重试' };
+    return { status: error.status, code, message: '操作未完成，请刷新状态后再试' };
+  }
+  return { status: 400, code: 'INVALID_SOURCE_REQUEST', message: error instanceof Error ? error.message : '请求无效' };
+}
+
+function isBridgeRequest(value: unknown, nonce: string): value is BridgeRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const message = value as Partial<BridgeRequest>;
+  const keys = Object.keys(message);
+  return keys.length === 6 && keys.every((key) => ['source', 'nonce', 'kind', 'id', 'method', 'args'].includes(key)) &&
+    message.source === BRIDGE_SOURCE && message.nonce === nonce && message.kind === 'request' &&
+    typeof message.id === 'string' && message.id.length > 0 && message.id.length <= 100 &&
+    typeof message.method === 'string' && Array.isArray(message.args);
 }
 
 export function DemonTowerPage(): JSX.Element {
-  const state = useDemonTower();
-  const wallet = useCommunityWalletStore();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedTab = searchParams.get('tab');
-  const tab: TowerTab = requestedTab === 'journal' ? 'world' : TABS.some(item => item.id === requestedTab) ? requestedTab as TowerTab : 'explore';
-  const [help, setHelp] = useState(false);
-  const autoScope = `${state.ownerId}:${getCommunitySessionGeneration()}`;
-  const [autoPending, setAutoPending] = useState<{ scope: string; pending: boolean } | null>(null);
-  const pointerFocus = useRef(false);
-  const catalog = state.catalog;
-  const overview = state.overview;
-  const profile = overview?.profile;
-  const navigationReady = Boolean(catalog?.enabled && overview && profile);
-  const visibleReceipt = state.receipt && (state.receipt.replayed || state.receipt.events.length > 0 || state.receipt.officeCoinsGranted > 0 || state.receipt.effectiveBossDamage > 0 || state.receipt.passageContribution > 0) ? state.receipt : null;
-  const autoRunning = overview?.autoExplore?.status === 'running';
-  const disabled = state.busy || state.pending || state.stale || !overview?.writesEnabled || autoRunning || Boolean(autoPending?.scope === autoScope && autoPending?.pending);
-  const explorationReceipt = overview?.lastExploration === undefined ? state.receipt?.exploration : overview.lastExploration;
-  const duplicateExploration = Boolean(state.receipt?.exploration && state.receipt.exploration.requestId === explorationReceipt?.requestId);
-  const revealedExploration = useRef<string | null>(null);
-  const balance = state.ownerId && wallet.ownerId === state.ownerId ? wallet.officeCoins : null;
-  const balanceStale = wallet.status === 'stale' || wallet.status === 'error';
-  const selectedFloor = catalog?.floors.find((floor) => floor.floor === profile?.selectedFloor);
-  const can = (kind: DemonTowerAction['kind']): boolean => {
-    if (disabled || !profile?.availableActions.includes(kind) || !catalog) return false;
-    if (kind === 'explore') return profile.hp > 0 && profile.stamina >= catalog.rules.exploreCost;
-    if (kind === 'train') return profile.stamina >= catalog.rules.trainCost;
-    if (kind === 'rest') return profile.hp < profile.maxHp && profile.stamina >= catalog.rules.restCost;
-    return true;
-  };
-  useEffect(() => { setHelp(false); }, [state.ownerId]);
-  useEffect(() => { revealedExploration.current = null; }, [autoScope]);
-  useEffect(() => {
-    // Reveal only a manually confirmed action reply, not every poll/initial history read.
-    const departure = state.receipt?.exploration;
-    if (tab !== 'explore' || !departure || departure.requestId !== explorationReceipt?.requestId || revealedExploration.current === departure.requestId) return;
-    revealedExploration.current = departure.requestId;
-    const target = document.getElementById('tower-exploration-result');
-    target?.focus({ preventScroll: true }); target?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-  }, [tab, state.receipt?.exploration, explorationReceipt?.requestId, autoScope]);
-  useEffect(() => {
-    // Canonicalize the removed tab without dropping supply or any unrelated query.
-    if (requestedTab === 'journal') {
-      const params = new URLSearchParams(searchParams); params.set('tab', 'world'); params.set('worldSection', 'journal');
-      setSearchParams(params, { replace: true });
-    }
-  }, [tab, autoScope, requestedTab, searchParams, setSearchParams]);
-  const worldSection = searchParams.get('worldSection');
-  useEffect(() => {
-    if (navigationReady && tab === 'world' && worldSection === 'journal') {
-      const target = document.getElementById('tower-world-journal');
-      target?.focus({ preventScroll: true }); target?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-      // The fixed mobile tab strip may be horizontally scrolled. Reveal its
-      // selected button without scrolling any vertical ancestor off the report.
-      const button = document.getElementById('tower-tab-world');
-      const strip = button?.closest<HTMLElement>('[role="tablist"]');
-      if (button && strip && window.innerWidth <= 760) {
-        const bounds = strip.getBoundingClientRect(), item = button.getBoundingClientRect();
-        if (item.right > bounds.right) strip.scrollLeft += item.right - bounds.right;
-        else if (item.left < bounds.left) strip.scrollLeft += item.left - bounds.left;
-      }
-    }
-  }, [navigationReady, tab, worldSection, autoScope]);
-  useEffect(() => {
-    // Deep links are selected before the private profile finishes loading.
-    // Scroll only after the tab strip actually exists, not on every profile poll.
-    if (navigationReady && !(tab === 'world' && worldSection === 'journal')) document.getElementById(`tower-tab-${tab}`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [tab, navigationReady, worldSection]);
-  useEffect(() => {
-    // Pointer focus occurs between press and release. Moving its target here
-    // would cancel a real mobile click; keyboard focus still clears fixed tabs.
-    const pointer = (): void => { pointerFocus.current = true; };
-    const keyboard = (): void => { pointerFocus.current = false; };
-    document.addEventListener('pointerdown', pointer, true);
-    document.addEventListener('keydown', keyboard, true);
-    return () => { document.removeEventListener('pointerdown', pointer, true); document.removeEventListener('keydown', keyboard, true); };
+  const user = useCommunityAuthStore((state) => state.user);
+  const generation = getCommunitySessionGeneration();
+  if (!user?.publicId) {
+    return <section className={styles.page}><p className={styles.error} role="alert">请先登录有效账号，再读取九层妖塔联网档案。</p></section>;
+  }
+  return <DemonTowerSourceFrame key={`${user.publicId}:${generation}`} displayName={user.displayName ?? user.username ?? '寻道者'} />;
+}
+
+function DemonTowerSourceFrame({ displayName }: { displayName: string }): JSX.Element {
+  const frame = useRef<HTMLIFrameElement>(null);
+  const { toggleCover } = useGamePrivacy();
+  const toggleCoverRef = useRef(toggleCover);
+  toggleCoverRef.current = toggleCover;
+  const theme = useCommunityThemeStore((state) => state.resolved);
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') === 'rank' ? 'rank' : '';
+  const [attempt, setAttempt] = useState(0);
+  // A profile-name change restarts the opaque child as one complete handshake;
+  // merely restarting this effect would wait for a `ready` event the old child
+  // has already stopped announcing.
+  const nonce = useMemo(bridgeNonce, [attempt, displayName]);
+  const [phase, setPhase] = useState<Phase>('loading');
+  const [frameHeight, setFrameHeight] = useState(MIN_FRAME_HEIGHT);
+  const [error, setError] = useState<string | null>(null);
+  const worldCache = useRef<{ expiresAt: number; value: Promise<DemonTowerSourceWorld> } | null>(null);
+  const startupProgress = useRef<DemonTowerSourceProgress | null>(null);
+  const startupProgressPending = useRef<Promise<DemonTowerSourceProgress> | null>(null);
+  const startupFailed = useRef(false);
+  const startupComplete = useRef(false);
+  const hydrationComplete = useRef(false);
+  const requestController = useRef<AbortController | null>(null);
+
+  const sourceUrl = useMemo(() => {
+    const query = new URLSearchParams({ bridge: nonce });
+    if (initialTab) query.set('tab', initialTab);
+    return `/games/demon-tower-source/index.html?${query.toString()}`;
+  }, [initialTab, nonce]);
+
+  const post = useCallback((message: Record<string, unknown>): void => {
+    frame.current?.contentWindow?.postMessage({ source: BRIDGE_SOURCE, nonce, ...message }, '*');
+  }, [nonce]);
+
+  const getWorld = useCallback((signal?: AbortSignal): Promise<DemonTowerSourceWorld> => {
+    const current = worldCache.current;
+    if (current && current.expiresAt > Date.now()) return current.value;
+    const value = communityDemonTowerSourceApi.world(signal);
+    worldCache.current = { value, expiresAt: Date.now() + 1_000 };
+    value.catch(() => { if (worldCache.current?.value === value) worldCache.current = null; });
+    return value;
   }, []);
 
-  const changeTab = (next: TowerTab): void => {
-    const params = new URLSearchParams(searchParams); params.set('tab', next); setSearchParams(params);
-    document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-  };
-  const openSupplies = (): void => {
-    const params = new URLSearchParams(searchParams); params.set('tab', 'shop'); params.set('supply', 'supplies'); setSearchParams(params);
-    document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-  };
-  const openOfficeSupplies = (): void => {
-    const params = new URLSearchParams(searchParams); params.set('tab', 'shop'); params.set('supply', 'office'); setSearchParams(params);
-    document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-  };
-  const openCultivation = (itemId?: string): void => {
-    const params = new URLSearchParams(searchParams); params.set('tab', 'expansion'); params.delete('craft');
-    if (itemId) params.set('item', itemId); setSearchParams(params);
-    document.getElementById('tower-section-heading')?.scrollIntoView?.({ block: 'start', behavior: 'instant' });
-  };
-  const selectCultivationItem = (itemId: string): void => {
-    const params = new URLSearchParams(searchParams); params.set('item', itemId); setSearchParams(params, { replace: true });
-  };
-  const navigateTabs = (event: KeyboardEvent<HTMLButtonElement>, current: TowerTab): void => {
-    const index = TABS.findIndex((item) => item.id === current);
-    const target = event.key === 'ArrowRight' ? (index + 1) % TABS.length : event.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
-    if (target === null) return;
-    event.preventDefault(); changeTab(TABS[target].id); document.getElementById('tower-tab-' + TABS[target].id)?.focus();
-  };
-  return <section className={styles.page} data-expanded={demonTowerExpansionUIEnabled} data-arena-skin={demonTowerExpansionUIEnabled && profile?.expansion?.arena?.skinUnlocked} data-skin={demonTowerExpansionUIEnabled ? profile?.expansion?.skin : 'field'} aria-label="九层妖塔工作台" onFocusCapture={(event) => { if (!pointerFocus.current && event.target instanceof HTMLElement) revealTowerControl(event.target); }}>
-    <header className={styles.heading} id="tower-section-heading"><div><span className={styles.eyebrow}>COOPERATIVE FIELD NOTES / VOL. 09</span><h1>九层妖塔</h1><p>一份缓慢成长的角色档案，一段可以和同事共同推进的探索。随时收起画面，进度由服务器保存。</p></div><div className={styles.headingTools}><span className={styles.badge} data-tone={state.stale ? 'warning' : 'muted'}>{state.busy ? '行动提交中' : state.stale ? '状态待同步' : state.refreshing ? '正在同步' : '联网档案'}</span><button type="button" className={styles.iconButton} aria-label="刷新妖塔状态" disabled={state.refreshing || state.busy} onClick={() => { void state.refresh(); }}><TowerIcon name="refresh" /></button><button type="button" className={styles.iconButton} aria-label="查看九层妖塔帮助" onClick={() => setHelp(true)}><TowerIcon name="help" /></button></div></header>
-    {state.error ? <div className={styles.error} role="alert"><p>{state.error}</p>{state.pending ? <><p>上次操作结果尚未确认。确认期间不能开始新动作，重试沿用原操作编号，不重复扣除或领奖。</p><button className={styles.button} type="button" disabled={state.busy} onClick={() => { void state.retry(); }}>{state.busy ? '确认处理中…' : '确认上次操作'}</button></> : <button className={styles.button} type="button" disabled={state.refreshing} onClick={() => { void state.refresh(); }}>同步最新状态</button>}</div> : null}
-    {state.loading ? <div className={styles.loading} role="status"><TowerIcon name="journal" /><p>正在读取角色与世界档案…</p><span className={styles.muted}>首次打开不会自动创建角色或扣除资源。</span></div> : null}
-    {catalog?.enabled === false ? <p className={styles.notice}>九层妖塔暂未开放。已有其他游戏仍可从<Link to="/games">小游戏专区</Link>进入。</p> : null}
-    {catalog?.enabled && !state.ownerId ? <section className={styles.intro}><div><span className={styles.eyebrow}>A SHARED ADVENTURE</span><h2>自己的角色，<br />大家的九层世界。</h2><p>登录后创建免费角色。你可以独自探索，也可以在不同时间参与同一个世界首领和通道建设。</p><ul className={styles.introChecks}><li><TowerIcon name="check" />原生文字交互，不需要安装</li><li><TowerIcon name="check" />角色存档与全站账号绑定</li><li><TowerIcon name="check" />无充值、无付费战力</li></ul><Link to="/login" className={styles.primary}>登录后建立档案<TowerIcon name="arrow" /></Link></div><TowerPortrait name="寻道者" weaponId="w1" className={styles.portrait} /></section> : null}
-    {catalog?.enabled && state.ownerId && overview && !profile ? <section className={styles.intro}><div><span className={styles.eyebrow}>NEW PERSONNEL FILE</span><h2>{state.displayName}，<br />建立你的寻道者档案。</h2><p>从第一层开始，免费领取五类基础武器和技能。创建角色免费，不扣办公币；每次行动消耗与奖励都会清楚记录。</p><ul className={styles.introChecks}><li><TowerIcon name="check" />20 件武器 / 法器，16 种技能</li><li><TowerIcon name="check" />九层世界按真实协作逐步开放</li><li><TowerIcon name="check" />回合制探索，离开页面仍保留进度</li></ul><p className={styles.muted}>角色存档保存在当前账号下；昵称与有效伤害、建设贡献可能出现在公开榜单。了解<Link to="/privacy-policy">隐私政策</Link>。</p><button className={styles.primary} type="button" disabled={disabled} onClick={() => { void state.act({ kind: 'enroll', payload: {} }); }}>{state.busy ? '正在建立档案…' : '免费建立角色'}<TowerIcon name="arrow" /></button>{!overview.writesEnabled ? <p className={styles.muted} style={{ marginTop: 13 }}>目前为维护只读状态，暂时不能建立新角色。</p> : null}</div><TowerPortrait name={state.displayName} weaponId="w1" className={styles.portrait} /></section> : null}
-    {catalog?.enabled && overview && profile ? <>
-      {!overview.writesEnabled ? <p className={styles.notice}>当前为维护只读状态。角色、配装和历史战报仍可查看，暂停提交新行动。</p> : null}
-      {autoRunning ? <p className={styles.notice}>委托探索正在服务器上执行，暂时不能手动修改角色。<button type="button" className={styles.textButton} onClick={() => changeTab('explore')}>查看进度或停止托管</button></p> : null}
-      {profile.growth && !profile.growth.chosenAttribute ? <p className={styles.notice}>你还没有选择免费永久命格。<button type="button" className={styles.textButton} onClick={() => changeTab('profile')}>前往成长选择心性</button>；未选择也可继续探索，旧战斗不会中途改变规则。</p> : null}
-      {demonTowerExpansionUIEnabled && profile.economy && tab !== 'shop' ? <div className={styles.supplyQuickBar}><span>灵石 <strong>{profile.economy.balance}</strong> · 残魂 <strong>{profile.materials.soul}</strong> · 办公币 <strong>{balance === null ? '待同步' : balance}{balanceStale && balance !== null ? '（待同步）' : ''}</strong><small>塔内资源与办公币独立，不互兑。</small></span></div> : null}
-      <nav className={styles.tabs} role="tablist" aria-label="妖塔工作区">{TABS.map((item) => <button type="button" role="tab" id={`tower-tab-${item.id}`} aria-controls={`tower-panel-${item.id}`} aria-selected={tab === item.id} tabIndex={tab === item.id ? 0 : -1} onKeyDown={(event) => navigateTabs(event, item.id)} key={item.id} className={styles.tab} onClick={() => changeTab(item.id)}><TowerIcon name={item.icon} /><span>{item.label}</span>{item.id === 'profile' && profile.unspentPoints > 0 ? <span className={styles.tabBadge}>{profile.unspentPoints}</span> : item.id === 'explore' && profile.battle ? <span className={styles.tabBadge}>进行中</span> : null}</button>)}</nav>
-      <DemonTowerDaily profile={profile} catalog={catalog} disabled={disabled} onAction={state.act} compact />
-      {visibleReceipt ? <div className={styles.feedback} role="status"><div className={styles.buttonRow} style={{ justifyContent: 'space-between' }}><strong>{visibleReceipt.replayed ? '上次操作已确认 · 没有重复结算' : '行动已记录'}</strong><button type="button" className={styles.textButton} onClick={state.dismissReceipt}>收起回执</button></div>{visibleReceipt.events.length && !duplicateExploration ? <ul>{visibleReceipt.events.map((event, index) => <li key={index}>{event}</li>)}</ul> : null}{visibleReceipt.officeCoinsGranted > 0 ? <p className={styles.feedbackCoins} style={{ margin: '8px 0 0' }}>{visibleReceipt.replayed ? '原操作' : '本次'}办公币到账 +{visibleReceipt.officeCoinsGranted}；余额将从统一钱包重新同步。</p> : null}{visibleReceipt.effectiveBossDamage > 0 ? <p className={styles.muted} style={{ margin: '5px 0 0' }}>实际计入世界血池伤害：{visibleReceipt.effectiveBossDamage}。</p> : null}{visibleReceipt.passageContribution > 0 ? <p className={styles.muted} style={{ margin: '5px 0 0' }}>实际建设贡献：{visibleReceipt.passageContribution}。</p> : null}</div> : null}
-      <div role="tabpanel" id="tower-panel-profile" aria-labelledby="tower-tab-profile" hidden={tab !== 'profile'}><div className={styles.profileLayout}><CharacterSummary name={state.displayName} profile={profile} catalog={catalog} balance={balance} balanceStale={balanceStale} now={state.now} expanded /><div className={styles.stack}><DemonTowerGrowth key={`growth-${state.ownerId}`} profile={profile} disabled={disabled} onAction={state.act} />{tab === 'profile' ? <DemonTowerAppearancePanel key={`appearance-${autoScope}`} profile={profile} name={state.displayName} ownerId={state.ownerId} disabled={disabled} showSkins={demonTowerExpansionUIEnabled} onAction={state.act} /> : null}<Attributes key={state.ownerId} profile={profile} catalog={catalog} now={state.now} disabled={disabled} onAction={state.act} /><TowerPanel title="成长说明"><p className={styles.muted}>妖塔等级、五维和体力独立于平台账号成长。武器类型决定战斗风格；具体效果可在装备标签查看。探索与修炼累积经验，配装和被动技能会改变有效属性。</p><button type="button" className={styles.button} onClick={() => changeTab('loadout')}>查看我的配装<TowerIcon name="arrow" /></button></TowerPanel></div></div></div>
-      <div role="tabpanel" id="tower-panel-explore" aria-labelledby="tower-tab-explore" hidden={tab !== 'explore'}><div className={styles.layout}><aside className={styles.desktopProfile}><CharacterSummary name={state.displayName} profile={profile} catalog={catalog} balance={balance} balanceStale={balanceStale} now={state.now} /></aside><div className={styles.stack}>
-        <div className={styles.mobileSummary}><span>Lv{profile.level} · {state.displayName}</span><span>生命 {profile.hp}/{profile.maxHp}</span><span>体力 {profile.stamina}/{profile.staminaMax}</span></div>
-        {explorationReceipt ? <DemonTowerExplorationResult receipt={explorationReceipt} catalog={catalog} stale={state.stale} /> : null}
-        {profile.battle ? <DemonTowerBattle battle={profile.battle} catalog={catalog} disabled={disabled} onAction={state.act} /> : <><section className={`${styles.panel} ${styles.fieldCard}`} aria-label="当前探索区域"><TowerTerrainArt terrain={selectedFloor?.terrain ?? 'plain'} className={styles.terrain} /><div className={styles.panelBody}><div className={styles.fieldTitle}><div><span className={styles.eyebrow}>FIELD {String(profile.selectedFloor).padStart(2, '0')} / EXPLORATION</span><h2>{selectedFloor?.name ?? '探索区域'}</h2><p>{selectedFloor?.description}</p></div><button type="button" className={styles.textButton} onClick={() => changeTab('world')}>换个区域</button></div>{selectedFloor?.mechanicHint ? <p className={styles.notice} style={{ marginBottom: 15 }}>区域提示：{selectedFloor.mechanicHint}</p> : null}<div className={styles.fieldAction}><button type="button" className={styles.primary} disabled={!can('explore')} onClick={() => { void state.act({ kind: 'explore', payload: {} }); }}><TowerIcon name="explore" />开始探索 · {catalog.rules.exploreCost} 体力</button><p>可能遇到妖物、宝箱或机缘。战斗按回合推进，随时可收起页面。</p></div>{profile.stamina < catalog.rules.exploreCost ? <p className={styles.muted} style={{ margin: '10px 0 0' }}>体力不足。每 {towerDuration(catalog.rules.staminaRestoreMs)} 自动恢复 1 点，无需保持页面开启。{demonTowerExpansionUIEnabled ? <button type="button" className={styles.textButton} onClick={openSupplies}>前往物资库补充体力</button> : null}</p> : null}</div></section><div className={styles.smallActions}><button type="button" className={styles.smallAction} disabled={!can('train')} onClick={() => { void state.act({ kind: 'train', payload: {} }); }}><strong><TowerIcon name="journal" />潜心修炼</strong><small>获得妖塔经验 · 消耗 {catalog.rules.trainCost} 体力</small></button><button type="button" className={styles.smallAction} disabled={!can('rest')} onClick={() => { void state.act({ kind: 'rest', payload: {} }); }}><strong><TowerIcon name="heart" />短暂休整</strong><small>恢复 {catalog.rules.restHealingPercent}% 最大生命 · {catalog.rules.restCost} 体力</small></button></div></>}
-        {tab === 'explore' && demonTowerExpansionUIEnabled ? <DemonTowerExplorationStats key={`exploration-stats-${autoScope}`} profile={profile} disabled={disabled} now={state.now} onAction={state.act} onSupplies={openOfficeSupplies} /> : null}
-        {COMMUNITY_FEATURE_FLAGS.demonTowerAuto && state.ownerId ? <DemonTowerAutoExplore overview={overview} catalog={catalog} now={state.now} ownerId={state.ownerId} manualPending={state.busy || state.pending} onOverview={state.observeOverview} onPending={(pending) => setAutoPending({ scope: autoScope, pending })} /> : null}
-        {demonTowerExpansionUIEnabled ? <DemonTowerExpeditions profile={profile} disabled={disabled} onAction={state.act} onContinueBattle={() => { document.querySelector<HTMLElement>('[aria-label="当前探索战斗"]')?.scrollIntoView?.({ block: 'start', behavior: 'instant' }); }} /> : null}
-      </div></div></div>
-      <div role="tabpanel" id="tower-panel-loadout" aria-labelledby="tower-tab-loadout" hidden={tab !== 'loadout'}><DemonTowerInventory key={`inventory-${autoScope}`} profile={profile} catalog={catalog} disabled={disabled} onAction={state.act} onWorkshop={openCultivation} /></div>
-      <div role="tabpanel" id="tower-panel-expansion" aria-labelledby="tower-tab-expansion" hidden={tab !== 'expansion'}>
-        {demonTowerExpansionUIEnabled ? <nav className={styles.buttonRow} aria-label="养成分区">{[['growth', '武器与技能养成'], ['forge', '装备锻造与精炼']].map(([id, title]) => <button type="button" className={styles.button} key={id} aria-pressed={(searchParams.get('craft') === 'forge' ? 'forge' : 'growth') === id} onClick={() => { const params = new URLSearchParams(searchParams); params.set('craft', id); setSearchParams(params); }}>{title}</button>)}</nav> : null}
-        <div hidden={demonTowerExpansionUIEnabled && searchParams.get('craft') === 'forge'}><DemonTowerExpansion key={`expansion-${autoScope}`} profile={profile} disabled={disabled} onAction={state.act} selectedItem={searchParams.get('item')} onSelectItem={selectCultivationItem} active={tab === 'expansion' && searchParams.get('craft') !== 'forge'} advancedEnabled={demonTowerExpansionUIEnabled} /></div>
-        {demonTowerExpansionUIEnabled && tab === 'expansion' && searchParams.get('craft') === 'forge' ? <DemonTowerWorkshop key={autoScope} profile={profile} disabled={disabled} balance={balance} balanceStale={balanceStale} onAction={state.act} /> : null}
-      </div>
-      {demonTowerExpansionUIEnabled ? <div role="tabpanel" id="tower-panel-shop" aria-labelledby="tower-tab-shop" hidden={tab !== 'shop'}>{tab === 'shop' ? <DemonTowerShop key={`shop-${autoScope}`} profile={profile} catalog={catalog} disabled={disabled} now={state.now} balance={balance} balanceStale={balanceStale} onAction={state.act} /> : null}</div> : null}
-      <div role="tabpanel" id="tower-panel-world" aria-labelledby="tower-tab-world" hidden={tab !== 'world'}>{tab === 'world' ? <div key={`world-${autoScope}`} className={styles.stack}><DemonTowerWorldNavigation phase={overview.world.phase} expanded={demonTowerExpansionUIEnabled && Boolean(profile.expansion)} /><DemonTowerWorld world={overview.world} profile={profile} catalog={catalog} ownerId={state.ownerId} disabled={disabled} onAction={state.act} />{demonTowerExpansionUIEnabled ? <div className={styles.stack}><DemonTowerFirstClear profile={profile} world={overview.world} disabled={disabled} onAction={state.act} /><DemonTowerSocial key={`social-${state.ownerId}`} profile={profile} ownerId={state.ownerId} disabled={disabled} onAction={state.act} /></div> : null}<section id="tower-world-journal" tabIndex={-1} aria-label="行动战报" className={`${styles.stack} ${styles.sectionTarget}`}><TowerPanel title="最近行动档案" detail={<span className={styles.muted}>角色版本 {profile.version}</span>}><p className={styles.muted}>这里展示服务器保留的最近一场战报。每一条伤害、恢复与状态变化都来自实际结算；世界首领的有效贡献另见回执和贡献榜。</p>{profile.battle ? <p className={styles.notice}>你有一场探索仍在进行。<button type="button" className={styles.textButton} onClick={() => changeTab('explore')}>返回现场</button></p> : null}<Link to="/games/demon-tower/leaderboard" className={styles.button}>首领讨伐日榜<TowerIcon name="arrow" /></Link></TowerPanel>{profile.lastReport ? <DemonTowerReport report={profile.lastReport} catalog={catalog} /> : <p className={styles.empty}>档案还是空白。完成首次探索战斗或世界首领协作后，战报会保存在这里。</p>}</section></div> : null}</div>
-    </> : null}
-    {help ? <TowerModal title="九层妖塔使用说明" onClose={() => setHelp(false)}><div className={styles.helpList}><section><h3>你的角色、共同的世界</h3><p>独自完成探索和培养，按自己的时间参与共同首领和通道建设。普通战斗没有实时倒计时，Esc 便签只收起界面，不会回滚服务端已经完成的行动。</p></section>{catalog ? <><section><h3>配装与战斗</h3><p>主手 1 件（可选择法器）、辅助法器 1 件，同件武器不能重复占位；主动技能最多 {catalog.rules.activeSkillSlots} 个、被动技能最多 {catalog.rules.passiveSkillSlots} 个。首领协作按主动技能排序自动行动，普通战斗由你逐回合选择。冷却、治疗和持续回合均真实结算。</p></section><section><h3>体力与恢复</h3><p>每 {towerDuration(catalog.rules.staminaRestoreMs)} 恢复 1 点体力。普通战斗外生命会逐步恢复；休整消耗 {catalog.rules.restCost} 体力，恢复 {catalog.rules.restHealingPercent}% 最大生命。以服务器时间为准，关闭页面不影响自然恢复。</p></section><section><h3>短时日常与奖励边界</h3><p>从零活跃开始，完成 {catalog.rules.dailyActivityTarget} 次修炼，共消耗 {catalog.rules.dailyActivityTarget * catalog.rules.trainCost} 体力，即可达到今日活跃目标；手动领取最多 {catalog.rules.dailyActivityCoins} 办公币，仍受当日剩余额度限制。{catalog.rules.dailyOfficeCoinCap} 办公币是日常奖励总上限，不是短时间必定拿满的奖励。</p><p>妖塔日常按北京时间 00:00 切换自然日，不要求连续在线。全部 {catalog.floors.length} 层联通后不再出现新的世界首领；没有有效首领伤害的日期，不产生讨伐冠军或冠军奖励，仍可继续个人探索。</p></section><section><h3>服务规则</h3><ul>{catalog.rules.rulesText.map((text) => <li key={text}>{text}</li>)}</ul></section></> : <p>规则资料正在同步，请稍后重试。</p>}<section><h3>网络中断时</h3><p>出现“确认上次操作”时，先确认原操作结果，再进行其他动作。重试沿用同一编号，不会重复扣除或发奖；重新登录或切换账号后不会显示上个账号的私人档案。</p></section></div></TowerModal> : null}
+  const runRequest = useCallback(async (request: BridgeRequest): Promise<unknown> => {
+    switch (request.method) {
+      case 'getServer':
+        if (request.args.length) throw new Error('请求参数无效');
+        return (await getWorld()).server;
+      case 'getLayers':
+        if (request.args.length) throw new Error('请求参数无效');
+        return (await getWorld()).layers;
+      case 'getProgress': {
+        if (request.args.length) throw new Error('请求参数无效');
+        if (startupProgress.current) {
+          const result = startupProgress.current;
+          startupProgress.current = null;
+          return result;
+        }
+        return communityDemonTowerSourceApi.progress(requestController.current?.signal);
+      }
+      case 'saveProgress': {
+        const input = singleArgument(request.args, ['requestId', 'expectedVersion', 'saveData']);
+        const expectedVersion = integer(input.expectedVersion, 0, 2_147_483_647);
+        if (typeof input.saveData !== 'string' || input.saveData.length < 2 || input.saveData.length > 524_288) throw new Error('联网档案大小无效');
+        return communityDemonTowerSourceApi.saveProgress({ requestId: logicalRequestId(input.requestId), expectedVersion, saveData: input.saveData }, requestController.current?.signal);
+      }
+      case 'postDamage': {
+        const input = singleArgument(request.args, ['requestId', 'layerId', 'damage', 'expectedVersion', 'saveData']);
+        if (typeof input.saveData !== 'string' || input.saveData.length < 2 || input.saveData.length > 524_288) throw new Error('联网档案大小无效');
+        const receipt = await communityDemonTowerSourceApi.damage({
+          requestId: logicalRequestId(input.requestId),
+          layerId: integer(input.layerId, 1, 9),
+          amount: integer(input.damage, 0, 100_000),
+          expectedVersion: integer(input.expectedVersion, 1, 2_147_483_647),
+          saveData: input.saveData,
+        }, requestController.current?.signal);
+        worldCache.current = null;
+        return { ...receipt.layer, accepted: receipt.accepted, unlockedLayer: receipt.unlockedLayer, replayed: receipt.replayed, profileVersion: receipt.profileVersion, profileUpdatedAt: receipt.profileUpdatedAt };
+      }
+      case 'postChannel': {
+        const input = singleArgument(request.args, ['requestId', 'layerId', 'materials', 'expectedVersion', 'saveData']);
+        if (typeof input.saveData !== 'string' || input.saveData.length < 2 || input.saveData.length > 524_288) throw new Error('联网档案大小无效');
+        const receipt = await communityDemonTowerSourceApi.channel({
+          requestId: logicalRequestId(input.requestId),
+          layerId: integer(input.layerId, 1, 9),
+          amount: integer(input.materials, 1, 20),
+          expectedVersion: integer(input.expectedVersion, 1, 2_147_483_647),
+          saveData: input.saveData,
+        }, requestController.current?.signal);
+        worldCache.current = null;
+        return { ...receipt.layer, accepted: receipt.accepted, unlockedLayer: receipt.unlockedLayer, replayed: receipt.replayed, profileVersion: receipt.profileVersion, profileUpdatedAt: receipt.profileUpdatedAt };
+      }
+      case 'postClue': {
+        const input = singleArgument(request.args, ['requestId', 'layerId', 'clues', 'expectedVersion', 'saveData']);
+        if (typeof input.saveData !== 'string' || input.saveData.length < 2 || input.saveData.length > 524_288) throw new Error('联网档案大小无效');
+        const receipt = await communityDemonTowerSourceApi.clue({
+          requestId: logicalRequestId(input.requestId),
+          layerId: integer(input.layerId, 1, 9),
+          amount: integer(input.clues, 1, 1),
+          expectedVersion: integer(input.expectedVersion, 1, 2_147_483_647),
+          saveData: input.saveData,
+        }, requestController.current?.signal);
+        worldCache.current = null;
+        return { ...receipt.layer, accepted: receipt.accepted, unlockedLayer: receipt.unlockedLayer, replayed: receipt.replayed, profileVersion: receipt.profileVersion, profileUpdatedAt: receipt.profileUpdatedAt };
+      }
+      case 'getContribution':
+        if (request.args.length) throw new Error('请求参数无效');
+        return communityDemonTowerSourceApi.contribution(requestController.current?.signal);
+      case 'getFriends':
+        if (request.args.length) throw new Error('请求参数无效');
+        return communityDemonTowerSourceApi.friends(requestController.current?.signal);
+      case 'getProfile': {
+        const input = singleArgument(request.args, ['publicId']);
+        if (typeof input.publicId !== 'string' || input.publicId.length < 1 || input.publicId.length > 100) throw new Error('好友编号无效');
+        return communityDemonTowerSourceApi.battleProfile(input.publicId, requestController.current?.signal);
+      }
+      case 'getSettings':
+        if (request.args.length) throw new Error('请求参数无效');
+        return communityDemonTowerSourceApi.settings(requestController.current?.signal);
+      case 'getStories':
+        if (request.args.length) throw new Error('请求参数无效');
+        return communityDemonTowerSourceApi.stories(requestController.current?.signal);
+      case 'getRanking': {
+        const input = singleArgument(request.args, ['limit']);
+        return communityDemonTowerSourceApi.ranking(integer(input.limit, 1, 50), requestController.current?.signal);
+      }
+      default:
+        throw new Error('不支持的九层妖塔请求');
+    }
+  }, [getWorld]);
+
+  useEffect(() => {
+    startupFailed.current = false;
+    startupProgress.current = null;
+    startupProgressPending.current = null;
+    worldCache.current = null;
+    startupComplete.current = false;
+    hydrationComplete.current = false;
+    const controller = new AbortController();
+    requestController.current = controller;
+    setPhase('loading');
+    setError(null);
+    setFrameHeight(MIN_FRAME_HEIGHT);
+
+    const message = (event: MessageEvent): void => {
+      // The iframe deliberately has an opaque origin. Source-window + nonce +
+      // strict message validation forms the complete trust boundary.
+      if (event.source !== frame.current?.contentWindow || event.origin !== 'null') return;
+      const data = event.data as Record<string, unknown> | null;
+      if (!data || data.source !== BRIDGE_SOURCE || data.nonce !== nonce) return;
+      if (data.kind === 'ready') {
+        if (startupFailed.current || startupProgressPending.current) return;
+        startupProgressPending.current = Promise.all([
+          communityDemonTowerSourceApi.progress(controller.signal),
+          getWorld(controller.signal),
+        ]).then(([progress]) => progress);
+        void startupProgressPending.current.then((progress) => {
+          if (controller.signal.aborted) return;
+          startupProgress.current = progress;
+          startupComplete.current = true;
+          post({ kind: 'init', theme: themeRef.current, displayName: displayName.slice(0, 100) });
+        }).catch((reason: unknown) => {
+          if (controller.signal.aborted) return;
+          startupFailed.current = true;
+          setError(safeBridgeError(reason).message);
+          setPhase('error');
+        });
+        return;
+      }
+      if (data.kind === 'hydrated') {
+        if (!startupComplete.current || startupFailed.current) return;
+        hydrationComplete.current = true;
+        setPhase('ready');
+        return;
+      }
+      if (data.kind === 'resize' && typeof data.height === 'number' && Number.isFinite(data.height)) {
+        setFrameHeight(Math.min(MAX_FRAME_HEIGHT, Math.max(MIN_FRAME_HEIGHT, Math.ceil(data.height))));
+        return;
+      }
+      if (data.kind === 'escape') {
+        toggleCoverRef.current?.();
+        return;
+      }
+      if (!isBridgeRequest(data, nonce)) return;
+      if (!startupComplete.current || startupFailed.current) return;
+      void runRequest(data).then((result) => post({ kind: 'response', id: data.id, ok: true, result }))
+        .catch((reason: unknown) => post({ kind: 'response', id: data.id, ok: false, error: safeBridgeError(reason) }));
+    };
+    window.addEventListener('message', message);
+    const timeout = window.setTimeout(() => {
+      if (hydrationComplete.current || startupFailed.current) return;
+      startupFailed.current = true;
+      controller.abort();
+      setError('游戏资源或联网档案未能及时就绪，请重新加载。');
+      setPhase('error');
+    }, STARTUP_TIMEOUT_MS);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener('message', message);
+      startupFailed.current = true;
+      controller.abort();
+      if (requestController.current === controller) requestController.current = null;
+    };
+  }, [displayName, getWorld, initialTab, nonce, post, runRequest]);
+
+  useEffect(() => {
+    if (phase === 'ready') post({ kind: 'theme', theme });
+  }, [phase, post, theme]);
+
+  const reload = (): void => setAttempt((value) => value + 1);
+
+  return <section className={styles.page} aria-label="九层妖塔源码版">
+    <header className={styles.heading}>
+      <div><span className={styles.eyebrow}>SOURCE EDITION / ONLINE PROFILE</span><h1>九层妖塔</h1><p>已完整切换为你提供的最新源码玩法，角色进度与当前账号绑定。</p></div>
+      <div className={styles.headingActions}><Link to="/games">返回小游戏专区</Link><button type="button" onClick={reload}>重新加载</button></div>
+    </header>
+    <div className={styles.boundary} role="note"><strong>源码版 2fe1c88e</strong><span>联网存档</span><span>塔内办公币为本玩法独立货币，不等于网站办公币，也不会互相扣除或兑换。</span></div>
+    {error ? <div className={styles.error} role="alert"><span>{error}</span><button type="button" onClick={reload}>重新连接</button></div> : null}
+    <div className={styles.frameShell} data-phase={phase} style={{ minHeight: Math.min(frameHeight, 1_000) }}>
+      <iframe
+        key={nonce}
+        ref={frame}
+        title="九层妖塔源码版游戏画面"
+        src={sourceUrl}
+        sandbox="allow-scripts allow-modals"
+        referrerPolicy="no-referrer"
+        allow="camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; autoplay 'none'"
+        style={{ height: frameHeight }}
+        onError={() => {
+          startupFailed.current = true;
+          setError('九层妖塔静态资源加载失败，请重新加载。');
+          setPhase('error');
+        }}
+      />
+      {phase === 'loading' ? <div className={styles.loading} role="status"><span className={styles.spinner} aria-hidden="true" /><strong>正在核对联网档案…</strong><small>读取完成前不会创建或覆盖存档</small></div> : null}
+    </div>
+    <details className={styles.details}><summary>存档、安全与来源说明</summary><p>游戏源码在隔离沙箱中运行，不能读取网站 Cookie、令牌或父页面。账号接口只由本站外层白名单桥调用；每次请求同时校验当前画面、临时随机标识和参数范围。</p><p>角色、装备和进度保存到当前网站账号。旧版妖塔数据保留作只读回滚，不与本源码版角色、经济或排行榜混算。</p><p>来源与改动记录见 <a href="/games/demon-tower-source/SOURCE.md" target="_blank" rel="noreferrer">源码清单</a>；许可见 <a href="/licenses/demon-tower-source/LICENSE" target="_blank" rel="noreferrer">MIT License</a>。</p></details>
   </section>;
 }

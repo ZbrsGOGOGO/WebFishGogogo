@@ -18,3 +18,4 @@ export * from './community-direct-messages';
 export * from './community-news';
 export * from './community-guild';
 export * from './community-development';
+export * from './community-demon-tower-source';

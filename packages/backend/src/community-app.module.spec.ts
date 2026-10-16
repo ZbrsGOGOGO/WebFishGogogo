@@ -36,6 +36,11 @@ import { RailController } from './modules/community/rail/rail.controller';
 import { RailModule } from './modules/community/rail/rail.module';
 import { DemonTowerController } from './modules/community/demon-tower/demon-tower.controller';
 import { DemonTowerModule } from './modules/community/demon-tower/demon-tower.module';
+import { DemonTowerSourceController } from './modules/community/demon-tower/demon-tower-source.controller';
+import { DemonTowerSourceService } from './modules/community/demon-tower/demon-tower-source.service';
+import { DemonTowerService } from './modules/community/demon-tower/demon-tower.service';
+import { DemonTowerRewardsService } from './modules/community/demon-tower/demon-tower-rewards.service';
+import { DemonTowerAutoService } from './modules/community/demon-tower/demon-tower-auto.service';
 import { CommunityProgressionModule } from './modules/community/progression/community-progression.module';
 import { CommunityProgressionController } from './modules/community/progression/community-progression.controller';
 import {
@@ -71,6 +76,7 @@ describe('CommunityAppModule route allowlist', () => {
         PlayController,
         RailController,
         DemonTowerController,
+        DemonTowerSourceController,
         CommunityProgressionController,
         NewsPublicController,
         NewsPreferenceController,
@@ -100,6 +106,10 @@ describe('CommunityAppModule route allowlist', () => {
     expect(providers).not.toContain(OutboxProcessorService);
     expect(providers).not.toContain(LocalOutboxPumpService);
     expect(providers).not.toContain(ActivityProjectorService);
+    expect(providers).toContain(DemonTowerSourceService);
+    expect(providers).not.toContain(DemonTowerService);
+    expect(providers).not.toContain(DemonTowerRewardsService);
+    expect(providers).not.toContain(DemonTowerAutoService);
   });
 });
 

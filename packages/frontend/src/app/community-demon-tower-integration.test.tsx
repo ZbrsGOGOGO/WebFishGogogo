@@ -8,7 +8,6 @@ vi.mock('./community-nav', async (original) => {
   return { ...actual, COMMUNITY_FEATURE_FLAGS: { ...actual.COMMUNITY_FEATURE_FLAGS, get demonTower() { return gate.enabled; } } };
 });
 vi.mock('../features/games/demon-tower/DemonTowerPage', () => ({ DemonTowerPage: () => <h1>妖塔角色测试入口</h1> }));
-vi.mock('../features/games/demon-tower/DemonTowerLeaderboardPage', () => ({ DemonTowerLeaderboardPage: () => <h1>妖塔贡献测试入口</h1> }));
 vi.mock('../features/workstation-tower-defense', () => ({ WorkstationTowerDefensePage: () => <h1>既有工位塔防测试入口</h1> }));
 
 import { communityGameRoomsApi } from '../api/community-game-rooms';
@@ -47,23 +46,25 @@ describe('demon tower integration release gates', () => {
     router('/tower-defense');
     expect(await screen.findByRole('heading', { name: '既有工位塔防测试入口' })).toBeInTheDocument();
   });
-  it('keeps the enabled contribution page public, without exposing a private save page', async () => {
+  it('redirects the retired leaderboard route into the account-bound source ranking tab', async () => {
+    const active = router('/games/demon-tower/leaderboard');
+    expect(await screen.findByRole('heading', { name: '妖塔角色测试入口' })).toBeInTheDocument();
+    active.unmount();
     useCommunityAuthStore.setState({ phase: 'guest', user: null });
-    const mounted = router('/games/demon-tower/leaderboard');
-    expect(await screen.findByRole('heading', { name: '妖塔贡献测试入口' })).toBeInTheDocument();
-    mounted.unmount(); router('/games/demon-tower');
+    router('/games/demon-tower/leaderboard');
     expect(await screen.findByRole('heading', { name: '欢迎回来' })).toBeInTheDocument();
   });
-  it('links the free character game and separate boss leaderboard from the games hub', async () => {
+  it('links the full source game and its read-only character ranking from the games hub', async () => {
     render(<MemoryRouter><CommunityGamesPage /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: '进入角色档案 →' })).toHaveAttribute('href', '/games/demon-tower');
-    expect(screen.getByRole('link', { name: '查看妖塔贡献日榜' })).toHaveAttribute('href', '/games/demon-tower/leaderboard');
+    expect(screen.getByRole('link', { name: '进入联网档案 →' })).toHaveAttribute('href', '/games/demon-tower');
+    expect(screen.getByRole('link', { name: '查看角色战力榜' })).toHaveAttribute('href', '/games/demon-tower?tab=rank');
+    expect(screen.getByText(/塔内办公币是玩法独立货币/)).toBeInTheDocument();
     expect(await screen.findByText('保留旧游戏')).toBeInTheDocument();
   });
-  it('includes the new independent board in the sidebar leaderboard hub without mixing construction into score', async () => {
+  it('includes the source character board without advertising website-currency rewards', async () => {
     render(<MemoryRouter initialEntries={['/leaderboards?tab=games']}><CommunityLeaderboardsPage /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: '查看妖塔贡献日榜 →' })).toHaveAttribute('href', '/games/demon-tower/leaderboard');
-    expect(screen.getByText(/通道建设贡献独立展示，不计入伤害日榜/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '查看妖塔战力榜 →' })).toHaveAttribute('href', '/games/demon-tower?tab=rank');
+    expect(screen.getByText(/旧版贡献日榜不再继续结算/)).toBeInTheDocument();
     expect(await screen.findByText(/测试结算/)).toBeInTheDocument();
   });
   it('does not advertise the game or its leaderboard from hubs before enablement', async () => {

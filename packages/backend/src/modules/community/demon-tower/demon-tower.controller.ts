@@ -1,29 +1,34 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { CurrentSessionId, CurrentUserId, OptionalCurrentUserId } from '../../auth/current-user.decorator';
+import { Body, Controller, Get, GoneException, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { CurrentUserId } from '../../auth/current-user.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
-import { DemonTowerRewardsService } from './demon-tower-rewards.service';
-import { DemonTowerService } from './demon-tower.service';
-import { DemonTowerAutoService } from './demon-tower-auto.service';
 
+/** Compatibility tombstone for the retired fused implementation. */
 @Controller('v1/games/demon-tower')
 export class DemonTowerController {
-  constructor(private readonly tower: DemonTowerService, private readonly rewards: DemonTowerRewardsService, private readonly auto: DemonTowerAutoService) {}
-  @Get('catalog') catalog() { return this.tower.catalog(); }
+  // Keeps old isolated test construction source-compatible without making Nest
+  // instantiate any retired service or the old automatic exploration worker.
+  constructor(..._retiredDependencies: unknown[]) {}
+
+  private gone(): never {
+    throw new GoneException({ code: 'DEMON_TOWER_CLIENT_OUTDATED', replacement: '/games/demon-tower' });
+  }
+
+  @Get('catalog') catalog(): never { return this.gone(); }
   @Get('overview') @UseGuards(JwtAuthGuard)
-  overview(@CurrentUserId() userId: string) { return this.tower.overview(userId); }
+  overview(@CurrentUserId() _userId: string): never { return this.gone(); }
   @Get('social') @UseGuards(JwtAuthGuard)
-  social(@CurrentUserId() userId: string) { return this.tower.social(userId); }
+  social(@CurrentUserId() _userId: string): never { return this.gone(); }
   @Post('actions') @UseGuards(JwtAuthGuard)
-  action(@CurrentUserId() userId: string, @Body() body: unknown) { return this.tower.action(userId, body); }
+  action(@CurrentUserId() _userId: string, @Body() _body: unknown): never { return this.gone(); }
   @Get('leaderboard') @UseGuards(OptionalJwtAuthGuard)
-  leaderboard(@Query('date') date: string | undefined, @OptionalCurrentUserId() userId: string | null) { return this.rewards.leaderboard(date, userId); }
+  leaderboard(@Query('date') _date?: string): never { return this.gone(); }
   @Get('contributions') @UseGuards(OptionalJwtAuthGuard)
-  contributions(@Query('floor') floor: string | undefined, @OptionalCurrentUserId() userId: string | null) { return this.rewards.contributions(floor, userId); }
+  contributions(@Query('floor') _floor?: string): never { return this.gone(); }
   @Get('auto-explore') @UseGuards(JwtAuthGuard)
-  autoRead(@CurrentUserId() userId: string) { return this.auto.read(userId); }
+  autoRead(@CurrentUserId() _userId: string): never { return this.gone(); }
   @Post('auto-explore') @UseGuards(JwtAuthGuard)
-  autoStart(@CurrentUserId() userId: string, @CurrentSessionId() sessionId: string, @Body() body: unknown) { return this.auto.start(userId, sessionId, body); }
+  autoStart(@CurrentUserId() _userId: string, @Body() _body: unknown): never { return this.gone(); }
   @Post('auto-explore/:id/stop') @UseGuards(JwtAuthGuard)
-  autoStop(@CurrentUserId() userId: string, @Param('id') id: string, @Body() body: unknown) { return this.auto.stop(userId, id, body); }
+  autoStop(@CurrentUserId() _userId: string, @Param('id') _id: string, @Body() _body: unknown): never { return this.gone(); }
 }

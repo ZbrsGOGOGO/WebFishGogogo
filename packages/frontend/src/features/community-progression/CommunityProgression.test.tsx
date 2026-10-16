@@ -12,9 +12,9 @@ import { CommunityVipSummary, membershipRemaining } from './CommunityVipSummary'
 import { useCommunityProgression } from './useCommunityProgression';
 import { CommunityProgressionCard } from './CommunityProgressionCard';
 
-const catalog: CommunityProgressionCatalog = { enabled: true, achievements: COMMUNITY_ACHIEVEMENTS, membership: { giftDays: 30, automaticRenewal: false, paid: false, benefit: 'demon_tower_auto_explore', existingAccountsOnly: true }, historicalDataNotice: '只读取可核验历史。' };
+const catalog: CommunityProgressionCatalog = { enabled: true, achievements: COMMUNITY_ACHIEVEMENTS, membership: { giftDays: 30, automaticRenewal: false, paid: false, benefit: null, existingAccountsOnly: true }, historicalDataNotice: '只读取可核验历史。' };
 const title = COMMUNITY_ACHIEVEMENTS.find(item => item.key === 'farm_first')!.title;
-const overview = (extra: Partial<CommunityProgressionView> = {}): CommunityProgressionView => ({ serverNow: '2026-09-09T00:00:00.000Z', enabled: true, writesEnabled: true, vip: { active: true, startsAt: '2026-09-09T00:00:00.000Z', expiresAt: '2026-10-09T00:00:00.000Z', source: 'launch_gift', benefits: ['demon_tower_auto_explore'] }, presentation: { version: 0, equippedTitle: null }, achievements: COMMUNITY_ACHIEVEMENTS.map(item => ({ key: item.key, progress: item.key === title.key ? 1 : 0, target: item.target, eligible: item.key === title.key, unlockedAt: item.key === title.key ? '2026-09-09T00:00:00.000Z' : null })), ...extra });
+const overview = (extra: Partial<CommunityProgressionView> = {}): CommunityProgressionView => ({ serverNow: '2026-09-09T00:00:00.000Z', enabled: true, writesEnabled: true, vip: { active: true, startsAt: '2026-09-09T00:00:00.000Z', expiresAt: '2026-10-09T00:00:00.000Z', source: 'launch_gift', benefits: [] }, presentation: { version: 0, equippedTitle: null }, achievements: COMMUNITY_ACHIEVEMENTS.map(item => ({ key: item.key, progress: item.key === title.key ? 1 : 0, target: item.target, eligible: item.key === title.key, unlockedAt: item.key === title.key ? '2026-09-09T00:00:00.000Z' : null })), ...extra });
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>((yes) => { resolve = yes; }); return { promise, resolve }; };
 const wrap = (ui: React.ReactNode) => render(<MemoryRouter>{ui}</MemoryRouter>);
 describe('community achievements, titles and VIP', () => {
@@ -34,11 +34,13 @@ describe('community achievements, titles and VIP', () => {
     expect(screen.getByRole('heading', { name: '第一次三星合成' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '职业晋升 · 大老板' })).toBeVisible();
     expect(screen.getByRole('heading', { name: '九层纪念' })).toBeVisible();
-    const rules = screen.getByText('权益、赠送与支持说明');
+    const rules = screen.getByText('身份、赠送与支持说明');
     expect(rules.closest('details')).not.toHaveAttribute('open');
     fireEvent.click(rules);
     expect(screen.getByText(/新注册账号不自动获赠/)).toBeVisible();
     expect(screen.getByText(/没有支付或自动续费入口/)).toBeVisible();
+    expect(screen.getByText(/旧版妖塔自动探索权益已于 2026-10-16/)).toBeVisible();
+    expect(screen.getByText(/当前不绑定专属玩法/)).toBeVisible();
     expect(communityProgressionApi.refresh).not.toHaveBeenCalled(); expect(communityProgressionApi.title).not.toHaveBeenCalled();
     expect(view.container.querySelector('iframe,video,audio')).toBeNull();
   });
@@ -140,7 +142,7 @@ describe('community achievements, titles and VIP', () => {
     fireEvent.change(screen.getByRole('searchbox', { name: '搜索成就或称号' }), { target: { value: '工位园丁' } });
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('article', { name: '第一批收获' })).toBeVisible();
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '独立等级' } });
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '旧版妖塔纪念' } });
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('article', { name: '妖塔启程' })).toBeVisible();
     expect(communityProgressionApi.title).not.toHaveBeenCalled();

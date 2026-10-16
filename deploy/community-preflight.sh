@@ -145,6 +145,25 @@ done
 grep -Fq 'AddDemonTower1700000000030' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
   fail "demon tower migration 0030 is not registered"
 for contract in \
+  packages/backend/src/database/migrations/1700000000042-AddDemonTowerSource.ts \
+  packages/backend/src/database/entities/demon-tower-source.entity.ts \
+  packages/backend/src/modules/community/demon-tower/demon-tower-source.controller.ts \
+  packages/backend/src/modules/community/demon-tower/demon-tower-source.service.ts \
+  packages/frontend/public/games/demon-tower-source/index.html \
+  packages/frontend/public/games/demon-tower-source/SOURCE.md \
+  packages/frontend/public/games/demon-tower-source/upstream-manifest.sha256 \
+  packages/frontend/public/licenses/demon-tower-source/LICENSE; do
+  [ -f "$ROOT_DIR/$contract" ] || fail "missing source-edition demon tower contract: $contract"
+done
+grep -Fq 'AddDemonTowerSource1700000000042' "$ROOT_DIR/packages/backend/src/database/migrations/index.ts" ||
+  fail "source-edition demon tower migration 0042 is not registered"
+[ "$(grep -c 'CREATE TABLE "demon_tower_source_' "$ROOT_DIR/packages/backend/src/database/migrations/1700000000042-AddDemonTowerSource.ts" || true)" -eq 5 ] ||
+  fail "source-edition migration 0042 must create exactly five independent tables"
+[ "$(grep -Ec "^[[:space:]]+\[[1-9], '(open|locked)'" "$ROOT_DIR/packages/backend/src/database/migrations/1700000000042-AddDemonTowerSource.ts" || true)" -eq 9 ] ||
+  fail "source-edition migration 0042 must seed exactly nine world floors"
+grep -Fq "CHECK (\"kind\" IN ('damage', 'channel', 'clue'))" "$ROOT_DIR/packages/backend/src/database/migrations/1700000000042-AddDemonTowerSource.ts" ||
+  fail "source-edition world receipts must remain bounded to damage/channel/clue commands"
+for contract in \
   packages/backend/src/database/migrations/1700000000031-AddCommunityProgression.ts \
   packages/backend/src/database/migrations/1700000000032-AddDemonTowerAutoExplore.ts \
   packages/backend/src/modules/community/progression/community-progression.module.ts \
@@ -247,6 +266,11 @@ done
 grep -Fq 'test "$VITE_COMMUNITY_TOWER_DEFENSE_ENABLED" = true' \
   "$ROOT_DIR/Dockerfile" ||
   fail "community-build must require workstation tower defense"
+grep -Fq 'test "$VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED" = false' \
+  "$ROOT_DIR/Dockerfile" &&
+grep -Fq 'test "$VITE_DEMON_TOWER_EXPANSION_ENABLED" = false' \
+  "$ROOT_DIR/Dockerfile" ||
+  fail "community-build must reject the retired demon-tower runtimes"
 grep -Fq 'test "$VITE_COMMUNITY_LEDOU_ENABLED" = false' \
   "$ROOT_DIR/Dockerfile" ||
   fail "community-build must reject the retired Ledou entry"
@@ -403,11 +427,17 @@ grep -Fq 'FEATURE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER
 grep -Fq 'VITE_COMMUNITY_DEMON_TOWER_ENABLED: ${FEATURE_COMMUNITY_DEMON_TOWER_ENABLED:-false}' \
   "$ROOT_DIR/deploy/docker-compose.community.yml" ||
   fail "demon-tower frontend and server must use the same feature flag"
-for growth_flag in COMMUNITY_PROGRESSION DEMON_TOWER_AUTO_EXPLORE WORKSTATION_CAMPAIGN OFFICE_HUB DEMON_TOWER_EXPANSION PAPER_ARENA; do
+for growth_flag in COMMUNITY_PROGRESSION WORKSTATION_CAMPAIGN OFFICE_HUB PAPER_ARENA; do
   grep -Fq "FEATURE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
     "$ROOT_DIR/$COMPOSE_FILE" || fail "$growth_flag must default to disabled on the API"
   grep -Fq "VITE_${growth_flag}_ENABLED: \${FEATURE_${growth_flag}_ENABLED:-false}" \
     "$ROOT_DIR/$COMPOSE_FILE" || fail "$growth_flag frontend and API must use the same source"
+done
+for retired_tower_flag in DEMON_TOWER_AUTO_EXPLORE DEMON_TOWER_EXPANSION; do
+  grep -Fq "FEATURE_${retired_tower_flag}_ENABLED: \"false\"" \
+    "$ROOT_DIR/$COMPOSE_FILE" || fail "$retired_tower_flag must be hard-disabled on the API"
+  grep -Fq "VITE_${retired_tower_flag}_ENABLED: \"false\"" \
+    "$ROOT_DIR/$COMPOSE_FILE" || fail "$retired_tower_flag must be hard-disabled in the frontend build"
 done
 grep -Fq 'VITE_COMMUNITY_LEDOU_ENABLED: "false"' \
   "$ROOT_DIR/$COMPOSE_FILE" ||
@@ -441,6 +471,27 @@ printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'add_header_inherit off;' &&
 printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq 'X-Frame-Options "SAMEORIGIN"' &&
 printf '%s\n' "$ZHESI_FRAME_LOCATION" | grep -Fq "frame-ancestors 'self'" ||
   fail "community Nginx must allow only the Zhesi document to be framed by the same origin"
+DEMON_TOWER_FRAME_LOCATION=$(awk '
+  /^[[:space:]]*location = \/games\/demon-tower-source\/index\.html \{/ { capture = 1 }
+  capture { print }
+  capture && /^    }$/ { exit }
+' "$ROOT_DIR/deploy/community.nginx.conf")
+printf '%s\n' "$DEMON_TOWER_FRAME_LOCATION" | grep -Fq 'add_header_inherit off;' &&
+printf '%s\n' "$DEMON_TOWER_FRAME_LOCATION" | grep -Fq 'X-Frame-Options "SAMEORIGIN"' &&
+printf '%s\n' "$DEMON_TOWER_FRAME_LOCATION" | grep -Fq "connect-src 'none'" &&
+printf '%s\n' "$DEMON_TOWER_FRAME_LOCATION" | grep -Fq "frame-ancestors 'self'" ||
+  fail "community Nginx must isolate the source demon tower and allow only its document in a same-origin frame"
+for source_write_route in \
+  /api/v1/games/demon-tower/source/progress \
+  /api/v1/games/demon-tower/source/world/damage \
+  /api/v1/games/demon-tower/source/world/channel \
+  /api/v1/games/demon-tower/source/world/clue; do
+  grep -F -A1 "location = $source_write_route {" "$ROOT_DIR/deploy/community.nginx.conf" |
+    grep -Fq 'client_max_body_size 1200k;' ||
+    fail "community Nginx must accept the bounded source demon-tower save envelope: $source_write_route"
+  grep -Fq "'$source_write_route'" "$ROOT_DIR/packages/backend/src/main.community.ts" ||
+    fail "community Nest parser must explicitly allow the source demon-tower save envelope: $source_write_route"
+done
 grep -Fq 'add_header X-Frame-Options "DENY" always;' \
   "$ROOT_DIR/deploy/community.nginx.conf" &&
 grep -Fq "frame-ancestors 'none'" "$ROOT_DIR/deploy/community.nginx.conf" ||
@@ -768,18 +819,14 @@ fi
 for growth_flag in FEATURE_COMMUNITY_PROGRESSION_ENABLED FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED FEATURE_WORKSTATION_CAMPAIGN_ENABLED FEATURE_OFFICE_HUB_ENABLED FEATURE_DEMON_TOWER_EXPANSION_ENABLED FEATURE_EXPANDED_TRENDING_ENABLED FEATURE_PAPER_ARENA_ENABLED FEATURE_WORD_FRONT_ROOMS_ENABLED; do
   if grep -q "^${growth_flag}=" "$ENV_FILE"; then check_boolean "$growth_flag"; fi
 done
-# Feature visibility may remain enabled during read-only maintenance. Each
-# mutation still enforces the independent community writes gate at runtime.
-if [ "$(env_value FEATURE_DEMON_TOWER_EXPANSION_ENABLED)" = true ]; then
-  [ "$(env_value FEATURE_COMMUNITY_DEMON_TOWER_ENABLED)" = true ] || fail "demon expansion requires demon tower"
-fi
+# These legacy switches are retained in the private environment only so a
+# stale value fails closed instead of silently reviving part of the old game.
+[ "$(env_value FEATURE_DEMON_TOWER_EXPANSION_ENABLED)" = false ] ||
+  fail "FEATURE_DEMON_TOWER_EXPANSION_ENABLED is retired and must remain false"
+[ "$(env_value FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED)" = false ] ||
+  fail "FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED is retired and must remain false"
 if [ "$(env_value FEATURE_EXPANDED_TRENDING_ENABLED)" = true ]; then
   [ "$(env_value FEATURE_COMMUNITY_NEWS_ENABLED)" = true ] || fail "expanded trending requires community news"
-fi
-if [ "$(env_value FEATURE_DEMON_TOWER_AUTO_EXPLORE_ENABLED)" = true ]; then
-  [ "$(env_value FEATURE_COMMUNITY_PROGRESSION_ENABLED)" = true ] &&
-    [ "$(env_value FEATURE_COMMUNITY_DEMON_TOWER_ENABLED)" = true ] ||
-    fail "auto exploration requires progression and demon tower"
 fi
 check_boolean FEATURE_COMMUNITY_BATTLE_ENABLED
 

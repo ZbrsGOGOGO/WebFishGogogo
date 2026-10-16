@@ -237,6 +237,8 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL} \
 
 RUN test "$VITE_SITE_MODE" = community \
     && test "$VITE_COMMUNITY_TOWER_DEFENSE_ENABLED" = true \
+    && test "$VITE_DEMON_TOWER_AUTO_EXPLORE_ENABLED" = false \
+    && test "$VITE_DEMON_TOWER_EXPANSION_ENABLED" = false \
     && test "$VITE_COMMUNITY_LEDOU_ENABLED" = false \
     && test "$VITE_COMMUNITY_BATTLE_SERVER_ENABLED" = false \
     && printf '%s\n' "$VITE_SITE_DOMAIN" | grep -Eq '[^[:space:]]' \

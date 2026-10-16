@@ -2,13 +2,25 @@
 
 本文面向当前「摸摸公司」的 `community` 模式。**已运行站点更新、空站初始化、历史迁移是三种不同流程，不可混用。** 旧 `full`、`review`、`public` 模式见 [部署导航](README.md)。
 
-### 2026-09-19 候选迁移复核：妖塔 v0.11 与 V4 战功（尚未代表已经上线）
+### 2026-10-16 九层妖塔源码版完整替换候选（尚未上线）
+
+当前生产仍固定到 2026-10-15 工坊 PVE 应用 `6e310e411371ee02e15a049249af792bfbd374ae`，数据库为 schema42 / 42 条迁移 / 151 张 public 表。本候选以实验室 5090 最新 `jiuceng.zip`（SHA-256 `2fe1c88e998f740ad01e8722a2e2c06f58c5eff41824c3aee833bd8b0e76bd2c`，内含源码提交 `d87e2df254397e0ce1bb2b9dac5f99567bc94ee6`）为唯一玩法源，完整替换旧妖塔，不融合旧界面、规则、存档、经济或自动探索。候选提交、不可变镜像、部署时间和生产结果均为 **TBD**。[完整候选发布清单](../docs/RELEASE_DEMON_TOWER_SOURCE_20261016.md)
+
+唯一新增迁移 `1700000000042-AddDemonTowerSource` 创建 `demon_tower_source_profiles`、`demon_tower_source_world_floors`、`demon_tower_source_contributions`、`demon_tower_source_daily_actions`、`demon_tower_source_commands` 五表及九层种子，目标为 **schema43 / 43 条迁移 / 156 张 public 表**。历史 `demon_tower_*` 表冻结，不更新、不删除、不迁移到新档。上线前必须用新鲜生产备份在隔离 PostgreSQL 16 副本完成恢复和 0041→0042 UP，核对五表约束/种子、旧业务摘要与 156 表；生产只执行一次 UP，不重建 PostgreSQL、Redis、Gateway 或数据卷。
+
+源码版不接网站钱包、办公币、奖励或期权特权，也没有自动探索。账号云存档与共享世界写入必须验证：单份解码存档 512 KiB、每账号每日 720 次存档 / 64 MiB 写入 / 120 次共享动作；`damage`、`channel`、`clue` 三类全服动作都携带同一逻辑 `requestId`、`expectedVersion` 和 `saveData`，在一个事务内原子更新档案、额度、世界、贡献和命令回执。探索线索也必须随个人存档提交并在刷新后恢复。传输结果不确定时只能用同请求号确认；仍无确定回执则冻结写入并整页重载，不重新执行随机动作。仅 progress PUT 与三个 world POST 使用精确的 Nginx `1200k` / Nest JSON `1200kb` 包络，解码存档仍以 512 KiB 为权威上限，其余妖塔路由不得放大。
+
+切换前避开北京时间跨日窗口并先确认所有历史贡献日均已由旧 worker 结算。随后停止旧 API（同时停止旧奖励 worker），等待进程优雅退出并复核旧伤害快照已稳定；此后才允许用日期绑定、非 HTTP 的一次性脚本结算当前切换日，并核对合格冠军恰好一笔奖项、奖励凭证和钱包账本；无合格记录则保存零待结算证据。不得先结算再继续接受旧伤害，也不得用最终日脚本重放历史日期。该步骤在生产实际执行前保持 **TBD**，不得预写为已完成。
+
+**源码版直接回滚只允许 API + Web 回切**：保留 schema43、五张新表和全部新旧数据，禁止 DOWN、删表、旧库回灌或数据卷重建。旧 API 不会清理五张新表，因此回切前必须设置 `FEATURE_ACCOUNT_DELETION_ENABLED=false`；启动后同时验证前端注销入口不可用和注销 API 被服务端拒绝，任一项失败则维持维护状态并恢复候选应用。不要套用任何旧妖塔兼容桥、奖励重放或 Web-only 回滚流程。
+
+### 2026-09-19 历史候选迁移复核：妖塔 v0.11 与 V4 战功
 
 当前生产已有 `1700000000040-AddWordFrontV4ArcadeGames`，共41条迁移、150张 public 表。本候选新增唯一迁移 `1700000000041-AddWordFrontProgress`：只新增账号级 `word_front_progress` 表，记录服务器验真 V4 对局的独立战功、胜负、每日获取上限和三项纯展示收藏。它不读写钱包、办公币、旧成绩、妖塔存档或地图；用户注销时由外键级联删除自身进度。生产升级必须先用新鲜备份在隔离 PostgreSQL 16 副本验证 0040→0041 UP/DOWN/UP，核对 42/42 迁移、151张 public 表、新表为空且旧业务行不变，才可执行唯一生产 UP。
 
 正常应用回退保留 schema41、战功及全部玩家数据，**不执行 DOWN、不回灌旧库**。旧 API 不查询新表，可作为应用回切基线；回切前仍要在恢复副本验证它能保留妖塔新增的未知 `seasonal` JSON 字段。候选通过备份、迁移、镜像与公网验收后，再用实际提交、镜像和时间替换本段。
 
-### 2026-09-15 18:06 当前发布：探索回执与免费异步猜画（API / Web）
+### 2026-09-15 18:06 历史发布：探索回执与免费异步猜画（API / Web）
 
 北京时间 **18:06:56** 只切换 API/Web，应用固定到 `f346f0c413d653203ae7f4c8d9ed2eadb8276e76`。API 镜像 `sha256:6f4d25ca2204c47d9581586aa71e7162e21346fe962538b7020c2d18d2af57ee`，Web 镜像 `sha256:04ea075460d0116dbc48e135e525e2afef9c01e0905f485a44a1a32bfa745eb8`；PostgreSQL、Redis、Gateway 完整容器身份、数据卷及除 IMAGE_TAG 外的环境不变。schema39 / 40 迁移 / 148 表，没有 UP/DOWN。新增完整妖塔出发回执与恢复、免费不限每日创作的异步猜画及无奖励评分、公司页深色对比修复；不是新游戏、支付或权限发布。
 
@@ -223,7 +235,7 @@ chmod 600 .env.community
 
 分别为 JWT、认证 pepper、PostgreSQL、Redis、邮件 webhook 和 Outbox 加密准备独立随机秘密；可用 `openssl rand -hex 32` 每次生成新的值，不在多字段复用。`BETA_BOOTSTRAP_CODE` 至少 16 字符且限次；真实秘密不能写入示例、Git 或命令历史。设置正确的域名、隐私/备案/游戏依据和完整 40 位候选 SHA，再执行预检。预检验证静态配置、密钥基本条件、前后端映射等，不代替 Provider 或真实数据库验收。
 
-新站首先在隔离环境验证同一候选的完整初始化与恢复。源码 [迁移清单](../packages/backend/src/database/migrations/index.ts) 当前登记 `0000` 至 `0039`，共 40 条；成功初始化应逐条比对名称/时间戳，不只看数量。通过后，在新站独立项目中构建并启动：
+新站首先在隔离环境验证同一候选的完整初始化与恢复。源码 [迁移清单](../packages/backend/src/database/migrations/index.ts) 当前候选登记 `0000` 至 `0042`，共 43 条；成功初始化应逐条比对名称/时间戳并核对 156 张 public 表，不只看数量。通过后，在新站独立项目中构建并启动：
 
 ```bash
 sh deploy/community-preflight.sh .env.community
@@ -243,7 +255,7 @@ docker compose -p webfish-community \
 
 ### 旧迁移演练脚本的适用范围
 
-[community-migration-rehearsal.sh](community-migration-rehearsal.sh) 当前硬编码 `BASELINE_TIMESTAMP=1700000000007`、`LATEST_TIMESTAMP=1700000000030`；预检也只检查其这套历史覆盖。它使用脱敏 0007 plain SQL 快照，在临时 PostgreSQL 16 中验证旧 `up/down/up`、邮箱冲突和锁超时，**不是 schema39 的当前发布门禁**。把含 0031–0039 的最新镜像直接交给它，会与“最高迁移必须为 0030”的断言冲突；不得忽略失败或声称它已验证本次版本。本轮没有修改该脚本。
+[community-migration-rehearsal.sh](community-migration-rehearsal.sh) 当前硬编码 `BASELINE_TIMESTAMP=1700000000007`、`LATEST_TIMESTAMP=1700000000030`；预检也只检查其历史覆盖。它使用脱敏 0007 plain SQL 快照，在临时 PostgreSQL 16 中验证旧 `up/down/up`、邮箱冲突和锁超时，**不是 schema43 源码版候选的发布门禁**。把含 0031–0042 的候选镜像直接交给它，会与“最高迁移必须为 0030”的断言冲突；不得忽略失败或声称它已验证本次版本。本轮没有修改该脚本。
 
 从旧快照升级或新站初始化，须先为真实起点和当前候选补齐独立演练并审阅；旧脚本的历史通过不能替代它。历史 f46 无迁移发布使用的是新鲜备份恢复、最终镜像只读克隆及数据不变核验，详见发布记录。其他 `community-*-rehearsal.cjs` 是会写合成数据的专项测试，也不能当作生产只读命令运行。
 

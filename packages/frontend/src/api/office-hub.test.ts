@@ -27,7 +27,7 @@ describe('office boss transport and isolated wallet observation', () => {
   });
   it.each([
     ['OFFICE_RELIEF_NO_CHANCES', '机会不足'], ['OFFICE_RELIEF_VERSION_CONFLICT', '版本已更新'], ['OFFICE_RELIEF_TOKENS_LOW', '不会改扣'],
-    ['OFFICE_RELIEF_TOWER_REQUIRED', '建立角色'], ['OFFICE_RELIEF_TOWER_BUSY', '仍然保留'], ['OFFICE_RELIEF_REWARD_FULL', '保留'],
+    ['OFFICE_RELIEF_TOWER_REQUIRED', '停止领取'], ['OFFICE_RELIEF_TOWER_BUSY', '停止领取'], ['OFFICE_RELIEF_TOWER_RETIRED', '不会写入新旧妖塔'], ['OFFICE_RELIEF_REWARD_FULL', '保留'],
     ['OFFICE_RELIEF_FARM_REQUIRED', '开通农场'], ['OFFICE_RELIEF_DAY_CHANGED', '回滚'], ['OFFICE_RELIEF_PENDING_FULL', '99'],
   ])('explains server rejection %s without leaking transport detail', (code, message) => {
     expect(officeBossError(new CommunityApiError(409, 'private internal detail', { code }))).toContain(message);

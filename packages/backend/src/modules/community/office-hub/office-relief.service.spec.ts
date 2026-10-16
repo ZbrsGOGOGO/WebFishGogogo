@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import crypto = require('node:crypto');
 import { DataSource, EntityManager } from 'typeorm';
-import { type OfficeReliefState } from '@stealth-reader/shared';
-import { User, WalletBalance, WalletLedger, DeskPlant, DemonTowerProfile, DemonTowerAutoRun, CommunityAchievementUnlock, CommunityUserPresentation } from '../../../database/entities';
+import { type OfficeReliefDrop, type OfficeReliefState } from '@stealth-reader/shared';
+import { User, WalletBalance, WalletLedger, DeskPlant, DemonTowerProfile, CommunityAchievementUnlock, CommunityUserPresentation } from '../../../database/entities';
 import { createLocalDevDataSource } from '../../../database/local-dev-datasource';
 import { PlatformAssetsService } from '../../platform';
 import { DeskPlantService } from '../desk-plant.service';
@@ -10,8 +10,7 @@ import { RelationshipPolicyService } from '../relationship-policy.service';
 import { NotificationService } from '../notification.service';
 import { FeedService } from '../feed.service';
 import { FARM_MAX_LEVEL, farmLevelSnapshot } from '../farm-growth-rules';
-import { actDemonTower, createDemonTowerState } from '../demon-tower/demon-tower.engine';
-import { demonTowerWorldView, initialDemonTowerWorld } from '../demon-tower/demon-tower.rules';
+import { createDemonTowerState } from '../demon-tower/demon-tower.engine';
 import { OfficeHubService } from './office-hub.service';
 import { accrueOfficeRelief, actOfficeRelief, newOfficeRelief } from './office-relief.rules';
 import { newOfficeProfile, officeDay } from './office-hub.rules';
@@ -21,7 +20,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
   const env = { ...process.env };
   beforeEach(async () => {
     process.env.FEATURE_OFFICE_HUB_ENABLED = 'true'; process.env.FEATURE_COMMUNITY_WRITES_ENABLED = 'true';
-    process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true'; process.env.FEATURE_COMMUNITY_DEMON_TOWER_ENABLED = 'true'; process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED = 'true';
+    process.env.FEATURE_COMMUNITY_PROGRESSION_ENABLED = 'true';
     process.env.FEATURE_SOCIAL_VERIFICATION_ENABLED = 'false';
     now = Date.parse('2099-09-11T01:00:00Z'); jest.spyOn(Date, 'now').mockImplementation(() => now);
     db = await createLocalDevDataSource(); assets = new PlatformAssetsService({ now: () => new Date(now) }); service = new OfficeHubService(db, assets);
@@ -56,6 +55,11 @@ describe('Office relief real service persistence and cross-module ownership (pg-
     }
     return state;
   }
+  function legacyPending(drop: OfficeReliefDrop): OfficeReliefState {
+    const state = accrueOfficeRelief(newOfficeRelief(now), 3600);
+    const outcome = { id: drop.id, at: drop.receivedAt, kind: drop.kind, tokenDelta: 0, itemId: drop.itemId, dropId: drop.id, message: '旧版妖塔遗留礼包', tool: 'coffee' as const };
+    return { ...state, version: 2, chances: 1, totalPlays: 1, pending: [drop], history: [outcome], lastResult: outcome };
+  }
   async function snapshot(user = owner) {
     return { office: await profile(user), receipts: await db.query('SELECT * FROM office_hub_receipts WHERE user_id=$1 ORDER BY request_id', [user.id]),
       wallet: await db.getRepository(WalletBalance).findBy({ userId: user.id }), ledger: await db.getRepository(WalletLedger).find({ where: { userId: user.id }, order: { id: 'ASC' } }),
@@ -63,8 +67,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
       titles: await db.getRepository(CommunityAchievementUnlock).find({ where: { userId: user.id }, order: { achievementKey: 'ASC' } }) };
   }
   async function tower(user = owner) {
-    const state = actDemonTower(createDemonTowerState(now, officeDay(now), 'relief-service-synthetic-seed'), { kind: 'select_skin', payload: { skin: 'ledger' } },
-      { now, serviceDate: officeDay(now), expansionEnabled: true, world: demonTowerWorldView(initialDemonTowerWorld(new Date(now))) }).state;
+    const state = createDemonTowerState(now, officeDay(now), 'relief-service-synthetic-seed');
     return db.getRepository(DemonTowerProfile).save({ userId: user.id, version: 1, state: state as unknown as Record<string, unknown>, createdAt: new Date(now), updatedAt: new Date(now) });
   }
   async function farmOverview(user = owner) {
@@ -87,7 +90,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
 
   it('replays the original outcome after later actions, rejects changed payload/key and stale versions', async () => {
     await seed(); const command = input(); let rng = roll(0, 0, 900); const first = await call(command); rng.mockRestore();
-    rng = roll(5000, 250); await call(input('relief_play', 2)); rng.mockRestore();
+    rng = roll(5030, 250); await call(input('relief_play', 2)); rng.mockRestore();
     const saved = await snapshot(), retry = await call(command);
     expect(retry.reliefReceipt).toEqual({ ...first.reliefReceipt, replayed: true }); expect(retry.relief?.tokenBalance).toBe(700); expect(await snapshot()).toEqual(saved);
     await expect(call({ ...command, tool: 'coffee' })).rejects.toMatchObject({ response: { code: 'OFFICE_IDEMPOTENCY_CONFLICT' } });
@@ -96,7 +99,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
 
   it('floors losses at module zero, buys and explicitly equips cosmetic skins without changing main assets', async () => {
     const state = accrueOfficeRelief(newOfficeRelief(now), 5400); state.tokenBalance = 20; await seed(state); const wallet = (await snapshot()).wallet;
-    const rng = roll(5000, 250); const lost = await call(input()); rng.mockRestore();
+    const rng = roll(5030, 250); const lost = await call(input()); rng.mockRestore();
     expect(lost.reliefReceipt?.outcome).toMatchObject({ kind: 'loss', nominalAmount: 300, tokenDelta: -20 }); expect(lost.relief?.tokenBalance).toBe(0);
     await expect(call(input('relief_buy', 2, { skinId: 'mint' }))).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOKENS_LOW' } });
     const p = await profile(); p.relief.tokenBalance = 2000; await db.query('UPDATE office_hub_profiles SET state=$2::jsonb WHERE user_id=$1', [owner.id, JSON.stringify(p)]);
@@ -121,15 +124,15 @@ describe('Office relief real service persistence and cross-module ownership (pg-
   });
 
   it('grants rare titles exactly once without automatic equip or a management-role change', async () => {
-    await seed(); let rng = roll(9900, 0); const first = await call(input()); rng.mockRestore();
+    await seed(); let rng = roll(9930, 0); const first = await call(input()); rng.mockRestore();
     expect(first.relief?.titles).toEqual(['office_relief_fish']); expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: owner.id, achievementKey: 'office_relief_fish' })).toBe(1);
     expect(await db.getRepository(CommunityUserPresentation).count()).toBe(0);
-    rng = roll(9900, 0); const duplicate = await call(input('relief_play', 2)); rng.mockRestore(); expect(duplicate.relief?.tokenBalance).toBe(500);
+    rng = roll(9930, 0); const duplicate = await call(input('relief_play', 2)); rng.mockRestore(); expect(duplicate.relief?.tokenBalance).toBe(500);
     expect(await db.getRepository(CommunityAchievementUnlock).countBy({ userId: owner.id })).toBe(1); expect((await db.getRepository(User).findOneByOrFail({ id: owner.id })).communityRole).toBe('user');
   });
 
   it('preserves missing-module pending rewards and grants visible farm experience and a real level-up exactly once', async () => {
-    const state = pending([[9970, 0]]); await seed(state); const dropId = state.pending[0].id, command = input('relief_claim', state.version, { dropId });
+    const state = pending([[9980, 0]]); await seed(state); const dropId = state.pending[0].id, command = input('relief_claim', state.version, { dropId });
     const before = await snapshot(); await expect(call(command)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_FARM_REQUIRED' } }); expect(await snapshot()).toEqual(before);
     await db.getRepository(DeskPlant).save({ userId: owner.id, farmCoins: 50, plantExperience: 25, level: 1, totalHarvests: 7 });
     const farm = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id });
@@ -148,7 +151,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
   });
 
   it.each([{ plantExperience: 2_147_483_618, farmVersion: 1 }, { plantExperience: 25, farmVersion: 2_147_483_647 }])('retains the gift when farm experience or version cannot safely increase: %j', async fields => {
-    const state = pending([[9970, 0]]); await seed(state);
+    const state = pending([[9980, 0]]); await seed(state);
     await db.getRepository(DeskPlant).save({ userId: owner.id, ...fields, farmCoins: 50, level: farmLevelSnapshot(fields.plantExperience).level });
     const before = await snapshot();
     await expect(call(input('relief_claim', state.version, { dropId: state.pending[0].id }))).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_REWARD_FULL' } });
@@ -156,7 +159,7 @@ describe('Office relief real service persistence and cross-module ownership (pg-
   });
 
   it('accepts the exact experience integer boundary while the actual farm level remains capped by existing rules', async () => {
-    const state = pending([[9970, 0]]); await seed(state);
+    const state = pending([[9980, 0]]); await seed(state);
     await db.getRepository(DeskPlant).save({ userId: owner.id, plantExperience: 2_147_483_617, level: FARM_MAX_LEVEL, farmCoins: 77 });
     await call(input('relief_claim', state.version, { dropId: state.pending[0].id }));
     const plant = await db.getRepository(DeskPlant).findOneByOrFail({ userId: owner.id });
@@ -164,30 +167,14 @@ describe('Office relief real service persistence and cross-module ownership (pg-
     expect((await farmOverview()).plant).toMatchObject({ experience: 2_147_483_647, level: FARM_MAX_LEVEL, experienceToNextLevel: null });
   });
 
-  it('retains tower gifts until explicitly claimed and credits real materials, fragments and current-main weapon experience once', async () => {
-    const state = pending([[9950, 0], [9990, 0], [9990, 1]]); await seed(state); const first = input('relief_claim', state.version, { dropId: state.pending[0].id });
-    const before = await snapshot(); await expect(call(first)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOWER_REQUIRED' } }); expect(await snapshot()).toEqual(before);
-    const initial = await tower(), original = structuredClone(initial.state) as any;
-    for (const drop of state.pending) {
-      const version = (await profile()).relief.version, command = input('relief_claim', version, { dropId: drop.id }); await call(command);
-      const saved = await snapshot(); expect((await call(command)).reliefReceipt?.replayed).toBe(true); expect(await snapshot()).toEqual(saved);
-    }
-    const saved = await snapshot(), updated = saved.tower!.state as any;
-    expect(updated.materials.ore).toBe(original.materials.ore + 3); expect(updated.provisions.fragments).toBe(original.provisions.fragments + 3);
-    const beforeWeapon = original.weapons.find((weapon: any) => weapon.id === original.loadout.mainHand), afterWeapon = updated.weapons.find((weapon: any) => weapon.id === original.loadout.mainHand);
-    expect(afterWeapon.qualityExperience).toBe(beforeWeapon.qualityExperience + 15); expect(afterWeapon.star).toBe(beforeWeapon.star); expect(afterWeapon.favor).toBe(beforeWeapon.favor); expect(saved.tower!.version).toBe(initial.version + 3);
-    expect(updated.totalExperience).toBe(original.totalExperience); expect(saved.wallet).toEqual(before.wallet); expect(saved.ledger).toEqual(before.ledger); expect(saved.office.relief.pending).toEqual([]);
-  });
-
-  it('blocks tower claims during automatic exploration or a battle and respects module switches without discarding pending', async () => {
-    const state = pending([[9950, 0]]); await seed(state); const p = await tower(), command = input('relief_claim', state.version, { dropId: state.pending[0].id });
-    process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED = 'false'; const disabled = await snapshot(); await expect(call(command)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOWER_REQUIRED' } }); expect(await snapshot()).toEqual(disabled); process.env.FEATURE_DEMON_TOWER_EXPANSION_ENABLED = 'true';
-    const run = await db.getRepository(DemonTowerAutoRun).save({ id: crypto.randomUUID(), userId: owner.id, originAuthSessionId: null, startRequestId: crypto.randomUUID(), requestHash: 'a'.repeat(64), version: 1, status: 'running', stopReason: null, serviceDate: officeDay(now), floor: 1, maxExplorations: 1, startedExplorations: 0, completedExplorations: 0, steps: 0, expectedProfileVersion: p.version, officeCoinsGranted: 0, failureCount: 0, nextStepAt: new Date(now), expiresAt: new Date(now + 60000), createdAt: new Date(now), updatedAt: new Date(now), stoppedAt: null });
-    const active = await snapshot(); await expect(call(command)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOWER_BUSY' } }); expect(await snapshot()).toEqual(active);
-    await db.getRepository(DemonTowerAutoRun).update(run.id, { status: 'completed', stopReason: 'completed', stoppedAt: new Date(now) });
-    let battleState = p.state as any;
-    for (let i = 0; i < 15 && !battleState.battle; i++) battleState = actDemonTower(battleState, { kind: 'explore', payload: {} }, { now, serviceDate: officeDay(now), expansionEnabled: true, world: demonTowerWorldView(initialDemonTowerWorld(new Date(now))) }).state;
-    expect(battleState.battle).not.toBeNull(); await db.getRepository(DemonTowerProfile).update(owner.id, { state: battleState });
-    const fighting = await snapshot(); await expect(call(command)).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOWER_BUSY' } }); expect(await snapshot()).toEqual(fighting);
+  it.each([
+    ['material', { id: '00000000-0000-4000-8000-000000000101', kind: 'tower_material', itemId: 'ore', quantity: 3, receivedAt: new Date(Date.parse('2099-09-11T01:00:00Z')).toISOString() }],
+    ['book', { id: '00000000-0000-4000-8000-000000000102', kind: 'tower_book', itemId: 'weapon_manual', quantity: 15, receivedAt: new Date(Date.parse('2099-09-11T01:00:00Z')).toISOString() }],
+  ] as const)('keeps a legacy tower %s record but never writes it into the old tower', async (_label, rawDrop) => {
+    const drop = rawDrop as OfficeReliefDrop;
+    const state = legacyPending(drop); await seed(state); await tower();
+    const before = await snapshot();
+    await expect(call(input('relief_claim', state.version, { dropId: drop.id }))).rejects.toMatchObject({ response: { code: 'OFFICE_RELIEF_TOWER_RETIRED' } });
+    expect(await snapshot()).toEqual(before);
   });
 });

@@ -1,12 +1,9 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../../auth/auth.module';
-import { PlatformAssetsModule } from '../../platform/platform-assets.module';
 import { CommunityModule } from '../community.module';
 import { DemonTowerController } from './demon-tower.controller';
-import { DemonTowerRewardsService } from './demon-tower-rewards.service';
-import { DemonTowerService } from './demon-tower.service';
-import { DemonTowerAutoService } from './demon-tower-auto.service';
-import { CommunityProgressionModule } from '../progression/community-progression.module';
+import { DemonTowerSourceController } from './demon-tower-source.controller';
+import { DemonTowerSourceService } from './demon-tower-source.service';
 
-@Module({ imports: [AuthModule, CommunityModule, PlatformAssetsModule, CommunityProgressionModule], controllers: [DemonTowerController], providers: [DemonTowerService, DemonTowerRewardsService, DemonTowerAutoService] })
+@Module({ imports: [AuthModule, CommunityModule], controllers: [DemonTowerController, DemonTowerSourceController], providers: [DemonTowerSourceService] })
 export class DemonTowerModule {}

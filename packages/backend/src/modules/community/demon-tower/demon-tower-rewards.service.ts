@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import type { DemonTowerContributions, DemonTowerLeaderboard, DemonTowerLeaderboardEntry } from '@stealth-reader/shared';
 import { DataSource, EntityManager } from 'typeorm';
 import { DemonTowerContribution, DemonTowerDailyAward, DemonTowerDailyProgress, User } from '../../../database/entities';
@@ -93,6 +93,28 @@ export class DemonTowerRewardsService implements OnModuleInit, OnModuleDestroy {
   async settleDay(rawDate: string): Promise<boolean> {
     const date = demonTowerDate(rawDate, this.clock.now());
     if (!demonTowerWritesEnabled() || !this.pastCutoff(date)) return false;
+    return this.settle(date, false);
+  }
+
+  /**
+   * One-shot cutover settlement for the final partial day of the retired game.
+   * It is intentionally absent from the Nest module and HTTP surface. The
+   * release CLI requires an exact date-bound confirmation before calling it.
+   */
+  async settleRetirementDay(rawDate: string, confirmation: string): Promise<boolean> {
+    const now = this.clock.now();
+    const date = demonTowerDate(rawDate, now);
+    if (confirmation !== `RETIRE_OLD_DEMON_TOWER:${date}`) {
+      throw new BadRequestException({ code: 'DEMON_TOWER_RETIREMENT_CONFIRMATION_REQUIRED' });
+    }
+    if (date !== toBusinessLocalDate(now)) {
+      throw new BadRequestException({ code: 'DEMON_TOWER_RETIREMENT_DATE_INVALID' });
+    }
+    if (!demonTowerWritesEnabled()) return false;
+    return this.settle(date, true);
+  }
+
+  private async settle(date: string, retirement: boolean): Promise<boolean> {
     try {
       return await this.db.transaction(async (manager) => {
         if (await manager.getRepository(DemonTowerDailyAward).exist({ where: { serviceDate: date } })) return false;
@@ -105,7 +127,9 @@ export class DemonTowerRewardsService implements OnModuleInit, OnModuleDestroy {
             .setLock('for_no_key_update').getOne();
           if (user?.accountStatus === 'active') { winner = { user, score: candidate }; break; }
         }
-        if (!demonTowerWritesEnabled() || !this.pastCutoff(date)) return false;
+        if (!demonTowerWritesEnabled() || (retirement
+          ? date !== toBusinessLocalDate(this.clock.now())
+          : !this.pastCutoff(date))) return false;
         const now = this.clock.now();
         // INSERT is the cross-process arbiter. The losing transaction must not overwrite or credit anything.
         await manager.getRepository(DemonTowerDailyAward).insert({ serviceDate: date, winnerUserId: winner?.user.id ?? null, bossDamage: winner?.score.bossDamage ?? 0, coins: winner ? DEMON_TOWER_CHAMPION_COINS : 0, awardedAt: now });
@@ -117,8 +141,12 @@ export class DemonTowerRewardsService implements OnModuleInit, OnModuleDestroy {
         });
         await this.notifications.create(manager, {
           userId: winner.user.id, actorUserId: null, category: 'system', eventType: 'demon_tower_daily_champion',
-          title: '九层妖塔日榜第一名', summary: `${date} 有效首领伤害 ${winner.score.bossDamage}，奖励100办公币已到账。`,
-          resourceType: 'game_leaderboard', resourceId: null, resourcePath: `/games/demon-tower/leaderboard?date=${date}`,
+          title: retirement ? '旧版九层妖塔最终日榜' : '九层妖塔日榜第一名',
+          summary: retirement
+            ? `${date} 截至源码版切换时有效首领伤害 ${winner.score.bossDamage}，旧版最终奖励100办公币已到账。`
+            : `${date} 有效首领伤害 ${winner.score.bossDamage}，奖励100办公币已到账。`,
+          resourceType: 'game_leaderboard', resourceId: null,
+          resourcePath: retirement ? '/games/demon-tower' : `/games/demon-tower/leaderboard?date=${date}`,
           dedupeKey: `demon_tower_daily_champion:${date}`,
         });
         assertDemonTowerWrites();

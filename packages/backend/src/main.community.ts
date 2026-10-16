@@ -2,6 +2,7 @@ import 'reflect-metadata';
 
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 
 import { CommunityAppModule } from './community-app.module';
 import { ChatWebSocketGateway } from './modules/chat/chat-websocket.gateway';
@@ -18,7 +19,27 @@ function commaSeparated(value: string | undefined): string[] {
 
 async function bootstrap(): Promise<void> {
   // Provider callback signatures cover the exact request bytes.
-  const app = await NestFactory.create(CommunityAppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(CommunityAppModule, { rawBody: true, bodyParser: false });
+  // saveData is a JSON string nested in one exact request JSON, so escaping can
+  // make that envelope larger than the strict 512 KiB decoded-save limit. The
+  // larger parser applies only to the progress PUT and the three atomic world
+  // POSTs that carry the same save envelope; every other JSON endpoint retains
+  // the standard 100 KiB ceiling. Both parsers keep Nest rawBody capture for
+  // provider signature verification.
+  app.useBodyParser('json', {
+    limit: '1200kb',
+    type: (request) => {
+      const path = (request.url ?? '').split('?', 1)[0];
+      return (request.method === 'PUT' && path === '/api/v1/games/demon-tower/source/progress')
+        || (request.method === 'POST' && (
+          path === '/api/v1/games/demon-tower/source/world/damage'
+          || path === '/api/v1/games/demon-tower/source/world/channel'
+          || path === '/api/v1/games/demon-tower/source/world/clue'
+        ));
+    },
+  });
+  app.useBodyParser('json', { limit: '100kb' });
+  app.useBodyParser('urlencoded', { limit: '32kb', extended: false });
   app.enableShutdownHooks();
   app.setGlobalPrefix('api');
 
