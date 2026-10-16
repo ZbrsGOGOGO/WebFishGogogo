@@ -6,10 +6,6 @@ import { OptionalJwtAuthGuard } from '../../auth/optional-jwt-auth.guard';
 /** Compatibility tombstone for the retired fused implementation. */
 @Controller('v1/games/demon-tower')
 export class DemonTowerController {
-  // Keeps old isolated test construction source-compatible without making Nest
-  // instantiate any retired service or the old automatic exploration worker.
-  constructor(..._retiredDependencies: unknown[]) {}
-
   private gone(): never {
     throw new GoneException({ code: 'DEMON_TOWER_CLIENT_OUTDATED', replacement: '/games/demon-tower' });
   }
